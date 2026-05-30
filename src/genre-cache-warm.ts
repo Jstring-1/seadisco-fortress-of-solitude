@@ -34,7 +34,15 @@ import {
   isReleaseCached,
   cacheRelease,
   getOAuthCredentials,
+  getAppSetting,
+  setAppSetting,
 } from "./db.js";
+
+// Anchor = the dayOfYear on which the rotation's first slot (index 0,
+// i.e. Blues at rotation_order 1) should fire. Stored in app_settings
+// so it survives restarts. Lets the admin "anchor today" if the
+// rotation lands on the wrong genre.
+const ANCHOR_KEY = "genre_cache_warm_anchor_doy";
 
 const TZ = "America/Los_Angeles";
 const WINDOW_START_HOUR = 1;   // inclusive
@@ -104,18 +112,49 @@ export function requestGenreCacheWarmStop(genreKey?: string): void {
 }
 
 // Pick today's genre from the rotation, considering only enabled
-// rows. Returns null when no genre is eligible (e.g. all disabled).
-// manual_override-enabled rows take precedence and run regardless
-// of the day-of-year cycle so an admin "Start now" on jazz at 3am
-// runs jazz, not whatever the day picks.
-export function pickTodaysGenre(rows: any[]): any | null {
+// rows. Returns null when no genre is eligible. manual_override
+// rows take precedence so an admin "Start now" runs *that* genre
+// regardless of the rotation. Otherwise: index = (today - anchor)
+// % activeCount, where anchor is the dayOfYear when index 0 should
+// fire (stored in app_settings, set by the admin via /anchor-today).
+// If no anchor is set, defaults to 0 — same shape as before so an
+// un-anchored install matches whatever genre the day-of-year picks.
+export async function pickTodaysGenre(rows: any[]): Promise<any | null> {
   const active = rows.filter(r => r.enabled);
   if (!active.length) return null;
   const override = active.find(r => r.manual_override);
   if (override) return override;
   active.sort((a, b) => a.rotation_order - b.rotation_order);
-  const idx = _dayOfYearPacific() % active.length;
+  const today = _dayOfYearPacific();
+  let anchor = 0;
+  try {
+    const raw = await getAppSetting(ANCHOR_KEY);
+    if (raw != null) {
+      const n = parseInt(raw, 10);
+      if (Number.isFinite(n)) anchor = n;
+    }
+  } catch {}
+  // (today - anchor) % len, then normalise into [0, len) so a
+  // pre-anchor date doesn't wrap negatively.
+  const idx = (((today - anchor) % active.length) + active.length) % active.length;
   return active[idx] ?? null;
+}
+
+// Admin: stamp the rotation anchor so today's slot picks index 0
+// (Blues, given the default rotation_order). Persisted in
+// app_settings.
+export async function anchorRotationToToday(): Promise<{ anchor_doy: number }> {
+  const doy = _dayOfYearPacific();
+  await setAppSetting(ANCHOR_KEY, String(doy));
+  return { anchor_doy: doy };
+}
+
+// Admin: peek the current anchor (null if never set).
+export async function getRotationAnchor(): Promise<number | null> {
+  const raw = await getAppSetting(ANCHOR_KEY);
+  if (raw == null) return null;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 async function _runWorkerForGenre(
@@ -245,6 +284,16 @@ async function _runWorkerForGenre(
 // the next minute boundary. When forceGenreKey is passed, the
 // rotation pick is bypassed — used by the Blues "Start now" button
 // so blues runs *now*, not whichever genre the day-of-year points at.
+// Public: is ANY genre currently running? Used by the /start
+// endpoint to reject a Start click that would create an overlap,
+// and by _tickOnce to enforce "one genre at a time" globally.
+export function anyGenreRunning(exceptKey?: string): boolean {
+  for (const g of _runningGenres) {
+    if (g !== exceptKey) return true;
+  }
+  return false;
+}
+
 async function _tickOnce(
   adminClerkId: string,
   forceGenreKey?: string,
@@ -253,10 +302,33 @@ async function _tickOnce(
     const rows = await listAllGenreCacheWarmStates();
     if (!rows.length) return;
     const target = forceGenreKey
-      ? rows.find(r => r.genre_key === forceGenreKey) ?? null
-      : pickTodaysGenre(rows);
+      ? (rows.find(r => r.genre_key === forceGenreKey) ?? null)
+      : await pickTodaysGenre(rows);
     if (!target) return;
     if (_runningGenres.has(target.genre_key)) return;
+    // Conflict handling: the worker enforces "one genre at a time".
+    //
+    //   - Manual Start (forceGenreKey set): refuse if another genre
+    //     is already running. The /start endpoint guards this with
+    //     a 409, so this is belt-and-braces.
+    //   - Auto-rotation tick (no forceGenreKey, in 1am-6am window):
+    //     the cron is authoritative. If a stray manual run is still
+    //     going from yesterday, signal it to stop and bail this
+    //     tick — by the next 60s tick the previous worker will
+    //     have wound down (it checks _stopRequested between every
+    //     Discogs call) and we'll claim the lock cleanly. Today's
+    //     pick takes precedence over any in-flight manual run.
+    if (anyGenreRunning(target.genre_key)) {
+      if (forceGenreKey) return;
+      for (const g of _runningGenres) {
+        if (g !== target.genre_key) {
+          console.log(`[genre-cache-warm] cron preempts ${g} for ${target.genre_key}`);
+          _stopRequested.add(g);
+          updateGenreCacheWarmState(g, { manual_override: false }).catch(() => {});
+        }
+      }
+      return;
+    }
     const wantToRun =
       (target.manual_override === true) ||
       (target.enabled === true && _inWindowPacific());
