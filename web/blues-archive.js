@@ -2245,6 +2245,33 @@ async function _baExportLyricsPdf() {
 }
 window._baExportLyricsPdf = _baExportLyricsPdf;
 
+// Word-openable .doc export — HTML masquerading as application/msword.
+// Same flow as the CSV / PDF handlers: hit the endpoint, blob-download.
+async function _baExportLyricsDoc() {
+  const btn = document.getElementById("blues-export-lyrics-doc-btn");
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
+  try {
+    const r = await apiFetch("/api/admin/lyrics/export.doc");
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const blob = await r.blob();
+    const fname = `seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.doc`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    alert("Export failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+window._baExportLyricsDoc = _baExportLyricsDoc;
+
 // Artist-profile PDF — same flow as the lyrics one. Big bib of every
 // artist alphabetised: name + dates / hometown / first-last recording
 // + pseudonyms + bands + bio + every Discogs release oldest→newest.
@@ -2289,6 +2316,7 @@ function _baAdminAction(kind, ev) {
     exportCsv:        () => window.bluesDbExportCsv?.(),
     exportLyricsCsv:  () => _baExportLyricsCsv(),
     exportLyricsPdf:  () => _baExportLyricsPdf(),
+    exportLyricsDoc:  () => _baExportLyricsDoc(),
     exportArtistsPdf: () => _baExportArtistsPdf(),
     deleteAll:        () => window.bluesDbDeleteAll?.(),
     lyricsScrape:     () => window.lyricsStartScrape?.(),

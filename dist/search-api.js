@@ -8846,6 +8846,100 @@ function _pdfSafe(s) {
     t = t.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "");
     return t;
 }
+// GET /api/admin/lyrics/export.doc — every lyric as a Word-openable
+// document. Same shape and sort as the PDF (grouped by artist, sorted
+// by title within each artist). Uses the classic HTML-masquerading-
+// as-.doc trick — served with application/msword and a .doc filename,
+// Word / Pages / LibreOffice / Google Docs all open it as a real
+// document with the headings, italic meta, and paragraphs preserved.
+// Unicode-safe (no _pdfSafe pass needed — HTML handles it natively),
+// no new deps, tiny output vs the PDF.
+app.get("/api/admin/lyrics/export.doc", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await getPool().query(`SELECT page_title, artist, tuning, plaintext, first_release_year
+         FROM blues_lyrics
+        ORDER BY lower(coalesce(artist, '~~')) ASC,
+                 lower(page_title) ASC,
+                 page_title ASC`);
+        const rows = r.rows;
+        const esc = (s) => String(s ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        const paraHtml = (body) => 
+        // Split on blank lines for paragraphs, single newlines inside a
+        // paragraph become <br>. Mirrors how the plaintext field reads
+        // when rendered as prose.
+        body.split(/\n\s*\n+/).map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("\n");
+        // Build the body incrementally so the response can stream — large
+        // archives are ~5 MB of HTML and we'd rather not buffer it all.
+        res.setHeader("Content-Type", "application/msword; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.doc"`);
+        res.write(`<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>SeaDisco Blues Archive — Lyrics</title>
+  <style>
+    body  { font-family: "Times New Roman", Times, serif; font-size: 14pt; line-height: 1.45; margin: 1in; }
+    h1    { font-size: 28pt; margin: 0 0 0.5em; page-break-before: always; }
+    h1.first { page-break-before: avoid; }
+    h2    { font-size: 18pt; margin: 1.2em 0 0.2em; }
+    .meta { font-style: italic; color: #555; font-size: 12pt; margin: 0 0 0.4em; }
+    .cover-title { text-align: center; font-size: 32pt; font-weight: bold; margin-top: 2in; }
+    .cover-sub   { text-align: center; font-style: italic; font-size: 16pt; margin-top: 0.4em; }
+    .cover-meta  { text-align: center; font-size: 12pt; margin-top: 1.5em; }
+    .sep         { border: 0; border-top: 1px solid #ddd; margin: 1.2em 0; }
+    .empty       { color: #999; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="cover-title">Blues Archive</div>
+  <div class="cover-sub">Lyrics, grouped by artist</div>
+  <div class="cover-meta">${rows.length.toLocaleString()} lyrics · ${esc(new Date().toISOString().slice(0, 10))}</div>
+`);
+        let currentArtist = null;
+        let firstArtist = true;
+        for (const row of rows) {
+            const artistKey = (String(row.artist || "").trim()) || "(Unknown artist)";
+            if (artistKey !== currentArtist) {
+                currentArtist = artistKey;
+                res.write(`<h1${firstArtist ? ' class="first"' : ""}>${esc(artistKey)}</h1>\n`);
+                firstArtist = false;
+            }
+            res.write(`<h2>${esc(row.page_title || "Untitled")}</h2>\n`);
+            const metaParts = [];
+            if (row.tuning)
+                metaParts.push(String(row.tuning));
+            if (row.first_release_year)
+                metaParts.push(String(row.first_release_year));
+            if (metaParts.length) {
+                res.write(`<p class="meta">${esc(metaParts.join("  ·  "))}</p>\n`);
+            }
+            const body = String(row.plaintext || "").trim();
+            if (body) {
+                res.write(paraHtml(body) + "\n");
+            }
+            else {
+                res.write(`<p class="empty">(no text yet)</p>\n`);
+            }
+            res.write(`<hr class="sep">\n`);
+        }
+        res.write(`</body></html>\n`);
+        res.end();
+    }
+    catch (err) {
+        console.error("[lyrics export.doc]", err);
+        if (!res.headersSent)
+            res.status(500).json({ error: err?.message ?? String(err) });
+        else
+            res.end();
+    }
+});
 // GET /api/admin/lyrics/export.pdf — streamed PDF of every lyric in
 // the archive, grouped by artist (alphabetical) with each artist's
 // lyrics sorted by title. Per artist: H1 name as a section header,
