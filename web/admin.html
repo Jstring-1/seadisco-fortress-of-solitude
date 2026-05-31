@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2157" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2201" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2157"></script>
-<script defer src="/shared.js?v=20260530.2157"></script>
+<script defer src="/utils.js?v=20260530.2201"></script>
+<script defer src="/shared.js?v=20260530.2201"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -334,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2157"></script>
-<script defer src="/blues-admin.js?v=20260530.2157"></script>
+<script defer src="/modal.js?v=20260530.2201"></script>
+<script defer src="/blues-admin.js?v=20260530.2201"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -994,6 +994,44 @@ const _CW_GENRES = [
   { key: "Non-Music",               list: "NonMusic"   },
 ];
 let _cwPollTimer = null;
+// Sort state for the per-combo stats grid. Default: in_cache desc
+// (biggest cached buckets first). Numeric vs string columns get
+// different comparators inside _cwSortRows.
+let _cwSort = { col: "in_cache", dir: "desc" };
+const _CW_NUMERIC_COLS = new Set([
+  "in_cache", "total_cached", "total_skipped", "total_errors", "current_year",
+]);
+function _cwSortRows(rows) {
+  const { col, dir } = _cwSort;
+  const mul = dir === "asc" ? 1 : -1;
+  const numeric = _CW_NUMERIC_COLS.has(col);
+  return rows.slice().sort((a, b) => {
+    const av = a?.[col];
+    const bv = b?.[col];
+    // Push null/undefined to the bottom regardless of direction so
+    // empty cells don't crowd the top when sorting ascending.
+    const aMissing = av == null || av === "";
+    const bMissing = bv == null || bv === "";
+    if (aMissing && !bMissing) return 1;
+    if (!aMissing && bMissing) return -1;
+    if (aMissing && bMissing) return 0;
+    if (numeric) return (Number(av) - Number(bv)) * mul;
+    if (col === "last_run_at") return (new Date(av).getTime() - new Date(bv).getTime()) * mul;
+    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * mul;
+  });
+}
+function _cwSortBy(col) {
+  if (_cwSort.col === col) {
+    _cwSort.dir = _cwSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _cwSort.col = col;
+    // Numeric columns default to desc (biggest first); text columns
+    // default to asc (A-Z).
+    _cwSort.dir = _CW_NUMERIC_COLS.has(col) || col === "last_run_at" ? "desc" : "asc";
+  }
+  loadCacheWarm();
+}
+window._cwSortBy = _cwSortBy;
 async function loadCacheWarm() {
   const el = document.getElementById("cw-content");
   if (!el) return;
@@ -1104,7 +1142,17 @@ async function loadCacheWarm() {
         <span style="font-size:0.72rem;color:var(--muted)">One row per (genre, style) combo you've ever run.</span>
       </div>
       ${rows.length
-        ? `<table class="api-log-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
+        ? (() => {
+          // Apply current sort (column + direction) before rendering
+          // tbody. _cwSort defaults to in_cache desc; clicking a
+          // header toggles direction or sets a new column.
+          rows = _cwSortRows(rows);
+          const th = (key, label, align = "left") => {
+            const isActive = _cwSort.col === key;
+            const arrow = isActive ? (_cwSort.dir === "asc" ? " ↑" : " ↓") : "";
+            return `<th style="text-align:${align};cursor:pointer;user-select:none" onclick="_cwSortBy('${key}')" title="Sort by ${label}">${label}${arrow}</th>`;
+          };
+          return `<table class="api-log-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
               <col style="width:18%">
               <col style="width:18%">
@@ -1117,14 +1165,14 @@ async function loadCacheWarm() {
               <col style="width:6%">
             </colgroup>
             <thead><tr>
-              <th style="text-align:left">Genre</th>
-              <th style="text-align:left">Style</th>
-              <th style="text-align:right">In cache</th>
-              <th style="text-align:right">Cached (this run)</th>
-              <th style="text-align:right">Skipped</th>
-              <th style="text-align:right">Errors</th>
-              <th style="text-align:right">Cursor</th>
-              <th style="text-align:left">Last run</th>
+              ${th("genre_key",     "Genre",       "left")}
+              ${th("style_key",     "Style",       "left")}
+              ${th("in_cache",      "In cache",    "right")}
+              ${th("total_cached",  "Cached (run)","right")}
+              ${th("total_skipped", "Skipped",     "right")}
+              ${th("total_errors",  "Errors",      "right")}
+              ${th("current_year",  "Cursor",      "right")}
+              ${th("last_run_at",   "Last run",    "left")}
               <th></th>
             </tr></thead>
             <tbody>${rows.map(r => {
@@ -1155,7 +1203,8 @@ async function loadCacheWarm() {
                 </td>
               </tr>`;
             }).join("")}</tbody>
-          </table>`
+          </table>`;
+        })()
         : `<div style="color:var(--muted);font-style:italic;padding:0.5rem 0">No cached releases yet — start a run above.</div>`}
     `;
 
