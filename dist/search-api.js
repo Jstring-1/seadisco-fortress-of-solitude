@@ -9377,76 +9377,137 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
 // Endpoints power the redesigned Cache admin tab. No cron — runs are
 // kicked manually, one at a time, with the admin picking genre +
 // optional style + optional year range.
+//
+// In-memory memo for the heavy stats CTE. The query unnests
+// data->'genres' and data->'styles' across every cached release —
+// linear in row count. Cheap at 45k, slower at 500k+. Since the
+// admin panel polls every 5s while a run is active and we only
+// cache ~1 release/sec, a short TTL serves the panel from memory
+// without it ever looking stale. Invalidated by any mutation route
+// (start/stop/reset/delete/force-clear) so the next poll re-runs the
+// query immediately after the admin clicks something.
+const CW_STATS_TTL_MS = 15_000;
+let _cwStatsCache = null;
+let _cwStatsInflight = null;
+function _invalidateCwStats() { _cwStatsCache = null; }
+// Canonical (genre → styles) map mirroring the admin datalists in
+// web/admin.html. Discogs tags genres and styles independently per
+// release — a single Blues release that's also tagged "Psychedelic
+// Rock" creates a noise row in the stats grid. We filter the per-
+// style rows down to combos that match this map (the styles the
+// admin can actually pick from for that genre). Off-canon combos
+// the admin explicitly ran (has_run = true) and all-of-genre rows
+// (style_key='') are always kept.
+const _CW_CANONICAL_STYLES = {
+    "Blues": new Set(["Country Blues", "Delta Blues", "Piano Blues", "Hokum", "Boogie Woogie", "Vaudeville", "Jug Band", "Pre-War Blues", "Acoustic Blues", "Electric Blues", "Chicago Blues", "Texas Blues", "Piedmont Blues", "Memphis Blues", "Harmonica Blues", "Hill Country Blues", "Modern Electric Blues", "Jump Blues"]),
+    "Folk, World, & Country": new Set(["Country", "Folk", "Bluegrass", "Gospel", "Cajun", "Zydeco", "African", "Celtic", "World", "Old-Time", "Honky Tonk", "Hillbilly", "Western", "Country Rock"]),
+    "Jazz": new Set(["Dixieland", "Hot Jazz", "Swing", "Big Band", "Bebop", "Hard Bop", "Free Jazz", "Smooth Jazz", "Cool Jazz", "Vocal", "Fusion", "Ragtime", "Soul-Jazz", "Free Improvisation"]),
+    "Reggae": new Set(["Reggae", "Ska", "Rocksteady", "Dancehall", "Dub", "Roots Reggae", "Lovers Rock", "Reggae-Pop"]),
+    "Latin": new Set(["Latin", "Bolero", "Salsa", "Mambo", "Tango", "Bossa Nova", "Cumbia", "Son", "Rumba", "Latin Jazz", "Merengue", "Samba"]),
+    "Rock": new Set(["Rock & Roll", "Garage Rock", "Surf", "Rockabilly", "Pop Rock", "Hard Rock", "Punk", "Indie Rock", "Folk Rock", "Psychedelic Rock", "Heavy Metal", "Glam", "New Wave", "Prog Rock"]),
+    "Electronic": new Set(["House", "Techno", "Ambient", "Dub", "IDM", "Trance", "Drum n Bass", "Synth-pop", "Electro", "Industrial", "Experimental"]),
+    "Funk / Soul": new Set(["Funk", "Soul", "Rhythm & Blues", "Disco", "Gospel", "Neo Soul", "Doo Wop"]),
+    "Hip Hop": new Set(["Hip Hop", "Conscious", "Boom Bap", "Trap", "East Coast", "West Coast", "Gangsta", "Old School"]),
+    "Classical": new Set(["Baroque", "Classical", "Romantic", "Modern", "Opera", "Choral", "Symphony", "Chamber Music", "Renaissance"]),
+    "Pop": new Set(["Pop", "Vocal", "Ballad", "Synth-pop", "Europop", "Schlager"]),
+    "Stage & Screen": new Set(["Soundtrack", "Score", "Musical", "Theme"]),
+    "Brass & Military": new Set(["Brass Band", "Marching Band", "Military", "Folk"]),
+    "Children's": new Set(["Story", "Educational", "Nursery Rhymes"]),
+    "Non-Music": new Set(["Spoken Word", "Field Recording", "Comedy", "Interview", "Audiobook", "Religious"]),
+};
+function _isCanonicalCombo(genre, style) {
+    if (!style)
+        return true; // all-of-genre row
+    const set = _CW_CANONICAL_STYLES[genre];
+    return !!set && set.has(style);
+}
+async function _computeCwStats() {
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
+    const arrOf = (path) => `CASE WHEN jsonb_typeof(rc.data->'${path}') = 'array'
+          THEN rc.data->'${path}' ELSE '[]'::jsonb END`;
+    const gridR = await getPool().query(`
+    WITH per_genre AS (
+      SELECT g.value AS genre_key, '' AS style_key,
+             COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
+       WHERE rc.type = 'release'
+       GROUP BY g.value
+    ),
+    per_style AS (
+      SELECT g.value AS genre_key, s.value AS style_key,
+             COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
+        CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("styles")}) s
+       WHERE rc.type = 'release'
+       GROUP BY g.value, s.value
+    ),
+    auto_combos AS (
+      SELECT * FROM per_genre UNION ALL SELECT * FROM per_style
+    )
+    SELECT
+      COALESCE(cwr.genre_key, ac.genre_key) AS genre_key,
+      COALESCE(cwr.style_key, ac.style_key) AS style_key,
+      cwr.current_year,
+      cwr.current_page,
+      cwr.total_searched,
+      cwr.total_cached,
+      cwr.total_skipped,
+      cwr.total_errors,
+      cwr.last_run_at,
+      cwr.last_cached_at,
+      cwr.recent_cached,
+      cwr.recent_errors,
+      COALESCE(ac.in_cache, 0) AS in_cache,
+      (cwr.genre_key IS NOT NULL) AS has_run
+    FROM cache_warm_runs cwr
+    FULL OUTER JOIN auto_combos ac
+      ON ac.genre_key = cwr.genre_key
+     AND ac.style_key = cwr.style_key
+    ORDER BY in_cache DESC NULLS LAST,
+             COALESCE(cwr.genre_key, ac.genre_key) ASC,
+             COALESCE(cwr.style_key, ac.style_key) ASC
+  `);
+    // Drop off-canon (genre, style) combos that come from Discogs's
+    // independent-tag noise — e.g. one Blues release also tagged with
+    // "Psychedelic Rock" style. Keep all-of-genre rows (style='') and
+    // any row the admin explicitly ran (has_run = true).
+    const rows = gridR.rows.filter((r) => r.has_run || _isCanonicalCombo(String(r.genre_key ?? ""), String(r.style_key ?? "")));
+    return { rows, release_cache_total: totalR.rows[0]?.n ?? 0 };
+}
+async function _getCwStats() {
+    const now = Date.now();
+    if (_cwStatsCache && now - _cwStatsCache.at < CW_STATS_TTL_MS) {
+        return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+    }
+    // Singleflight: if a recompute is already in flight, await that
+    // promise instead of kicking a second concurrent CTE scan.
+    if (_cwStatsInflight)
+        return _cwStatsInflight;
+    _cwStatsInflight = (async () => {
+        try {
+            const out = await _computeCwStats();
+            _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            return out;
+        }
+        finally {
+            _cwStatsInflight = null;
+        }
+    })();
+    return _cwStatsInflight;
+}
 app.get("/api/admin/cache-warm-runs/status", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     try {
-        const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
-        // Single query that:
-        //  1. Auto-derives (genre, style) combos from every cached
-        //     release's JSONB genres/styles arrays — including style=''
-        //     rows for the all-of-genre totals
-        //  2. FULL OUTER JOINs them with cache_warm_runs so each row
-        //     carries both the live cached count and the cumulative run
-        //     stats (when the admin has actually run that combo)
-        // Result: the grid shows every (genre, style) present in cache,
-        // even combos the admin has never explicitly run, with a Run
-        // button to kick a sweep for any of them.
-        // Guard with jsonb_typeof — if a cached release has `genres` or
-        // `styles` stored as a non-array (string, null, object) — which
-        // can happen if a Discogs response was incomplete — jsonb_array_
-        // elements_text would throw and abort the whole query. The
-        // CASE expression substitutes an empty array in that case so
-        // the release is silently excluded instead of breaking the page.
-        const arrOf = (path) => `CASE WHEN jsonb_typeof(rc.data->'${path}') = 'array'
-            THEN rc.data->'${path}' ELSE '[]'::jsonb END`;
-        const gridR = await getPool().query(`
-      WITH per_genre AS (
-        SELECT g.value AS genre_key, '' AS style_key,
-               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
-          FROM release_cache rc
-          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
-         WHERE rc.type = 'release'
-         GROUP BY g.value
-      ),
-      per_style AS (
-        SELECT g.value AS genre_key, s.value AS style_key,
-               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
-          FROM release_cache rc
-          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
-          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("styles")}) s
-         WHERE rc.type = 'release'
-         GROUP BY g.value, s.value
-      ),
-      auto_combos AS (
-        SELECT * FROM per_genre UNION ALL SELECT * FROM per_style
-      )
-      SELECT
-        COALESCE(cwr.genre_key, ac.genre_key) AS genre_key,
-        COALESCE(cwr.style_key, ac.style_key) AS style_key,
-        cwr.current_year,
-        cwr.current_page,
-        cwr.total_searched,
-        cwr.total_cached,
-        cwr.total_skipped,
-        cwr.total_errors,
-        cwr.last_run_at,
-        cwr.last_cached_at,
-        cwr.recent_cached,
-        cwr.recent_errors,
-        COALESCE(ac.in_cache, 0) AS in_cache,
-        (cwr.genre_key IS NOT NULL) AS has_run
-      FROM cache_warm_runs cwr
-      FULL OUTER JOIN auto_combos ac
-        ON ac.genre_key = cwr.genre_key
-       AND ac.style_key = cwr.style_key
-      ORDER BY in_cache DESC NULLS LAST,
-               COALESCE(cwr.genre_key, ac.genre_key) ASC,
-               COALESCE(cwr.style_key, ac.style_key) ASC
-    `);
+        // Heavy CTE memoized with a short TTL — see _getCwStats above.
+        // `active`/`running` are always read fresh from in-memory worker
+        // state so the panel still reacts instantly to Start/Stop clicks.
+        const stats = await _getCwStats();
         res.json({
-            rows: gridR.rows,
-            release_cache_total: totalR.rows[0]?.n ?? 0,
+            rows: stats.rows,
+            release_cache_total: stats.release_cache_total,
             active: getActiveCacheWarmParams(),
             running: isCacheWarmRunning(),
         });
@@ -9481,6 +9542,7 @@ app.post("/api/admin/cache-warm-runs/start", express.json({ limit: "4kb" }), asy
             res.status(409).json({ error: out.error || "could not start" });
             return;
         }
+        _invalidateCwStats();
         res.json({ ok: true });
     }
     catch (err) {
@@ -9492,6 +9554,7 @@ app.post("/api/admin/cache-warm-runs/stop", async (req, res) => {
         return;
     try {
         requestCacheWarmStop();
+        _invalidateCwStats();
         res.json({ ok: true });
     }
     catch (err) {
@@ -9506,6 +9569,7 @@ app.post("/api/admin/cache-warm-runs/force-clear", async (req, res) => {
         return;
     try {
         forceClearCacheWarmRunning();
+        _invalidateCwStats();
         res.json({ ok: true });
     }
     catch (err) {
@@ -9523,6 +9587,7 @@ app.post("/api/admin/cache-warm-runs/reset", express.json({ limit: "2kb" }), asy
     }
     try {
         await resetCacheWarmRun(genreKey, styleKey);
+        _invalidateCwStats();
         res.json({ ok: true });
     }
     catch (err) {
@@ -9540,6 +9605,7 @@ app.post("/api/admin/cache-warm-runs/delete", express.json({ limit: "2kb" }), as
     }
     try {
         await deleteCacheWarmRun(genreKey, styleKey);
+        _invalidateCwStats();
         res.json({ ok: true });
     }
     catch (err) {
