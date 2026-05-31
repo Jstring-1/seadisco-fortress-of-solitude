@@ -35,6 +35,16 @@ export function requestCacheWarmStop() {
     if (_runningKey)
         _stopRequested = true;
 }
+// Admin override: force-clear the in-memory lock even if the worker
+// is theoretically running. Use when the state is wedged — e.g. a
+// crashed worker that didn't reach its finally clause, or a stale
+// _runningKey from a hot-reload during development.
+export function forceClearCacheWarmRunning() {
+    console.log(`[cache-warm] FORCE clearing in-memory lock (was ${_runningKey})`);
+    _runningKey = null;
+    _stopRequested = false;
+    _activeParams = null;
+}
 function _sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
@@ -120,20 +130,31 @@ export async function startCacheWarmRun(opts) {
         last_run_at: new Date(),
     });
     // Fire-and-forget: caller doesn't wait. Worker tears down state on exit.
+    console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}`);
     (async () => {
         try {
             await _runWorker(client, genreKey, styleKey, cursorYear, cursorPage, toYear);
+            console.log(`[cache-warm] worker for ${key} exited cleanly`);
         }
         catch (err) {
-            console.error("[cache-warm] worker crashed:", err);
-            await recordCacheWarmRunError(genreKey, styleKey, `crash: ${err?.message ?? String(err)}`);
+            console.error(`[cache-warm] worker for ${key} crashed:`, err?.stack || err);
+            // Best-effort error log; if THIS also throws (DB down), the
+            // outer .catch(() => {}) below swallows it so finally still
+            // clears the in-memory lock.
+            try {
+                await recordCacheWarmRunError(genreKey, styleKey, `crash: ${err?.message ?? String(err)}`);
+            }
+            catch (e2) {
+                console.error(`[cache-warm] failed to record crash for ${key}:`, e2);
+            }
         }
         finally {
+            console.log(`[cache-warm] clearing in-memory lock for ${key}`);
             _runningKey = null;
             _stopRequested = false;
             _activeParams = null;
         }
-    })().catch(() => { });
+    })().catch(err => console.error(`[cache-warm] outer IIFE rejected for ${key}:`, err));
     return { ok: true };
 }
 async function _runWorker(client, genreKey, styleKey, startYear, startPage, endYear) {
