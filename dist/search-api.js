@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listCachedBluesReleases, listCacheWarmRuns, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listCachedBluesReleases, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams } from "./cache-warm.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -9381,30 +9381,63 @@ app.get("/api/admin/cache-warm/status", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     try {
-        const rows = await listCacheWarmRuns();
         const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
-        // Live cached-count per (genre, style). When style is empty,
-        // count by genre alone. The GIN index on (data->'genres') makes
-        // the genre clause cheap; the style clause uses a sequential
-        // scan but only over the already-filtered subset so still snappy.
-        for (const row of rows) {
-            try {
-                let cntSql = `SELECT COUNT(*)::int AS n FROM release_cache
-                       WHERE type = 'release' AND data->'genres' ? $1`;
-                const params = [row.genre_key];
-                if (row.style_key) {
-                    cntSql += ` AND data->'styles' ? $2`;
-                    params.push(row.style_key);
-                }
-                const cntR = await getPool().query(cntSql, params);
-                row.cached_count = cntR.rows[0]?.n ?? 0;
-            }
-            catch {
-                row.cached_count = null;
-            }
-        }
+        // Single query that:
+        //  1. Auto-derives (genre, style) combos from every cached
+        //     release's JSONB genres/styles arrays — including style=''
+        //     rows for the all-of-genre totals
+        //  2. FULL OUTER JOINs them with cache_warm_runs so each row
+        //     carries both the live cached count and the cumulative run
+        //     stats (when the admin has actually run that combo)
+        // Result: the grid shows every (genre, style) present in cache,
+        // even combos the admin has never explicitly run, with a Run
+        // button to kick a sweep for any of them.
+        const gridR = await getPool().query(`
+      WITH per_genre AS (
+        SELECT g.value AS genre_key, '' AS style_key,
+               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+          FROM release_cache rc
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
+         WHERE rc.type = 'release'
+         GROUP BY g.value
+      ),
+      per_style AS (
+        SELECT g.value AS genre_key, s.value AS style_key,
+               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+          FROM release_cache rc
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'styles','[]'::jsonb)) s
+         WHERE rc.type = 'release'
+         GROUP BY g.value, s.value
+      ),
+      auto_combos AS (
+        SELECT * FROM per_genre UNION ALL SELECT * FROM per_style
+      )
+      SELECT
+        COALESCE(cwr.genre_key, ac.genre_key) AS genre_key,
+        COALESCE(cwr.style_key, ac.style_key) AS style_key,
+        cwr.current_year,
+        cwr.current_page,
+        cwr.total_searched,
+        cwr.total_cached,
+        cwr.total_skipped,
+        cwr.total_errors,
+        cwr.last_run_at,
+        cwr.last_cached_at,
+        cwr.recent_cached,
+        cwr.recent_errors,
+        COALESCE(ac.in_cache, 0) AS in_cache,
+        (cwr.genre_key IS NOT NULL) AS has_run
+      FROM cache_warm_runs cwr
+      FULL OUTER JOIN auto_combos ac
+        ON ac.genre_key = cwr.genre_key
+       AND ac.style_key = cwr.style_key
+      ORDER BY in_cache DESC NULLS LAST,
+               COALESCE(cwr.genre_key, ac.genre_key) ASC,
+               COALESCE(cwr.style_key, ac.style_key) ASC
+    `);
         res.json({
-            rows,
+            rows: gridR.rows,
             release_cache_total: totalR.rows[0]?.n ?? 0,
             active: getActiveCacheWarmParams(),
             running: isCacheWarmRunning(),
