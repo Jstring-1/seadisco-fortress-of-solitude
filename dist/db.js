@@ -967,6 +967,30 @@ export async function initDb() {
       BEFORE UPDATE ON blues_artists
       FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
   `);
+    // ── Manual cache-warm runs (per genre+style combo) ────────────────
+    // The earlier nightly-rotation cron has been removed; runs are now
+    // driven by an admin clicking Start with a genre and (optional)
+    // style. This table holds one row per (genre, style) combination
+    // the admin has ever run, tracking the cursor and cumulative
+    // counters. style_key='' means "all-of-genre" (no style filter).
+    // PK enforces single row per combo.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS cache_warm_runs (
+      genre_key       TEXT NOT NULL,
+      style_key       TEXT NOT NULL DEFAULT '',
+      current_year    INT,
+      current_page    INT NOT NULL DEFAULT 1,
+      total_searched  INT NOT NULL DEFAULT 0,
+      total_cached    INT NOT NULL DEFAULT 0,
+      total_skipped   INT NOT NULL DEFAULT 0,
+      total_errors    INT NOT NULL DEFAULT 0,
+      last_run_at     TIMESTAMPTZ,
+      last_cached_at  TIMESTAMPTZ,
+      recent_cached   JSONB NOT NULL DEFAULT '[]'::jsonb,
+      recent_errors   JSONB NOT NULL DEFAULT '[]'::jsonb,
+      PRIMARY KEY (genre_key, style_key)
+    )
+  `);
     // ── Genre cache-warm cron state ──────────────────────────────────
     // One row per Discogs genre in the rotation. The nightly worker
     // picks today's genre by (dayOfYear % active.length) over rows
@@ -5982,6 +6006,89 @@ export async function resetGenreCacheWarmCycle(genreKey) {
             cycle_started_at = NOW(),
             cycle_count      = cycle_count + 1
       WHERE genre_key = $1`, [genreKey]);
+}
+// ── Manual cache-warm run helpers ─────────────────────────────────
+// One row per (genre, style) combo. Helpers below are designed for
+// the single-active-run pattern: the worker reads its row, updates
+// the cursor + counters, and persists every page so a restart can
+// resume from current_year / current_page.
+export async function listCacheWarmRuns() {
+    const r = await getPool().query(`SELECT * FROM cache_warm_runs ORDER BY lower(genre_key) ASC, lower(style_key) ASC`);
+    return r.rows;
+}
+export async function getCacheWarmRun(genreKey, styleKey) {
+    const r = await getPool().query(`SELECT * FROM cache_warm_runs WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
+    return r.rows[0] || null;
+}
+export async function upsertCacheWarmRun(genreKey, styleKey, patch) {
+    const allowed = new Set([
+        "current_year", "current_page",
+        "total_searched", "total_cached", "total_skipped", "total_errors",
+        "last_run_at", "last_cached_at",
+        "recent_cached", "recent_errors",
+    ]);
+    const cols = [];
+    const vals = [];
+    for (const [k, v] of Object.entries(patch)) {
+        if (!allowed.has(k))
+            continue;
+        vals.push((k === "recent_cached" || k === "recent_errors") && v != null ? JSON.stringify(v) : v);
+        cols.push(k);
+    }
+    if (!cols.length) {
+        // Just ensure the row exists.
+        await getPool().query(`INSERT INTO cache_warm_runs (genre_key, style_key) VALUES ($1, $2)
+        ON CONFLICT (genre_key, style_key) DO NOTHING`, [genreKey, styleKey || ""]);
+        return;
+    }
+    const setSql = cols.map((c, i) => `${c} = $${i + 3}`).join(", ");
+    const insertCols = ["genre_key", "style_key", ...cols].join(", ");
+    const insertVals = ["$1", "$2", ...cols.map((_, i) => `$${i + 3}`)].join(", ");
+    await getPool().query(`INSERT INTO cache_warm_runs (${insertCols})
+     VALUES (${insertVals})
+     ON CONFLICT (genre_key, style_key) DO UPDATE SET ${setSql}`, [genreKey, styleKey || "", ...vals]);
+}
+export async function recordCacheWarmRunHit(genreKey, styleKey, title, releaseId) {
+    await getPool().query(`UPDATE cache_warm_runs
+        SET total_cached   = total_cached + 1,
+            last_cached_at = NOW(),
+            recent_cached  = (
+              jsonb_build_array(jsonb_build_object('id', $4::bigint, 'title', $3::text, 'at', NOW()))
+              || (recent_cached - 9)
+            )
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", title, releaseId]);
+}
+export async function recordCacheWarmRunSkip(genreKey, styleKey) {
+    await getPool().query(`UPDATE cache_warm_runs SET total_skipped = total_skipped + 1
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
+}
+export async function recordCacheWarmRunSearched(genreKey, styleKey, n) {
+    await getPool().query(`UPDATE cache_warm_runs SET total_searched = total_searched + $3
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", n]);
+}
+export async function recordCacheWarmRunError(genreKey, styleKey, msg) {
+    await getPool().query(`UPDATE cache_warm_runs
+        SET total_errors  = total_errors + 1,
+            recent_errors = (
+              jsonb_build_array(jsonb_build_object('msg', $3::text, 'at', NOW()))
+              || (recent_errors - 9)
+            )
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", msg.slice(0, 500)]);
+}
+export async function resetCacheWarmRun(genreKey, styleKey) {
+    await getPool().query(`UPDATE cache_warm_runs
+        SET current_year    = NULL,
+            current_page    = 1,
+            total_searched  = 0,
+            total_cached    = 0,
+            total_skipped   = 0,
+            total_errors    = 0,
+            recent_cached   = '[]'::jsonb,
+            recent_errors   = '[]'::jsonb
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
+}
+export async function deleteCacheWarmRun(genreKey, styleKey) {
+    await getPool().query(`DELETE FROM cache_warm_runs WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
 }
 // Existence check the worker uses before fetching a release. We only
 // pay the Discogs RTT if it's not already cached. (kind defaults to
