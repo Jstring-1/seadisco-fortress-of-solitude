@@ -43,6 +43,11 @@ import {
 // so it survives restarts. Lets the admin "anchor today" if the
 // rotation lands on the wrong genre.
 const ANCHOR_KEY = "genre_cache_warm_anchor_doy";
+// Global pause flag. When "1", the auto-rotation scheduler tick
+// no-ops; manual /start calls still kick the worker (so the admin
+// can warm specific genres on demand without the nightly cycle
+// running too).
+const PAUSED_KEY = "genre_cache_warm_paused";
 
 const TZ = "America/Los_Angeles";
 const WINDOW_START_HOUR = 1;   // inclusive
@@ -189,6 +194,15 @@ export async function getRotationAnchor(): Promise<number | null> {
   if (raw == null) return null;
   const n = parseInt(raw, 10);
   return Number.isFinite(n) ? n : null;
+}
+
+// Global pause helpers — wraps app_settings so the worker has a
+// single source of truth.
+export async function isGenreCacheWarmPaused(): Promise<boolean> {
+  return (await getAppSetting(PAUSED_KEY)) === "1";
+}
+export async function setGenreCacheWarmPaused(paused: boolean): Promise<void> {
+  await setAppSetting(PAUSED_KEY, paused ? "1" : "0");
 }
 
 async function _runWorkerForGenre(
@@ -338,6 +352,11 @@ async function _tickOnce(
   forceGenreKey?: string,
 ): Promise<void> {
   try {
+    // Global pause gates the auto-rotation only. Manual /start
+    // calls reach _tickOnce with forceGenreKey set, and those still
+    // run so the admin can warm specific genres while the nightly
+    // cycle is paused.
+    if (!forceGenreKey && await isGenreCacheWarmPaused()) return;
     const rows = await listAllGenreCacheWarmStates();
     if (!rows.length) return;
     const target = forceGenreKey
