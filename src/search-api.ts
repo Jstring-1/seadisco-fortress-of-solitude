@@ -8717,7 +8717,7 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
 // Endpoints power the redesigned Cache admin tab. No cron — runs are
 // kicked manually, one at a time, with the admin picking genre +
 // optional style + optional year range.
-app.get("/api/admin/cache-warm/status", async (req, res) => {
+app.get("/api/admin/cache-warm-runs/status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     const totalR = await getPool().query(
@@ -8795,7 +8795,7 @@ app.get("/api/admin/cache-warm/status", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-app.post("/api/admin/cache-warm/start", express.json({ limit: "4kb" }), async (req, res) => {
+app.post("/api/admin/cache-warm-runs/start", express.json({ limit: "4kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const body = req.body ?? {};
   const num = (v: any) => {
@@ -8818,7 +8818,7 @@ app.post("/api/admin/cache-warm/start", express.json({ limit: "4kb" }), async (r
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-app.post("/api/admin/cache-warm/stop", async (req, res) => {
+app.post("/api/admin/cache-warm-runs/stop", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     requestCacheWarmStop();
@@ -8826,7 +8826,7 @@ app.post("/api/admin/cache-warm/stop", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-app.post("/api/admin/cache-warm/reset", express.json({ limit: "2kb" }), async (req, res) => {
+app.post("/api/admin/cache-warm-runs/reset", express.json({ limit: "2kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const genreKey = String(req.body?.genreKey ?? req.query.genreKey ?? "").trim();
   const styleKey = String(req.body?.styleKey ?? req.query.styleKey ?? "").trim();
@@ -8837,7 +8837,7 @@ app.post("/api/admin/cache-warm/reset", express.json({ limit: "2kb" }), async (r
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-app.post("/api/admin/cache-warm/delete", express.json({ limit: "2kb" }), async (req, res) => {
+app.post("/api/admin/cache-warm-runs/delete", express.json({ limit: "2kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const genreKey = String(req.body?.genreKey ?? req.query.genreKey ?? "").trim();
   const styleKey = String(req.body?.styleKey ?? req.query.styleKey ?? "").trim();
