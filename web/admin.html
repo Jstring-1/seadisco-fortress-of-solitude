@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2144" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2153" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2144"></script>
-<script defer src="/shared.js?v=20260530.2144"></script>
+<script defer src="/utils.js?v=20260530.2153"></script>
+<script defer src="/shared.js?v=20260530.2153"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -334,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2144"></script>
-<script defer src="/blues-admin.js?v=20260530.2144"></script>
+<script defer src="/modal.js?v=20260530.2153"></script>
+<script defer src="/blues-admin.js?v=20260530.2153"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1086,11 +1086,12 @@ async function loadCacheWarm() {
           <label style="font-size:0.74rem;color:var(--muted)">To year
             <input id="cw-form-to" type="number" placeholder="${new Date().getFullYear()}" value="${esc(prevTo)}" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
           </label>
-          <div style="display:flex;gap:0.4rem">
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
             ${running
               ? `<button class="admin-btn" onclick="cacheWarmStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
               : `<button class="admin-btn" onclick="cacheWarmStartFromForm(false)" title="Resume from the persisted cursor for this combo, or start fresh if none. From-year only applies on first run for the combo.">▶ Start</button>
                  <button class="admin-btn" onclick="cacheWarmStartFromForm(true)" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>`}
+            <button class="admin-btn" onclick="cacheWarmForceClear()" title="Force-clear the in-memory 'running' lock when the worker is stuck or crashed silently. Doesn't affect cached data. Use if Start refuses to fire.">⚠ Force clear lock</button>
           </div>
         </div>
         <div style="font-size:0.72rem;color:var(--muted);margin-top:0.5rem">
@@ -1209,6 +1210,15 @@ async function cacheWarmStartFromForm(resetCursor) {
   } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
 }
 window.cacheWarmStartFromForm = cacheWarmStartFromForm;
+async function cacheWarmForceClear() {
+  if (!confirm("Force-clear the in-memory 'running' lock? Use this when a worker crashed silently and Start now refuses to fire. Doesn't affect cached data.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-runs/force-clear", { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadCacheWarm();
+  } catch (e) { alert("Force clear failed: " + ((e && e.message) || e)); }
+}
+window.cacheWarmForceClear = cacheWarmForceClear;
 async function cacheWarmStop() {
   try {
     const r = await apiFetch("/api/admin/cache-warm-runs/stop", { method: "POST" });
