@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2134" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2144" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2134"></script>
-<script defer src="/shared.js?v=20260530.2134"></script>
+<script defer src="/utils.js?v=20260530.2144"></script>
+<script defer src="/shared.js?v=20260530.2144"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -334,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2134"></script>
-<script defer src="/blues-admin.js?v=20260530.2134"></script>
+<script defer src="/modal.js?v=20260530.2144"></script>
+<script defer src="/blues-admin.js?v=20260530.2144"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -998,7 +998,7 @@ async function loadCacheWarm() {
   const el = document.getElementById("cw-content");
   if (!el) return;
   try {
-    const r = await apiFetch("/api/admin/cache-warm/status");
+    const r = await apiFetch("/api/admin/cache-warm-runs/status");
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
     const { rows = [], release_cache_total = 0, active = null, running = false } = await r.json();
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
@@ -1011,20 +1011,50 @@ async function loadCacheWarm() {
     const selectedGenre = active?.genreKey ?? prevGenre ?? _CW_GENRES[0].key;
     const selectedStyle = active?.styleKey ?? prevStyle ?? "";
     // Active-run rate from the matching row's recent_cached ring.
+    // Also fetch the row's cursor + counters so the control box can
+    // surface in-flight progress without making the admin glance
+    // down at the stats grid.
+    const activeRow = (running && active)
+      ? rows.find(x => x.genre_key === active.genreKey && (x.style_key || "") === (active.styleKey || ""))
+      : null;
+    const rc = Array.isArray(activeRow?.recent_cached) ? activeRow.recent_cached : [];
+    const recentErrors = Array.isArray(activeRow?.recent_errors) ? activeRow.recent_errors : [];
     let ratePill = "";
-    if (running && active) {
-      const r2 = rows.find(x => x.genre_key === active.genreKey && (x.style_key || "") === (active.styleKey || ""));
-      const rc = Array.isArray(r2?.recent_cached) ? r2.recent_cached : [];
-      if (rc.length >= 2) {
-        const dt = new Date(rc[0]?.at || 0).getTime() - new Date(rc[rc.length - 1]?.at || 0).getTime();
-        if (dt > 0) ratePill = `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">${((rc.length - 1) / (dt / 60000)).toFixed(1)} / min</span>`;
-      }
+    if (running && rc.length >= 2) {
+      const dt = new Date(rc[0]?.at || 0).getTime() - new Date(rc[rc.length - 1]?.at || 0).getTime();
+      if (dt > 0) ratePill = `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">${((rc.length - 1) / (dt / 60000)).toFixed(1)} / min</span>`;
     }
     const runningPill = running
       ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
       : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
-    const activeLine = running && active
-      ? `<div style="font-size:0.78rem;color:var(--accent);margin-bottom:0.4rem">Running: <strong>${esc(active.genreKey)}</strong>${active.styleKey ? ` / ${esc(active.styleKey)}` : ""} · ${active.fromYear}–${active.toYear} · started ${new Date(active.startedAt).toLocaleString()}</div>`
+    // Beefier active block: progress tiles + recent + errors. Shown
+    // only when running so an idle panel stays compact.
+    const activeBlock = (running && active && activeRow) ? `
+      <div style="border:1px solid rgba(125,225,150,0.3);border-radius:5px;padding:0.5rem 0.7rem;margin-bottom:0.6rem;background:rgba(125,225,150,0.05)">
+        <div style="font-size:0.82rem;color:var(--accent);margin-bottom:0.4rem">
+          Running: <strong>${esc(active.genreKey)}</strong>${active.styleKey ? ` / <strong>${esc(active.styleKey)}</strong>` : ""} · ${active.fromYear}–${active.toYear} · started ${new Date(active.startedAt).toLocaleString()}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;margin-bottom:0.4rem">
+          <div><div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Cursor</div><div style="font-size:0.95rem;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums">${activeRow.current_year ?? "—"} · p${activeRow.current_page ?? 1}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Cached (run)</div><div style="font-size:0.95rem;font-weight:600;color:#7ed196;font-variant-numeric:tabular-nums">${fmt(activeRow.total_cached)}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Skipped</div><div style="font-size:0.95rem;color:var(--muted);font-variant-numeric:tabular-nums">${fmt(activeRow.total_skipped)}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Searched</div><div style="font-size:0.95rem;color:var(--muted);font-variant-numeric:tabular-nums">${fmt(activeRow.total_searched)}</div></div>
+          <div><div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">Errors</div><div style="font-size:0.95rem;color:${activeRow.total_errors ? "#e88" : "var(--muted)"};font-variant-numeric:tabular-nums">${fmt(activeRow.total_errors)}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div>
+            <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Recent cached</div>
+            ${rc.length
+              ? `<ul style="margin:0;padding-left:1rem;font-size:0.74rem;color:var(--text)">${rc.slice(0, 5).map(c => `<li style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.title || "")}">${esc(c.title || "")} <span style="color:var(--muted)">#${esc(c.id)}</span></li>`).join("")}</ul>`
+              : `<div style="font-style:italic;color:var(--muted);font-size:0.74rem">(none yet)</div>`}
+          </div>
+          <div>
+            ${recentErrors.length
+              ? `<details><summary style="cursor:pointer;color:#e88;font-size:0.74rem;font-weight:600">${recentErrors.length} recent error${recentErrors.length === 1 ? "" : "s"}</summary><ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:#e88">${recentErrors.map(e => `<li>${esc(e.msg || "")}</li>`).join("")}</ul></details>`
+              : ""}
+          </div>
+        </div>
+      </div>`
       : "";
 
     // Genre <select> with options. Pre-select the active or
@@ -1042,7 +1072,7 @@ async function loadCacheWarm() {
           ${runningPill}${ratePill}
           <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
         </div>
-        ${activeLine}
+        ${activeBlock}
         <div style="display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:0.5rem;align-items:end">
           <label style="font-size:0.74rem;color:var(--muted)">Genre
             <select id="cw-form-genre" onchange="_cwSyncStyleList()" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">${genreOptions}</select>
@@ -1156,7 +1186,7 @@ async function cacheWarmStartFromForm(resetCursor) {
   const to       = document.getElementById("cw-form-to")?.value   || "";
   if (!genreKey) { alert("Pick a genre."); return; }
   try {
-    const r = await apiFetch("/api/admin/cache-warm/start", {
+    const r = await apiFetch("/api/admin/cache-warm-runs/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1181,7 +1211,7 @@ async function cacheWarmStartFromForm(resetCursor) {
 window.cacheWarmStartFromForm = cacheWarmStartFromForm;
 async function cacheWarmStop() {
   try {
-    const r = await apiFetch("/api/admin/cache-warm/stop", { method: "POST" });
+    const r = await apiFetch("/api/admin/cache-warm-runs/stop", { method: "POST" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadCacheWarm();
   } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
