@@ -10,7 +10,35 @@
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 import { DiscogsClient } from "./discogs-client.js";
-import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSkip, recordCacheWarmRunSearched, recordCacheWarmRunError, isReleaseCached, cacheRelease, getOAuthCredentials, } from "./db.js";
+import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSkip, recordCacheWarmRunSearched, recordCacheWarmRunError, isReleaseCached, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, } from "./db.js";
+// Persisted intent so a Railway restart can auto-resume the run.
+// Set when startCacheWarmRun fires, cleared by Stop or natural
+// completion. Crashes do NOT clear it — boot-resume picks up where
+// the dead worker left off.
+const ACTIVE_KEY = "cache_warm_active_run";
+async function _writeActiveRun(params) {
+    try {
+        await setAppSetting(ACTIVE_KEY, JSON.stringify(params));
+    }
+    catch { }
+}
+async function _clearActiveRun() {
+    try {
+        await setAppSetting(ACTIVE_KEY, null);
+    }
+    catch { }
+}
+async function _readActiveRun() {
+    try {
+        const raw = await getAppSetting(ACTIVE_KEY);
+        if (!raw)
+            return null;
+        return JSON.parse(raw);
+    }
+    catch {
+        return null;
+    }
+}
 const PER_PAGE = 100;
 const REQ_INTERVAL_MS = 1100;
 // In-memory state only — survives process lifetime, resets on
@@ -24,6 +52,23 @@ let _adminClerkIdForWorker = null;
 let _activeParams = null;
 export function initCacheWarmModule(adminClerkId) {
     _adminClerkIdForWorker = adminClerkId || null;
+    // Boot-resume: if app_settings still has an active_run record
+    // from before the restart, kick the worker again. Idempotent —
+    // the persisted cursor in cache_warm_runs lets the worker pick
+    // up where the dead one left off.
+    setTimeout(() => {
+        _readActiveRun().then(active => {
+            if (!active || _runningKey)
+                return;
+            console.log(`[cache-warm] boot-resume: ${active.genreKey}::${active.styleKey || ""}`);
+            startCacheWarmRun({
+                genreKey: active.genreKey,
+                styleKey: active.styleKey,
+                fromYear: active.fromYear,
+                toYear: active.toYear,
+            }).catch(err => console.error("[cache-warm] boot-resume failed:", err));
+        }).catch(() => { });
+    }, 5000); // brief delay so DB pool is up
 }
 export function isCacheWarmRunning() {
     return _runningKey != null;
@@ -34,6 +79,10 @@ export function getActiveCacheWarmParams() {
 export function requestCacheWarmStop() {
     if (_runningKey)
         _stopRequested = true;
+    // Clear the persisted resume intent so a restart doesn't bring
+    // a stopped run back. Fire-and-forget — worker's finally clause
+    // also clears it on natural exit; both paths are safe.
+    _clearActiveRun().catch(() => { });
 }
 // Admin override: force-clear the in-memory lock even if the worker
 // is theoretically running. Use when the state is wedged — e.g. a
@@ -44,6 +93,9 @@ export function forceClearCacheWarmRunning() {
     _runningKey = null;
     _stopRequested = false;
     _activeParams = null;
+    // Also clear the resume intent — otherwise the next restart
+    // would helpfully bring the wedged run back.
+    _clearActiveRun().catch(() => { });
 }
 function _sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
@@ -133,6 +185,10 @@ export async function startCacheWarmRun(opts) {
         fromYear, toYear,
         startedAt: new Date().toISOString(),
     };
+    // Persist the resume intent so a Railway restart auto-resumes
+    // this combo from the persisted cursor. Cleared by Stop, natural
+    // completion, or Force-clear.
+    await _writeActiveRun({ genreKey, styleKey, fromYear: opts.fromYear, toYear: opts.toYear });
     await upsertCacheWarmRun(genreKey, styleKey, {
         current_year: cursorYear,
         current_page: cursorPage,
@@ -144,6 +200,9 @@ export async function startCacheWarmRun(opts) {
         try {
             await _runWorker(client, genreKey, styleKey, cursorYear, cursorPage, toYear);
             console.log(`[cache-warm] worker for ${key} exited cleanly`);
+            // Natural exit = clear the resume intent. Crashes leave it
+            // set so the next boot will retry.
+            await _clearActiveRun();
         }
         catch (err) {
             console.error(`[cache-warm] worker for ${key} crashed:`, err?.stack || err);
