@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1331" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2106" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.1331"></script>
-<script defer src="/shared.js?v=20260530.1331"></script>
+<script defer src="/utils.js?v=20260530.2106"></script>
+<script defer src="/shared.js?v=20260530.2106"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -316,8 +316,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.1331"></script>
-<script defer src="/blues-admin.js?v=20260530.1331"></script>
+<script defer src="/modal.js?v=20260530.2106"></script>
+<script defer src="/blues-admin.js?v=20260530.2106"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -965,7 +965,7 @@ async function loadGenreCacheWarm() {
   try {
     const r = await apiFetch("/api/admin/genre-cache-warm/status");
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
-    const { rows = [], release_cache_total, rotation_anchor_doy } = await r.json();
+    const { rows = [], release_cache_total, rotation_anchor_doy, paused = false } = await r.json();
     if (!rows.length) { el.textContent = "(no genre rows seeded — restart the server)"; return; }
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
     const fmt = n => Number(n || 0).toLocaleString();
@@ -985,14 +985,25 @@ async function loadGenreCacheWarm() {
     // genre); a global single-genre run lock prevents overlap server-
     // side so Start is disabled on every other card while one genre
     // is running.
+    const pauseBtnLabel = paused ? "▶ Resume auto-rotation" : "⏸ Pause auto-rotation";
+    const pauseBtnTitle = paused
+      ? "Resume the nightly 1a-6a auto-rotation. Manual Start buttons keep working either way."
+      : "Pause the nightly 1a-6a auto-rotation so it stops at the next tick. Manual Start buttons still work for warming specific genres on demand.";
+    const pauseBanner = paused
+      ? `<div style="padding:0.4rem 0.6rem;background:rgba(255,200,100,0.12);border:1px solid rgba(255,200,100,0.4);border-radius:5px;color:#e8c87a;font-size:0.78rem;margin-bottom:0.6rem">⏸ <strong>Auto-rotation paused.</strong> Tonight's tick will no-op. Use Start on a card to warm it manually.</div>`
+      : "";
     const summary = `
+      ${pauseBanner}
       <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.8rem">
         <span style="font-size:0.78rem;color:var(--muted)">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
         <span style="font-size:0.78rem;color:var(--muted)">Today's pick:
-          ${todayKey
-            ? `<strong style="color:var(--accent)">${esc(todayKey)}</strong>`
-            : `<em>(no enabled genre)</em>`}
+          ${paused
+            ? `<em style="color:#e8c87a">(paused)</em>`
+            : (todayKey
+              ? `<strong style="color:var(--accent)">${esc(todayKey)}</strong>`
+              : `<em>(no enabled genre)</em>`)}
         </span>
+        <button class="admin-btn" onclick="genreCacheWarmTogglePaused()" title="${pauseBtnTitle}">${pauseBtnLabel}</button>
         <button class="admin-btn" onclick="genreCacheWarmAnchorToday()" title="Re-anchor the rotation so today picks the first slot (Blues, by default). Use this if the rotation drifted onto the wrong genre.">Anchor today → ${esc(active.length ? active[0].genre_key : "?")}</button>
         ${anyRunning
           ? `<span style="font-size:0.72rem;color:var(--accent);margin-left:auto">One genre at a time — Start is disabled on other cards while a worker is active.</span>`
@@ -1156,6 +1167,13 @@ async function genreCacheWarmToggleAuto(genre) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadGenreCacheWarm();
   } catch (e) { alert("Toggle failed: " + ((e && e.message) || e)); }
+}
+async function genreCacheWarmTogglePaused() {
+  try {
+    const r = await apiFetch("/api/admin/genre-cache-warm/toggle-paused", { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Toggle paused failed: " + ((e && e.message) || e)); }
 }
 async function genreCacheWarmAnchorToday() {
   if (!confirm("Anchor the rotation so TODAY picks the first slot (Blues by default). Tomorrow picks the second slot, etc. Use this when the rotation has drifted onto the wrong genre.")) return;
