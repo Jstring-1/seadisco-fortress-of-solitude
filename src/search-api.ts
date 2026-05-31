@@ -8733,12 +8733,21 @@ app.get("/api/admin/cache-warm/status", async (req, res) => {
     // Result: the grid shows every (genre, style) present in cache,
     // even combos the admin has never explicitly run, with a Run
     // button to kick a sweep for any of them.
+    // Guard with jsonb_typeof — if a cached release has `genres` or
+    // `styles` stored as a non-array (string, null, object) — which
+    // can happen if a Discogs response was incomplete — jsonb_array_
+    // elements_text would throw and abort the whole query. The
+    // CASE expression substitutes an empty array in that case so
+    // the release is silently excluded instead of breaking the page.
+    const arrOf = (path: string) =>
+      `CASE WHEN jsonb_typeof(rc.data->'${path}') = 'array'
+            THEN rc.data->'${path}' ELSE '[]'::jsonb END`;
     const gridR = await getPool().query(`
       WITH per_genre AS (
         SELECT g.value AS genre_key, '' AS style_key,
                COUNT(DISTINCT rc.discogs_id)::int AS in_cache
           FROM release_cache rc
-          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
+          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
          WHERE rc.type = 'release'
          GROUP BY g.value
       ),
@@ -8746,8 +8755,8 @@ app.get("/api/admin/cache-warm/status", async (req, res) => {
         SELECT g.value AS genre_key, s.value AS style_key,
                COUNT(DISTINCT rc.discogs_id)::int AS in_cache
           FROM release_cache rc
-          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
-          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'styles','[]'::jsonb)) s
+          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
+          CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("styles")}) s
          WHERE rc.type = 'release'
          GROUP BY g.value, s.value
       ),
