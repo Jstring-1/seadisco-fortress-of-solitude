@@ -111,13 +111,22 @@ export async function startCacheWarmRun(opts) {
     // Ensure a row exists; honour resetCursor if asked.
     await upsertCacheWarmRun(genreKey, styleKey, {});
     const row = await getCacheWarmRun(genreKey, styleKey);
-    const cursorYear = (opts.resetCursor || !row?.current_year)
+    const toYear = opts.toYear ?? new Date().getFullYear();
+    let cursorYear = (opts.resetCursor || !row?.current_year)
         ? (opts.fromYear ?? 1900)
         : Number(row.current_year);
-    const cursorPage = (opts.resetCursor || !row?.current_page)
+    let cursorPage = (opts.resetCursor || !row?.current_page)
         ? 1
         : Number(row.current_page);
-    const toYear = opts.toYear ?? new Date().getFullYear();
+    // If the persisted cursor is past the cap (a previous sweep
+    // completed), restart from the user's from-year (or 1900) so a
+    // fresh click on Start picks up new Discogs submissions in the
+    // existing range — instead of silently doing nothing.
+    if (cursorYear > toYear) {
+        console.log(`[cache-warm] persisted cursor ${cursorYear} > toYear ${toYear}; auto-resetting to ${opts.fromYear ?? 1900}`);
+        cursorYear = opts.fromYear ?? 1900;
+        cursorPage = 1;
+    }
     const fromYear = Math.min(cursorYear, toYear);
     _activeParams = {
         genreKey, styleKey,
@@ -216,7 +225,12 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
         }
         if (_stopRequested)
             break;
-        // Page advance / year roll.
+        // Page advance / year roll. Clamp the persisted year at
+        // endYear+1 max — beyond that and a future Start with the same
+        // toYear would silently no-op. The auto-reset in
+        // startCacheWarmRun handles the +1 case (cursor past end) by
+        // rewinding to fromYear, so this is just a guard against
+        // persisting nonsense values.
         const totalPages = Number(searchRes?.pagination?.pages);
         const nextPage = page + 1;
         if (Number.isFinite(totalPages) && nextPage > totalPages) {
@@ -227,7 +241,9 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
             page = nextPage;
         }
         await upsertCacheWarmRun(genreKey, styleKey, {
-            current_year: year, current_page: page, last_run_at: new Date(),
+            current_year: Math.min(year, endYear + 1),
+            current_page: page,
+            last_run_at: new Date(),
         });
     }
 }
