@@ -1058,17 +1058,40 @@ export async function initDb() {
   // (rotation_order, start/end years, enabled, etc.) across re-runs.
   // Genre keys must match Discogs's exact genre strings — "Folk,
   // World, & Country" is one genre (not three), so commas + ampersand
-  // are intentional. 5-night rotation as requested.
-  for (const [order, genre] of [
+  // are intentional. First five participate in the auto rotation;
+  // the other ten get inserted disabled so the admin can manually
+  // warm them via Start without them slotting into the nightly cycle.
+  const _ROTATION = [
     [1, "Blues"],
     [2, "Folk, World, & Country"],
     [3, "Jazz"],
     [4, "Reggae"],
     [5, "Latin"],
-  ] as [number, string][]) {
+  ] as [number, string][];
+  const _MANUAL_ONLY = [
+    [10, "Rock"],
+    [11, "Electronic"],
+    [12, "Funk / Soul"],
+    [13, "Pop"],
+    [14, "Hip Hop"],
+    [15, "Classical"],
+    [16, "Stage & Screen"],
+    [17, "Brass & Military"],
+    [18, "Children's"],
+    [19, "Non-Music"],
+  ] as [number, string][];
+  for (const [order, genre] of _ROTATION) {
     await getPool().query(
       `INSERT INTO genre_cache_warm_state (genre_key, rotation_order)
        VALUES ($1, $2)
+       ON CONFLICT (genre_key) DO NOTHING`,
+      [genre, order],
+    );
+  }
+  for (const [order, genre] of _MANUAL_ONLY) {
+    await getPool().query(
+      `INSERT INTO genre_cache_warm_state (genre_key, rotation_order, enabled)
+       VALUES ($1, $2, false)
        ON CONFLICT (genre_key) DO NOTHING`,
       [genre, order],
     );
