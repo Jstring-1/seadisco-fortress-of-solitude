@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2106" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2122" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2106"></script>
-<script defer src="/shared.js?v=20260530.2106"></script>
+<script defer src="/utils.js?v=20260530.2122"></script>
+<script defer src="/shared.js?v=20260530.2122"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -132,16 +132,34 @@
         <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
       </div>
 
-      <!-- Genre cache-warm cron (own Cache tab) -->
-      <div class="admin-tab-panel admin-grp-cache" id="panel-genre-cache-warm" style="display:none">
+      <!-- Manual cache-warm: single control box + stats grid -->
+      <div class="admin-tab-panel admin-grp-cache" id="panel-cache-warm" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Genre cache-warm cron</h2>
-          <button class="admin-refresh-btn" id="gcw-refresh-btn" onclick="_adminClickRefresh(this, loadGenreCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="gcw-refresh-status" class="admin-refresh-status"></span>
-          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">1a-6a Pacific. Rotates one genre per night via (dayOfYear % activeGenres). Each genre tracks its own cursor.</span>
+          <h2 style="margin:0">Cache-warm runs</h2>
+          <button class="admin-refresh-btn" id="cw-refresh-btn" onclick="_adminClickRefresh(this, loadCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="cw-refresh-status" class="admin-refresh-status"></span>
+          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Pick a genre + optional style + year range, hit Start. One run at a time.</span>
         </div>
-        <div id="gcw-content" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+        <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
+
+      <!-- Style suggestions per Discogs genre. The genre dropdown
+           re-points cb-styles via JS on change; user can type freely. -->
+      <datalist id="cw-styles-Blues"><option value=""><option value="Country Blues"><option value="Delta Blues"><option value="Piano Blues"><option value="Hokum"><option value="Boogie Woogie"><option value="Vaudeville"><option value="Jug Band"><option value="Pre-War Blues"><option value="Acoustic Blues"><option value="Electric Blues"><option value="Chicago Blues"><option value="Texas Blues"><option value="Piedmont Blues"><option value="Memphis Blues"><option value="Harmonica Blues"><option value="Hill Country Blues"><option value="Modern Electric Blues"><option value="Jump Blues"></datalist>
+      <datalist id="cw-styles-Folk"><option value=""><option value="Country"><option value="Folk"><option value="Bluegrass"><option value="Gospel"><option value="Cajun"><option value="Zydeco"><option value="African"><option value="Celtic"><option value="World"><option value="Old-Time"><option value="Honky Tonk"><option value="Hillbilly"><option value="Western"><option value="Country Rock"></datalist>
+      <datalist id="cw-styles-Jazz"><option value=""><option value="Dixieland"><option value="Hot Jazz"><option value="Swing"><option value="Big Band"><option value="Bebop"><option value="Hard Bop"><option value="Free Jazz"><option value="Smooth Jazz"><option value="Cool Jazz"><option value="Vocal"><option value="Fusion"><option value="Ragtime"><option value="Soul-Jazz"><option value="Free Improvisation"></datalist>
+      <datalist id="cw-styles-Reggae"><option value=""><option value="Reggae"><option value="Ska"><option value="Rocksteady"><option value="Dancehall"><option value="Dub"><option value="Roots Reggae"><option value="Lovers Rock"><option value="Reggae-Pop"></datalist>
+      <datalist id="cw-styles-Latin"><option value=""><option value="Latin"><option value="Bolero"><option value="Salsa"><option value="Mambo"><option value="Tango"><option value="Bossa Nova"><option value="Cumbia"><option value="Son"><option value="Rumba"><option value="Latin Jazz"><option value="Merengue"><option value="Samba"></datalist>
+      <datalist id="cw-styles-Rock"><option value=""><option value="Rock & Roll"><option value="Garage Rock"><option value="Surf"><option value="Rockabilly"><option value="Pop Rock"><option value="Hard Rock"><option value="Punk"><option value="Indie Rock"><option value="Folk Rock"><option value="Psychedelic Rock"><option value="Heavy Metal"><option value="Glam"><option value="New Wave"><option value="Prog Rock"></datalist>
+      <datalist id="cw-styles-Electronic"><option value=""><option value="House"><option value="Techno"><option value="Ambient"><option value="Dub"><option value="IDM"><option value="Trance"><option value="Drum n Bass"><option value="Synth-pop"><option value="Electro"><option value="Industrial"><option value="Experimental"></datalist>
+      <datalist id="cw-styles-FunkSoul"><option value=""><option value="Funk"><option value="Soul"><option value="Rhythm & Blues"><option value="Disco"><option value="Gospel"><option value="Neo Soul"><option value="Doo Wop"></datalist>
+      <datalist id="cw-styles-HipHop"><option value=""><option value="Hip Hop"><option value="Conscious"><option value="Boom Bap"><option value="Trap"><option value="East Coast"><option value="West Coast"><option value="Gangsta"><option value="Old School"></datalist>
+      <datalist id="cw-styles-Classical"><option value=""><option value="Baroque"><option value="Classical"><option value="Romantic"><option value="Modern"><option value="Opera"><option value="Choral"><option value="Symphony"><option value="Chamber Music"><option value="Renaissance"></datalist>
+      <datalist id="cw-styles-Pop"><option value=""><option value="Pop"><option value="Vocal"><option value="Ballad"><option value="Synth-pop"><option value="Europop"><option value="Schlager"></datalist>
+      <datalist id="cw-styles-Stage"><option value=""><option value="Soundtrack"><option value="Score"><option value="Musical"><option value="Theme"></datalist>
+      <datalist id="cw-styles-Brass"><option value=""><option value="Brass Band"><option value="Marching Band"><option value="Military"><option value="Folk"></datalist>
+      <datalist id="cw-styles-Childrens"><option value=""><option value="Story"><option value="Educational"><option value="Nursery Rhymes"></datalist>
+      <datalist id="cw-styles-NonMusic"><option value=""><option value="Spoken Word"><option value="Field Recording"><option value="Comedy"><option value="Interview"><option value="Audiobook"><option value="Religious"></datalist>
 
       <!-- API Request Log (System group — below Database) -->
       <div class="admin-tab-panel admin-grp-system" id="panel-api-log" style="display:none">
@@ -316,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2106"></script>
-<script defer src="/blues-admin.js?v=20260530.2106"></script>
+<script defer src="/modal.js?v=20260530.2122"></script>
+<script defer src="/blues-admin.js?v=20260530.2122"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -397,8 +415,8 @@ const _adminGroups = {
     load: () => { loadDbStats(); loadApiLog(); },
   },
   'cache': {
-    panels: ['panel-genre-cache-warm'],
-    load: () => { loadGenreCacheWarm(); },
+    panels: ['panel-cache-warm'],
+    load: () => { loadCacheWarm(); },
   },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
@@ -954,243 +972,217 @@ async function clearLocCache() {
   }
 }
 
-// ── Genre cache-warm cron panel (multi-genre rotation) ────────────────
-// Renders one card per genre with its cursor, cycle/lifetime counters,
-// and per-genre Start/Stop/Toggle/Reset buttons. Highlights today's
-// scheduled genre. Polls every 5s while any worker is running.
-let _gcwPollTimer = null;
-async function loadGenreCacheWarm() {
-  const el = document.getElementById("gcw-content");
+// ── Cache-warm manual control + stats grid ────────────────────────
+// Single control box at the top (genre / style / year range / Start
+// or Stop), stats grid below listing every (genre, style) combo the
+// admin has ever run. Polls every 5s while a run is in progress.
+const _CW_GENRES = [
+  { key: "Blues",                   list: "Blues"      },
+  { key: "Folk, World, & Country",  list: "Folk"       },
+  { key: "Jazz",                    list: "Jazz"       },
+  { key: "Reggae",                  list: "Reggae"     },
+  { key: "Latin",                   list: "Latin"      },
+  { key: "Rock",                    list: "Rock"       },
+  { key: "Electronic",              list: "Electronic" },
+  { key: "Funk / Soul",             list: "FunkSoul"   },
+  { key: "Hip Hop",                 list: "HipHop"     },
+  { key: "Pop",                     list: "Pop"        },
+  { key: "Classical",               list: "Classical"  },
+  { key: "Stage & Screen",          list: "Stage"      },
+  { key: "Brass & Military",        list: "Brass"      },
+  { key: "Children's",              list: "Childrens"  },
+  { key: "Non-Music",               list: "NonMusic"   },
+];
+let _cwPollTimer = null;
+async function loadCacheWarm() {
+  const el = document.getElementById("cw-content");
   if (!el) return;
   try {
-    const r = await apiFetch("/api/admin/genre-cache-warm/status");
+    const r = await apiFetch("/api/admin/cache-warm/status");
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
-    const { rows = [], release_cache_total, rotation_anchor_doy, paused = false } = await r.json();
-    if (!rows.length) { el.textContent = "(no genre rows seeded — restart the server)"; return; }
+    const { rows = [], release_cache_total = 0, active = null, running = false } = await r.json();
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
     const fmt = n => Number(n || 0).toLocaleString();
-    // Today's genre: same logic as the worker — (dayOfYear in Pacific
-    // % activeCount) over rows ordered by rotation_order. We compute
-    // it client-side so the UI can highlight "today's genre" without
-    // an extra endpoint roundtrip.
-    const active = rows.filter(r => r.enabled).sort((a, b) => a.rotation_order - b.rotation_order);
-    const anchor = Number.isFinite(rotation_anchor_doy) ? Number(rotation_anchor_doy) : 0;
-    const today = _gcwDayOfYearPacific();
-    const todayKey = active.length
-      ? active[(((today - anchor) % active.length) + active.length) % active.length].genre_key
-      : null;
-    const anyRunning = rows.some(r => r.running);
-
-    // Top summary row. Start/Stop are per-card now (one set per
-    // genre); a global single-genre run lock prevents overlap server-
-    // side so Start is disabled on every other card while one genre
-    // is running.
-    const pauseBtnLabel = paused ? "▶ Resume auto-rotation" : "⏸ Pause auto-rotation";
-    const pauseBtnTitle = paused
-      ? "Resume the nightly 1a-6a auto-rotation. Manual Start buttons keep working either way."
-      : "Pause the nightly 1a-6a auto-rotation so it stops at the next tick. Manual Start buttons still work for warming specific genres on demand.";
-    const pauseBanner = paused
-      ? `<div style="padding:0.4rem 0.6rem;background:rgba(255,200,100,0.12);border:1px solid rgba(255,200,100,0.4);border-radius:5px;color:#e8c87a;font-size:0.78rem;margin-bottom:0.6rem">⏸ <strong>Auto-rotation paused.</strong> Tonight's tick will no-op. Use Start on a card to warm it manually.</div>`
-      : "";
-    const summary = `
-      ${pauseBanner}
-      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.8rem">
-        <span style="font-size:0.78rem;color:var(--muted)">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
-        <span style="font-size:0.78rem;color:var(--muted)">Today's pick:
-          ${paused
-            ? `<em style="color:#e8c87a">(paused)</em>`
-            : (todayKey
-              ? `<strong style="color:var(--accent)">${esc(todayKey)}</strong>`
-              : `<em>(no enabled genre)</em>`)}
-        </span>
-        <button class="admin-btn" onclick="genreCacheWarmTogglePaused()" title="${pauseBtnTitle}">${pauseBtnLabel}</button>
-        <button class="admin-btn" onclick="genreCacheWarmAnchorToday()" title="Re-anchor the rotation so today picks the first slot (Blues, by default). Use this if the rotation drifted onto the wrong genre.">Anchor today → ${esc(active.length ? active[0].genre_key : "?")}</button>
-        ${anyRunning
-          ? `<span style="font-size:0.72rem;color:var(--accent);margin-left:auto">One genre at a time — Start is disabled on other cards while a worker is active.</span>`
-          : ""}
-      </div>
-    `;
-
-    // Per-genre cards in rotation order.
-    rows.sort((a, b) => a.rotation_order - b.rotation_order);
-    const cards = rows.map(r => {
-      const isToday = r.genre_key === todayKey;
-      const recentCached = Array.isArray(r.recent_cached) ? r.recent_cached : [];
-      const recentErrors = Array.isArray(r.recent_errors) ? r.recent_errors : [];
-      // Caches-per-minute rate from the recent_cached ring's
-      // timestamps. Needs ≥2 samples for a meaningful interval.
-      // Newest is index 0, oldest is the last. Shows on running
-      // cards only.
-      let ratePerMin = null;
-      if (r.running && recentCached.length >= 2) {
-        const newest = new Date(recentCached[0]?.at || 0).getTime();
-        const oldest = new Date(recentCached[recentCached.length - 1]?.at || 0).getTime();
-        const dtMs = newest - oldest;
-        if (dtMs > 0) ratePerMin = (recentCached.length - 1) / (dtMs / 60000);
+    // Preserve form values across re-renders (poll, refresh).
+    const prevGenre = document.getElementById("cw-form-genre")?.value;
+    const prevStyle = document.getElementById("cw-form-style")?.value || "";
+    const prevFrom  = document.getElementById("cw-form-from")?.value  || "";
+    const prevTo    = document.getElementById("cw-form-to")?.value    || "";
+    const selectedGenre = active?.genreKey ?? prevGenre ?? _CW_GENRES[0].key;
+    const selectedStyle = active?.styleKey ?? prevStyle ?? "";
+    // Active-run rate from the matching row's recent_cached ring.
+    let ratePill = "";
+    if (running && active) {
+      const r2 = rows.find(x => x.genre_key === active.genreKey && (x.style_key || "") === (active.styleKey || ""));
+      const rc = Array.isArray(r2?.recent_cached) ? r2.recent_cached : [];
+      if (rc.length >= 2) {
+        const dt = new Date(rc[0]?.at || 0).getTime() - new Date(rc[rc.length - 1]?.at || 0).getTime();
+        if (dt > 0) ratePill = `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">${((rc.length - 1) / (dt / 60000)).toFixed(1)} / min</span>`;
       }
-      const ratePill = r.running
-        ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem" title="Releases cached per minute, averaged across the last ${recentCached.length} samples in recent_cached.">${ratePerMin == null ? "— / min" : `${ratePerMin.toFixed(1)} / min`}</span>`
-        : "";
-      const runningPill = r.running
-        ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
-        : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
-      const enabledPill = r.enabled
-        ? `<span style="color:#7ed196;font-size:0.72rem">Auto on</span>`
-        : `<span style="color:#e88;font-size:0.72rem">Auto off</span>`;
-      const overridePill = r.manual_override
-        ? `<span style="color:var(--accent);font-size:0.72rem">· Override on</span>`
-        : "";
-      const lastCachedAt = r.last_cached_at ? new Date(r.last_cached_at).toLocaleString() : "—";
-      const cycleStartedAt = r.cycle_started_at ? new Date(r.cycle_started_at).toLocaleString() : "—";
-      const recentCachedHtml = recentCached.length
-        ? `<ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:var(--text)">${
-            recentCached.slice(0, 5).map(c => `<li>${esc(c.title || "")} <span style="color:var(--muted)">#${esc(c.id)}</span></li>`).join("")
-          }</ul>`
-        : `<div style="font-style:italic;color:var(--muted);font-size:0.72rem">(none yet this cycle)</div>`;
-      // Errors collapsed by default so a noisy day doesn't blow the
-      // card height. <details> is browser-native: click "N recent
-      // errors" to expand. Hidden entirely when there are none.
-      const recentErrorsHtml = recentErrors.length
-        ? `<details style="margin-top:0.2rem">
-             <summary style="cursor:pointer;color:#e88;font-size:0.72rem;font-weight:600">${recentErrors.length} recent error${recentErrors.length === 1 ? "" : "s"}</summary>
-             <ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:#e88">${
-               recentErrors.map(e => `<li>${esc(e.msg || "")}</li>`).join("")
-             }</ul>
-           </details>`
-        : "";
-      const cardBorder = isToday
-        ? "2px solid var(--accent)"
-        : "1px solid var(--border)";
-      const safeKey = esc(r.genre_key).replace(/'/g, "\\'");
-      return `
-        <div style="border:${cardBorder};border-radius:6px;padding:0.6rem 0.7rem;background:rgba(255,255,255,0.02)">
-          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.3rem">
-            <strong style="font-size:0.95rem;color:var(--text)">${esc(r.genre_key)}</strong>
-            <span style="font-size:0.7rem;color:var(--muted)">#${r.rotation_order}</span>
-            ${isToday ? `<span style="font-size:0.7rem;color:var(--accent)">· today</span>` : ""}
-            <span style="font-size:0.72rem;color:var(--muted);margin-left:auto">in cache: <strong style="color:var(--text)">${r.cached_count == null ? "—" : fmt(r.cached_count)}</strong></span>
-          </div>
-          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem">
-            ${runningPill}
-            ${ratePill}
-            ${enabledPill}${overridePill}
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 0.8rem;font-size:0.76rem;margin-bottom:0.4rem">
-            <div>
-              <div style="color:var(--muted)">Cursor</div>
-              <div style="color:var(--text);font-weight:600">${r.current_year} · p${r.current_page}</div>
-              <div style="color:var(--muted);font-size:0.7rem">${r.start_year}–${
-                // Worker auto-extends the cap to currentYear, so the
-                // label reads "1900 – present" once we've passed the
-                // stored end_year. Avoids the misleading "1900-2100"
-                // when the stored sentinel happens to be 2100.
-                Number(r.end_year) >= new Date().getFullYear() ? "present" : r.end_year
-              }</div>
-            </div>
-            <div>
-              <div style="color:var(--muted)">Cycle #${r.cycle_count}</div>
-              <div style="color:var(--text)">Cached <strong>${fmt(r.cycle_cached)}</strong> · Skipped ${fmt(r.cycle_skipped)}</div>
-              <div style="color:var(--muted);font-size:0.7rem">Started: ${cycleStartedAt}</div>
-            </div>
-            <div>
-              <div style="color:var(--muted)">Lifetime</div>
-              <div style="color:var(--text)">Cached <strong>${fmt(r.lifetime_cached)}</strong> · Err ${fmt(r.lifetime_errors)}</div>
-              <div style="color:var(--muted);font-size:0.7rem">Last cached: ${lastCachedAt}</div>
-            </div>
-            <div>
-              <div style="color:var(--muted);margin-bottom:0.1rem">Recent</div>
-              ${recentCachedHtml}
-              ${recentErrorsHtml}
-            </div>
-          </div>
-          <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
-            ${r.running
-              ? `<button class="admin-btn" onclick="genreCacheWarmStop('${safeKey}')" title="Signal this genre's worker to wind down at the next safe boundary.">■ Stop</button>`
-              : `<button class="admin-btn" ${anyRunning ? "disabled" : ""} onclick="genreCacheWarmStart('${safeKey}')" title="${anyRunning ? "Another genre is running — stop it first." : "Kick this genre's worker immediately, bypassing the 1a-6a window."}">▶ Start now</button>`}
-            <button class="admin-btn" onclick="genreCacheWarmToggleAuto('${safeKey}')" title="Toggle this genre's slot in the nightly rotation.">${r.enabled ? "Disable" : "Enable"}</button>
-            <button class="admin-btn" onclick="genreCacheWarmReset('${safeKey}')" title="Reset this genre's cursor to start_year and zero its cycle counters.">Reset cursor</button>
+    }
+    const runningPill = running
+      ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
+      : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
+    const activeLine = running && active
+      ? `<div style="font-size:0.78rem;color:var(--accent);margin-bottom:0.4rem">Running: <strong>${esc(active.genreKey)}</strong>${active.styleKey ? ` / ${esc(active.styleKey)}` : ""} · ${active.fromYear}–${active.toYear} · started ${new Date(active.startedAt).toLocaleString()}</div>`
+      : "";
+
+    // Genre <select> with options. Pre-select the active or
+    // previously chosen genre. Style <input> bound to a per-genre
+    // datalist (set in HTML).
+    const genreOptions = _CW_GENRES.map(g =>
+      `<option value="${esc(g.key)}"${g.key === selectedGenre ? " selected" : ""}>${esc(g.key)}</option>`,
+    ).join("");
+    const currentList = (_CW_GENRES.find(g => g.key === selectedGenre) || _CW_GENRES[0]).list;
+
+    el.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.8rem;margin-bottom:1rem;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.5rem">
+          <strong style="font-size:0.95rem">Start a run</strong>
+          ${runningPill}${ratePill}
+          <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
+        </div>
+        ${activeLine}
+        <div style="display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:0.5rem;align-items:end">
+          <label style="font-size:0.74rem;color:var(--muted)">Genre
+            <select id="cw-form-genre" onchange="_cwSyncStyleList()" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">${genreOptions}</select>
+          </label>
+          <label style="font-size:0.74rem;color:var(--muted)">Style <em style="color:#888">(optional)</em>
+            <input id="cw-form-style" type="text" list="cw-styles-${currentList}" value="${esc(selectedStyle)}" ${running ? "disabled" : ""} placeholder="(all of genre)" style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          </label>
+          <label style="font-size:0.74rem;color:var(--muted)">From year
+            <input id="cw-form-from" type="number" placeholder="1900" value="${esc(prevFrom)}" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          </label>
+          <label style="font-size:0.74rem;color:var(--muted)">To year
+            <input id="cw-form-to" type="number" placeholder="${new Date().getFullYear()}" value="${esc(prevTo)}" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          </label>
+          <div style="display:flex;gap:0.4rem">
+            ${running
+              ? `<button class="admin-btn" onclick="cacheWarmStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
+              : `<button class="admin-btn" onclick="cacheWarmStartFromForm(false)" title="Resume from the persisted cursor for this combo, or start fresh if none. From-year only applies on first run for the combo.">▶ Start</button>
+                 <button class="admin-btn" onclick="cacheWarmStartFromForm(true)" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>`}
           </div>
         </div>
-      `;
-    }).join("");
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.5rem">
+          Walks Discogs ${selectedStyle ? `<strong>${esc(selectedStyle)}</strong> in ` : ""}<strong>${esc(selectedGenre)}</strong> year-by-year at 1.1 s/req. Skips already-cached releases.
+        </div>
+      </div>
 
-    el.innerHTML = summary + `
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0.6rem">${cards}</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
+        <strong style="font-size:0.9rem">Per-combo stats</strong>
+        <span style="font-size:0.72rem;color:var(--muted)">One row per (genre, style) combo you've ever run.</span>
+      </div>
+      ${rows.length
+        ? `<table class="api-log-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
+            <colgroup>
+              <col style="width:18%">
+              <col style="width:18%">
+              <col style="width:9%">
+              <col style="width:9%">
+              <col style="width:9%">
+              <col style="width:9%">
+              <col style="width:8%">
+              <col style="width:14%">
+              <col style="width:6%">
+            </colgroup>
+            <thead><tr>
+              <th style="text-align:left">Genre</th>
+              <th style="text-align:left">Style</th>
+              <th style="text-align:right">In cache</th>
+              <th style="text-align:right">Cached (this run)</th>
+              <th style="text-align:right">Skipped</th>
+              <th style="text-align:right">Errors</th>
+              <th style="text-align:right">Cursor</th>
+              <th style="text-align:left">Last run</th>
+              <th></th>
+            </tr></thead>
+            <tbody>${rows.map(r => {
+              const isActive = !!(active && r.genre_key === active.genreKey && (r.style_key || "") === (active.styleKey || ""));
+              const safeG = esc(r.genre_key).replace(/'/g, "\\'");
+              const safeS = esc(r.style_key || "").replace(/'/g, "\\'");
+              const cursor = r.current_year ? `${r.current_year}·p${r.current_page}` : "—";
+              const last = r.last_run_at ? new Date(r.last_run_at).toLocaleString() : "—";
+              return `<tr${isActive ? ' style="background:rgba(125,225,150,0.06)"' : ""}>
+                <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.genre_key)}">${esc(r.genre_key)}</td>
+                <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${r.style_key ? "var(--text)" : "var(--muted)"}" title="${esc(r.style_key || "(all)")}">${esc(r.style_key || "—")}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.cached_count)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.total_cached)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmt(r.total_skipped)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.total_errors ? "#e88" : "var(--muted)"}">${fmt(r.total_errors)}</td>
+                <td style="text-align:right;color:var(--muted);font-size:0.74rem">${cursor}</td>
+                <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}</td>
+                <td style="text-align:right">
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form">↗</button>
+                </td>
+              </tr>`;
+            }).join("")}</tbody>
+          </table>`
+        : `<div style="color:var(--muted);font-style:italic;padding:0.5rem 0">No runs yet — start one above.</div>`}
     `;
 
-    if (_gcwPollTimer) { clearTimeout(_gcwPollTimer); _gcwPollTimer = null; }
-    if (anyRunning && document.getElementById("panel-genre-cache-warm")?.style.display !== "none") {
-      _gcwPollTimer = setTimeout(loadGenreCacheWarm, 5000);
+    if (_cwPollTimer) { clearTimeout(_cwPollTimer); _cwPollTimer = null; }
+    if (running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+      _cwPollTimer = setTimeout(loadCacheWarm, 5000);
     }
   } catch (e) {
     el.innerHTML = `<span style="color:#e88">Load failed: ${(e && e.message) || e}</span>`;
   }
 }
-
-// Mirror of the worker's _dayOfYearPacific so the UI's "today" tag
-// stays in sync with what the cron actually picks.
-function _gcwDayOfYearPacific() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(now);
-  const get = t => parseInt(parts.find(p => p.type === t)?.value || "0", 10);
-  const y = get("year"), m = get("month"), d = get("day");
-  const jan1Utc = Date.UTC(y, 0, 1);
-  const todayUtc = Date.UTC(y, m - 1, d);
-  return Math.floor((todayUtc - jan1Utc) / (24 * 3600 * 1000));
+function _cwSyncStyleList() {
+  const g = document.getElementById("cw-form-genre")?.value || "";
+  const def = _CW_GENRES.find(x => x.key === g) || _CW_GENRES[0];
+  const styleEl = document.getElementById("cw-form-style");
+  if (styleEl) styleEl.setAttribute("list", `cw-styles-${def.list}`);
 }
-
-async function genreCacheWarmStart(genre) {
+window._cwSyncStyleList = _cwSyncStyleList;
+function _cwLoadIntoForm(genre, style) {
+  const g = document.getElementById("cw-form-genre"); if (g) g.value = genre;
+  const s = document.getElementById("cw-form-style"); if (s) s.value = style;
+  _cwSyncStyleList();
+}
+window._cwLoadIntoForm = _cwLoadIntoForm;
+async function cacheWarmStartFromForm(resetCursor) {
+  const genreKey = document.getElementById("cw-form-genre")?.value || "";
+  const styleKey = document.getElementById("cw-form-style")?.value || "";
+  const from     = document.getElementById("cw-form-from")?.value || "";
+  const to       = document.getElementById("cw-form-to")?.value   || "";
+  if (!genreKey) { alert("Pick a genre."); return; }
   try {
-    const r = await apiFetch(`/api/admin/genre-cache-warm/start?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    const r = await apiFetch("/api/admin/cache-warm/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        genreKey, styleKey,
+        fromYear: from ? Number(from) : undefined,
+        toYear:   to   ? Number(to)   : undefined,
+        resetCursor: !!resetCursor,
+      }),
+    });
     if (r.status === 409) {
       const body = await r.json().catch(() => ({}));
-      alert(body.error || "Another genre is currently running. Stop it first.");
+      alert(body.error || "Another run is in progress.");
       return;
     }
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    loadCacheWarm();
   } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
 }
-async function genreCacheWarmStop(genre) {
+window.cacheWarmStartFromForm = cacheWarmStartFromForm;
+async function cacheWarmStop() {
   try {
-    const r = await apiFetch(`/api/admin/genre-cache-warm/stop?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    const r = await apiFetch("/api/admin/cache-warm/stop", { method: "POST" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
+    loadCacheWarm();
   } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
 }
-async function genreCacheWarmToggleAuto(genre) {
-  try {
-    const r = await apiFetch(`/api/admin/genre-cache-warm/toggle-auto?genre=${encodeURIComponent(genre)}`, { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
-  } catch (e) { alert("Toggle failed: " + ((e && e.message) || e)); }
-}
-async function genreCacheWarmTogglePaused() {
-  try {
-    const r = await apiFetch("/api/admin/genre-cache-warm/toggle-paused", { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
-  } catch (e) { alert("Toggle paused failed: " + ((e && e.message) || e)); }
-}
-async function genreCacheWarmAnchorToday() {
-  if (!confirm("Anchor the rotation so TODAY picks the first slot (Blues by default). Tomorrow picks the second slot, etc. Use this when the rotation has drifted onto the wrong genre.")) return;
-  try {
-    const r = await apiFetch("/api/admin/genre-cache-warm/anchor-today", { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
-  } catch (e) { alert("Anchor failed: " + ((e && e.message) || e)); }
-}
-async function genreCacheWarmReset(genre) {
-  if (!confirm(`Reset cursor for "${genre}" to its start_year and zero its cycle counters? Lifetime stats are preserved.`)) return;
-  try {
-    const r = await apiFetch(`/api/admin/genre-cache-warm/reset?genre=${encodeURIComponent(genre)}`, { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadGenreCacheWarm();
-  } catch (e) { alert("Reset failed: " + ((e && e.message) || e)); }
-}
+window.cacheWarmStop = cacheWarmStop;
+
+// Legacy stub — kept so any session that cached the old admin.html
+// can call this safely. No-op; the new path is loadCacheWarm().
+async function loadGenreCacheWarm() { return loadCacheWarm(); }
 
 // ── API Request Log ───────────────────────────────────────────────────
 let _apiLogSeq = 0;
