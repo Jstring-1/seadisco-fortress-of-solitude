@@ -8720,29 +8720,65 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
 app.get("/api/admin/cache-warm/status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const rows = await listCacheWarmRuns();
     const totalR = await getPool().query(
       `SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`,
     );
-    // Live cached-count per (genre, style). When style is empty,
-    // count by genre alone. The GIN index on (data->'genres') makes
-    // the genre clause cheap; the style clause uses a sequential
-    // scan but only over the already-filtered subset so still snappy.
-    for (const row of rows) {
-      try {
-        let cntSql = `SELECT COUNT(*)::int AS n FROM release_cache
-                       WHERE type = 'release' AND data->'genres' ? $1`;
-        const params: any[] = [row.genre_key];
-        if (row.style_key) {
-          cntSql += ` AND data->'styles' ? $2`;
-          params.push(row.style_key);
-        }
-        const cntR = await getPool().query(cntSql, params);
-        row.cached_count = cntR.rows[0]?.n ?? 0;
-      } catch { row.cached_count = null; }
-    }
+    // Single query that:
+    //  1. Auto-derives (genre, style) combos from every cached
+    //     release's JSONB genres/styles arrays — including style=''
+    //     rows for the all-of-genre totals
+    //  2. FULL OUTER JOINs them with cache_warm_runs so each row
+    //     carries both the live cached count and the cumulative run
+    //     stats (when the admin has actually run that combo)
+    // Result: the grid shows every (genre, style) present in cache,
+    // even combos the admin has never explicitly run, with a Run
+    // button to kick a sweep for any of them.
+    const gridR = await getPool().query(`
+      WITH per_genre AS (
+        SELECT g.value AS genre_key, '' AS style_key,
+               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+          FROM release_cache rc
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
+         WHERE rc.type = 'release'
+         GROUP BY g.value
+      ),
+      per_style AS (
+        SELECT g.value AS genre_key, s.value AS style_key,
+               COUNT(DISTINCT rc.discogs_id)::int AS in_cache
+          FROM release_cache rc
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'genres','[]'::jsonb)) g
+          CROSS JOIN LATERAL jsonb_array_elements_text(coalesce(rc.data->'styles','[]'::jsonb)) s
+         WHERE rc.type = 'release'
+         GROUP BY g.value, s.value
+      ),
+      auto_combos AS (
+        SELECT * FROM per_genre UNION ALL SELECT * FROM per_style
+      )
+      SELECT
+        COALESCE(cwr.genre_key, ac.genre_key) AS genre_key,
+        COALESCE(cwr.style_key, ac.style_key) AS style_key,
+        cwr.current_year,
+        cwr.current_page,
+        cwr.total_searched,
+        cwr.total_cached,
+        cwr.total_skipped,
+        cwr.total_errors,
+        cwr.last_run_at,
+        cwr.last_cached_at,
+        cwr.recent_cached,
+        cwr.recent_errors,
+        COALESCE(ac.in_cache, 0) AS in_cache,
+        (cwr.genre_key IS NOT NULL) AS has_run
+      FROM cache_warm_runs cwr
+      FULL OUTER JOIN auto_combos ac
+        ON ac.genre_key = cwr.genre_key
+       AND ac.style_key = cwr.style_key
+      ORDER BY in_cache DESC NULLS LAST,
+               COALESCE(cwr.genre_key, ac.genre_key) ASC,
+               COALESCE(cwr.style_key, ac.style_key) ASC
+    `);
     res.json({
-      rows,
+      rows: gridR.rows,
       release_cache_total: totalR.rows[0]?.n ?? 0,
       active: getActiveCacheWarmParams(),
       running: isCacheWarmRunning(),
