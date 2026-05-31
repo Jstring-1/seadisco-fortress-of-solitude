@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2122" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2127" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2122"></script>
-<script defer src="/shared.js?v=20260530.2122"></script>
+<script defer src="/utils.js?v=20260530.2127"></script>
+<script defer src="/shared.js?v=20260530.2127"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -334,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2122"></script>
-<script defer src="/blues-admin.js?v=20260530.2122"></script>
+<script defer src="/modal.js?v=20260530.2127"></script>
+<script defer src="/blues-admin.js?v=20260530.2127"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1102,22 +1102,30 @@ async function loadCacheWarm() {
               const safeS = esc(r.style_key || "").replace(/'/g, "\\'");
               const cursor = r.current_year ? `${r.current_year}·p${r.current_page}` : "—";
               const last = r.last_run_at ? new Date(r.last_run_at).toLocaleString() : "—";
-              return `<tr${isActive ? ' style="background:rgba(125,225,150,0.06)"' : ""}>
+              // has_run distinguishes combos the admin has actually
+              // swept from auto-derived ones (only seen via the
+              // release_cache genre/style breakdown). Auto-derived
+              // rows dim out the run-specific cells; the ↗ button
+              // loads any combo into the form so the admin can
+              // promote it to a real run.
+              const isAuto = !r.has_run;
+              const styleLabel = r.style_key || "(all)";
+              return `<tr${isActive ? ' style="background:rgba(125,225,150,0.06)"' : (isAuto ? ' style="opacity:0.78"' : "")}>
                 <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.genre_key)}">${esc(r.genre_key)}</td>
-                <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${r.style_key ? "var(--text)" : "var(--muted)"}" title="${esc(r.style_key || "(all)")}">${esc(r.style_key || "—")}</td>
-                <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.cached_count)}</td>
-                <td style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.total_cached)}</td>
-                <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmt(r.total_skipped)}</td>
-                <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.total_errors ? "#e88" : "var(--muted)"}">${fmt(r.total_errors)}</td>
+                <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${r.style_key ? "var(--text)" : "var(--muted)"}" title="${esc(styleLabel)}">${esc(styleLabel)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${fmt(r.in_cache)}</strong></td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:${isAuto ? "var(--muted)" : ""}">${isAuto ? "—" : fmt(r.total_cached)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${isAuto ? "—" : fmt(r.total_skipped)}</td>
+                <td style="text-align:right;font-variant-numeric:tabular-nums;color:${isAuto ? "var(--muted)" : (r.total_errors ? "#e88" : "var(--muted)")}">${isAuto ? "—" : fmt(r.total_errors)}</td>
                 <td style="text-align:right;color:var(--muted);font-size:0.74rem">${cursor}</td>
                 <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}</td>
                 <td style="text-align:right">
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form">↗</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it">↗</button>
                 </td>
               </tr>`;
             }).join("")}</tbody>
           </table>`
-        : `<div style="color:var(--muted);font-style:italic;padding:0.5rem 0">No runs yet — start one above.</div>`}
+        : `<div style="color:var(--muted);font-style:italic;padding:0.5rem 0">No cached releases yet — start a run above.</div>`}
     `;
 
     if (_cwPollTimer) { clearTimeout(_cwPollTimer); _cwPollTimer = null; }
