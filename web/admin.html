@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.2205" />
+  <link rel="stylesheet" href="/style.css?v=20260530.2207" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.2205"></script>
-<script defer src="/shared.js?v=20260530.2205"></script>
+<script defer src="/utils.js?v=20260530.2207"></script>
+<script defer src="/shared.js?v=20260530.2207"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -334,8 +334,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.2205"></script>
-<script defer src="/blues-admin.js?v=20260530.2205"></script>
+<script defer src="/modal.js?v=20260530.2207"></script>
+<script defer src="/blues-admin.js?v=20260530.2207"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1038,7 +1038,9 @@ async function loadCacheWarm() {
   try {
     const r = await apiFetch("/api/admin/cache-warm-runs/status");
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
-    const { rows = [], release_cache_total = 0, active = null, running = false } = await r.json();
+    // let (not const) on rows because the sort-headers helper
+    // re-assigns it to the sorted copy before rendering tbody.
+    let { rows = [], release_cache_total = 0, active = null, running = false } = await r.json();
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
     const fmt = n => Number(n || 0).toLocaleString();
     // Preserve form values across re-renders (poll, refresh).
