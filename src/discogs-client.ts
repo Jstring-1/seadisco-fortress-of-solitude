@@ -15,7 +15,7 @@ export class DiscogsClient {
   private oauth: OAuthCredentials | null;
   private appName: string;
 
-  constructor(tokenOrOAuth: string | OAuthCredentials, appName = "SeaDisco/1.0") {
+  constructor(tokenOrOAuth: string | OAuthCredentials, appName = "SeaDisco/1.0 (+https://seadisco.com)") {
     this.appName = appName;
     if (typeof tokenOrOAuth === "string") {
       this.token = tokenOrOAuth;
