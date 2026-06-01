@@ -2190,34 +2190,196 @@ async function _trackPlaylistDoAdd(id) {
 }
 window._trackPlaylistDoAdd = _trackPlaylistDoAdd;
 
+// ── Default "play directly" rows for the playlist picker ───────────
+// Two synthetic entries that appear above the user's saved playlists:
+//   • Play Recent      — tracks from albums in local viewing history
+//   • Play Suggestions — tracks from the per-user suggestions feed
+//
+// Sources data directly (history for Recent, /api/user/personal-
+// suggestions for Suggestions) and enriches via /api/cards/enrich
+// to resolve YT URLs per track without touching the home strip DOM.
+// That way the user can trigger play without the picker's view
+// dependency on which home-strip tab happens to be active.
+async function _sdPlayHomeStripDirect(mode) {
+  if (mode === "suggestions" && !window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to use suggestions", "info");
+    return;
+  }
+  // 1. Source releases + remember title/artist for the queue items.
+  let pairs = [];
+  const cardMeta = new Map(); // "type:id" → {albumTitle, artist}
+  if (mode === "suggestions") {
+    try {
+      const r = await apiFetch("/api/user/personal-suggestions?limit=24");
+      if (!r.ok) { if (typeof showToast === "function") showToast("Could not load suggestions", "error"); return; }
+      const j = await r.json();
+      const items = Array.isArray(j?.items) ? j.items : [];
+      for (const it of items) {
+        const id = Number(it?.id);
+        const type = String(it?.type ?? "release");
+        if (!Number.isFinite(id)) continue;
+        pairs.push({ id, type });
+        const artists = Array.isArray(it?.artists)
+          ? it.artists.map(a => a?.name).filter(Boolean).join(", ")
+          : "";
+        cardMeta.set(`${type}:${id}`, {
+          albumTitle: String(it?.title || ""),
+          artist: artists,
+        });
+      }
+    } catch {
+      if (typeof showToast === "function") showToast("Could not load suggestions", "error");
+      return;
+    }
+  } else {
+    // Recent — read the same localStorage cache the home strip uses.
+    let hist = [];
+    try { const raw = localStorage.getItem("sd_history"); hist = raw ? JSON.parse(raw) : []; } catch {}
+    if (!Array.isArray(hist)) hist = [];
+    hist = hist.slice(0, 24);
+    for (const h of hist) {
+      const id = Number(h?.id);
+      const type = String(h?.type ?? "release");
+      if (!Number.isFinite(id)) continue;
+      pairs.push({ id, type });
+      // Recent history stores h.title — could be "Artist - Album" for
+      // some sources and just the album for others. Pass it through;
+      // the queue UI is fine with either shape.
+      cardMeta.set(`${type}:${id}`, {
+        albumTitle: String(h?.title || ""),
+        artist: String(h?.artist || ""),
+      });
+    }
+  }
+  if (!pairs.length) {
+    if (typeof showToast === "function") {
+      showToast(mode === "recent" ? "No recent albums yet" : "No suggestions yet", "info");
+    }
+    return;
+  }
+  // 2. Enrich — gets tracklist + Discogs videos + crowd overrides per release.
+  let rows = [];
+  try {
+    const r = await fetch("/api/cards/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: pairs }),
+      cache: "no-store",
+    });
+    if (r.ok) {
+      const j = await r.json();
+      rows = Array.isArray(j?.items) ? j.items : [];
+    }
+  } catch { /* fall through to the empty check below */ }
+  if (!rows.length) {
+    if (typeof showToast === "function") showToast("No track data cached for those albums yet", "error");
+    return;
+  }
+  // 3. Resolve a YT URL per track using the same matcher the home
+  //    strip cards use (overrides win, else fuzzy title match).
+  const items = [];
+  for (const row of rows) {
+    const meta = cardMeta.get(`${row.type}:${row.id}`) || { albumTitle: "", artist: "" };
+    const overrides = (row.overrides && typeof row.overrides === "object") ? row.overrides : {};
+    const tracks = Array.isArray(row.tracklist) ? row.tracklist : [];
+    const videos = Array.isArray(row.videos) ? row.videos : [];
+    for (const t of tracks) {
+      const ovId = overrides[String(t.position)];
+      const url = ovId
+        ? `https://www.youtube.com/watch?v=${ovId}`
+        : (typeof _sdMatchTrackVideo === "function" ? _sdMatchTrackVideo(t.title, videos) : "");
+      if (!url) continue;
+      const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+      if (!videoId) continue;
+      items.push({
+        source: "yt",
+        externalId: String(videoId),
+        data: {
+          title:       String(t.title || ""),
+          artist:      meta.artist,
+          albumTitle:  meta.albumTitle,
+          ytUrl:       url,
+          releaseType: String(row.type || ""),
+          releaseId:   String(row.id || ""),
+        },
+      });
+    }
+  }
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("No tracks resolved to YouTube videos", "error");
+    return;
+  }
+  // 4. Play. queueAddAlbumOrPlay mode:"play" inserts at head + plays.
+  try {
+    if (window._clerk?.user && typeof queueAddAlbumOrPlay === "function") {
+      await queueAddAlbumOrPlay(items, { mode: "play" });
+    } else if (typeof queueAdd === "function") {
+      await queueAdd(items, { mode: "next" });
+      if (typeof queuePlayHead === "function") { try { await queuePlayHead(); } catch {} }
+    }
+    if (typeof showToast === "function") {
+      const label = mode === "recent" ? "Recent" : "Suggestions";
+      showToast(`Playing ${items.length} track${items.length === 1 ? "" : "s"} from ${label}`);
+    }
+  } catch (e) {
+    console.warn("[_sdPlayHomeStripDirect] play failed", e);
+    if (typeof showToast === "function") showToast("Could not start playback", "error");
+  }
+}
+window._sdPlayHomeStripDirect = _sdPlayHomeStripDirect;
+
 async function _playlistRefreshPicker() {
   if (!_playlistPickerEl) return;
   const body = _playlistPickerEl.querySelector("#playlist-picker-body");
   if (!body) return;
   body.innerHTML = "Loading…";
+  // Two synthetic "default" rows rendered above the user's saved
+  // playlists. Distinct visual class so they can be re-styled without
+  // touching the regular rows. Suggestions row is disabled for anons
+  // — the click still lands on the helper which routes to a sign-in
+  // toast — but we don't want to grey it out either since the Recent
+  // row is always available.
+  const defaultRows = `
+    <li class="playlist-picker-row playlist-picker-row-default" data-default="recent">
+      <span class="playlist-picker-name">▶ Play Recent</span>
+      <span class="playlist-picker-count">tracks from your recent albums</span>
+      <span class="playlist-picker-actions">
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('recent')" title="Play tracks from the albums in your recent history">▶ Play</button>
+      </span>
+    </li>
+    <li class="playlist-picker-row playlist-picker-row-default" data-default="suggestions">
+      <span class="playlist-picker-name">▶ Play Suggestions</span>
+      <span class="playlist-picker-count">tracks from your suggestions feed</span>
+      <span class="playlist-picker-actions">
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('suggestions')" title="Play tracks from your personal suggestions feed">▶ Play</button>
+      </span>
+    </li>`;
   try {
     const r = await apiFetch("/api/user/playlists");
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
     const { items } = await r.json();
-    if (!Array.isArray(items) || !items.length) {
-      body.innerHTML = `<div class="playlist-picker-empty">No saved playlists yet. Click 💾 in the queue drawer to save the current queue.</div>`;
-      return;
-    }
     const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-    body.innerHTML = `<ul class="playlist-picker-list">${items.map(p => `
-      <li class="playlist-picker-row" data-id="${p.id}">
-        <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
-        <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
-        <span class="playlist-picker-actions">
-          <button type="button" class="playlist-picker-load"   onclick="_playlistLoad(${p.id})"  title="Load into queue">▶ Load</button>
-          <button type="button" class="playlist-picker-share"  onclick="_playlistShare(${p.id})" title="Copy share link">🔗</button>
-          <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Rename">✏</button>
-          <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Delete">🗑</button>
-        </span>
-      </li>`).join("")}</ul>`;
+    const userRows = (Array.isArray(items) && items.length)
+      ? items.map(p => `
+        <li class="playlist-picker-row" data-id="${p.id}">
+          <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
+          <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
+          <span class="playlist-picker-actions">
+            <button type="button" class="playlist-picker-load"   onclick="_playlistLoad(${p.id})"  title="Load into queue">▶ Load</button>
+            <button type="button" class="playlist-picker-share"  onclick="_playlistShare(${p.id})" title="Copy share link">🔗</button>
+            <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Rename">✏</button>
+            <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Delete">🗑</button>
+          </span>
+        </li>`).join("")
+      : `<li class="playlist-picker-empty-row"><div class="playlist-picker-empty">No saved playlists yet. Click 💾 in the queue drawer to save the current queue.</div></li>`;
+    body.innerHTML = `<ul class="playlist-picker-list">${defaultRows}${userRows}</ul>`;
   } catch (e) {
     console.warn("[_playlistRefreshPicker]", e);
-    body.textContent = "Could not load playlists.";
+    // Even on fetch failure show the defaults so the user isn't locked
+    // out of Play Recent / Play Suggestions just because the playlist
+    // index didn't load.
+    body.innerHTML = `<ul class="playlist-picker-list">${defaultRows}</ul>
+      <div class="playlist-picker-empty" style="margin-top:0.6rem">Could not load your saved playlists.</div>`;
   }
 }
 
