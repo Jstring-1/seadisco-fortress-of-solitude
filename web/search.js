@@ -1018,39 +1018,22 @@ function _sdToggleExcludeCd(btn) {
 }
 window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
-// ── Home strip Recent / Suggestions / Submitted toggle ────────────────
+// ── Home strip Recent / Suggestions toggle ────────────────
 //
 // Defaults to "recent" on every fresh page load. Optionally honours
-// a ?strip=suggestions or ?strip=submitted URL param so links can
-// deep-link into a specific tab. Click handlers replaceState (no
-// new history entry) the URL so the address bar stays in sync with
-// what the user sees. We deliberately do NOT persist across
-// sessions — only this URL handshake.
+// a ?strip=suggestions URL param so links can deep-link into the
+// Suggestions tab. Click handlers replaceState (no new history
+// entry) the URL so the address bar stays in sync with what the
+// user sees. We deliberately do NOT persist across sessions — only
+// this URL handshake.
+//
+// The legacy ?strip=feed and ?strip=submitted values silently fall
+// back to Recent — old bookmarks keep working without 404ing.
 function _sdInitialHomeStripMode() {
-  // ?strip= URL param wins for both anon and signed-in so deep links
-  // keep working — EXCEPT for "submitted", which is gated to admin/
-  // demo. We can't know whether the user qualifies until Clerk
-  // resolves, so we stash the pin in window._sdHomeStripPendingPin
-  // and start on "recent". applyAuthState replays the pin once it
-  // confirms the user is admin/demo (or drops it if they're not).
-  // Without this deferral, an admin reload on /?strip=submitted
-  // would flash the Submitted tab as active-but-display:none during
-  // the unresolved window — the whole strip looked like it was on
-  // Feed because no tab appeared highlighted until auth caught up.
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "suggestions" || v === "feed") return v;
-    if (v === "submitted") {
-      window._sdHomeStripPendingPin = "submitted";
-      return "recent";
-    }
+    if (v === "suggestions") return v;
   } catch {}
-  // Optimistic default: "recent" — matches the static markup's
-  // rr-tab-recent.rr-tab-active class, so signed-in users see no
-  // visual jump while Clerk is hydrating. applyAuthState will flip
-  // unresolved-but-actually-anon users to "feed" once auth lands.
-  // The previous "feed for unresolved auth" default was the cause
-  // of the recent-loads-then-disappears flicker on every page load.
   return "recent";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
@@ -1060,60 +1043,37 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
+  // Feed + Submitted tabs were removed — only Recent + Suggestions
+  // remain. Any stale persisted mode (URL pin, localStorage) gets
+  // coerced to Recent so we never paint with no active tab.
+  if (window._sdHomeStripMode !== "recent" && window._sdHomeStripMode !== "suggestions") {
+    window._sdHomeStripMode = "recent";
+  }
   const tabs = {
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
-    submitted:   document.getElementById("rr-tab-submitted"),
-    feed:        document.getElementById("rr-tab-feed"),
   };
-  // Submitted tab is admin/demo-only while YouTube quota request is
-  // pending — hide for everyone else (and hide its leading separator
-  // so the strip doesn't have a dangling " / " between Suggestions
-  // and Feed). When (if) the quota lifts, revert this gate.
-  const submittedAllowed = !!window._isAdmin || !!window._sdIsDemo;
-  if (tabs.submitted) tabs.submitted.style.display = submittedAllowed ? "" : "none";
-  const sepSubmitted = document.querySelector(".rr-tab-sep-submitted");
-  if (sepSubmitted) sepSubmitted.style.display = submittedAllowed ? "" : "none";
-  // If a non-admin/demo user landed on Submitted via URL (?strip=submitted)
-  // before this gate ran, snap them back to Recent so they don't see
-  // an empty strip with no active tab.
-  //
-  // GATE on _sdAuthResolved: _isAdmin / _sdIsDemo are populated by
-  // applyAuthState, so before auth resolves submittedAllowed=false
-  // even for users who actually qualify. Without this gate, an admin
-  // landing on ?strip=submitted got clobbered to "feed" on first
-  // sync and the URL pin was lost forever — manifesting as Submitted
-  // briefly highlighting then dropping out. Once auth resolves,
-  // applyAuthState calls this fn again and the snap kicks in
-  // correctly for users who genuinely shouldn't see Submitted.
-  if (window._sdAuthResolved && !submittedAllowed && window._sdHomeStripMode === "submitted") {
-    window._sdHomeStripMode = window._clerk?.user ? "recent" : "feed";
-  }
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
     el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
     el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
   }
-  // Anon users see all four tabs but Recent / Suggestions / Submitted
-  // are visually disabled (greyed out) — clicking them is a no-op
-  // (handled in _sdSwitchHomeStripTab) so anons can only land on Feed.
-  // Sign-in unlocks the rest.
+  // Anons see both tabs but they're greyed out — clicking either
+  // prompts sign-in. Recent's local-history fallback still renders
+  // a community-picks sample so the strip isn't empty.
   //
   // IMPORTANT: only treat as anon when Clerk has actually resolved.
   // Before auth resolves, window._clerk is undefined and we'd
   // incorrectly disable the tabs for signed-in users on first paint
-  // until applyAuthState (in app.js) re-runs this. _sdAuthResolved
-  // is set true by applyAuthState after Clerk hydrates.
+  // until applyAuthState (in app.js) re-runs this.
   const authResolved = !!window._sdAuthResolved;
   const isAnon = authResolved && !window._clerk?.user;
-  ["recent", "suggestions", "submitted"].forEach(k => {
+  ["recent", "suggestions"].forEach(k => {
     const el = tabs[k];
     if (!el) return;
-    el.classList.toggle("rr-tab-disabled", isAnon);
-    // Stash the original title once + reset on every sync so the
-    // " · Sign in to use" suffix doesn't accrete on repeat calls.
+    el.classList.toggle("rr-tab-disabled", isAnon && k === "suggestions");
     if (el.dataset.baseTitle == null) el.dataset.baseTitle = el.title || "";
-    el.title = isAnon
+    el.title = (isAnon && k === "suggestions")
       ? (el.dataset.baseTitle ? el.dataset.baseTitle + " · " : "") + "Sign in to use"
       : el.dataset.baseTitle;
   });
@@ -1139,14 +1099,12 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  const m = mode === "suggestions" ? "suggestions"
-          : mode === "submitted"   ? "submitted"
-          : mode === "feed"        ? "feed"
-          : "recent";
-  // Anon-mode lockdown: signed-out users can only land on Feed. Other
-  // tabs are visible-but-disabled — nudge them to sign in and bail.
-  if (!window._clerk?.user && m !== "feed") {
-    if (typeof showToast === "function") showToast("Sign in to use the rest of the strip.", "info");
+  // Feed + Submitted tabs were removed — only Recent + Suggestions.
+  const m = mode === "suggestions" ? "suggestions" : "recent";
+  // Anon-mode lockdown: signed-out users can land on Recent (its
+  // local-history fallback hits community-picks) but not Suggestions.
+  if (!window._clerk?.user && m === "suggestions") {
+    if (typeof showToast === "function") showToast("Sign in to use Suggestions.", "info");
     if (typeof openSignInModal === "function") {
       try { openSignInModal(); } catch {}
     }
@@ -2238,24 +2196,13 @@ async function loadRandomRecords(more) {
   if (!grid || !wrap) return;
   const _mySeq = ++_randomLoadSeq;
   const _stillCurrent = () => _mySeq === _randomLoadSeq;
-  // Anon-mode default: load the public Feed (random cached albums).
-  // Force the strip mode to "feed" since Recent / Suggestions /
-  // Submitted all require signin — keeps the rendering path clean
-  // for anon visitors.
-  //
-  // GATE on _sdAuthResolved: before Clerk hydrates, window._clerk is
-  // undefined and `!window._clerk?.user` is true even for users who
-  // are about to resolve as signed-in. Without this gate, signed-in
-  // users on a fresh page load got their mode clobbered from "recent"
-  // → "feed" before auth resolved, and applyAuthState never flipped
-  // it back (it only flips for confirmed-anon). That manifested as
-  // "main subnav defaulting to Feed" for signed-in users.
-  if (window._sdAuthResolved && !window._clerk?.user) {
-    if (window._sdHomeStripMode !== "feed") window._sdHomeStripMode = "feed";
+  // Anons can only land on Recent (its local-history fallback hits
+  // community-picks / admin-favorites so the strip isn't empty).
+  // Coerce stray modes (suggestions from a deep link, etc.) before
+  // the render branches below.
+  if (window._sdAuthResolved && !window._clerk?.user && window._sdHomeStripMode !== "recent") {
+    window._sdHomeStripMode = "recent";
     if (typeof _sdSyncHomeStripTabsVisual === "function") _sdSyncHomeStripTabsVisual();
-    wrap.style.display = "";
-    // Falls through into the main render path below; the "feed"
-    // branch handles fetching and rendering for both anon + signed-in.
   }
 
   // First call (or full reload): rebuild from localStorage history.
@@ -2271,28 +2218,7 @@ async function loadRandomRecords(more) {
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdHomeStripMode === "submitted") {
-      // ── Submitted (the SIGNED-IN user's own contributions) ──────
-      // Distinct list of albums the current user has submitted YT
-      // overrides for. Empty for users who haven't contributed yet —
-      // placeholder text below points them at the contribution path.
-      _randomAll = [];
-      if (window._clerk?.user) {
-        try {
-          const r = await apiFetch("/api/user/my-submitted-albums?limit=200");
-          if (!_stillCurrent()) return;
-          if (r.ok) {
-            const j = await r.json();
-            if (!_stillCurrent()) return;
-            if (Array.isArray(j?.items) && j.items.length) {
-              _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
-            }
-          }
-        } catch { /* leave empty — placeholder below */ }
-      }
-      titleText = "Submitted";
-      isSuggested = true;
-    } else if (window._sdHomeStripMode === "suggestions") {
+    if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
       // Signed-in: per-user background-generated feed. If the user
       // has none yet (new account, sync hasn't run), show the empty
@@ -2331,25 +2257,6 @@ async function loadRandomRecords(more) {
         } catch { /* leave empty */ }
       }
       titleText = "Suggestions";
-      isSuggested = true;
-    } else if (window._sdHomeStripMode === "feed") {
-      // ── Feed: random sample from every cached album ─────────────
-      // Public, no auth required. Rows already paid for via the
-      // release_cache so this is free server-side. Anon visitors
-      // see this as their primary home view.
-      _randomAll = [];
-      try {
-        const r = await fetch("/api/feed/random?limit=96", { cache: "no-store" });
-        if (!_stillCurrent()) return;
-        if (r.ok) {
-          const j = await r.json();
-          if (!_stillCurrent()) return;
-          if (Array.isArray(j?.items) && j.items.length) {
-            _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
-          }
-        }
-      } catch { /* leave empty */ }
-      titleText = "Feed";
       isSuggested = true;
     } else {
       // ── Recent (default) ────────────────────────────────────────
@@ -2411,18 +2318,13 @@ async function loadRandomRecords(more) {
     _applyFavoritesSort();
 
     if (!_randomAll.length) {
-      if (window._sdHomeStripMode === "submitted") {
-        wrap.style.display = "";
-        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">You haven't submitted any tracks yet. Open any album that has missing YouTube videos and click the <span style="color:#c084fc">🎵 N missing</span> link in the tracklist heading to contribute. Your submissions will appear here.</div>`;
-        return;
-      }
       if (window._sdHomeStripMode === "suggestions") {
         wrap.style.display = "";
         const isSignedIn = !!window._clerk?.user;
         grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">${
           isSignedIn
             ? "No suggestions yet — they're generated hourly from your library's taste profile. Check back soon."
-            : "Sign in to see personalized suggestions, or browse Submitted above."
+            : "Sign in to see personalized suggestions."
         }</div>`;
         return;
       }
@@ -2431,10 +2333,9 @@ async function loadRandomRecords(more) {
     }
   }
 
-  // Feed-mode Load More: when we've exhausted the locally-loaded
-  // page AND the user is asking for more, fetch a fresh server page
-  // with already-shown ids excluded so we don't repeat. Append to
-  // _randomAll then fall through to the normal render-slice path.
+  // Feed-mode Load More: dead-code after the Feed tab was removed,
+  // but left guarded by the (unreachable) mode check so the rest of
+  // the function is untouched. Will be pruned in a follow-up sweep.
   if (more && window._sdHomeStripMode === "feed") {
     const filteredSoFar = _sdFilterRandom(_randomAll);
     if (_randomShown >= filteredSoFar.length) {

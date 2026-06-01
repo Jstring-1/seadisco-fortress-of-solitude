@@ -738,43 +738,19 @@ async function applyAuthState(clerk) {
   // tabs show as disabled for signed-in users on first paint
   // because Clerk hadn't hydrated yet when the strip first rendered.
   window._sdAuthResolved = true;
-  // _sdInitialHomeStripMode runs at module load with the optimistic
-  // default "recent" (matches the static HTML's rr-tab-active class
-  // so signed-in users never flicker). Anons need to flip to "feed"
-  // since Recent / Suggestions / Submitted all require sign-in. Only
-  // switch when there's no URL pin asking for a specific tab.
-  if (!clerk?.user && window._sdHomeStripMode === "recent") {
-    let urlPinned = false;
-    try {
-      const v = new URLSearchParams(location.search).get("strip");
-      urlPinned = (v === "feed" || v === "submitted" || v === "suggestions" || v === "recent");
-    } catch {}
-    if (!urlPinned && typeof window._sdSwitchHomeStripTab === "function") {
-      try { window._sdSwitchHomeStripTab("feed"); } catch {}
+  // Anons stay on Recent — its no-history fallback hits community-
+  // picks / admin-favorites so the strip isn't empty without sign-in.
+  // (Feed / Submitted tabs were removed.) Strip stale ?strip=feed
+  // and ?strip=submitted params from the URL so old bookmarks don't
+  // resurrect dead modes on reload.
+  try {
+    const u = new URL(location.href);
+    const v = u.searchParams.get("strip");
+    if (v === "feed" || v === "submitted") {
+      u.searchParams.delete("strip");
+      history.replaceState(history.state, "", u.toString());
     }
-  }
-  // Replay a deferred ?strip=submitted URL pin now that we know
-  // whether the user is admin/demo. _sdInitialHomeStripMode parks
-  // the pin on window._sdHomeStripPendingPin instead of applying it
-  // optimistically (the pre-auth Submitted tab is hidden, so an
-  // optimistic apply leaves the strip with no visible active tab —
-  // the strip looks like it "defaulted to Feed" then briefly shows
-  // Submitted once auth resolves).
-  if (window._sdHomeStripPendingPin === "submitted") {
-    const allow = !!window._isAdmin || !!window._sdIsDemo;
-    if (allow && typeof window._sdSwitchHomeStripTab === "function") {
-      try { window._sdSwitchHomeStripTab("submitted"); } catch {}
-    } else {
-      // User doesn't qualify — drop the param so the URL doesn't
-      // resurrect on next reload, and stay on whatever mode we have.
-      try {
-        const u = new URL(location.href);
-        u.searchParams.delete("strip");
-        history.replaceState(history.state, "", u.toString());
-      } catch {}
-    }
-    window._sdHomeStripPendingPin = null;
-  }
+  } catch {}
   if (typeof window._sdSyncHomeStripTabsVisual === "function") {
     try { window._sdSyncHomeStripTabsVisual(); } catch {}
   }
