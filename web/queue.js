@@ -2200,33 +2200,49 @@ window._trackPlaylistDoAdd = _trackPlaylistDoAdd;
 // to resolve YT URLs per track without touching the home strip DOM.
 // That way the user can trigger play without the picker's view
 // dependency on which home-strip tab happens to be active.
-async function _sdPlayHomeStripDirect(mode) {
+// The 15 Discogs top-level genres, surfaced as the dropdown options
+// next to each default play row. Mirrors _CW_GENRES in admin.html so
+// the picker matches the cache admin's vocabulary; releases store
+// these strings verbatim in their `genre` / `genres` arrays.
+const _SD_DEFAULT_PICKER_GENRES = [
+  "Blues", "Folk, World, & Country", "Jazz", "Reggae", "Latin",
+  "Rock", "Electronic", "Funk / Soul", "Hip Hop", "Pop",
+  "Classical", "Stage & Screen", "Brass & Military", "Children's", "Non-Music",
+];
+
+// Genre filter accepts both shapes: `item.genre` (search-API
+// results, history items) and `item.genres` (release-cache rows
+// from /api/user/personal-suggestions). Case-sensitive match —
+// Discogs is consistent here.
+function _sdItemMatchesGenre(item, genre) {
+  if (!genre) return true;
+  const arrs = [item?.genre, item?.genres];
+  for (const a of arrs) {
+    if (Array.isArray(a) && a.some(g => String(g) === genre)) return true;
+  }
+  return false;
+}
+
+async function _sdPlayHomeStripDirect(mode, genre) {
+  genre = String(genre || "").trim();
   if (mode === "suggestions" && !window._clerk?.user) {
     if (typeof showToast === "function") showToast("Sign in to use suggestions", "info");
     return;
   }
-  // 1. Source releases + remember title/artist for the queue items.
-  let pairs = [];
-  const cardMeta = new Map(); // "type:id" → {albumTitle, artist}
+  // 1. Source releases. Pull the FULL set (no slice yet) so the genre
+  //    filter sees everything. If no genre is set we cap below; with
+  //    a genre we keep more (more headroom to find matches before
+  //    capping). Genre check uses item.genre / item.genres arrays.
+  let sourceItems = [];
   if (mode === "suggestions") {
     try {
-      const r = await apiFetch("/api/user/personal-suggestions?limit=24");
+      // Suggestions feed is up to 1000 server-side; pull a bigger
+      // slice when a genre is set so the cap-after-filter is meaningful.
+      const limit = genre ? 200 : 24;
+      const r = await apiFetch(`/api/user/personal-suggestions?limit=${limit}`);
       if (!r.ok) { if (typeof showToast === "function") showToast("Could not load suggestions", "error"); return; }
       const j = await r.json();
-      const items = Array.isArray(j?.items) ? j.items : [];
-      for (const it of items) {
-        const id = Number(it?.id);
-        const type = String(it?.type ?? "release");
-        if (!Number.isFinite(id)) continue;
-        pairs.push({ id, type });
-        const artists = Array.isArray(it?.artists)
-          ? it.artists.map(a => a?.name).filter(Boolean).join(", ")
-          : "";
-        cardMeta.set(`${type}:${id}`, {
-          albumTitle: String(it?.title || ""),
-          artist: artists,
-        });
-      }
+      sourceItems = Array.isArray(j?.items) ? j.items : [];
     } catch {
       if (typeof showToast === "function") showToast("Could not load suggestions", "error");
       return;
@@ -2235,29 +2251,37 @@ async function _sdPlayHomeStripDirect(mode) {
     // Recent — read the same localStorage cache the home strip uses.
     let hist = [];
     try { const raw = localStorage.getItem("sd_history"); hist = raw ? JSON.parse(raw) : []; } catch {}
-    if (!Array.isArray(hist)) hist = [];
-    hist = hist.slice(0, 24);
-    for (const h of hist) {
-      const id = Number(h?.id);
-      const type = String(h?.type ?? "release");
-      if (!Number.isFinite(id)) continue;
-      pairs.push({ id, type });
-      // Recent history stores h.title — could be "Artist - Album" for
-      // some sources and just the album for others. Pass it through;
-      // the queue UI is fine with either shape.
-      cardMeta.set(`${type}:${id}`, {
-        albumTitle: String(h?.title || ""),
-        artist: String(h?.artist || ""),
-      });
-    }
+    sourceItems = Array.isArray(hist) ? hist : [];
+  }
+  // Apply genre filter, then cap to 24 (the same horizon the home
+  // strip uses) so we don't blow up the enrich batch / queue size.
+  if (genre) sourceItems = sourceItems.filter(it => _sdItemMatchesGenre(it, genre));
+  sourceItems = sourceItems.slice(0, 24);
+
+  // 2. Build id pairs + meta map for queue items.
+  const pairs = [];
+  const cardMeta = new Map(); // "type:id" → {albumTitle, artist}
+  for (const it of sourceItems) {
+    const id = Number(it?.id);
+    const type = String(it?.type ?? "release");
+    if (!Number.isFinite(id)) continue;
+    pairs.push({ id, type });
+    const artist = Array.isArray(it?.artists)
+      ? it.artists.map(a => a?.name).filter(Boolean).join(", ")
+      : String(it?.artist || "");
+    cardMeta.set(`${type}:${id}`, {
+      albumTitle: String(it?.title || ""),
+      artist,
+    });
   }
   if (!pairs.length) {
     if (typeof showToast === "function") {
-      showToast(mode === "recent" ? "No recent albums yet" : "No suggestions yet", "info");
+      const what = mode === "recent" ? "recent albums" : "suggestions";
+      showToast(genre ? `No ${what} tagged "${genre}"` : `No ${what} yet`, "info");
     }
     return;
   }
-  // 2. Enrich — gets tracklist + Discogs videos + crowd overrides per release.
+  // 3. Enrich — gets tracklist + Discogs videos + crowd overrides per release.
   let rows = [];
   try {
     const r = await fetch("/api/cards/enrich", {
@@ -2275,7 +2299,7 @@ async function _sdPlayHomeStripDirect(mode) {
     if (typeof showToast === "function") showToast("No track data cached for those albums yet", "error");
     return;
   }
-  // 3. Resolve a YT URL per track using the same matcher the home
+  // 4. Resolve a YT URL per track using the same matcher the home
   //    strip cards use (overrides win, else fuzzy title match).
   const items = [];
   for (const row of rows) {
@@ -2309,7 +2333,7 @@ async function _sdPlayHomeStripDirect(mode) {
     if (typeof showToast === "function") showToast("No tracks resolved to YouTube videos", "error");
     return;
   }
-  // 4. Play. queueAddAlbumOrPlay mode:"play" inserts at head + plays.
+  // 5. Play. queueAddAlbumOrPlay mode:"play" inserts at head + plays.
   try {
     if (window._clerk?.user && typeof queueAddAlbumOrPlay === "function") {
       await queueAddAlbumOrPlay(items, { mode: "play" });
@@ -2319,7 +2343,8 @@ async function _sdPlayHomeStripDirect(mode) {
     }
     if (typeof showToast === "function") {
       const label = mode === "recent" ? "Recent" : "Suggestions";
-      showToast(`Playing ${items.length} track${items.length === 1 ? "" : "s"} from ${label}`);
+      const where = genre ? `${label} · ${genre}` : label;
+      showToast(`Playing ${items.length} track${items.length === 1 ? "" : "s"} from ${where}`);
     }
   } catch (e) {
     console.warn("[_sdPlayHomeStripDirect] play failed", e);
@@ -2335,23 +2360,27 @@ async function _playlistRefreshPicker() {
   body.innerHTML = "Loading…";
   // Two synthetic "default" rows rendered above the user's saved
   // playlists. Distinct visual class so they can be re-styled without
-  // touching the regular rows. Suggestions row is disabled for anons
-  // — the click still lands on the helper which routes to a sign-in
-  // toast — but we don't want to grey it out either since the Recent
-  // row is always available.
+  // touching the regular rows. Each row has a genre dropdown next to
+  // the play button — leaving it on "All" plays the unfiltered top
+  // 24; picking a genre filters to releases tagged with it (matches
+  // both .genre and .genres arrays).
+  const genreOpts = `<option value="">All genres</option>` +
+    _SD_DEFAULT_PICKER_GENRES.map(g => `<option value="${g.replace(/"/g, "&quot;")}">${g}</option>`).join("");
   const defaultRows = `
     <li class="playlist-picker-row playlist-picker-row-default" data-default="recent">
       <span class="playlist-picker-name">▶ Play Recent</span>
       <span class="playlist-picker-count">tracks from your recent albums</span>
       <span class="playlist-picker-actions">
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('recent')" title="Play tracks from the albums in your recent history">▶ Play</button>
+        <select id="cw-picker-genre-recent" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre — leave on All to play the most recent 24">${genreOpts}</select>
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('recent', document.getElementById('cw-picker-genre-recent')?.value || '')" title="Play tracks from the albums in your recent history">▶ Play</button>
       </span>
     </li>
     <li class="playlist-picker-row playlist-picker-row-default" data-default="suggestions">
       <span class="playlist-picker-name">▶ Play Suggestions</span>
       <span class="playlist-picker-count">tracks from your suggestions feed</span>
       <span class="playlist-picker-actions">
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('suggestions')" title="Play tracks from your personal suggestions feed">▶ Play</button>
+        <select id="cw-picker-genre-suggestions" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre — leave on All to play the top 24 suggestions">${genreOpts}</select>
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('suggestions', document.getElementById('cw-picker-genre-suggestions')?.value || '')" title="Play tracks from your personal suggestions feed">▶ Play</button>
       </span>
     </li>`;
   try {
