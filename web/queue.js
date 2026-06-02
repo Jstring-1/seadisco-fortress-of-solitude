@@ -58,6 +58,26 @@ let _queueRepeat = (() => {
 let _repeatHistory = [];
 let _repeatRefillInFlight = false;
 
+// ── Shuffle ─────────────────────────────────────────────────────────
+// When ON, _queuePlayNext picks a random visible item (excluding the
+// one currently playing) instead of the next sequential one. Pairs
+// with repeat-all to give an endless shuffled walk through the queue.
+// Persisted in localStorage so user preference survives reloads.
+const _SHUFFLE_KEY = "sd_queue_shuffle";
+let _queueShuffle = (() => {
+  try { return localStorage.getItem(_SHUFFLE_KEY) === "1"; } catch { return false; }
+})();
+function _queueGetShuffle() { return _queueShuffle; }
+function _queueToggleShuffle() {
+  _queueShuffle = !_queueShuffle;
+  try { localStorage.setItem(_SHUFFLE_KEY, _queueShuffle ? "1" : "0"); } catch {}
+  if (typeof window._syncMiniBarShuffleBtn === "function") {
+    try { window._syncMiniBarShuffleBtn(); } catch {}
+  }
+}
+window._queueGetShuffle = _queueGetShuffle;
+window._queueToggleShuffle = _queueToggleShuffle;
+
 // ── Consume-on-play state ───────────────────────────────────────────
 // When ON, every track that finishes playing (or is replaced when the
 // user jumps to another row) is removed from the queue. Equivalent of
@@ -464,6 +484,19 @@ async function _queuePlayNext() {
     _refreshPlayerNavButtons();
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
+  }
+  // Shuffle: substitute a random visible item (excluding the one we
+  // just finished, if we can identify it) for `next`. This runs AFTER
+  // the normal next-pick + repeat-all wrap above so shuffle composes
+  // with repeat-all (the queue still loops, just in random order).
+  // Skip when there's only one item — no shuffle target.
+  if (_queueShuffle && vis.length > 1) {
+    const pool = currentIdx >= 0 && currentIdx < vis.length
+      ? vis.filter((_, i) => i !== currentIdx)
+      : vis;
+    if (pool.length) {
+      next = pool[Math.floor(Math.random() * pool.length)];
+    }
   }
   return _queuePlayItem(next);
 }
@@ -896,6 +929,7 @@ function _ensureQueueDrawer() {
     <div class="queue-drawer-head">
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
+      <button type="button" class="queue-drawer-shuffle shuffle-btn" onclick="_queueToggleShuffle()" title="Shuffle: off" style="background:none;border:1px solid var(--border);color:#666;border-radius:4px;padding:0.2rem 0.45rem;font-size:0.78rem;cursor:pointer">⇋</button>
       <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
       <button type="button" class="queue-drawer-save" onclick="_playlistSavePrompt()" title="Save current queue as a playlist">💾</button>
       <button type="button" class="queue-drawer-load" onclick="_playlistOpenPicker()" title="Load one of your saved playlists">📂</button>
@@ -909,6 +943,9 @@ function _ensureQueueDrawer() {
   _renderRepeatBtn();
   _renderConsumeBtn();
   _syncLoadedPlaylistLabel();
+  if (typeof window._syncMiniBarShuffleBtn === "function") {
+    try { window._syncMiniBarShuffleBtn(); } catch {}
+  }
   return wrap;
 }
 
@@ -2225,8 +2262,10 @@ function _sdItemMatchesGenre(item, genre) {
 
 async function _sdPlayHomeStripDirect(mode, genre) {
   genre = String(genre || "").trim();
-  if (mode === "suggestions" && !window._clerk?.user) {
-    if (typeof showToast === "function") showToast("Sign in to use suggestions", "info");
+  // Favorites / Wantlist / Suggestions all require sign-in. Recent
+  // falls back to local history + community-picks for anons.
+  if ((mode === "suggestions" || mode === "favorites" || mode === "wantlist") && !window._clerk?.user) {
+    if (typeof showToast === "function") showToast(`Sign in to use ${mode}`, "info");
     return;
   }
   // 1. Source releases. Pull the FULL set (no slice yet) so the genre
@@ -2234,6 +2273,11 @@ async function _sdPlayHomeStripDirect(mode, genre) {
   //    a genre we keep more (more headroom to find matches before
   //    capping). Genre check uses item.genre / item.genres arrays.
   let sourceItems = [];
+  // Whether to shuffle the source pool before capping. Favorites and
+  // Wantlist are "random selections", so we shuffle. Recent and
+  // Suggestions are ordered by recency/relevance — leave them in
+  // their natural order so the user gets the freshest picks.
+  let shuffleBeforeCap = false;
   if (mode === "suggestions") {
     try {
       // Suggestions feed is up to 1000 server-side; pull a bigger
@@ -2247,15 +2291,61 @@ async function _sdPlayHomeStripDirect(mode, genre) {
       if (typeof showToast === "function") showToast("Could not load suggestions", "error");
       return;
     }
+  } else if (mode === "favorites") {
+    try {
+      // Favorites cap at 200 server-side — pull the lot, shuffle, then
+      // cap to 24 so each click plays a different mix.
+      const r = await apiFetch("/api/user/favorites?limit=200");
+      if (!r.ok) { if (typeof showToast === "function") showToast("Could not load favorites", "error"); return; }
+      const j = await r.json();
+      // Favorites rows are { data, created_at, entity_type } — flatten
+      // to the same shape Recent uses so the downstream pair-builder
+      // doesn't need a special case. genre / genres ride on row.data.
+      const rows = Array.isArray(j?.items) ? j.items : [];
+      sourceItems = rows.map(row => ({
+        ...(row?.data || {}),
+        type: row?.entity_type ?? row?.data?.type ?? "release",
+      }));
+      shuffleBeforeCap = true;
+    } catch {
+      if (typeof showToast === "function") showToast("Could not load favorites", "error");
+      return;
+    }
+  } else if (mode === "wantlist") {
+    try {
+      // Server-side genre filter — let the API narrow the page so we
+      // can still shuffle from a meaningful pool when the wantlist
+      // is huge. per_page caps at 200 in practice.
+      let url = "/api/user/wantlist?page=1&per_page=200";
+      if (genre) url += `&genre=${encodeURIComponent(genre)}`;
+      const r = await apiFetch(url);
+      if (!r.ok) { if (typeof showToast === "function") showToast("Could not load wantlist", "error"); return; }
+      const j = await r.json();
+      sourceItems = Array.isArray(j?.items) ? j.items : [];
+      shuffleBeforeCap = true;
+    } catch {
+      if (typeof showToast === "function") showToast("Could not load wantlist", "error");
+      return;
+    }
   } else {
     // Recent — read the same localStorage cache the home strip uses.
     let hist = [];
     try { const raw = localStorage.getItem("sd_history"); hist = raw ? JSON.parse(raw) : []; } catch {}
     sourceItems = Array.isArray(hist) ? hist : [];
   }
-  // Apply genre filter, then cap to 24 (the same horizon the home
-  // strip uses) so we don't blow up the enrich batch / queue size.
-  if (genre) sourceItems = sourceItems.filter(it => _sdItemMatchesGenre(it, genre));
+  // Apply client-side genre filter for sources where the server
+  // didn't pre-narrow (wantlist already did it via &genre).
+  if (genre && mode !== "wantlist") {
+    sourceItems = sourceItems.filter(it => _sdItemMatchesGenre(it, genre));
+  }
+  // Shuffle when the mode wants a random pick rather than a recency-
+  // ordered head. Fisher-Yates; cheap at this scale.
+  if (shuffleBeforeCap && sourceItems.length > 1) {
+    for (let i = sourceItems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [sourceItems[i], sourceItems[j]] = [sourceItems[j], sourceItems[i]];
+    }
+  }
   sourceItems = sourceItems.slice(0, 24);
 
   // 2. Build id pairs + meta map for queue items.
@@ -2276,7 +2366,11 @@ async function _sdPlayHomeStripDirect(mode, genre) {
   }
   if (!pairs.length) {
     if (typeof showToast === "function") {
-      const what = mode === "recent" ? "recent albums" : "suggestions";
+      const what =
+        mode === "recent"      ? "recent albums" :
+        mode === "favorites"   ? "favorites"     :
+        mode === "wantlist"    ? "wantlist items":
+                                 "suggestions";
       showToast(genre ? `No ${what} tagged "${genre}"` : `No ${what} yet`, "info");
     }
     return;
@@ -2342,7 +2436,11 @@ async function _sdPlayHomeStripDirect(mode, genre) {
       if (typeof queuePlayHead === "function") { try { await queuePlayHead(); } catch {} }
     }
     if (typeof showToast === "function") {
-      const label = mode === "recent" ? "Recent" : "Suggestions";
+      const label =
+        mode === "recent"      ? "Recent" :
+        mode === "favorites"   ? "Favorites" :
+        mode === "wantlist"    ? "Wantlist" :
+                                 "Suggestions";
       const where = genre ? `${label} · ${genre}` : label;
       showToast(`Playing ${items.length} track${items.length === 1 ? "" : "s"} from ${where}`);
     }
@@ -2381,6 +2479,22 @@ async function _playlistRefreshPicker() {
       <span class="playlist-picker-actions">
         <select id="cw-picker-genre-suggestions" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre — leave on All to play the top 24 suggestions">${genreOpts}</select>
         <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('suggestions', document.getElementById('cw-picker-genre-suggestions')?.value || '')" title="Play tracks from your personal suggestions feed">▶ Play</button>
+      </span>
+    </li>
+    <li class="playlist-picker-row playlist-picker-row-default" data-default="favorites">
+      <span class="playlist-picker-name">▶ Play Favorites</span>
+      <span class="playlist-picker-count">random selection from your favorites</span>
+      <span class="playlist-picker-actions">
+        <select id="cw-picker-genre-favorites" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre">${genreOpts}</select>
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('favorites', document.getElementById('cw-picker-genre-favorites')?.value || '')" title="Play a random 24-track mix from your favorites">▶ Play</button>
+      </span>
+    </li>
+    <li class="playlist-picker-row playlist-picker-row-default" data-default="wantlist">
+      <span class="playlist-picker-name">▶ Play Wantlist</span>
+      <span class="playlist-picker-count">random selection from your wantlist</span>
+      <span class="playlist-picker-actions">
+        <select id="cw-picker-genre-wantlist" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre">${genreOpts}</select>
+        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('wantlist', document.getElementById('cw-picker-genre-wantlist')?.value || '')" title="Play a random 24-track mix from your wantlist">▶ Play</button>
       </span>
     </li>`;
   try {
