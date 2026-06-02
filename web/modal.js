@@ -1730,14 +1730,29 @@ function toggleRepeat() {
   _syncMiniBarRepeatBtn();
 }
 
-// Sync the mini-bar repeat button on boot so users who toggled the
-// queue drawer to "one" / "all" in a prior session see the correct
-// indicator immediately, instead of a stale "off" until they click.
+// Mirror of _syncMiniBarRepeatBtn for the shuffle button — paints
+// .shuffle-btn elements green when on, muted-grey when off. Called
+// by _queueToggleShuffle (queue.js) and at boot.
+function _syncMiniBarShuffleBtn() {
+  const on = typeof window._queueGetShuffle === "function" && window._queueGetShuffle();
+  document.querySelectorAll(".shuffle-btn").forEach(btn => {
+    btn.style.color = on ? "#4caf50" : "#666";
+    btn.title = on ? "Shuffle: on" : "Shuffle: off";
+    if (btn.closest("#video-nav")) btn.innerHTML = on ? "⇋ shuffle ON" : "⇋ shuffle";
+    else btn.innerHTML = on ? "⇋ ON" : "⇋";
+  });
+}
+window._syncMiniBarShuffleBtn = _syncMiniBarShuffleBtn;
+
+// Sync the mini-bar repeat + shuffle buttons on boot so users who
+// toggled either in a prior session see the correct indicator
+// immediately, instead of a stale "off" until they click.
 if (typeof document !== "undefined") {
+  const _syncBoth = () => { _syncMiniBarRepeatBtn(); _syncMiniBarShuffleBtn(); };
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", _syncMiniBarRepeatBtn);
+    document.addEventListener("DOMContentLoaded", _syncBoth);
   } else {
-    setTimeout(_syncMiniBarRepeatBtn, 0);
+    setTimeout(_syncBoth, 0);
   }
 }
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
