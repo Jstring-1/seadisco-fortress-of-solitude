@@ -270,7 +270,6 @@ function switchView(view, skipPushState = false) {
   const gutenbergView = document.getElementById("gutenberg-view");
   const chronamView   = document.getElementById("chronam-view");
   const bluesArchiveView = document.getElementById("blues-archive-view");
-  const cachedBluesView  = document.getElementById("cached-blues-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -284,7 +283,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "cached-blues") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -313,7 +312,6 @@ function switchView(view, skipPushState = false) {
   if (gutenbergView) gutenbergView.style.display = "none";
   if (chronamView) chronamView.style.display = "none";
   if (bluesArchiveView) bluesArchiveView.style.display = "none";
-  if (cachedBluesView)  cachedBluesView.style.display  = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -498,25 +496,6 @@ function switchView(view, skipPushState = false) {
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/blues-archive.js").then(() => window.initBluesArchiveView?.()).catch(() => {});
     }
-  } else if (view === "cached-blues") {
-    // Admin-only — Discovery view of every release_cache row tagged
-    // Blues. Same signed-in + admin gate as blues-archive.
-    if (!_sdGateSignedInView()) return;
-    if (!window._isAdmin) {
-      if (typeof showToast === "function") {
-        showToast("Cached Blues is admin-only.", "info");
-      }
-      switchView("search", true);
-      return;
-    }
-    if (cachedBluesView) cachedBluesView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    if (typeof initCachedBluesView === "function") initCachedBluesView();
-    else if (typeof window._sdLoadModule === "function") {
-      window._sdLoadModule("/cached-blues.js").then(() => window.initCachedBluesView?.()).catch(() => {});
-    }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
@@ -675,7 +654,6 @@ function switchView(view, skipPushState = false) {
         gutenberg: document.getElementById("extras-tab-gutenberg"),
         chronam:   document.getElementById("extras-tab-chronam"),
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
-        "cached-blues":  document.getElementById("extras-tab-cached-blues"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -717,24 +695,15 @@ function switchView(view, skipPushState = false) {
         if (baTab) baTab.style.display = baAccess ? "" : "none";
         if (baSep) baSep.style.display = baAccess ? "" : "none";
       };
-      // Cached Blues: admin-only — same gate as Blues Archive.
-      const _syncCachedBlues = () => {
-        const access = !!window._isAdmin;
-        const sep = document.getElementById("extras-tab-cached-blues-sep");
-        const tab = tabs["cached-blues"];
-        if (tab) tab.style.display = access ? "" : "none";
-        if (sep) sep.style.display = access ? "" : "none";
-      };
       _syncYt();
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
-      _syncCachedBlues();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
         // tabs pop in for admin/demo without requiring a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncCachedBlues(); }).catch(() => {});
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
