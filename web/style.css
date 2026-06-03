@@ -7497,6 +7497,7 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .queue-drawer-clear,
 .queue-drawer-close,
 .queue-drawer-repeat,
+.queue-drawer-shuffle,
 .queue-drawer-consume,
 .queue-drawer-save,
 .queue-drawer-load {
@@ -7510,6 +7511,8 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .queue-drawer-close   { font-size: 1.1rem; }
 .queue-drawer-repeat  { font-size: 1.05rem; line-height: 1; position: relative; }
+.queue-drawer-shuffle { font-size: 1.05rem; line-height: 1; }
+.queue-drawer-shuffle.is-on { color: var(--accent); }
 .queue-drawer-consume { font-size: 1rem; line-height: 1; opacity: 0.7; }
 .queue-drawer-consume.is-on { color: var(--accent); opacity: 1; }
 .queue-drawer-save,
@@ -7517,9 +7520,11 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .queue-drawer-clear:hover,
 .queue-drawer-close:hover,
 .queue-drawer-repeat:hover,
+.queue-drawer-shuffle:hover,
 .queue-drawer-consume:hover,
 .queue-drawer-save:hover,
 .queue-drawer-load:hover { color: #fff; background: rgba(255,255,255,0.08); opacity: 1; }
+.queue-drawer-shuffle.is-on:hover,
 .queue-drawer-consume.is-on:hover { color: var(--accent); }
 
 /* ── Playlist picker modal ───────────────────────────────────────── */

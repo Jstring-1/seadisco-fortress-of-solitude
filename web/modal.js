@@ -1730,16 +1730,25 @@ function toggleRepeat() {
   _syncMiniBarRepeatBtn();
 }
 
-// Mirror of _syncMiniBarRepeatBtn for the shuffle button — paints
-// .shuffle-btn elements green when on, muted-grey when off. Called
-// by _queueToggleShuffle (queue.js) and at boot.
+// Mirror of _syncMiniBarRepeatBtn for the shuffle button. Mono-glyph
+// icon (⤨) so CSS color can drive the off/on visual — green when on,
+// muted-grey when off. Drawer button gets an .is-on class so the
+// queue-drawer CSS theme handles colors there; the mini-player nav
+// button uses an inline color since it has no class theme.
 function _syncMiniBarShuffleBtn() {
   const on = typeof window._queueGetShuffle === "function" && window._queueGetShuffle();
   document.querySelectorAll(".shuffle-btn").forEach(btn => {
-    btn.style.color = on ? "#4caf50" : "#666";
     btn.title = on ? "Shuffle: on" : "Shuffle: off";
-    if (btn.closest("#video-nav")) btn.innerHTML = on ? "⇋ shuffle ON" : "⇋ shuffle";
-    else btn.innerHTML = on ? "⇋ ON" : "⇋";
+    btn.classList.toggle("is-on", on);
+    if (btn.closest("#video-nav")) {
+      btn.style.color = on ? "var(--accent)" : "#666";
+      btn.innerHTML = "⤨ shuffle";
+    } else if (!btn.classList.contains("queue-drawer-shuffle")) {
+      // Mini-bar collapsed icon — single glyph, inline color.
+      btn.style.color = on ? "var(--accent)" : "#666";
+      btn.innerHTML = "⤨";
+    }
+    // queue-drawer-shuffle: CSS class drives color, leave innerHTML alone.
   });
 }
 window._syncMiniBarShuffleBtn = _syncMiniBarShuffleBtn;
