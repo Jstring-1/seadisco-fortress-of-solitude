@@ -929,7 +929,7 @@ function _ensureQueueDrawer() {
     <div class="queue-drawer-head">
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
-      <button type="button" class="queue-drawer-shuffle shuffle-btn" onclick="_queueToggleShuffle()" title="Shuffle: off" style="background:none;border:1px solid var(--border);color:#666;border-radius:4px;padding:0.2rem 0.45rem;font-size:0.78rem;cursor:pointer">⇋</button>
+      <button type="button" class="queue-drawer-shuffle shuffle-btn" onclick="_queueToggleShuffle()" title="Shuffle: off">⤨</button>
       <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
       <button type="button" class="queue-drawer-save" onclick="_playlistSavePrompt()" title="Save current queue as a playlist">💾</button>
       <button type="button" class="queue-drawer-load" onclick="_playlistOpenPicker()" title="Load one of your saved playlists">📂</button>
