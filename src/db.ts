@@ -6717,6 +6717,102 @@ const _LYRICS_SORT_COLS: Record<string, string> = {
   first_release_year: "first_release_year",
 };
 
+// Expand a lyric search query into its phonetic / colloquial
+// equivalents so a single typed phrase catches all the ways blues
+// lyrics actually render the same thought. Bidirectional: typing
+// "want to" also matches "wanna" and vice versa. Capped at 32
+// variants so a pathological query can't blow up the OR list.
+//
+//   "want to" → ["want to", "wanna"]
+//   "wanna"   → ["wanna", "want to"]
+//   "one and one" → ["one and one", "1 and one", "one & one",
+//                     "one and 1", "1 & 1", "1 and 1", …]
+//   "morning" → ["morning", "mornin'"]
+//   "mornin'" → ["mornin'", "morning"]
+function _escRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function expandLyricSearchVariants(q: string): string[] {
+  if (!q) return [q];
+  const out = new Set<string>([q]);
+  // Bidirectional substring rewrites. Each pair is applied both ways
+  // against every variant in the BFS queue until we hit the cap.
+  const pairs: Array<[string, string]> = [
+    // Reduced auxiliaries / common slurs
+    ["want to", "wanna"],
+    ["going to", "gonna"],
+    ["got to", "gotta"],
+    ["have to", "hafta"],
+    ["has to", "hasta"],
+    ["had to", "hadda"],
+    ["ought to", "oughta"],
+    ["used to", "useta"],
+    ["kind of", "kinda"],
+    ["sort of", "sorta"],
+    ["lot of", "lotta"],
+    ["out of", "outta"],
+    ["because", "'cause"],
+    ["because", "cause"],
+    ["them", "'em"],
+    ["and", "&"],
+    // Number words ↔ digits
+    ["zero", "0"], ["one", "1"], ["two", "2"], ["three", "3"],
+    ["four", "4"], ["five", "5"], ["six", "6"], ["seven", "7"],
+    ["eight", "8"], ["nine", "9"], ["ten", "10"],
+    // Common contractions seen in transcribed blues lyrics
+    ["i am", "i'm"],
+    ["you are", "you're"],
+    ["he is", "he's"],
+    ["she is", "she's"],
+    ["it is", "it's"],
+    ["we are", "we're"],
+    ["they are", "they're"],
+    ["do not", "don't"],
+    ["does not", "doesn't"],
+    ["did not", "didn't"],
+    ["will not", "won't"],
+    ["can not", "can't"],
+    ["cannot",  "can't"],
+    ["should not", "shouldn't"],
+    ["would not", "wouldn't"],
+    ["could not", "couldn't"],
+    ["is not", "ain't"],
+    ["are not", "ain't"],
+    ["am not", "ain't"],
+  ];
+  const queue: string[] = [q];
+  const CAP = 32;
+  while (queue.length && out.size < CAP) {
+    const s = queue.shift()!;
+    const lower = s.toLowerCase();
+    for (const [a, b] of pairs) {
+      if (out.size >= CAP) break;
+      if (lower.includes(a)) {
+        const v = s.replace(new RegExp(_escRe(a), "gi"), b);
+        if (!out.has(v)) { out.add(v); queue.push(v); }
+      }
+      if (lower.includes(b)) {
+        const v = s.replace(new RegExp(_escRe(b), "gi"), a);
+        if (!out.has(v)) { out.add(v); queue.push(v); }
+      }
+    }
+  }
+  // Dropped-g ending: morning ↔ mornin'. Applied after the pair pass
+  // so contractions don't accidentally collide. Word-boundary only on
+  // the right so we match the suffix at end-of-word, not anywhere.
+  for (const s of [...out]) {
+    if (out.size >= CAP * 2) break;
+    if (/ing\b/i.test(s)) {
+      out.add(s.replace(/ing\b/gi, "in'"));
+      out.add(s.replace(/ing\b/gi, "in"));    // sometimes apostrophe is dropped too
+    }
+    if (/in'\b/i.test(s)) {
+      out.add(s.replace(/in'\b/gi, "ing"));
+    }
+  }
+  return [...out];
+}
+
 export async function listLyrics(opts: {
   search?: string;
   tuning?: string;
@@ -6738,8 +6834,17 @@ export async function listLyrics(opts: {
   const where: string[] = [];
   const params: any[] = [];
   if (opts.search) {
-    params.push(`%${opts.search}%`);
-    where.push(`(page_title ILIKE $${params.length} OR artist ILIKE $${params.length} OR plaintext ILIKE $${params.length})`);
+    // Expand to colloquial variants so "want to" also matches "wanna"
+    // etc. — see expandLyricSearchVariants above. Each variant gets
+    // ORed across page_title / artist / plaintext.
+    const variants = expandLyricSearchVariants(opts.search);
+    const clauses: string[] = [];
+    for (const v of variants) {
+      params.push(`%${v}%`);
+      const p = `$${params.length}`;
+      clauses.push(`(page_title ILIKE ${p} OR artist ILIKE ${p} OR plaintext ILIKE ${p})`);
+    }
+    where.push(`(${clauses.join(" OR ")})`);
   }
   if (opts.tuning) {
     // Special sentinel: "(unspecified)" filters rows where no tuning
