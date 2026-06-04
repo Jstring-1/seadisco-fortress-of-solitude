@@ -559,7 +559,7 @@ function _baRenderArtistDetail(a) {
                            `&a=${encodeURIComponent(a.name || "")}` +
                            `&r=${encodeURIComponent("master+")}` +
                            `&s=${encodeURIComponent("year:asc")}`;
-          const searchLink = `<a href="/${searchQs}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+          const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
           const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? " ba-lyric-visited" : "";
           return `<tr data-lyric-row="${l.id}" class="${visitedCls.trim()}">
             <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}</td>
@@ -1967,7 +1967,7 @@ function _baLyricRowHtml(l) {
                    `&a=${encodeURIComponent(fullArtist)}` +
                    `&r=${encodeURIComponent("master+")}` +
                    `&s=${encodeURIComponent("year:asc")}`;
-  const searchLink = `<a href="/${searchQs}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
     <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${searchLink} ${titleHtml}</td>
