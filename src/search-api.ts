@@ -9419,7 +9419,7 @@ type LyricsScrapeState = {
   // it clearly. "scrape" = full wiki walk + page-content fetch.
   // "artist-sync" = walk Category:Lyrics by Artist + DB updates only,
   // no page-content fetch.
-  jobKind: "idle" | "scrape" | "artist-sync";
+  jobKind: "idle" | "scrape" | "artist-sync" | "pre-scrape";
   phase: "idle" | "discovering" | "fetching" | "done" | "error";
   startedAt: number;
   finishedAt: number | null;
@@ -9436,8 +9436,20 @@ type LyricsScrapeState = {
   // Capped at 500 most-recent so the JSON payload stays small even
   // for a full ~4000-page sweep — the rest are summarized by counts.
   recentlyAdded: LyricsScrapeAddedRow[];
+  // Pre-scrape result: page titles discovered on the wiki that are
+  // NOT already in blues_lyrics. Populated by the pre-scrape job
+  // (jobKind="pre-scrape"); empty during/after a regular scrape.
+  // Capped at 1000 so the payload stays bounded even if the wiki
+  // grows dramatically. Lets the admin estimate how much new content
+  // a rescrape would actually fetch before committing to ~80 min.
+  newTitles: string[];
+  // Total counts so the UI can show "X new of Y on the wiki" even
+  // when newTitles[] has been truncated by the cap.
+  newTitlesTotal: number;
+  wikiTotalPages: number;
 };
 const _LYRICS_RECENT_ADDED_CAP = 500;
+const _LYRICS_PRESCRAPE_TITLES_CAP = 1000;
 let _lyricsScrapeState: LyricsScrapeState = {
   running: false,
   jobKind: "idle",
@@ -9452,6 +9464,9 @@ let _lyricsScrapeState: LyricsScrapeState = {
   message: "Idle",
   error: null,
   recentlyAdded: [],
+  newTitles: [],
+  newTitlesTotal: 0,
+  wikiTotalPages: 0,
 };
 
 function _lyricsExtractTuning(text: string): string | null {
@@ -9774,6 +9789,71 @@ async function _lyricsFetchPage(title: string): Promise<{ wikitext: string; url:
   return { wikitext, url };
 }
 
+// Discovery-only pre-scrape: walks Category:Lyrics on the wiki the
+// same way the real scrape does, then diffs the resulting title set
+// against blues_lyrics.page_title to compute exactly which pages a
+// rescrape would add. NO page content is fetched — this is the
+// cheap "is it worth running the full ~80 min scrape?" check.
+// Throttle is the discovery-rate (~0.4s per category list call),
+// so this completes in a few minutes for a 4000-page wiki rather
+// than the hours a full scrape takes.
+async function _lyricsPreScrapeRun(): Promise<void> {
+  if (_lyricsScrapeState.running) return;
+  _lyricsScrapeState = {
+    running: true,
+    jobKind: "pre-scrape",
+    phase: "discovering",
+    startedAt: Date.now(),
+    finishedAt: null,
+    pagesDiscovered: 0,
+    pagesScraped: 0,
+    pagesSkipped: 0,
+    pagesFailed: 0,
+    currentTitle: "",
+    message: "Walking Category:Lyrics on the wiki…",
+    error: null,
+    recentlyAdded: [],
+    newTitles: [],
+    newTitlesTotal: 0,
+    wikiTotalPages: 0,
+  };
+  try {
+    const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+    const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
+    if (!_lyricsScrapeState.running) {
+      _lyricsScrapeState.phase = "done";
+      _lyricsScrapeState.message = `Stopped during discovery. ${pages.length} pages had been queued.`;
+      return;
+    }
+    // Diff: any wiki page title we don't already have. Preserve the
+    // wiki's discovery order so the list reads naturally (alphabetical
+    // within each subcategory).
+    const newTitles: string[] = [];
+    for (const t of pages) {
+      if (!already.has(t)) newTitles.push(t);
+    }
+    _lyricsScrapeState.wikiTotalPages = pages.length;
+    _lyricsScrapeState.pagesDiscovered = pages.length;
+    _lyricsScrapeState.newTitlesTotal = newTitles.length;
+    // Cap the array shipped to the client.
+    _lyricsScrapeState.newTitles = newTitles.slice(0, _LYRICS_PRESCRAPE_TITLES_CAP);
+    _lyricsScrapeState.phase = "done";
+    _lyricsScrapeState.message = newTitles.length
+      ? `Wiki has ${pages.length.toLocaleString()} pages; ${newTitles.length.toLocaleString()} are NOT yet in your DB. A rescrape would fetch those.`
+      : `Wiki has ${pages.length.toLocaleString()} pages; everything is already in your DB. Nothing new to scrape.`;
+    console.log(`[lyrics] pre-scrape done: ${pages.length} on wiki, ${newTitles.length} new`);
+  } catch (e: any) {
+    _lyricsScrapeState.phase = "error";
+    _lyricsScrapeState.error = e?.message ?? String(e);
+    _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+    console.error("[lyrics] pre-scrape failed:", e);
+  } finally {
+    _lyricsScrapeState.running = false;
+    _lyricsScrapeState.finishedAt = Date.now();
+    _lyricsScrapeState.currentTitle = "";
+  }
+}
+
 async function _lyricsScrapeRun(): Promise<void> {
   if (_lyricsScrapeState.running) return;
   _lyricsScrapeState = {
@@ -9790,6 +9870,9 @@ async function _lyricsScrapeRun(): Promise<void> {
     message: "Collecting page list…",
     error: null,
     recentlyAdded: [],
+    newTitles: [],
+    newTitlesTotal: 0,
+    wikiTotalPages: 0,
   };
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
@@ -9887,6 +9970,20 @@ app.post("/api/admin/lyrics/scrape", async (req, res) => {
     return;
   }
   _lyricsScrapeRun().catch((e) => console.error("[lyrics] background run threw:", e));
+  res.json({ ok: true, started: true });
+});
+
+// POST /api/admin/lyrics/scrape/precheck — discovery-only pre-scrape.
+// Fires _lyricsPreScrapeRun in the background; status is shared with
+// the regular scrape (jobKind="pre-scrape"). Result lives in
+// state.newTitles + .newTitlesTotal + .wikiTotalPages.
+app.post("/api/admin/lyrics/scrape/precheck", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_lyricsScrapeState.running) {
+    res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+    return;
+  }
+  _lyricsPreScrapeRun().catch((e) => console.error("[lyrics] pre-scrape threw:", e));
   res.json({ ok: true, started: true });
 });
 
@@ -10144,6 +10241,9 @@ async function _lyricsSyncArtistsRun(force: boolean): Promise<void> {
     message: "Walking Category:Lyrics by Artist…",
     error: null,
     recentlyAdded: [],
+    newTitles: [],
+    newTitlesTotal: 0,
+    wikiTotalPages: 0,
   };
   try {
     const { map, subcats, pages } = await _lyricsCollectArtistMappingFromWiki();

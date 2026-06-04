@@ -2016,6 +2016,29 @@ async function lyricsStopScrape() {
 }
 window.lyricsStopScrape = lyricsStopScrape;
 
+async function lyricsStartPreScrape() {
+  const btn = document.getElementById("lyrics-prescrape-btn");
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  if (!btn || !statusEl) return;
+  btn.disabled = true;
+  statusEl.textContent = "Pre-scrape starting…";
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/precheck", { method: "POST" });
+    if (r.status === 409) {
+      statusEl.textContent = "Another job is running — attaching to its status…";
+    } else if (!r.ok) {
+      statusEl.textContent = `Pre-scrape failed: HTTP ${r.status}`;
+      btn.disabled = false;
+      return;
+    }
+    lyricsStartPolling();
+  } catch (e) {
+    statusEl.textContent = `Pre-scrape failed: ${e?.message || e}`;
+    btn.disabled = false;
+  }
+}
+window.lyricsStartPreScrape = lyricsStartPreScrape;
+
 async function lyricsStartScrape() {
   const btn = document.getElementById("lyrics-scrape-btn");
   const statusEl = document.getElementById("lyrics-scrape-status");
@@ -2072,9 +2095,14 @@ async function lyricsPollScrapeOnce() {
       stats.textContent = `${s.totalStored.toLocaleString()} lyric${s.totalStored === 1 ? "" : "s"} stored`;
     }
     const stopBtn = document.getElementById("lyrics-stop-btn");
+    const preBtn  = document.getElementById("lyrics-prescrape-btn");
     if (s.running) {
       btn.disabled = true;
-      if (stopBtn) stopBtn.style.display = "";
+      if (preBtn) preBtn.disabled = true;
+      // Stop button is only meaningful for the long scrape; pre-scrape
+      // finishes on its own in a few minutes and there's no partial
+      // progress to preserve.
+      if (stopBtn) stopBtn.style.display = s.jobKind === "scrape" ? "" : "none";
       const phase = s.phase || "running";
       // Label the job kind so artist-sync runs aren't mistaken for a
       // new scrape — they share progress state but mean different
@@ -2082,6 +2110,7 @@ async function lyricsPollScrapeOnce() {
       // page content from the wiki).
       const jobLabel = s.jobKind === "artist-sync" ? "Artist sync"
                      : s.jobKind === "scrape"      ? "Lyric scrape"
+                     : s.jobKind === "pre-scrape"  ? "Pre-scrape"
                      :                               "Running";
       if (phase === "discovering") {
         statusEl.innerHTML = `<span style="color:var(--accent)">${escHtml(jobLabel)} ·</span> ${escHtml(s.message || "").slice(0, 140)}`;
@@ -2091,6 +2120,7 @@ async function lyricsPollScrapeOnce() {
       }
     } else {
       btn.disabled = false;
+      if (preBtn) preBtn.disabled = false;
       if (stopBtn) stopBtn.style.display = "none";
       if (s.finishedAt && s.startedAt) {
         const mins = Math.round((s.finishedAt - s.startedAt) / 60000);
@@ -2121,6 +2151,52 @@ async function lyricsPollScrapeOnce() {
 function _lyricsRenderRecentlyAdded(s) {
   const panel = document.getElementById("lyrics-scrape-added");
   if (!panel) return;                   // not on the Discovery view
+  // Pre-scrape result: show the list of titles the wiki has that we
+  // don't, with a header that summarises the diff. Distinct from the
+  // recentlyAdded panel because nothing is in our DB yet — these
+  // titles aren't clickable links to a viewer, just shortcuts to a
+  // SeaDisco / Discogs search so the admin can scout ahead of a
+  // commit to the full ~80 min scrape.
+  if (s?.jobKind === "pre-scrape" && Array.isArray(s.newTitles)) {
+    const titles = s.newTitles;
+    const total = Number(s.newTitlesTotal) || titles.length;
+    if (!titles.length && !s.running && total === 0) {
+      panel.style.display = "";
+      panel.innerHTML = `
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
+          <strong style="font-size:0.86rem">Pre-scrape complete <span style="color:var(--muted);font-weight:400">— no new lyrics on the wiki</span></strong>
+          <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'">×</button>
+        </div>
+        <div style="color:var(--muted);font-size:0.84rem">Wiki has ${(s.wikiTotalPages || 0).toLocaleString()} pages and you already have all of them. A rescrape would be a no-op right now.</div>`;
+      return;
+    }
+    if (titles.length) {
+      panel.style.display = "";
+      const headerLabel = s.running ? "Pre-scrape in progress…" : `Pre-scrape result — ${total.toLocaleString()} new title${total === 1 ? "" : "s"} on the wiki`;
+      const sub = `<span style="color:var(--muted);font-weight:400">${s.wikiTotalPages ? `${s.wikiTotalPages.toLocaleString()} total on wiki` : ""}${total > titles.length ? ` · showing first ${titles.length.toLocaleString()}` : ""}</span>`;
+      const html = titles.map(t => {
+        const title = String(t || "");
+        const sdQs = `?q=${encodeURIComponent(title)}` +
+                     `&r=${encodeURIComponent("master+")}` +
+                     `&s=${encodeURIComponent("year:asc")}`;
+        return `<div style="display:flex;gap:0.4rem;align-items:baseline;padding:0.15rem 0;font-size:0.84rem;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <a href="/${sdQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>
+          <span style="color:var(--text)">${escHtml(title)}</span>
+        </div>`;
+      }).join("");
+      panel.innerHTML = `
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
+          <strong style="font-size:0.86rem">${escHtml(headerLabel)} ${sub}</strong>
+          <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'">×</button>
+        </div>
+        <div style="max-height:240px;overflow-y:auto">${html}</div>
+        ${!s.running && total > 0 ? `<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">Ready to fetch? Click <strong style="color:var(--text)">Rescrape new</strong> to pull these (and skip everything you already have).</div>` : ""}`;
+      return;
+    }
+    // pre-scrape is running but no titles yet — let the status row do
+    // the talking and don't blank the panel mid-run.
+    if (s.running) return;
+  }
   const rows = Array.isArray(s?.recentlyAdded) ? s.recentlyAdded : [];
   if (!rows.length) { panel.style.display = "none"; panel.innerHTML = ""; return; }
   panel.style.display = "";
