@@ -10060,6 +10060,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
     const unmatched = req.query.unmatched === "1" || req.query.unmatched === "true";
     const unpinned  = req.query.unpinned  === "1" || req.query.unpinned  === "true";
     const empty     = req.query.empty     === "1" || req.query.empty     === "true";
+    const noArtist  = req.query.noArtist  === "1" || req.query.noArtist  === "true";
     // Sort column (whitelisted server-side) + direction. Anything else
     // is ignored / falls back to the default in listLyrics.
     const sort  = String(req.query.sort  ?? "").trim().slice(0, 30);
@@ -10073,6 +10074,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
       unmatchedOnly: unmatched,
       unpinnedOnly: unpinned,
       emptyOnly: empty,
+      noArtistOnly: noArtist,
       sort: sort || undefined,
       order,
       limit, offset,

@@ -45,6 +45,7 @@ function _baPersistViewState() {
         unmatched: _baLyricsUnmatched,
         unpinned:  _baLyricsUnpinned,
         empty:     _baLyricsEmpty,
+        noArtist:  _baLyricsNoArtist,
         page:      _baLyricsPage,
         sort:      { key: _baLyricsListSort.key, dir: _baLyricsListSort.dir },
         scrollY:   window.scrollY,
@@ -224,6 +225,7 @@ function initBluesArchiveView() {
       _baLyricsUnmatched = !!saved.lyrics.unmatched;
       _baLyricsUnpinned  = !!saved.lyrics.unpinned;
       _baLyricsEmpty     = !!saved.lyrics.empty;
+      _baLyricsNoArtist  = !!saved.lyrics.noArtist;
       _baLyricsPage      = Number(saved.lyrics.page) || 0;
       if (saved.lyrics.sort?.key) {
         _baLyricsListSort.key = saved.lyrics.sort.key;
@@ -241,6 +243,8 @@ function initBluesArchiveView() {
       if (up) up.checked = !!saved.lyrics.unpinned;
       const em = document.getElementById("blues-archive-lyrics-empty");
       if (em) em.checked = !!saved.lyrics.empty;
+      const na = document.getElementById("blues-archive-lyrics-no-artist");
+      if (na) na.checked = !!saved.lyrics.noArtist;
       _baSwitchSubtab("lyrics");
       // Scroll restore — wait past the table render. RAF + ~250ms
       // settles the layout for long lists; clamp to body height so a
@@ -1309,6 +1313,7 @@ let _baLyricsTuning = "";
 let _baLyricsUnmatched = false;
 let _baLyricsUnpinned = false;
 let _baLyricsEmpty = false;
+let _baLyricsNoArtist = false;
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", first_release_year: "num" };
@@ -1385,6 +1390,13 @@ function _baLyricsApplyEmpty() {
   _baLoadLyrics();
 }
 window._baLyricsApplyEmpty = _baLyricsApplyEmpty;
+
+function _baLyricsApplyNoArtist() {
+  _baLyricsNoArtist = !!document.getElementById("blues-archive-lyrics-no-artist")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyNoArtist = _baLyricsApplyNoArtist;
 
 // Cheap pass: set every lyric's first_release_year from its linked
 // artist's discogs_releases (title match). Zero Discogs API calls.
@@ -1845,15 +1857,18 @@ function _baLyricsClearFilters() {
   const unmatched = document.getElementById("blues-archive-lyrics-unmatched");
   const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
   const empty     = document.getElementById("blues-archive-lyrics-empty");
+  const noArtist  = document.getElementById("blues-archive-lyrics-no-artist");
   if (search)    search.value = "";
   if (tuningSel) tuningSel.value = "";
   if (unmatched) unmatched.checked = false;
   if (unpinned)  unpinned.checked  = false;
   if (empty)     empty.checked     = false;
+  if (noArtist)  noArtist.checked  = false;
   _baLyricsTuning    = "";
   _baLyricsUnmatched = false;
   _baLyricsUnpinned  = false;
   _baLyricsEmpty     = false;
+  _baLyricsNoArtist  = false;
   _baLyricsPage      = 0;
   _baLoadLyrics();
 }
@@ -1912,10 +1927,11 @@ async function _baLoadLyrics() {
   if (_baLyricsUnmatched) params.set("unmatched", "1");
   if (_baLyricsUnpinned)  params.set("unpinned",  "1");
   if (_baLyricsEmpty)     params.set("empty",     "1");
+  if (_baLyricsNoArtist)  params.set("noArtist",  "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current

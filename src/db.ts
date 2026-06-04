@@ -6826,6 +6826,12 @@ export async function listLyrics(opts: {
    *  Used to surface lyric titles awaiting their text body so the
    *  curator can paste it in via the editor. */
   emptyOnly?: boolean;
+  /** True → only return rows whose `artist` column is NULL or blank.
+   *  Distinct from `unmatchedOnly` (which checks the artist_id FK):
+   *  this surfaces rows whose extractor never found an artist string
+   *  to begin with — they sort to the bottom under any ORDER BY so
+   *  this is the only practical way to surface them. */
+  noArtistOnly?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -6871,6 +6877,9 @@ export async function listLyrics(opts: {
   }
   if (opts.emptyOnly) {
     where.push(`(plaintext IS NULL OR LENGTH(TRIM(plaintext)) = 0)`);
+  }
+  if (opts.noArtistOnly) {
+    where.push(`(artist IS NULL OR LENGTH(TRIM(artist)) = 0)`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
