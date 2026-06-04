@@ -9474,7 +9474,7 @@ type LyricsScrapeState = {
   // it clearly. "scrape" = full wiki walk + page-content fetch.
   // "artist-sync" = walk Category:Lyrics by Artist + DB updates only,
   // no page-content fetch.
-  jobKind: "idle" | "scrape" | "artist-sync" | "pre-scrape";
+  jobKind: "idle" | "scrape" | "artist-sync" | "pre-scrape" | "recent-changes";
   phase: "idle" | "discovering" | "fetching" | "done" | "error";
   startedAt: number;
   finishedAt: number | null;
@@ -9844,6 +9844,162 @@ async function _lyricsFetchPage(title: string): Promise<{ wikitext: string; url:
   return { wikitext, url };
 }
 
+// Pulls article-namespace titles from list=recentchanges. Two modes
+// via opts.includeEdits: false (default) returns only newly-created
+// pages (rctype=new), true returns every change in the window.
+// Deduplicates by title since the same page may be edited several
+// times during the window. Returns newest-first by API default
+// (rcdir=older means walk from now backwards).
+async function _lyricsCollectRecentChanges(opts: {
+  daysBack: number;
+  includeEdits: boolean;
+}): Promise<string[]> {
+  const since = new Date(Date.now() - opts.daysBack * 24 * 60 * 60 * 1000).toISOString();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let rccontinue = "";
+  do {
+    if (!_lyricsScrapeState.running) break;
+    const params = new URLSearchParams({
+      action: "query",
+      list: "recentchanges",
+      rcnamespace: "0",                 // article namespace only
+      rcprop: "title|timestamp|type",
+      rclimit: "500",
+      rcend: since,                     // stop when older than the window
+      rcdir: "older",                   // newest first
+      format: "json",
+    });
+    if (!opts.includeEdits) params.set("rctype", "new");
+    if (rccontinue) params.set("rccontinue", rccontinue);
+    _lyricsScrapeState.message = `Reading RecentChanges (${out.length} unique so far)…`;
+    const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+      console.warn("[lyrics] recentchanges fetch failed:", e?.message ?? e);
+      return null;
+    });
+    await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+    const changes = j?.query?.recentchanges ?? [];
+    for (const c of changes) {
+      const t = String(c?.title || "");
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+    rccontinue = j?.continue?.rccontinue ?? "";
+  } while (rccontinue);
+  return out;
+}
+
+async function _lyricsRefreshRecentRun(opts: {
+  daysBack: number;
+  includeEdits: boolean;
+}): Promise<void> {
+  if (_lyricsScrapeState.running) return;
+  _lyricsScrapeState = {
+    running: true,
+    jobKind: "recent-changes",
+    phase: "discovering",
+    startedAt: Date.now(),
+    finishedAt: null,
+    pagesDiscovered: 0,
+    pagesScraped: 0,
+    pagesSkipped: 0,
+    pagesFailed: 0,
+    currentTitle: "",
+    message: `Reading RecentChanges (${opts.daysBack}d, ${opts.includeEdits ? "new + edits" : "new only"})…`,
+    error: null,
+    recentlyAdded: [],
+    newTitles: [],
+    newTitlesTotal: 0,
+    wikiTotalPages: 0,
+  };
+  try {
+    const already       = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+    const bannedTitles  = await getBannedLyricTitleSet().catch(() => new Set<string>());
+    const bannedArtists = await getBannedLyricArtistSet().catch(() => new Set<string>());
+    const titles        = await _lyricsCollectRecentChanges(opts);
+    if (!_lyricsScrapeState.running) {
+      _lyricsScrapeState.phase = "done";
+      _lyricsScrapeState.message = `Stopped during discovery. ${titles.length} titles had been queued.`;
+      return;
+    }
+    _lyricsScrapeState.phase = "fetching";
+    _lyricsScrapeState.pagesDiscovered = titles.length;
+    _lyricsScrapeState.message = `Discovered ${titles.length} recent change${titles.length === 1 ? "" : "s"} — processing…`;
+    console.log(`[lyrics] recent-changes: ${titles.length} unique titles in last ${opts.daysBack}d`);
+    for (let i = 0; i < titles.length; i++) {
+      if (!_lyricsScrapeState.running) break;
+      const title = titles[i];
+      if (bannedTitles.has(title)) {
+        _lyricsScrapeState.pagesSkipped++;
+        continue;
+      }
+      const isExisting = already.has(title);
+      // Skip existing rows in new-only mode — there's nothing to do
+      // unless the caller asked us to refresh wikitext on edits too.
+      if (isExisting && !opts.includeEdits) {
+        _lyricsScrapeState.pagesSkipped++;
+        continue;
+      }
+      _lyricsScrapeState.currentTitle = title;
+      const iterT0 = Date.now();
+      try {
+        const fetched = await _lyricsFetchPage(title);
+        if (!fetched) {
+          _lyricsScrapeState.pagesFailed++;
+          console.warn(`[lyrics-recent] ${i + 1}/${titles.length} fetch returned null: ${title} (${Date.now() - iterT0}ms)`);
+        } else {
+          const wikitext  = fetched.wikitext;
+          const plaintext = _lyricsWikitextToPlain(wikitext);
+          const tuning    = _lyricsExtractTuning(wikitext) || _lyricsExtractTuning(plaintext);
+          const artist    = _lyricsExtractArtist(wikitext, title);
+          if (artist && bannedArtists.has(String(artist).toLowerCase().trim())) {
+            _lyricsScrapeState.pagesSkipped++;
+            await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+            continue;
+          }
+          await upsertLyric({
+            pageTitle: title,
+            pageUrl: fetched.url,
+            artist,
+            tuning,
+            wikitext,
+            plaintext,
+            sourceHost: "weeniecampbell.com",
+          });
+          _lyricsScrapeState.pagesScraped++;
+          _lyricsScrapeState.recentlyAdded.push({
+            title,
+            url: fetched.url,
+            artist,
+            tuning,
+            at: Date.now(),
+          });
+          if (_lyricsScrapeState.recentlyAdded.length > _LYRICS_RECENT_ADDED_CAP) {
+            _lyricsScrapeState.recentlyAdded.splice(0, _lyricsScrapeState.recentlyAdded.length - _LYRICS_RECENT_ADDED_CAP);
+          }
+        }
+      } catch (e: any) {
+        _lyricsScrapeState.pagesFailed++;
+        console.warn(`[lyrics-recent] ${i + 1}/${titles.length} threw: ${title}`, e?.message ?? e);
+      }
+      _lyricsScrapeState.message = `Processed ${_lyricsScrapeState.pagesScraped + _lyricsScrapeState.pagesSkipped} / ${titles.length}`;
+      await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+    }
+    _lyricsScrapeState.phase = "done";
+    _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} ${opts.includeEdits ? "fetched" : "added"}, ${_lyricsScrapeState.pagesSkipped} skipped, ${_lyricsScrapeState.pagesFailed} failed.`;
+  } catch (e: any) {
+    _lyricsScrapeState.phase = "error";
+    _lyricsScrapeState.error = e?.message ?? String(e);
+    _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+    console.error("[lyrics] recent-changes run failed:", e);
+  } finally {
+    _lyricsScrapeState.running = false;
+    _lyricsScrapeState.finishedAt = Date.now();
+    _lyricsScrapeState.currentTitle = "";
+  }
+}
+
 // Discovery-only pre-scrape: walks Category:Lyrics on the wiki the
 // same way the real scrape does, then diffs the resulting title set
 // against blues_lyrics.page_title to compute exactly which pages a
@@ -10048,6 +10204,32 @@ app.post("/api/admin/lyrics/scrape", async (req, res) => {
   }
   _lyricsScrapeRun().catch((e) => console.error("[lyrics] background run threw:", e));
   res.json({ ok: true, started: true });
+});
+
+// POST /api/admin/lyrics/scrape/recent — incremental refresh driven by
+// MediaWiki's list=recentchanges. Body / query:
+//   days  (default 30, max 180) — lookback window
+//   edits (default 0)           — when 1, also fetch existing rows so
+//                                 their wikitext/tuning reflect edits
+// Much faster than the full walk: a 30-day window typically returns
+// a few dozen titles vs the 4000+ in Category:Lyrics.
+app.post("/api/admin/lyrics/scrape/recent", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_lyricsScrapeState.running) {
+    res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+    return;
+  }
+  const num = (v: any, def: number) => {
+    const n = parseInt(String(v ?? ""), 10);
+    return Number.isFinite(n) ? n : def;
+  };
+  const daysBackRaw = num(req.body?.days ?? req.query.days, 30);
+  const daysBack    = Math.max(1, Math.min(180, daysBackRaw));
+  const includeEdits = req.body?.edits === 1 || req.body?.edits === "1" || req.body?.edits === true
+                    || req.query.edits === "1" || req.query.edits === "true";
+  _lyricsRefreshRecentRun({ daysBack, includeEdits })
+    .catch((e) => console.error("[lyrics] recent-changes threw:", e));
+  res.json({ ok: true, started: true, daysBack, includeEdits });
 });
 
 // POST /api/admin/lyrics/scrape/precheck — discovery-only pre-scrape.
