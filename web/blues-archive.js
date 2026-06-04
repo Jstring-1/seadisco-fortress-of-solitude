@@ -24,6 +24,89 @@ const _BA_LIST_TYPES = { name: "str", discogs_id: "num", has_photo: "num", first
 let _baDetailArtist = null;
 const _baLyricsSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_TYPES = { page_title: "str", tuning: "str", snippet: "str", scraped_at: "date" };
+
+// Page-state persistence — subtab + lyrics filters + scroll. Saved on
+// every relevant change and on subtab switch; restored when the user
+// returns to the Blues Archive view (initBluesArchiveView reads this
+// and routes through _baSwitchSubtab + populates the lyrics inputs).
+// Capped by age (1 hour) so a stale state from yesterday doesn't pull
+// you back to a long-forgotten filter on next session.
+const _BA_VIEW_STATE_KEY = "sd_ba_view_state";
+const _BA_VIEW_STATE_MAX_AGE_MS = 60 * 60 * 1000;
+let _baStateScrollTimer = null;
+function _baPersistViewState() {
+  try {
+    const state = {
+      at: Date.now(),
+      subtab: _baSubtab,
+      lyrics: _baSubtab === "lyrics" ? {
+        q:         document.getElementById("blues-archive-lyrics-search")?.value || "",
+        tuning:    _baLyricsTuning,
+        unmatched: _baLyricsUnmatched,
+        unpinned:  _baLyricsUnpinned,
+        empty:     _baLyricsEmpty,
+        page:      _baLyricsPage,
+        sort:      { key: _baLyricsListSort.key, dir: _baLyricsListSort.dir },
+        scrollY:   window.scrollY,
+      } : null,
+    };
+    localStorage.setItem(_BA_VIEW_STATE_KEY, JSON.stringify(state));
+  } catch {}
+}
+function _baReadViewState() {
+  try {
+    const raw = localStorage.getItem(_BA_VIEW_STATE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || typeof s !== "object") return null;
+    if (Date.now() - Number(s.at || 0) > _BA_VIEW_STATE_MAX_AGE_MS) return null;
+    return s;
+  } catch { return null; }
+}
+// Debounced scroll listener — only persists while the user is actually
+// on the Blues Archive lyrics tab. Cheap when the tab isn't visible
+// (returns early) so the global listener is harmless elsewhere.
+if (typeof window !== "undefined") {
+  window.addEventListener("scroll", () => {
+    if (_baSubtab !== "lyrics") return;
+    const lp = document.getElementById("blues-archive-lyrics-panel");
+    if (!lp || lp.style.display === "none") return;
+    if (_baStateScrollTimer) clearTimeout(_baStateScrollTimer);
+    _baStateScrollTimer = setTimeout(_baPersistViewState, 400);
+  }, { passive: true });
+}
+
+// Visited-lyric tracker. localStorage-backed Set so the snippet column
+// dims for already-opened rows on revisit (like a browser's visited
+// link colour). Cap at 5000 to bound the JSON blob. Mutations are
+// pushed back to LS immediately so they survive reload.
+const _BA_VISITED_LYRICS_KEY = "sd_ba_visited_lyrics";
+const _BA_VISITED_LYRICS_MAX = 5000;
+const _baVisitedLyrics = (() => {
+  try {
+    const raw = localStorage.getItem(_BA_VISITED_LYRICS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(arr) ? arr.map(n => Number(n)).filter(Number.isFinite) : []);
+  } catch { return new Set(); }
+})();
+function _baMarkLyricVisited(id) {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  if (_baVisitedLyrics.has(n)) return; // already marked → no LS churn
+  _baVisitedLyrics.add(n);
+  // Drop oldest entries (insertion-order) once we blow past the cap.
+  if (_baVisitedLyrics.size > _BA_VISITED_LYRICS_MAX) {
+    const drop = _baVisitedLyrics.size - _BA_VISITED_LYRICS_MAX;
+    const it = _baVisitedLyrics.values();
+    for (let i = 0; i < drop; i++) _baVisitedLyrics.delete(it.next().value);
+  }
+  try { localStorage.setItem(_BA_VISITED_LYRICS_KEY, JSON.stringify([..._baVisitedLyrics])); } catch {}
+  // Live-update any rows for this lyric currently on screen so the
+  // visual change is immediate without a re-render.
+  document.querySelectorAll(`tr[data-lyric-row="${n}"]`).forEach(tr => {
+    tr.classList.add("ba-lyric-visited");
+  });
+}
 const _baReleasesSort = { key: "year", dir: "asc" };
 const _BA_RELEASES_TYPES = { year: "num", title: "str", label: "str", type: "str" };
 
@@ -99,13 +182,59 @@ function initBluesArchiveView() {
   // Deep-link support: /?v=blues-archive&baArtist=ID opens the given
   // archive artist after the list view paints. Used by the 🎸 badge
   // on album/version modals to jump straight to a matched artist.
+  // A URL deep-link wins over any persisted view-state so the badge
+  // jump never lands you on the Lyrics tab from a stale session.
+  let hasUrlDeepLink = false;
   try {
     const p = new URLSearchParams(window.location.search);
     const aid = parseInt(p.get("baArtist") || "", 10);
     if (Number.isFinite(aid) && aid > 0) {
+      hasUrlDeepLink = true;
       setTimeout(() => _baOpenArtist(aid), 40);
     }
   } catch { /* non-fatal */ }
+  // Restore the previously-active subtab + filters if the user just
+  // bounced over to Search (or any other view) and came back. Only
+  // honoured when no URL deep-link is active.
+  if (!hasUrlDeepLink) {
+    const saved = _baReadViewState();
+    if (saved?.subtab === "lyrics" && saved.lyrics) {
+      _baLyricsTuning    = String(saved.lyrics.tuning ?? "");
+      _baLyricsUnmatched = !!saved.lyrics.unmatched;
+      _baLyricsUnpinned  = !!saved.lyrics.unpinned;
+      _baLyricsEmpty     = !!saved.lyrics.empty;
+      _baLyricsPage      = Number(saved.lyrics.page) || 0;
+      if (saved.lyrics.sort?.key) {
+        _baLyricsListSort.key = saved.lyrics.sort.key;
+        _baLyricsListSort.dir = saved.lyrics.sort.dir || "asc";
+      }
+      // DOM inputs — set what we can synchronously. The tuning <select>
+      // gets populated asynchronously by _baLoadTunings; the module
+      // var _baLyricsTuning is what _baLoadLyrics actually reads, so
+      // the dropdown's stale value doesn't matter for the fetch.
+      const sq = document.getElementById("blues-archive-lyrics-search");
+      if (sq) sq.value = String(saved.lyrics.q ?? "");
+      const un = document.getElementById("blues-archive-lyrics-unmatched");
+      if (un) un.checked = !!saved.lyrics.unmatched;
+      const up = document.getElementById("blues-archive-lyrics-unpinned");
+      if (up) up.checked = !!saved.lyrics.unpinned;
+      const em = document.getElementById("blues-archive-lyrics-empty");
+      if (em) em.checked = !!saved.lyrics.empty;
+      _baSwitchSubtab("lyrics");
+      // Scroll restore — wait past the table render. RAF + ~250ms
+      // settles the layout for long lists; clamp to body height so a
+      // shorter result set doesn't overshoot.
+      const targetY = Number(saved.lyrics.scrollY) || 0;
+      if (targetY > 0) {
+        setTimeout(() => {
+          requestAnimationFrame(() => {
+            const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            window.scrollTo(0, Math.min(targetY, maxY));
+          });
+        }, 280);
+      }
+    }
+  }
 }
 window.initBluesArchiveView = initBluesArchiveView;
 
@@ -422,11 +551,21 @@ function _baRenderArtistDetail(a) {
           const yrHtml = yr
             ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
             : `<span style="color:#555">—</span>`;
-          return `<tr data-lyric-row="${l.id}">
-            <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
+          // Search-this-track shortcut: jumps to the main SeaDisco
+          // search with title in `q`, artist name in `a`, restricted
+          // to master+ results, sorted by year ascending. Params here
+          // mirror restoreFromParams() in search.js (1-letter keys).
+          const searchQs = `?q=${encodeURIComponent(l.page_title || "")}` +
+                           `&a=${encodeURIComponent(a.name || "")}` +
+                           `&r=${encodeURIComponent("master+")}` +
+                           `&s=${encodeURIComponent("year:asc")}`;
+          const searchLink = `<a href="/${searchQs}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+          const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? " ba-lyric-visited" : "";
+          return `<tr data-lyric-row="${l.id}" class="${visitedCls.trim()}">
+            <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}</td>
             <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
             <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
-            <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+            <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
             <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
           </tr>`;
         }).join("")}</tbody>
@@ -562,6 +701,10 @@ window._baBackToList = _baBackToList;
 // view is on a different page (/admin), so we render a simple inline
 // popup here using the existing chronam-style overlay pattern.
 async function _baOpenLyric(id) {
+  // Mark the row visited immediately (before the fetch resolves) so
+  // the snippet column dims even if the user dismisses the overlay
+  // before the body lands.
+  _baMarkLyricVisited(id);
   try {
     const r = await apiFetch(`/api/admin/lyrics/${id}`);
     if (!r.ok) return;
@@ -1172,6 +1315,9 @@ function _baSwitchSubtab(tab) {
   } else if (_baSubtab === "setlists") {
     _baLoadSetlists();
   }
+  // Persist after every subtab switch so a quick "Lyrics → Search"
+  // round trip pulls the user back to Lyrics on return.
+  _baPersistViewState();
 }
 window._baSwitchSubtab = _baSwitchSubtab;
 
@@ -1766,6 +1912,8 @@ async function _baLoadLyrics() {
     // Restore scroll. The new table may be a different height than
     // the old one; clamp manually to avoid bouncing past the bottom.
     requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
+    // Persist the current filter/page/sort tuple so re-entry restores it.
+    _baPersistViewState();
   } catch (e) {
     rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
   } finally {
@@ -1812,12 +1960,21 @@ function _baLyricRowHtml(l) {
   const fullTitle  = String(l.page_title || "");
   const fullArtist = String(l.artist || "");
   const fullSnip   = (l.snippet || "").replace(/\s+/g, " ");
-  return `<tr data-lyric-row="${l.id}">
-    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${titleHtml}</td>
+  // Search-this-track shortcut: opens a SeaDisco search prefilled with
+  // title (q), artist (a), restricted to master+, sorted oldest first.
+  // Param keys mirror restoreFromParams() in search.js.
+  const searchQs = `?q=${encodeURIComponent(fullTitle)}` +
+                   `&a=${encodeURIComponent(fullArtist)}` +
+                   `&r=${encodeURIComponent("master+")}` +
+                   `&s=${encodeURIComponent("year:asc")}`;
+  const searchLink = `<a href="/${searchQs}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
+  return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
+    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${searchLink} ${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
-    <td style="font-size:0.7rem;color:#888;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
+    <td class="ba-lyric-snippet" style="font-size:0.7rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
     <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
   </tr>`;
 }
