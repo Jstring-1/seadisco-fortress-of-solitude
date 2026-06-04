@@ -1417,15 +1417,40 @@ function renderSharedHeader(opts) {
   // you're on one. data-view is set to "discover" so syncDiscoverTabActive
   // (defined below) can flip the active class when any of the four
   // sub-views is active.
-  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam"]);
+  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"]);
+  // Last-visited sub-view inside the Discover group. Persisted by
+  // _sdRememberDiscoverView on every switchView call so the top-nav
+  // Discover button drops the user back where they left off (LOC by
+  // default for first-time visits).
+  const _SD_LAST_DISCOVER_KEY = "sd_last_discover_view";
   const discoverTab = (label, iconKey) => {
     const isActive = _DISCOVER_VIEWS.has(active);
     const activeCls = isActive ? ' active' : '';
     if (isSPA) {
-      return `<button class="${navTabClass}${activeCls}" data-view="discover" onclick="switchView('loc')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass}${activeCls}" data-view="discover" onclick="_sdGoToDiscover()" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
+    // Non-SPA pages can't read localStorage at render time the same
+    // way; keep the LOC default href so the link works without JS.
     return `<a class="${navTabClass}${activeCls}" href="/?v=loc" data-view="discover" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
+  // Helpers — declared on window so the Discover button's inline
+  // onclick can call into them, and switchView can hook the remember
+  // call cheaply.
+  if (typeof window !== "undefined") {
+    window._sdDiscoverViews = _DISCOVER_VIEWS;
+    window._sdRememberDiscoverView = function (view) {
+      if (!_DISCOVER_VIEWS.has(view)) return;
+      try { localStorage.setItem(_SD_LAST_DISCOVER_KEY, view); } catch {}
+    };
+    window._sdGoToDiscover = function () {
+      let target = "loc";
+      try {
+        const v = localStorage.getItem(_SD_LAST_DISCOVER_KEY);
+        if (v && _DISCOVER_VIEWS.has(v)) target = v;
+      } catch {}
+      if (typeof switchView === "function") switchView(target);
+    };
+  }
 
   // Record tab — starts disabled until signed in. `startEmpty` adds
   // the nav-rec-empty class on first paint so tabs that only matter
@@ -1453,7 +1478,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260603.2038";
+  const SITE_VERSION = "build 20260604.0759";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
