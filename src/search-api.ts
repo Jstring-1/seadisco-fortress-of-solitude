@@ -9406,6 +9406,13 @@ const _LYRICS_THROTTLE_MS = 1200;          // page-content fetches (heavier)
 const _LYRICS_DISCOVERY_THROTTLE_MS = 400; // category-member lookups (light)
 const _LYRICS_HARD_CAP    = 5000; // safety cap (4006 known)
 
+type LyricsScrapeAddedRow = {
+  title: string;
+  url: string;
+  artist: string | null;
+  tuning: string | null;
+  at: number;
+};
 type LyricsScrapeState = {
   running: boolean;
   // What kind of job is using this shared state, so the UI can label
@@ -9423,7 +9430,14 @@ type LyricsScrapeState = {
   currentTitle: string;
   message: string;
   error: string | null;
+  // Per-page log of new lyrics added during THIS run so the UI can
+  // show the admin exactly what came in (title + extracted artist),
+  // ready to be used as the starting point for Discogs lookups.
+  // Capped at 500 most-recent so the JSON payload stays small even
+  // for a full ~4000-page sweep — the rest are summarized by counts.
+  recentlyAdded: LyricsScrapeAddedRow[];
 };
+const _LYRICS_RECENT_ADDED_CAP = 500;
 let _lyricsScrapeState: LyricsScrapeState = {
   running: false,
   jobKind: "idle",
@@ -9437,6 +9451,7 @@ let _lyricsScrapeState: LyricsScrapeState = {
   currentTitle: "",
   message: "Idle",
   error: null,
+  recentlyAdded: [],
 };
 
 function _lyricsExtractTuning(text: string): string | null {
@@ -9774,6 +9789,7 @@ async function _lyricsScrapeRun(): Promise<void> {
     currentTitle: "",
     message: "Collecting page list…",
     error: null,
+    recentlyAdded: [],
   };
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
@@ -9826,6 +9842,18 @@ async function _lyricsScrapeRun(): Promise<void> {
             sourceHost: "weeniecampbell.com",
           });
           _lyricsScrapeState.pagesScraped++;
+          // Log the new row so the UI can show the admin exactly
+          // what came in. Drop oldest when the cap is hit.
+          _lyricsScrapeState.recentlyAdded.push({
+            title,
+            url: fetched.url,
+            artist,
+            tuning,
+            at: Date.now(),
+          });
+          if (_lyricsScrapeState.recentlyAdded.length > _LYRICS_RECENT_ADDED_CAP) {
+            _lyricsScrapeState.recentlyAdded.splice(0, _lyricsScrapeState.recentlyAdded.length - _LYRICS_RECENT_ADDED_CAP);
+          }
           if (i < 5 || i % 50 === 0) {
             console.log(`[lyrics] ${i + 1}/${pages.length} scraped: ${title} (artist=${artist ?? "-"}, tuning=${tuning ?? "-"}, ${Date.now() - iterT0}ms)`);
           }
@@ -10115,6 +10143,7 @@ async function _lyricsSyncArtistsRun(force: boolean): Promise<void> {
     currentTitle: "",
     message: "Walking Category:Lyrics by Artist…",
     error: null,
+    recentlyAdded: [],
   };
   try {
     const { map, subcats, pages } = await _lyricsCollectArtistMappingFromWiki();

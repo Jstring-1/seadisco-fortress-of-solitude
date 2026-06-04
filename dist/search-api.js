@@ -10048,6 +10048,7 @@ const _LYRICS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const _LYRICS_THROTTLE_MS = 1200; // page-content fetches (heavier)
 const _LYRICS_DISCOVERY_THROTTLE_MS = 400; // category-member lookups (light)
 const _LYRICS_HARD_CAP = 5000; // safety cap (4006 known)
+const _LYRICS_RECENT_ADDED_CAP = 500;
 let _lyricsScrapeState = {
     running: false,
     jobKind: "idle",
@@ -10061,6 +10062,7 @@ let _lyricsScrapeState = {
     currentTitle: "",
     message: "Idle",
     error: null,
+    recentlyAdded: [],
 };
 function _lyricsExtractTuning(text) {
     if (!text)
@@ -10426,6 +10428,7 @@ async function _lyricsScrapeRun() {
         currentTitle: "",
         message: "Collecting page list…",
         error: null,
+        recentlyAdded: [],
     };
     try {
         const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
@@ -10479,6 +10482,18 @@ async function _lyricsScrapeRun() {
                         sourceHost: "weeniecampbell.com",
                     });
                     _lyricsScrapeState.pagesScraped++;
+                    // Log the new row so the UI can show the admin exactly
+                    // what came in. Drop oldest when the cap is hit.
+                    _lyricsScrapeState.recentlyAdded.push({
+                        title,
+                        url: fetched.url,
+                        artist,
+                        tuning,
+                        at: Date.now(),
+                    });
+                    if (_lyricsScrapeState.recentlyAdded.length > _LYRICS_RECENT_ADDED_CAP) {
+                        _lyricsScrapeState.recentlyAdded.splice(0, _lyricsScrapeState.recentlyAdded.length - _LYRICS_RECENT_ADDED_CAP);
+                    }
                     if (i < 5 || i % 50 === 0) {
                         console.log(`[lyrics] ${i + 1}/${pages.length} scraped: ${title} (artist=${artist ?? "-"}, tuning=${tuning ?? "-"}, ${Date.now() - iterT0}ms)`);
                     }
@@ -10774,6 +10789,7 @@ async function _lyricsSyncArtistsRun(force) {
         currentTitle: "",
         message: "Walking Category:Lyrics by Artist…",
         error: null,
+        recentlyAdded: [],
     };
     try {
         const { map, subcats, pages } = await _lyricsCollectArtistMappingFromWiki();
