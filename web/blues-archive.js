@@ -107,6 +107,27 @@ function _baMarkLyricVisited(id) {
     tr.classList.add("ba-lyric-visited");
   });
 }
+
+// Reset button on the Lyrics tab — wipes the visited set + its LS
+// blob and yanks the .ba-lyric-visited class off every rendered row
+// so the table immediately reads as "all unread" without a re-fetch.
+function _baClearVisitedLyrics() {
+  if (!_baVisitedLyrics.size) {
+    if (typeof showToast === "function") showToast("No visited lyrics to reset", "info");
+    return;
+  }
+  if (!confirm(`Clear visited state for ${_baVisitedLyrics.size} lyric${_baVisitedLyrics.size === 1 ? "" : "s"}?`)) return;
+  const n = _baVisitedLyrics.size;
+  _baVisitedLyrics.clear();
+  try { localStorage.removeItem(_BA_VISITED_LYRICS_KEY); } catch {}
+  document.querySelectorAll("tr.ba-lyric-visited").forEach(tr => {
+    tr.classList.remove("ba-lyric-visited");
+  });
+  if (typeof showToast === "function") {
+    showToast(`Reset visited state on ${n} lyric${n === 1 ? "" : "s"}`);
+  }
+}
+window._baClearVisitedLyrics = _baClearVisitedLyrics;
 const _baReleasesSort = { key: "year", dir: "asc" };
 const _BA_RELEASES_TYPES = { year: "num", title: "str", label: "str", type: "str" };
 
