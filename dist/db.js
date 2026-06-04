@@ -5511,6 +5511,9 @@ export async function listLyrics(opts) {
     if (opts.emptyOnly) {
         where.push(`(plaintext IS NULL OR LENGTH(TRIM(plaintext)) = 0)`);
     }
+    if (opts.noArtistOnly) {
+        where.push(`(artist IS NULL OR LENGTH(TRIM(artist)) = 0)`);
+    }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
     const offset = Math.max(0, opts.offset ?? 0);
