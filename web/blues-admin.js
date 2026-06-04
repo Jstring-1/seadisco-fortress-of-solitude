@@ -2016,6 +2016,41 @@ async function lyricsStopScrape() {
 }
 window.lyricsStopScrape = lyricsStopScrape;
 
+async function lyricsStartRecentRefresh() {
+  const btn = document.getElementById("lyrics-recent-btn");
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  if (!btn || !statusEl) return;
+  // Default flow: 30 days, new pages only. Holding Shift while
+  // clicking includes edits too (refetches existing rows so the
+  // wikitext/tuning columns catch any upstream edits). Keeps the
+  // button single-click for the common case while exposing the
+  // rare full-refresh path via a modifier the curator can discover
+  // from the button title attribute.
+  const days = 30;
+  const includeEdits = !!(window.event && window.event.shiftKey);
+  btn.disabled = true;
+  statusEl.textContent = `Starting recent-changes refresh (${days}d${includeEdits ? ", incl. edits" : ", new only"})…`;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/recent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days, edits: includeEdits ? 1 : 0 }),
+    });
+    if (r.status === 409) {
+      statusEl.textContent = "Another job is running — attaching to its status…";
+    } else if (!r.ok) {
+      statusEl.textContent = `Failed: HTTP ${r.status}`;
+      btn.disabled = false;
+      return;
+    }
+    lyricsStartPolling();
+  } catch (e) {
+    statusEl.textContent = `Failed: ${e?.message || e}`;
+    btn.disabled = false;
+  }
+}
+window.lyricsStartRecentRefresh = lyricsStartRecentRefresh;
+
 async function lyricsStartPreScrape() {
   const btn = document.getElementById("lyrics-prescrape-btn");
   const statusEl = document.getElementById("lyrics-scrape-status");
@@ -2096,9 +2131,11 @@ async function lyricsPollScrapeOnce() {
     }
     const stopBtn = document.getElementById("lyrics-stop-btn");
     const preBtn  = document.getElementById("lyrics-prescrape-btn");
+    const recBtn  = document.getElementById("lyrics-recent-btn");
     if (s.running) {
       btn.disabled = true;
       if (preBtn) preBtn.disabled = true;
+      if (recBtn) recBtn.disabled = true;
       // Stop button is only meaningful for the long scrape; pre-scrape
       // finishes on its own in a few minutes and there's no partial
       // progress to preserve.
@@ -2108,10 +2145,11 @@ async function lyricsPollScrapeOnce() {
       // new scrape — they share progress state but mean different
       // things (sync is DB-only after the wiki walk; scrape fetches
       // page content from the wiki).
-      const jobLabel = s.jobKind === "artist-sync" ? "Artist sync"
-                     : s.jobKind === "scrape"      ? "Lyric scrape"
-                     : s.jobKind === "pre-scrape"  ? "Pre-scrape"
-                     :                               "Running";
+      const jobLabel = s.jobKind === "artist-sync"    ? "Artist sync"
+                     : s.jobKind === "scrape"         ? "Lyric scrape"
+                     : s.jobKind === "pre-scrape"     ? "Pre-scrape"
+                     : s.jobKind === "recent-changes" ? "Recent refresh"
+                     :                                  "Running";
       if (phase === "discovering") {
         statusEl.innerHTML = `<span style="color:var(--accent)">${escHtml(jobLabel)} ·</span> ${escHtml(s.message || "").slice(0, 140)}`;
       } else {
@@ -2121,6 +2159,7 @@ async function lyricsPollScrapeOnce() {
     } else {
       btn.disabled = false;
       if (preBtn) preBtn.disabled = false;
+      if (recBtn) recBtn.disabled = false;
       if (stopBtn) stopBtn.style.display = "none";
       if (s.finishedAt && s.startedAt) {
         const mins = Math.round((s.finishedAt - s.startedAt) / 60000);
