@@ -244,20 +244,29 @@ function switchView(view, skipPushState = false) {
 
   // Highlight nav — single row has both data-view and data-rtab tabs
   const isRecords = view === "records";
-  // The Discover tab covers the LOC/Wiki/Archive/YouTube group, so
-  // it should highlight on any of those four sub-views (none of
-  // which match data-view="discover" directly).
-  const _DISCOVER_VIEWS_NAV = new Set(["loc", "wiki", "archive", "youtube"]);
+  // The Discover tab covers the LOC/Wiki/Archive/YouTube/Gutenberg/
+  // Chronam/Blues Archive group, so it should highlight on any of
+  // those sub-views (none of which match data-view="discover"
+  // directly). Source of truth lives on window._sdDiscoverViews
+  // (populated by renderSharedHeader in shared.js) so we don't have
+  // to keep two sets in sync.
+  const _discoverSet = window._sdDiscoverViews
+    || new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"]);
   document.querySelectorAll(".nav-tab-top").forEach(btn => {
     if (btn.dataset.rtab) {
       // Record tab — active when in records view and matching the current sub-tab
       btn.classList.toggle("active", isRecords && btn.dataset.rtab === (_cwTab || "collection"));
     } else if (btn.dataset.view === "discover") {
-      btn.classList.toggle("active", _DISCOVER_VIEWS_NAV.has(view));
+      btn.classList.toggle("active", _discoverSet.has(view));
     } else {
       btn.classList.toggle("active", btn.dataset.view === view);
     }
   });
+  // Persist the last-visited Discover sub-view so the top-nav
+  // Discover button can drop the user back where they left off.
+  if (typeof window._sdRememberDiscoverView === "function") {
+    try { window._sdRememberDiscoverView(view); } catch {}
+  }
   const searchView  = document.getElementById("search-view");
   const infoView    = document.getElementById("info-view");
   const privacyView = document.getElementById("privacy-view");
