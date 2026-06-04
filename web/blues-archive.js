@@ -1331,6 +1331,16 @@ function _baSwitchSubtab(tab) {
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
+    // If a scrape job is already running on the server (page reload
+    // mid-run, another tab kicked it), attach the status poller so
+    // the UI reflects live progress. lyricsStartPolling is defined
+    // in blues-admin.js (loaded lazily for admins by initBluesArchiveView);
+    // it does a first poll immediately and clears its own interval
+    // when the server returns running=false, so calling it when no
+    // scrape exists is cheap — one round-trip then idle.
+    if (typeof window.lyricsStartPolling === "function") {
+      try { window.lyricsStartPolling(); } catch {}
+    }
   } else if (_baSubtab === "releases") {
     _baLoadReleases();
   } else if (_baSubtab === "setlists") {

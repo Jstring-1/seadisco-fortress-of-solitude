@@ -2105,5 +2105,47 @@ async function lyricsPollScrapeOnce() {
         lyricsLoadList();
       }
     }
+    // Render the recently-added panel (Discovery view only — admin
+    // page doesn't have this slot). Lists every new lyric from THIS
+    // run with click-through shortcuts to SeaDisco + Discogs search.
+    _lyricsRenderRecentlyAdded(s);
   } catch {}
+}
+
+// Recently-added list — populated by the rescrape job's recentlyAdded
+// array (server-side). Each row gets two shortcut links: 🔍 to search
+// SeaDisco prefilled with the lyric title + artist, and ↗ to open
+// Discogs artist search in a new tab so the admin can match against
+// the catalog. Hidden when there's nothing new (idle session or no
+// new rows yet).
+function _lyricsRenderRecentlyAdded(s) {
+  const panel = document.getElementById("lyrics-scrape-added");
+  if (!panel) return;                   // not on the Discovery view
+  const rows = Array.isArray(s?.recentlyAdded) ? s.recentlyAdded : [];
+  if (!rows.length) { panel.style.display = "none"; panel.innerHTML = ""; return; }
+  panel.style.display = "";
+  const label = s.running ? "Adding now" : "Newly added this run";
+  // Render newest-first so the live progress reads top-down.
+  const reversed = rows.slice().reverse();
+  const html = reversed.map(r => {
+    const title = String(r.title || "");
+    const artist = String(r.artist || "");
+    const sdQs = `?q=${encodeURIComponent(title)}` +
+                 `&a=${encodeURIComponent(artist)}` +
+                 `&r=${encodeURIComponent("master+")}` +
+                 `&s=${encodeURIComponent("year:asc")}`;
+    const dcQs = `https://www.discogs.com/search?type=artist&q=${encodeURIComponent(artist || title)}`;
+    return `<div style="display:flex;gap:0.4rem;align-items:baseline;padding:0.15rem 0;font-size:0.84rem;border-bottom:1px solid rgba(255,255,255,0.04)">
+      <a href="/${sdQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>
+      <a href="${dcQs}" target="_blank" rel="noopener" class="ba-lyric-search" title="Search Discogs for this artist (opens in a new tab)">↗</a>
+      <span style="color:var(--text);font-weight:600">${escHtml(title)}</span>
+      <span style="color:var(--muted)">${artist ? "— " + escHtml(artist) : "<em>(no artist)</em>"}</span>
+    </div>`;
+  }).join("");
+  panel.innerHTML = `
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
+      <strong style="font-size:0.86rem">${escHtml(label)} <span style="color:var(--muted);font-weight:400">(${rows.length}${rows.length >= 500 ? "+ shown; older trimmed" : ""})</span></strong>
+      <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'" title="Dismiss this panel">×</button>
+    </div>
+    <div style="max-height:240px;overflow-y:auto">${html}</div>`;
 }
