@@ -1087,6 +1087,29 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
+    // ── Scrape ban list ──────────────────────────────────────────────
+    // When the curator deletes an artist (or a single lyric) they can
+    // mark it BANNED so the wiki rescrape doesn't immediately put it
+    // back. Two kinds:
+    //   'title'  — exact page_title; the discovery list filters these
+    //              out before any fetch happens
+    //   'artist' — case-insensitive artist name; we still fetch the
+    //              page (we need the extracted-artist field), but the
+    //              loop skips the upsert when the artist matches
+    // Unique on (kind, lower-cased value) so adding an existing ban is
+    // an idempotent no-op.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_lyrics_bans (
+      id         SERIAL PRIMARY KEY,
+      kind       TEXT NOT NULL CHECK (kind IN ('title', 'artist')),
+      value      TEXT NOT NULL,
+      reason     TEXT,
+      banned_by  TEXT,
+      banned_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_bans_uniq_idx
+       ON blues_lyrics_bans (kind, LOWER(TRIM(value)))`);
     // One-shot backfill of artist_id for any rows missing it. Matches on
     // case-insensitive trim equality — same key the merge / import code
     // paths have always used. Idempotent: once populated, the WHERE
@@ -1383,7 +1406,77 @@ export async function deleteBluesArtist(id) {
 // whose artist_id hasn't been backfilled). Single transaction so a
 // partial failure rolls back the whole thing. Returns counts so the
 // UI can report exactly how many lyrics went with the artist.
-export async function deleteBluesArtistAndLyrics(id) {
+// ── Lyrics ban list helpers ──────────────────────────────────────────
+// blues_lyrics_bans backs the "delete and don't re-add" workflow:
+// scrape consults these sets so already-banned titles never get fetched
+// and banned-artist pages never get upserted even if the discovery
+// phase finds them.
+export async function addBluesLyricsBans(rows) {
+    if (!rows.length)
+        return 0;
+    let inserted = 0;
+    for (const row of rows) {
+        const v = String(row.value || "").trim();
+        if (!v)
+            continue;
+        // Pre-check via the same lower-cased trim used by the unique
+        // index so we don't have to wrestle with ON CONFLICT's expression-
+        // index inference (which is finicky). The unique index still
+        // catches concurrent inserts — we just swallow that error.
+        const exists = await getPool().query(`SELECT 1 FROM blues_lyrics_bans
+        WHERE kind = $1
+          AND LOWER(TRIM(value)) = LOWER(TRIM($2))
+        LIMIT 1`, [row.kind, v]);
+        if (exists.rows.length)
+            continue;
+        try {
+            await getPool().query(`INSERT INTO blues_lyrics_bans (kind, value, reason, banned_by)
+         VALUES ($1, $2, $3, $4)`, [row.kind, v, row.reason ?? null, row.bannedBy ?? null]);
+            inserted++;
+        }
+        catch (e) {
+            // Unique-violation: someone raced us. Treat as already-banned.
+            if (e?.code !== "23505")
+                throw e;
+        }
+    }
+    return inserted;
+}
+export async function removeBluesLyricsBan(id) {
+    const r = await getPool().query(`DELETE FROM blues_lyrics_bans WHERE id = $1`, [id]);
+    return (r.rowCount ?? 0) > 0;
+}
+export async function listBluesLyricsBans(opts = {}) {
+    const where = [];
+    const params = [];
+    if (opts.kind) {
+        params.push(opts.kind);
+        where.push(`kind = $${params.length}`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics_bans ${whereSql}`, params);
+    const limit = Math.max(1, Math.min(500, opts.limit ?? 200));
+    const offset = Math.max(0, opts.offset ?? 0);
+    params.push(limit, offset);
+    const rowsR = await getPool().query(`SELECT id, kind, value, reason, banned_by, banned_at
+       FROM blues_lyrics_bans ${whereSql}
+       ORDER BY banned_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { rows: rowsR.rows, total: totalR.rows[0]?.n ?? 0 };
+}
+// Sets for the scrape loop — cheap full-table scans (the ban list is
+// expected to stay small, < a few hundred rows for normal use). Values
+// are lower-cased+trimmed so the in-memory contains() match is fast
+// regardless of how the scraper capitalises the extracted artist.
+export async function getBannedLyricTitleSet() {
+    const r = await getPool().query(`SELECT TRIM(value) AS value FROM blues_lyrics_bans WHERE kind = 'title'`);
+    return new Set(r.rows.map((row) => String(row.value)));
+}
+export async function getBannedLyricArtistSet() {
+    const r = await getPool().query(`SELECT LOWER(TRIM(value)) AS value FROM blues_lyrics_bans WHERE kind = 'artist'`);
+    return new Set(r.rows.map((row) => String(row.value)));
+}
+export async function deleteBluesArtistAndLyrics(id, opts = {}) {
     const client = await getPool().connect();
     try {
         await client.query("BEGIN");
@@ -1393,6 +1486,14 @@ export async function deleteBluesArtistAndLyrics(id) {
             throw new Error("artist not found");
         }
         const name = String(ar.rows[0].name || "");
+        // Capture page titles BEFORE we delete so we can ban them by
+        // exact match later. Union both deletion sets: FK-linked +
+        // legacy name-matched orphans.
+        const titlesR = await client.query(`SELECT page_title FROM blues_lyrics
+        WHERE artist_id = $1
+           OR (artist_id IS NULL
+               AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($2)))`, [id, name]);
+        const titles = titlesR.rows.map((r) => String(r.page_title)).filter(Boolean);
         // 1. Drop lyrics linked by FK.
         const r1 = await client.query(`DELETE FROM blues_lyrics WHERE artist_id = $1`, [id]);
         // 2. Drop lyrics that name-match but never got FK-linked (legacy).
@@ -1404,10 +1505,27 @@ export async function deleteBluesArtistAndLyrics(id) {
         // 3. Drop the artist.
         await client.query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
         await client.query("COMMIT");
+        let bansAdded = 0;
+        if (opts.ban) {
+            // After the transaction so a ban-insert race can't roll back
+            // the deletion. Banning is best-effort — duplicates are fine.
+            const banRows = [];
+            if (name)
+                banRows.push({ kind: "artist", value: name, reason: opts.banReason ?? null, bannedBy: opts.banBy ?? null });
+            for (const t of titles)
+                banRows.push({ kind: "title", value: t, reason: opts.banReason ?? null, bannedBy: opts.banBy ?? null });
+            try {
+                bansAdded = await addBluesLyricsBans(banRows);
+            }
+            catch (e) {
+                console.warn("[deleteBluesArtistAndLyrics] ban insert failed:", e);
+            }
+        }
         return {
             ok: true,
             artistName: name,
             lyricsDeleted: (r1.rowCount ?? 0) + (r2.rowCount ?? 0),
+            bansAdded,
         };
     }
     catch (e) {

@@ -109,6 +109,87 @@ function _baMarkLyricVisited(id) {
   });
 }
 
+// Rescrape ban-list viewer/editor — fetches /api/admin/lyrics/bans
+// and renders the rows in a simple overlay with a × Remove button per
+// entry. Two columns of bans (title vs artist) appear side-by-side
+// since the use case is "I want to see what's blocked and selectively
+// unblock things". Refreshes itself after each remove so the row
+// vanishes without a manual reload.
+async function _baOpenBansOverlay() {
+  let overlay = document.getElementById("ba-bans-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-bans-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "1300", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "3rem 1rem", overflowY: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(800px,100%);max-height:80vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.8rem">
+        <h3 style="margin:0;font-size:1.05rem">Rescrape ban list</h3>
+        <button class="archive-btn" onclick="document.getElementById('ba-bans-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="margin:0 0 0.8rem;font-size:0.82rem;color:var(--muted)">Titles and artist names listed here are SKIPPED by the wiki rescrape. Use × to unban a row — the next rescrape will treat that title / artist as eligible again.</p>
+      <div id="ba-bans-body" style="font-size:0.86rem">Loading…</div>
+    </div>`;
+  await _baRenderBansBody();
+}
+window._baOpenBansOverlay = _baOpenBansOverlay;
+
+async function _baRenderBansBody() {
+  const body = document.getElementById("ba-bans-body");
+  if (!body) return;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/bans?limit=500");
+    if (!r.ok) { body.textContent = `Failed: HTTP ${r.status}`; return; }
+    const { rows = [] } = await r.json();
+    if (!rows.length) {
+      body.innerHTML = `<p style="color:var(--muted);font-style:italic;padding:0.6rem 0">No bans yet. The "Delete + don't re-add" button on artist popups adds rows here.</p>`;
+      return;
+    }
+    const byKind = { artist: [], title: [] };
+    for (const b of rows) {
+      const arr = byKind[b.kind] || (byKind[b.kind] = []);
+      arr.push(b);
+    }
+    const col = (kind, label) => {
+      const list = byKind[kind] || [];
+      const items = list.map(b => {
+        const when = b.banned_at ? new Date(b.banned_at).toLocaleDateString() : "";
+        return `<li style="display:flex;align-items:baseline;gap:0.4rem;padding:0.25rem 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <button class="archive-btn" onclick="_baRemoveBan(${b.id})" title="Unban this ${kind}" style="font-size:0.78rem;padding:0.1rem 0.45rem;color:#e88;border-color:rgba(232,136,136,0.4)">×</button>
+          <span style="flex:1;color:var(--text)">${escHtml(b.value || "")}</span>
+          <span style="font-size:0.74rem;color:var(--muted)" title="${escHtml(b.reason || "")}">${escHtml(when)}</span>
+        </li>`;
+      }).join("");
+      return `<div style="flex:1;min-width:280px">
+        <h4 style="margin:0 0 0.4rem;font-size:0.88rem;color:var(--accent)">${escHtml(label)} <span style="color:var(--muted);font-weight:400">(${list.length})</span></h4>
+        <ul style="list-style:none;margin:0;padding:0">${items || `<li style="color:var(--muted);font-style:italic">none</li>`}</ul>
+      </div>`;
+    };
+    body.innerHTML = `<div style="display:flex;gap:1.2rem;flex-wrap:wrap">${col("artist", "Banned artists")}${col("title", "Banned titles")}</div>`;
+  } catch (e) {
+    body.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+
+async function _baRemoveBan(id) {
+  if (!confirm("Unban this row? The next rescrape will be allowed to add it back.")) return;
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/bans/${id}`, { method: "DELETE" });
+    if (!r.ok) { alert(`Unban failed: HTTP ${r.status}`); return; }
+    await _baRenderBansBody();
+  } catch (e) {
+    alert(`Unban failed: ${e?.message || e}`);
+  }
+}
+window._baRemoveBan = _baRemoveBan;
+
 // Reset button on the Lyrics tab — wipes the visited set + its LS
 // blob and yanks the .ba-lyric-visited class off every rendered row
 // so the table immediately reads as "all unread" without a re-fetch.
@@ -639,6 +720,7 @@ function _baRenderArtistDetail(a) {
         <button class="archive-btn" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics from…</button>
         <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
         <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete artist + lyrics</button>
+        <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete + don't re-add</button>
       </span>
     </div>
     <div style="display:flex;gap:1rem;margin-bottom:1.2rem;align-items:flex-start;flex-wrap:wrap">
@@ -672,20 +754,33 @@ function _baRenderArtistDetail(a) {
 // up) so a stray click can't nuke a row with 40 lyrics by accident.
 // On success: closes the popup, reloads the grid + stats so the
 // numbers reflect the deletion.
-async function _baDeleteArtistWithLyrics(id) {
+//
+// opts.ban=true → also adds the artist name and every deleted page
+// title to blues_lyrics_bans so a future rescrape doesn't re-add
+// them. Pass true from the "Delete + don't re-add" button; the
+// plain delete button calls without ban.
+async function _baDeleteArtistWithLyrics(id, opts = {}) {
+  const ban = !!opts.ban;
   const artistName = _baDetailArtist?.name || `#${id}`;
   const lyricsN = Array.isArray(_baDetailArtist?.lyrics) ? _baDetailArtist.lyrics.length : 0;
   const releasesN = Array.isArray(_baDetailArtist?.releases) ? _baDetailArtist.releases.length : 0;
-  const msg =
-    `Permanently delete ${artistName}?\n\n` +
-    `This removes:\n` +
-    `· the artist row\n` +
-    `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
-    (releasesN ? `\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "") +
-    `\nThis cannot be undone. Use 'Merge into…' instead if you want to consolidate without losing lyrics.`;
+  const msg = ban
+    ? `Permanently delete ${artistName} AND ban from rescrape?\n\n` +
+      `This removes:\n` +
+      `· the artist row\n` +
+      `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
+      `\nAnd adds ban rows so the wiki rescrape will SKIP every page from this artist (by title + by name). Reversible — bans can be removed individually later.` +
+      (releasesN ? `\n\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "")
+    : `Permanently delete ${artistName}?\n\n` +
+      `This removes:\n` +
+      `· the artist row\n` +
+      `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
+      (releasesN ? `\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "") +
+      `\nThis cannot be undone. Use 'Merge into…' instead if you want to consolidate without losing lyrics. If a rescrape would just re-add this artist, use 'Delete + don't re-add' instead.`;
   if (!confirm(msg)) return;
   try {
-    const r = await apiFetch(`/api/admin/blues/${id}?with_lyrics=1`, { method: "DELETE" });
+    const qs = ban ? "?with_lyrics=1&ban=1" : "?with_lyrics=1";
+    const r = await apiFetch(`/api/admin/blues/${id}${qs}`, { method: "DELETE" });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       alert("Delete failed: " + (err?.error ?? r.status));
@@ -699,7 +794,8 @@ async function _baDeleteArtistWithLyrics(id) {
     if (typeof _baLoadList === "function")  { try { _baLoadList();  } catch {} }
     if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
     if (typeof showToast === "function") {
-      showToast(`Deleted ${out.artistName || artistName} + ${out.lyricsDeleted ?? 0} lyric${out.lyricsDeleted === 1 ? "" : "s"}`, "ok");
+      const banSuffix = (ban && out.bansAdded) ? ` · ${out.bansAdded} ban${out.bansAdded === 1 ? "" : "s"} added` : "";
+      showToast(`Deleted ${out.artistName || artistName} + ${out.lyricsDeleted ?? 0} lyric${out.lyricsDeleted === 1 ? "" : "s"}${banSuffix}`, "ok");
     }
   } catch (e) {
     alert("Delete failed: " + (e?.message || e));

@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listCacheWarmRuns, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 
@@ -8661,16 +8661,71 @@ app.delete("/api/admin/blues/:id(\\d+)", async (req, res) => {
   // hit this endpoint to drop a stray artist don't suddenly lose
   // their orphan lyrics. The Discovery profile button passes the
   // flag explicitly.
-  const cascadeLyrics = req.query.with_lyrics === "1" || req.query.with_lyrics === "true";
+  // ?ban=1 → also add ban rows for the artist name + every deleted
+  // page title so a future rescrape won't re-add any of it. Implies
+  // with_lyrics (banning a name without dropping its lyrics first
+  // would leave orphaned rows the curator just said they don't want).
+  const ban           = req.query.ban         === "1" || req.query.ban         === "true";
+  const cascadeLyrics = ban || req.query.with_lyrics === "1" || req.query.with_lyrics === "true";
+  const banReason     = String(req.query.banReason ?? "").trim().slice(0, 400) || null;
   try {
     if (cascadeLyrics) {
-      const out = await deleteBluesArtistAndLyrics(id);
+      const out = await deleteBluesArtistAndLyrics(id, {
+        ban,
+        banReason,
+        banBy: (req as any).clerkUserId ?? null,
+      });
       res.json(out);
     } else {
       await deleteBluesArtist(id);
       res.json({ ok: true });
     }
   } catch (err: any) { console.error("[blues delete]", err); res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// ── Lyric ban list management ─────────────────────────────────────
+// CRUD over blues_lyrics_bans. The scrape consults these sets on
+// every run, so removing a row from here re-enables that title /
+// artist for the next rescrape.
+app.get("/api/admin/lyrics/bans", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const kindParam = String(req.query.kind ?? "").trim();
+    const kind = (kindParam === "title" || kindParam === "artist") ? kindParam : undefined;
+    const limit  = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "200"), 10) || 200));
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const result = await listBluesLyricsBans({ kind, limit, offset });
+    res.json(result);
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.post("/api/admin/lyrics/bans", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const kind = String(req.body?.kind ?? "").trim();
+    const value = String(req.body?.value ?? "").trim();
+    const reason = (req.body?.reason ? String(req.body.reason).trim().slice(0, 400) : null);
+    if (kind !== "title" && kind !== "artist") {
+      res.status(400).json({ error: "kind must be 'title' or 'artist'" });
+      return;
+    }
+    if (!value) { res.status(400).json({ error: "value required" }); return; }
+    const n = await addBluesLyricsBans([{
+      kind, value, reason,
+      bannedBy: (req as any).clerkUserId ?? null,
+    }]);
+    res.json({ ok: true, inserted: n });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.delete("/api/admin/lyrics/bans/:id(\\d+)", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
+  try {
+    const removed = await removeBluesLyricsBan(id);
+    res.json({ ok: removed });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
 // ── Artist-to-artist links (pseudonym / band) ─────────────────────
@@ -9819,18 +9874,22 @@ async function _lyricsPreScrapeRun(): Promise<void> {
   };
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+    // Pre-scrape also subtracts banned titles from the "new" set so
+    // the curator's previous "delete + ban" decisions don't get
+    // surfaced as "12 new lyrics to add" every time.
+    const bannedTitles = await getBannedLyricTitleSet().catch(() => new Set<string>());
     const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
     if (!_lyricsScrapeState.running) {
       _lyricsScrapeState.phase = "done";
       _lyricsScrapeState.message = `Stopped during discovery. ${pages.length} pages had been queued.`;
       return;
     }
-    // Diff: any wiki page title we don't already have. Preserve the
-    // wiki's discovery order so the list reads naturally (alphabetical
-    // within each subcategory).
+    // Diff: any wiki page title we don't already have AND isn't banned.
     const newTitles: string[] = [];
     for (const t of pages) {
-      if (!already.has(t)) newTitles.push(t);
+      if (already.has(t)) continue;
+      if (bannedTitles.has(t)) continue;
+      newTitles.push(t);
     }
     _lyricsScrapeState.wikiTotalPages = pages.length;
     _lyricsScrapeState.pagesDiscovered = pages.length;
@@ -9876,6 +9935,11 @@ async function _lyricsScrapeRun(): Promise<void> {
   };
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+    // Ban lists: titles get filtered before any fetch; banned artists
+    // still cost a fetch but get dropped before upsert (we need the
+    // wikitext to know who the artist is).
+    const bannedTitles  = await getBannedLyricTitleSet().catch(() => new Set<string>());
+    const bannedArtists = await getBannedLyricArtistSet().catch(() => new Set<string>());
     const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
     // Stop request during discovery — don't drop into the fetch loop
     // (which would re-enter for whatever partial page list we have).
@@ -9891,7 +9955,7 @@ async function _lyricsScrapeRun(): Promise<void> {
     _lyricsScrapeState.pagesDiscovered = pages.length;
     _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
     console.log(`[lyrics] discovery done in ${Math.round((Date.now() - _lyricsScrapeState.startedAt) / 1000)}s: ${pages.length} pages`);
-    console.log(`[lyrics] entering scrape loop: ${pages.length} pages, ${already.size} already stored`);
+    console.log(`[lyrics] entering scrape loop: ${pages.length} pages, ${already.size} already stored, ${bannedTitles.size} title bans, ${bannedArtists.size} artist bans`);
     for (let i = 0; i < pages.length; i++) {
       // Honor the /scrape/stop request — running flag is the signal.
       if (!_lyricsScrapeState.running) {
@@ -9900,6 +9964,10 @@ async function _lyricsScrapeRun(): Promise<void> {
       }
       const title = pages[i];
       if (already.has(title)) {
+        _lyricsScrapeState.pagesSkipped++;
+        continue;
+      }
+      if (bannedTitles.has(title)) {
         _lyricsScrapeState.pagesSkipped++;
         continue;
       }
@@ -9915,6 +9983,15 @@ async function _lyricsScrapeRun(): Promise<void> {
           const plaintext = _lyricsWikitextToPlain(wikitext);
           const tuning    = _lyricsExtractTuning(wikitext) || _lyricsExtractTuning(plaintext);
           const artist    = _lyricsExtractArtist(wikitext, title);
+          // Banned-artist gate: if the extractor pulled a name that's
+          // on the ban list, skip the upsert. The page is still
+          // counted as skipped (not scraped), so the curator's prior
+          // "remove + ban this artist" decision sticks.
+          if (artist && bannedArtists.has(String(artist).toLowerCase().trim())) {
+            _lyricsScrapeState.pagesSkipped++;
+            await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+            continue;
+          }
           await upsertLyric({
             pageTitle: title,
             pageUrl: fetched.url,
