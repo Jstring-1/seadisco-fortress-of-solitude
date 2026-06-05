@@ -2494,22 +2494,22 @@ async function _baLoadTuningsGrid() {
           ? `<a href="/${searchQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a> `
           : "";
         return `<tr>
-          <td style="font-weight:600;color:var(--text);white-space:nowrap">${escHtml(artist)}</td>
-          <td style="color:var(--muted);text-align:right;padding-right:0.6rem;white-space:nowrap">${escHtml(String(r.track || ""))}</td>
-          <td style="color:var(--text)">${searchLink}${escHtml(displayTitle)}</td>
-          <td style="color:var(--accent);white-space:nowrap">${escHtml(String(r.position || ""))}</td>
-          <td style="white-space:nowrap">${escHtml(String(r.pitch || ""))}</td>
-          <td style="color:var(--muted);font-size:0.78rem">${escHtml(displayNotes)}</td>
+          <td style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(artist)}">${escHtml(artist)}</td>
+          <td style="color:var(--muted);text-align:right;padding-right:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(String(r.track || ""))}</td>
+          <td style="color:var(--text);overflow:hidden;text-overflow:ellipsis" title="${escHtml(displayTitle)}">${searchLink}${escHtml(displayTitle)}</td>
+          <td style="color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(String(r.position || ""))}">${escHtml(String(r.position || ""))}</td>
+          <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(String(r.pitch || ""))}</td>
+          <td style="color:var(--muted);font-size:0.78rem;overflow:hidden" title="${escHtml(displayNotes)}">${escHtml(displayNotes)}</td>
         </tr>`;
       };
       rowsEl.innerHTML = `
         <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
           <colgroup>
-            <col style="width:14%">
-            <col style="width:48px">
-            <col style="width:32%">
-            <col style="width:90px">
-            <col style="width:60px">
+            <col style="width:18%">
+            <col style="width:56px">
+            <col style="width:30%">
+            <col style="width:100px">
+            <col style="width:64px">
             <col>
           </colgroup>
           <thead><tr>

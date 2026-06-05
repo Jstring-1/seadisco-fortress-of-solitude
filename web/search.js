@@ -163,6 +163,44 @@ function searchFromAiPanel(field, value) {
   doSearch(1, false, true);
 }
 
+// Prefilled-search entry-point used by the 🔍 shortcuts on the Blues
+// Archive lyrics + tunings grids + Lyrics scrape "recently added" panel.
+// Switches into the search view (SPA, no reload), populates the form
+// fields, expands the advanced panel when an artist or other filter
+// is set, then fires doSearch — so the mini-player keeps playing
+// instead of being torn down by a full navigation.
+function _sdRunPrefilledSearch(opts) {
+  if (!opts || typeof opts !== "object") return;
+  if (typeof switchView === "function") {
+    try { switchView("search", false); } catch {}
+  }
+  if (typeof clearFormFieldsOnly === "function") clearFormFieldsOnly();
+  const q  = document.getElementById("query");
+  const fa = document.getElementById("f-artist");
+  const fl = document.getElementById("f-label");
+  const fr = document.getElementById("f-release");
+  const fy = document.getElementById("f-year");
+  const fs = document.getElementById("f-sort");
+  if (q  && opts.q != null) q.value  = String(opts.q);
+  if (fa && opts.a != null) fa.value = String(opts.a);
+  if (fl && opts.l != null) fl.value = String(opts.l);
+  if (fr && opts.e != null) fr.value = String(opts.e);
+  if (fy && opts.y != null) fy.value = String(opts.y);
+  if (fs && opts.s != null) fs.value = String(opts.s);
+  if (opts.r) {
+    const radio = document.querySelector(`input[name="result-type"][value="${String(opts.r).replace(/"/g, "")}"]`);
+    if (radio) radio.checked = true;
+  }
+  // Open the advanced panel when any of its fields are populated so
+  // the user can see the artist / label / etc. that drove the search.
+  const hasAdvanced = !!(opts.a || opts.l || opts.e || opts.y);
+  if (hasAdvanced && typeof toggleAdvanced === "function") {
+    try { toggleAdvanced(true); } catch {}
+  }
+  if (typeof doSearch === "function") doSearch(1);
+}
+window._sdRunPrefilledSearch = _sdRunPrefilledSearch;
+
 // ── Main search ──────────────────────────────────────────────────────────
 // Scanner.js handoff: clear the form, pin the barcode, fire the
 // search. Called from a successful camera scan or the manual-entry
