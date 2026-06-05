@@ -1,5 +1,39 @@
 // ── Shared utilities for all pages (index, account, admin) ──────────────
 
+// Intercept clicks on .ba-lyric-search anchors (the 🔍 shortcuts in
+// the Blues Archive lyrics list, tunings grid, and lyric-scrape
+// "recently added" panel) so they run an in-page SPA search instead
+// of doing a full navigation. A real navigation tears down the mini-
+// player iframe and music stops — using the SPA path keeps playback
+// alive. We honour modifier-clicks (ctrl/meta/shift/alt) and right/
+// middle clicks so "open in new tab" / "open in new window" still
+// behave as expected, and we leave the href as the real /?q=…&a=… URL
+// so anon visitors without JS get the same destination.
+if (typeof document !== "undefined") {
+  document.addEventListener("click", function(e) {
+    const a = e.target && e.target.closest ? e.target.closest("a.ba-lyric-search") : null;
+    if (!a) return;
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    if (a.target === "_blank") return;
+    let url;
+    try { url = new URL(a.href, location.origin); } catch { return; }
+    if (url.origin !== location.origin) return;
+    if (typeof window._sdRunPrefilledSearch !== "function") return; // fall back to navigation
+    e.preventDefault();
+    const params = url.searchParams;
+    window._sdRunPrefilledSearch({
+      q: params.get("q") || "",
+      a: params.get("a") || "",
+      l: params.get("l") || "",
+      e: params.get("e") || "",
+      y: params.get("y") || "",
+      s: params.get("s") || "",
+      r: params.get("r") || "",
+    });
+  }, true); // capture so per-row stopPropagation handlers don't kill us
+}
+
+
 // ── Lazy module loader ──────────────────────────────────────────────────
 // Used to defer non-critical view code (archive, youtube, inventory
 // editor) until the user actually navigates into that view. Each path
@@ -1478,7 +1512,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260605.1016";
+  const SITE_VERSION = "build 20260605.1025";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
