@@ -1129,12 +1129,27 @@ export async function initDb() {
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS blues_tunings_grid_artist_idx ON blues_tunings_grid (artist)`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS blues_tunings_grid_title_idx ON blues_tunings_grid (title)`);
-    // Seed from the bundled CSV iff the table is empty. The CSV ships
-    // with the deploy so a fresh boot on an empty DB stamps the grid.
+    // Seed from the bundled CSV iff the table is empty OR the seed
+    // version has changed. Bump _TUNINGS_SEED_VERSION whenever the CSV
+    // is replaced so deployed environments truncate + re-seed instead
+    // of clinging to the previous content. The version is stored in
+    // app_settings under "tunings_seed_version".
+    const _TUNINGS_SEED_VERSION = "2"; // bump on every CSV swap
     try {
         const countR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_tunings_grid`);
         const existing = countR.rows[0]?.n ?? 0;
-        if (existing === 0) {
+        let storedVersion = null;
+        try {
+            const vr = await getPool().query(`SELECT value FROM app_settings WHERE key = 'tunings_seed_version'`);
+            storedVersion = vr.rows[0]?.value ?? null;
+        }
+        catch { /* app_settings might not exist on a brand-new DB; fall through */ }
+        const needsReseed = existing === 0 || storedVersion !== _TUNINGS_SEED_VERSION;
+        if (needsReseed) {
+            if (existing > 0) {
+                await getPool().query(`TRUNCATE blues_tunings_grid RESTART IDENTITY`);
+                console.log(`[init] tunings seed version changed (${storedVersion} → ${_TUNINGS_SEED_VERSION}); truncated ${existing} rows`);
+            }
             // Lazy require to avoid pulling fs into hot init paths when the
             // table is already populated. Path resolution: dist/db.js sits
             // at <repo>/dist/db.js so the CSV at <repo>/src/data/tunings.csv
@@ -1171,6 +1186,16 @@ export async function initDb() {
                         rows.map(r => r.notes),
                     ]);
                     console.log(`[init] seeded blues_tunings_grid with ${rows.length} rows from ${csvPath}`);
+                    // Stamp the seed version so subsequent boots skip the
+                    // re-seed unless the constant is bumped again.
+                    try {
+                        await getPool().query(`INSERT INTO app_settings (key, value)
+               VALUES ('tunings_seed_version', $1)
+               ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [_TUNINGS_SEED_VERSION]);
+                    }
+                    catch (e) {
+                        console.warn("[init] tunings_seed_version stamp failed:", e);
+                    }
                 }
             }
             else {
@@ -1488,22 +1513,58 @@ function _parseTuningsCsv(raw) {
     const lines = raw.replace(/\r\n/g, "\n").split("\n");
     if (lines.length < 2)
         return [];
-    // Skip header row. Standard order: Artist,Track,Title,Position,Pitch,Notes
+    // The file may start with one or more "noise" rows (the export sometimes
+    // adds an empty first line of just commas) before the real header.
+    // Find the header row by looking for "Artist" and "Title" tokens.
+    let headerIdx = -1;
+    let cols = [];
+    for (let i = 0; i < Math.min(5, lines.length); i++) {
+        const cells = _splitCsvLine(lines[i]).map(c => c.trim().toLowerCase());
+        if (cells.includes("artist") && cells.includes("title")) {
+            headerIdx = i;
+            cols = cells;
+            break;
+        }
+    }
+    if (headerIdx < 0)
+        return [];
+    // Map header names → cell indices so the parser doesn't break if the
+    // column order shifts again. Both the original layout
+    //   Artist,Track,Title,Position,Pitch,Notes
+    // and the current one
+    //   #,Artist,Title,Position,Pitch,Notes
+    // are accepted without code changes.
+    const idx = (name) => cols.indexOf(name);
+    const iArtist = idx("artist");
+    const iTitle = idx("title");
+    const iPosition = idx("position");
+    const iPitch = idx("pitch");
+    const iNotes = idx("notes");
+    // "Track" column is named differently across exports. The "#" column
+    // in the newer file is a row index that effectively serves as the
+    // track number per artist; treat both as the track identifier.
+    let iTrack = idx("track");
+    if (iTrack < 0)
+        iTrack = idx("#");
     const rows = [];
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = headerIdx + 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line || !line.trim())
             continue;
         const cells = _splitCsvLine(line);
-        if (cells.length < 3)
-            continue; // need at least artist + track + title
+        const artist = iArtist >= 0 ? (cells[iArtist] ?? "").trim() : "";
+        const title = iTitle >= 0 ? (cells[iTitle] ?? "").trim() : "";
+        // Skip noise rows (commas only / no artist). A row without an
+        // artist is meaningless for our schema.
+        if (!artist && !title)
+            continue;
         rows.push({
-            artist: (cells[0] ?? "").trim(),
-            track: (cells[1] ?? "").trim(),
-            title: (cells[2] ?? "").trim(),
-            position: (cells[3] ?? "").trim(),
-            pitch: (cells[4] ?? "").trim(),
-            notes: (cells[5] ?? "").trim(),
+            artist,
+            track: iTrack >= 0 ? (cells[iTrack] ?? "").trim() : "",
+            title,
+            position: iPosition >= 0 ? (cells[iPosition] ?? "").trim() : "",
+            pitch: iPitch >= 0 ? (cells[iPitch] ?? "").trim() : "",
+            notes: iNotes >= 0 ? (cells[iNotes] ?? "").trim() : "",
         });
     }
     return rows;

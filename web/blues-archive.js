@@ -2460,27 +2460,58 @@ async function _baLoadTuningsGrid() {
       const S = _baTuningsSort;
       // The search-link shortcut on each title mirrors the one on the
       // Lyrics table: opens SeaDisco search prefilled with title + artist.
+      // Notes-as-title fallback: collaborative-session rows in the CSV
+      // leave Title blank and stash the real track name in Notes as
+      // "With <collaborator>:: <Track Title>". Surface the parsed
+      // track title in the Title column and the collaborator name as
+      // a small grey prefix on the Notes column so the grid reads
+      // cleanly without losing either piece of info.
       const rowHtml = (r) => {
-        const title = String(r.title || "");
+        const rawTitle = String(r.title || "").trim();
+        const rawNotes = String(r.notes || "").trim();
+        let displayTitle = rawTitle;
+        let displayNotes = rawNotes;
+        let collaborator = "";
+        if (!rawTitle && rawNotes) {
+          const m = rawNotes.match(/^(.*?)::\s*(.+)$/);
+          if (m) {
+            collaborator = m[1].trim();           // "With Gus Cannon (Banjo Joe)"
+            displayTitle = m[2].trim();           // "My Money Never Runs Out"
+            displayNotes = collaborator;
+          } else {
+            // No "::" — show notes in the title slot as a last resort
+            // so the row isn't a row of blanks.
+            displayTitle = rawNotes;
+            displayNotes = "";
+          }
+        }
         const artist = String(r.artist || "");
-        const searchQs = `?q=${encodeURIComponent(title)}` +
+        const searchQs = `?q=${encodeURIComponent(displayTitle)}` +
                          `&a=${encodeURIComponent(artist)}` +
                          `&r=${encodeURIComponent("master+")}` +
                          `&s=${encodeURIComponent("year:asc")}`;
+        const searchLink = displayTitle
+          ? `<a href="/${searchQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a> `
+          : "";
         return `<tr>
-          <td style="font-weight:600;color:var(--text)">${escHtml(artist)}</td>
-          <td style="color:var(--muted);text-align:right;padding-right:0.6rem">${escHtml(String(r.track || ""))}</td>
-          <td style="color:var(--text)">
-            <a href="/${searchQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>
-            ${escHtml(title)}
-          </td>
-          <td style="color:var(--accent)">${escHtml(String(r.position || ""))}</td>
-          <td>${escHtml(String(r.pitch || ""))}</td>
-          <td style="color:var(--muted);font-size:0.78rem">${escHtml(String(r.notes || ""))}</td>
+          <td style="font-weight:600;color:var(--text);white-space:nowrap">${escHtml(artist)}</td>
+          <td style="color:var(--muted);text-align:right;padding-right:0.6rem;white-space:nowrap">${escHtml(String(r.track || ""))}</td>
+          <td style="color:var(--text)">${searchLink}${escHtml(displayTitle)}</td>
+          <td style="color:var(--accent);white-space:nowrap">${escHtml(String(r.position || ""))}</td>
+          <td style="white-space:nowrap">${escHtml(String(r.pitch || ""))}</td>
+          <td style="color:var(--muted);font-size:0.78rem">${escHtml(displayNotes)}</td>
         </tr>`;
       };
       rowsEl.innerHTML = `
-        <table class="api-log-table" style="font-size:0.84rem;width:100%">
+        <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
+          <colgroup>
+            <col style="width:14%">
+            <col style="width:48px">
+            <col style="width:32%">
+            <col style="width:90px">
+            <col style="width:60px">
+            <col>
+          </colgroup>
           <thead><tr>
             ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
             ${_baSortTh("Track",    "track",    S, "_baSortTunings", "text-align:right;padding-right:0.6rem")}
