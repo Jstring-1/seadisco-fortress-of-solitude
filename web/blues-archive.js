@@ -874,7 +874,6 @@ async function _baOpenLyric(id) {
           </div>
           <div style="display:flex;gap:0.4rem;align-items:start">
             <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
-            <button class="archive-btn" onclick="_baAddLyricToSetlist(${row.id})" title="Add this lyric to a setlist…">+ Setlist</button>
             <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
             <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row">Delete</button>
             <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
@@ -1416,7 +1415,7 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "setlists") ? tab : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings") ? tab : "artists";
   // Toggle button active state
   document.querySelectorAll("#blues-archive-subtabs .ba-subtab").forEach(b => {
     b.classList.toggle("is-active", b.dataset.baTab === _baSubtab);
@@ -1424,11 +1423,11 @@ function _baSwitchSubtab(tab) {
   const ap = document.getElementById("blues-archive-artists-panel");
   const lp = document.getElementById("blues-archive-lyrics-panel");
   const rp = document.getElementById("blues-archive-releases-panel");
-  const sp = document.getElementById("blues-archive-setlists-panel");
+  const tp = document.getElementById("blues-archive-tunings-panel");
   if (ap) ap.style.display = _baSubtab === "artists"  ? "" : "none";
   if (lp) lp.style.display = _baSubtab === "lyrics"   ? "" : "none";
   if (rp) rp.style.display = _baSubtab === "releases" ? "" : "none";
-  if (sp) sp.style.display = _baSubtab === "setlists" ? "" : "none";
+  if (tp) tp.style.display = _baSubtab === "tunings"  ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
@@ -1444,8 +1443,9 @@ function _baSwitchSubtab(tab) {
     }
   } else if (_baSubtab === "releases") {
     _baLoadReleases();
-  } else if (_baSubtab === "setlists") {
-    _baLoadSetlists();
+  } else if (_baSubtab === "tunings") {
+    if (!_baTuningsFacetsLoaded) _baLoadTuningsFacets();
+    _baLoadTuningsGrid();
   }
   // Persist after every subtab switch so a quick "Lyrics → Search"
   // round trip pulls the user back to Lyrics on return.
@@ -2122,14 +2122,49 @@ function _baLyricRowHtml(l) {
   </tr>`;
 }
 
+// Popup-variant row HTML — the artist detail overlay's lyrics table
+// has 5 cells (Title, Year, Tuning, Snippet, ✎) instead of the master
+// list's 6 (master adds an Artist column). Without this we'd splat
+// the 6-cell HTML into a 5-cell layout and every column would shift
+// left, dropping the tuning into the snippet slot, etc.
+function _baLyricRowHtmlPopup(l, artistName) {
+  const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
+    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: artistName || l.artist || "", title: `Lookup options for "${l.page_title}"` })
+    : escHtml(l.page_title || "");
+  const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
+  const yrHtml = yr
+    ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
+    : `<span style="color:#555">—</span>`;
+  const searchQs = `?q=${encodeURIComponent(l.page_title || "")}` +
+                   `&a=${encodeURIComponent(artistName || l.artist || "")}` +
+                   `&r=${encodeURIComponent("master+")}` +
+                   `&s=${encodeURIComponent("year:asc")}`;
+  const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
+  return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
+    <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}</td>
+    <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
+    <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
+    <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+    <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
+  </tr>`;
+}
+
 // Patch a single rendered row in place after a save. Walks every <tr>
 // with data-lyric-row=id (covers both the master list and the artist
-// popup sub-table) and replaces its outerHTML with the fresh row.
-// Scroll position is preserved because we only swap the one row.
+// popup sub-table) and replaces its outerHTML with the variant that
+// matches whichever container the row lives in — the artist popup
+// (#ba-artist-overlay) uses a 5-cell layout, the master list a 6-cell.
+// Using the wrong builder shifted every column over by one, e.g. the
+// tuning landed in the snippet slot. Scroll position is preserved
+// because we only swap the one row.
 function _baPatchLyricRowEverywhere(updated) {
   if (!updated || updated.id == null) return;
   document.querySelectorAll(`tr[data-lyric-row="${updated.id}"]`).forEach(tr => {
-    tr.outerHTML = _baLyricRowHtml(updated);
+    const inPopup = !!tr.closest("#ba-artist-overlay");
+    tr.outerHTML = inPopup
+      ? _baLyricRowHtmlPopup(updated, _baDetailArtist?.name || updated.artist || "")
+      : _baLyricRowHtml(updated);
   });
 }
 
@@ -2362,6 +2397,153 @@ function _baReleasesClearFilters() {
   _baLoadReleases();
 }
 window._baReleasesClearFilters = _baReleasesClearFilters;
+
+// ── Tunings grid ─────────────────────────────────────────────────────
+// Read-only view over blues_tunings_grid, seeded server-side from
+// src/data/tunings.csv. Filters: free-text + per-facet dropdowns
+// (artist / position / pitch). Sort is server-side; pagination is
+// the same 100-row pattern as the Lyrics / Releases tabs.
+let _baTuningsFacetsLoaded = false;
+let _baTuningsPage = 0;
+const _BA_TUNINGS_LIMIT = 100;
+let _baTuningsTotal = 0;
+let _baTuningsSearchTimer = null;
+const _baTuningsSort = { key: "artist", dir: "asc" };
+
+async function _baLoadTuningsFacets() {
+  try {
+    const r = await apiFetch("/api/blues-archive/tunings/facets");
+    if (!r.ok) return;
+    const { artists = [], positions = [], pitches = [] } = await r.json();
+    const fill = (id, label, vals) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = `<option value="">${label}</option>` +
+        vals.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join("");
+    };
+    fill("ba-tunings-artist",   "All artists",   artists);
+    fill("ba-tunings-position", "All positions", positions);
+    fill("ba-tunings-pitch",    "All pitches",   pitches);
+    _baTuningsFacetsLoaded = true;
+  } catch { /* non-fatal */ }
+}
+
+async function _baLoadTuningsGrid() {
+  const rowsEl  = document.getElementById("ba-tunings-rows");
+  const countEl = document.getElementById("ba-tunings-count");
+  if (!rowsEl) return;
+  const q        = (document.getElementById("ba-tunings-search")?.value   || "").trim();
+  const artist   = (document.getElementById("ba-tunings-artist")?.value   || "").trim();
+  const position = (document.getElementById("ba-tunings-position")?.value || "").trim();
+  const pitch    = (document.getElementById("ba-tunings-pitch")?.value    || "").trim();
+  const params = new URLSearchParams();
+  if (q)        params.set("q",        q);
+  if (artist)   params.set("artist",   artist);
+  if (position) params.set("position", position);
+  if (pitch)    params.set("pitch",    pitch);
+  params.set("sort",   _baTuningsSort.key);
+  params.set("order",  _baTuningsSort.dir);
+  params.set("limit",  String(_BA_TUNINGS_LIMIT));
+  params.set("offset", String(_baTuningsPage * _BA_TUNINGS_LIMIT));
+  const clearBtn = document.getElementById("ba-tunings-clear");
+  if (clearBtn) clearBtn.style.display = (q || artist || position || pitch) ? "" : "none";
+  rowsEl.classList.add("ba-loading");
+  try {
+    const r = await apiFetch(`/api/blues-archive/tunings?${params}`);
+    if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
+    const { rows = [], total = 0 } = await r.json();
+    _baTuningsTotal = total;
+    if (countEl) countEl.textContent = total ? `${total.toLocaleString()} row${total === 1 ? "" : "s"}` : "No matches.";
+    if (!rows.length) {
+      rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    } else {
+      const S = _baTuningsSort;
+      // The search-link shortcut on each title mirrors the one on the
+      // Lyrics table: opens SeaDisco search prefilled with title + artist.
+      const rowHtml = (r) => {
+        const title = String(r.title || "");
+        const artist = String(r.artist || "");
+        const searchQs = `?q=${encodeURIComponent(title)}` +
+                         `&a=${encodeURIComponent(artist)}` +
+                         `&r=${encodeURIComponent("master+")}` +
+                         `&s=${encodeURIComponent("year:asc")}`;
+        return `<tr>
+          <td style="font-weight:600;color:var(--text)">${escHtml(artist)}</td>
+          <td style="color:var(--muted);text-align:right;padding-right:0.6rem">${escHtml(String(r.track || ""))}</td>
+          <td style="color:var(--text)">
+            <a href="/${searchQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>
+            ${escHtml(title)}
+          </td>
+          <td style="color:var(--accent)">${escHtml(String(r.position || ""))}</td>
+          <td>${escHtml(String(r.pitch || ""))}</td>
+          <td style="color:var(--muted);font-size:0.78rem">${escHtml(String(r.notes || ""))}</td>
+        </tr>`;
+      };
+      rowsEl.innerHTML = `
+        <table class="api-log-table" style="font-size:0.84rem;width:100%">
+          <thead><tr>
+            ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
+            ${_baSortTh("Track",    "track",    S, "_baSortTunings", "text-align:right;padding-right:0.6rem")}
+            ${_baSortTh("Title",    "title",    S, "_baSortTunings")}
+            ${_baSortTh("Position", "position", S, "_baSortTunings")}
+            ${_baSortTh("Pitch",    "pitch",    S, "_baSortTunings")}
+            <th>Notes</th>
+          </tr></thead>
+          <tbody>${rows.map(rowHtml).join("")}</tbody>
+        </table>`;
+    }
+    _baRenderTuningsPager();
+  } catch (e) {
+    rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  } finally {
+    rowsEl.classList.remove("ba-loading");
+  }
+}
+window._baLoadTuningsGrid = _baLoadTuningsGrid;
+
+function _baRenderTuningsPager() {
+  const el = document.getElementById("ba-tunings-pager");
+  if (!el) return;
+  const pageCount = Math.max(1, Math.ceil(_baTuningsTotal / _BA_TUNINGS_LIMIT));
+  const cur = _baTuningsPage + 1;
+  if (pageCount <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baTuningsGoToPage(${_baTuningsPage - 1})">‹ Prev</button>
+    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
+    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baTuningsGoToPage(${_baTuningsPage + 1})">Next ›</button>`;
+}
+function _baTuningsGoToPage(p) { _baTuningsPage = Math.max(0, p); _baLoadTuningsGrid(); }
+window._baTuningsGoToPage = _baTuningsGoToPage;
+
+function _baSortTunings(key) {
+  _baToggleSort(_baTuningsSort, key);
+  _baTuningsPage = 0;
+  _baLoadTuningsGrid();
+}
+window._baSortTunings = _baSortTunings;
+
+function _baTuningsDebouncedSearch() {
+  if (_baTuningsSearchTimer) clearTimeout(_baTuningsSearchTimer);
+  _baTuningsSearchTimer = setTimeout(() => { _baTuningsPage = 0; _baLoadTuningsGrid(); }, 280);
+}
+window._baTuningsDebouncedSearch = _baTuningsDebouncedSearch;
+
+function _baTuningsApplyFilters() { _baTuningsPage = 0; _baLoadTuningsGrid(); }
+window._baTuningsApplyFilters = _baTuningsApplyFilters;
+
+function _baTuningsClearFilters() {
+  const s = document.getElementById("ba-tunings-search");
+  const a = document.getElementById("ba-tunings-artist");
+  const p = document.getElementById("ba-tunings-position");
+  const ch = document.getElementById("ba-tunings-pitch");
+  if (s) s.value = "";
+  if (a) a.value = "";
+  if (p) p.value = "";
+  if (ch) ch.value = "";
+  _baTuningsPage = 0;
+  _baLoadTuningsGrid();
+}
+window._baTuningsClearFilters = _baTuningsClearFilters;
 
 // ── Stats strip ──────────────────────────────────────────────────────
 // Curation dashboard chips at the top of the archive list view. Each

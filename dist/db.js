@@ -1110,6 +1110,77 @@ export async function initDb() {
   `);
     await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_bans_uniq_idx
        ON blues_lyrics_bans (kind, LOWER(TRIM(value)))`);
+    // ── Tunings grid (read-only) ───────────────────────────────────────
+    // Per-track tuning + pitch table seeded from src/data/tunings.csv
+    // (Weeniecampbell "keys and positions" research) the first time
+    // this migration runs. Source-of-truth lives in the CSV — re-import
+    // by truncating + re-seeding. Schema mirrors the CSV: artist, track,
+    // title, position, pitch, notes.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_tunings_grid (
+      id        SERIAL PRIMARY KEY,
+      artist    TEXT NOT NULL,
+      track     TEXT,
+      title     TEXT NOT NULL,
+      position  TEXT,
+      pitch     TEXT,
+      notes     TEXT
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_tunings_grid_artist_idx ON blues_tunings_grid (artist)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_tunings_grid_title_idx ON blues_tunings_grid (title)`);
+    // Seed from the bundled CSV iff the table is empty. The CSV ships
+    // with the deploy so a fresh boot on an empty DB stamps the grid.
+    try {
+        const countR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_tunings_grid`);
+        const existing = countR.rows[0]?.n ?? 0;
+        if (existing === 0) {
+            // Lazy require to avoid pulling fs into hot init paths when the
+            // table is already populated. Path resolution: dist/db.js sits
+            // at <repo>/dist/db.js so the CSV at <repo>/src/data/tunings.csv
+            // is reached via "../src/data/tunings.csv" from the compiled file.
+            const fs = await import("fs");
+            const path = await import("path");
+            const url = await import("url");
+            // ESM-safe __dirname equivalent. dist/db.js → __dirname = dist/
+            const here = path.dirname(url.fileURLToPath(import.meta.url));
+            const candidates = [
+                path.join(here, "..", "src", "data", "tunings.csv"),
+                path.join(here, "..", "..", "src", "data", "tunings.csv"),
+                path.join(process.cwd(), "src", "data", "tunings.csv"),
+            ];
+            let csvPath = "";
+            for (const c of candidates) {
+                if (fs.existsSync(c)) {
+                    csvPath = c;
+                    break;
+                }
+            }
+            if (csvPath) {
+                const raw = fs.readFileSync(csvPath, "utf8");
+                const rows = _parseTuningsCsv(raw);
+                if (rows.length) {
+                    // Batch-insert via UNNEST so 1k+ rows go in one query.
+                    await getPool().query(`INSERT INTO blues_tunings_grid (artist, track, title, position, pitch, notes)
+             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])`, [
+                        rows.map(r => r.artist),
+                        rows.map(r => r.track),
+                        rows.map(r => r.title),
+                        rows.map(r => r.position),
+                        rows.map(r => r.pitch),
+                        rows.map(r => r.notes),
+                    ]);
+                    console.log(`[init] seeded blues_tunings_grid with ${rows.length} rows from ${csvPath}`);
+                }
+            }
+            else {
+                console.log("[init] tunings.csv not found in any candidate path; blues_tunings_grid left empty");
+            }
+        }
+    }
+    catch (e) {
+        console.warn("[init] tunings seed failed (table left as-is):", e);
+    }
     // One-shot backfill of artist_id for any rows missing it. Matches on
     // case-insensitive trim equality — same key the merge / import code
     // paths have always used. Idempotent: once populated, the WHERE
@@ -1406,6 +1477,126 @@ export async function deleteBluesArtist(id) {
 // whose artist_id hasn't been backfilled). Single transaction so a
 // partial failure rolls back the whole thing. Returns counts so the
 // UI can report exactly how many lyrics went with the artist.
+// ── Tunings grid helpers ─────────────────────────────────────────────
+// Minimal CSV parser tuned for the keysandpositions/tunings.csv shape:
+// header row + comma-separated fields with optional double-quoted
+// values that may themselves contain commas. Quoted-quote escaping is
+// "" → ". Newlines inside quoted fields aren't expected for this
+// dataset, so the line splitter is naive. Good enough for our seed
+// data; replace with a real parser if the source ever grows arbitrary.
+function _parseTuningsCsv(raw) {
+    const lines = raw.replace(/\r\n/g, "\n").split("\n");
+    if (lines.length < 2)
+        return [];
+    // Skip header row. Standard order: Artist,Track,Title,Position,Pitch,Notes
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || !line.trim())
+            continue;
+        const cells = _splitCsvLine(line);
+        if (cells.length < 3)
+            continue; // need at least artist + track + title
+        rows.push({
+            artist: (cells[0] ?? "").trim(),
+            track: (cells[1] ?? "").trim(),
+            title: (cells[2] ?? "").trim(),
+            position: (cells[3] ?? "").trim(),
+            pitch: (cells[4] ?? "").trim(),
+            notes: (cells[5] ?? "").trim(),
+        });
+    }
+    return rows;
+}
+function _splitCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+            }
+            else if (ch === '"') {
+                inQuotes = false;
+            }
+            else {
+                cur += ch;
+            }
+        }
+        else {
+            if (ch === '"') {
+                inQuotes = true;
+            }
+            else if (ch === ",") {
+                out.push(cur);
+                cur = "";
+            }
+            else {
+                cur += ch;
+            }
+        }
+    }
+    out.push(cur);
+    return out;
+}
+const _TUNINGS_SORT_COLS = {
+    artist: "artist", track: "track", title: "title",
+    position: "position", pitch: "pitch",
+};
+export async function listBluesTunings(opts = {}) {
+    const where = [];
+    const params = [];
+    if (opts.q) {
+        params.push(`%${opts.q}%`);
+        const p = `$${params.length}`;
+        where.push(`(artist ILIKE ${p} OR title ILIKE ${p} OR position ILIKE ${p} OR pitch ILIKE ${p} OR notes ILIKE ${p})`);
+    }
+    if (opts.artist) {
+        params.push(opts.artist);
+        where.push(`artist = $${params.length}`);
+    }
+    if (opts.position) {
+        params.push(opts.position);
+        where.push(`position = $${params.length}`);
+    }
+    if (opts.pitch) {
+        params.push(opts.pitch);
+        where.push(`pitch = $${params.length}`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const sortCol = _TUNINGS_SORT_COLS[String(opts.sort ?? "")] || "artist";
+    const order = opts.order === "desc" ? "DESC" : "ASC";
+    const orderSql = sortCol === "artist"
+        ? `ORDER BY artist ${order}, title ASC`
+        : `ORDER BY ${sortCol} ${order} NULLS LAST, artist ASC, title ASC`;
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_tunings_grid ${whereSql}`, params);
+    const total = totalR.rows[0]?.n ?? 0;
+    const limit = Math.max(1, Math.min(500, opts.limit ?? 200));
+    const offset = Math.max(0, opts.offset ?? 0);
+    params.push(limit, offset);
+    const rowsR = await getPool().query(`SELECT id, artist, track, title, position, pitch, notes
+       FROM blues_tunings_grid ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { rows: rowsR.rows, total };
+}
+export async function getBluesTuningsFacets() {
+    const r = await getPool().query(`
+    SELECT
+      ARRAY(SELECT DISTINCT artist   FROM blues_tunings_grid WHERE artist   IS NOT NULL AND artist   <> '' ORDER BY artist)   AS artists,
+      ARRAY(SELECT DISTINCT position FROM blues_tunings_grid WHERE position IS NOT NULL AND position <> '' ORDER BY position) AS positions,
+      ARRAY(SELECT DISTINCT pitch    FROM blues_tunings_grid WHERE pitch    IS NOT NULL AND pitch    <> '' ORDER BY pitch)    AS pitches
+  `);
+    const row = r.rows[0] ?? {};
+    return {
+        artists: Array.isArray(row.artists) ? row.artists : [],
+        positions: Array.isArray(row.positions) ? row.positions : [],
+        pitches: Array.isArray(row.pitches) ? row.pitches : [],
+    };
+}
 // ── Lyrics ban list helpers ──────────────────────────────────────────
 // blues_lyrics_bans backs the "delete and don't re-add" workflow:
 // scrape consults these sets so already-banned titles never get fetched
@@ -5590,17 +5781,42 @@ export async function listLyrics(opts) {
     const where = [];
     const params = [];
     if (opts.search) {
-        // Expand to colloquial variants so "want to" also matches "wanna"
-        // etc. — see expandLyricSearchVariants above. Each variant gets
-        // ORed across page_title / artist / plaintext.
-        const variants = expandLyricSearchVariants(opts.search);
-        const clauses = [];
-        for (const v of variants) {
-            params.push(`%${v}%`);
-            const p = `$${params.length}`;
-            clauses.push(`(page_title ILIKE ${p} OR artist ILIKE ${p} OR plaintext ILIKE ${p})`);
+        // Parse the query for && (AND) and || (OR) operators. Standard
+        // precedence: || binds looser than &&, so "a && b || c" means
+        // "(a AND b) OR c". Each leaf term is then expanded to colloquial
+        // variants (want to ↔ wanna, one ↔ 1, mornin' ↔ morning, etc.)
+        // and matched ILIKE against page_title / artist / plaintext.
+        //   "wanna"            → single-term: variant expansion only
+        //   "love && money"    → must match both terms
+        //   "love || hate"     → match either term
+        //   "love && me || you"→ (love AND me) OR (you)
+        const orGroups = String(opts.search)
+            .split(/\s*\|\|\s*/)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(part => part
+            .split(/\s*&&\s*/)
+            .map(s => s.trim())
+            .filter(Boolean));
+        const orClauses = [];
+        for (const group of orGroups) {
+            if (!group.length)
+                continue;
+            const andClauses = [];
+            for (const term of group) {
+                const variants = expandLyricSearchVariants(term);
+                const subClauses = [];
+                for (const v of variants) {
+                    params.push(`%${v}%`);
+                    const p = `$${params.length}`;
+                    subClauses.push(`(page_title ILIKE ${p} OR artist ILIKE ${p} OR plaintext ILIKE ${p})`);
+                }
+                andClauses.push(`(${subClauses.join(" OR ")})`);
+            }
+            orClauses.push(`(${andClauses.join(" AND ")})`);
         }
-        where.push(`(${clauses.join(" OR ")})`);
+        if (orClauses.length)
+            where.push(`(${orClauses.join(" OR ")})`);
     }
     if (opts.tuning) {
         // Special sentinel: "(unspecified)" filters rows where no tuning
