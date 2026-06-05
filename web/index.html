@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260604.1135" />
+  <link rel="stylesheet" href="/style.css?v=20260605.1002" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260604.1135"></script>
+<script defer src="/shared.js?v=20260605.1002"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1016,7 +1016,7 @@ e.g.  miles davis | coltrane
       <button type="button" class="archive-btn ba-subtab is-active" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
-      <button type="button" class="archive-btn ba-subtab" data-ba-tab="setlists" onclick="_baSwitchSubtab('setlists')">Setlists</button>
+      <button type="button" class="archive-btn ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
     </div>
     <div id="blues-archive-artists-panel">
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem">
@@ -1034,7 +1034,7 @@ e.g.  miles davis | coltrane
            re-link orphans buttons removed — the source wiki is dormant and
            every lyric is matched. + Add lyric stays for manual one-offs. -->
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
-        <input id="blues-archive-lyrics-search" type="search" placeholder="Search lyrics: title, artist, or text" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baLyricsDebouncedSearch()">
+        <input id="blues-archive-lyrics-search" type="search" placeholder="Search lyrics: title, artist, text. Use && / || for AND / OR." title="Search across title, artist, and full lyric text. Each term auto-expands to colloquial variants (want to ↔ wanna, one ↔ 1, mornin' ↔ morning, …). Operators: && for AND, || for OR. Example: love && money || hate. && binds tighter than ||." style="flex:1;min-width:220px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baLyricsDebouncedSearch()">
         <select id="blues-archive-lyrics-tuning" onchange="_baLyricsApplyTuning()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
           <option value="">All tunings</option>
         </select>
@@ -1108,21 +1108,23 @@ e.g.  miles davis | coltrane
       <div id="blues-archive-releases-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="blues-archive-releases-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>
-    <div id="blues-archive-setlists-panel" style="display:none">
-      <!-- Left: setlist list with new/delete. Right: selected setlist
-           contents with reorder/remove + export. ★ favorites filter
-           inline so a lyric flagged via the viewer's star is one click
-           away. -->
+    <!-- Tunings grid — seeded from src/data/tunings.csv on first boot.
+         Schema: artist, track, title, position, pitch, notes. Filters:
+         q (cross-column text), artist, position, pitch. Sort: any
+         column (server-side). Pure read view; the source-of-truth
+         lives in the CSV that ships with the deploy. -->
+    <div id="blues-archive-tunings-panel" style="display:none">
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
-        <button type="button" class="archive-btn" onclick="_baOpenNewSetlistDialog()" title="Create a new setlist. Name has to be unique among your setlists.">+ New setlist</button>
-        <button type="button" class="archive-btn" onclick="_baShowFavorites()" title="Browse every lyric you've ★ favorited.">★ Favorites</button>
-        <button type="button" class="archive-btn" onclick="_baLoadSetlists()" title="Re-fetch your setlists from the server">↻ Refresh</button>
-        <span id="blues-archive-setlists-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+        <input id="ba-tunings-search"   type="search" placeholder="Search title, artist, position, notes…" style="flex:1;min-width:240px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baTuningsDebouncedSearch()">
+        <select id="ba-tunings-artist"   onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All artists</option></select>
+        <select id="ba-tunings-position" onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All positions</option></select>
+        <select id="ba-tunings-pitch"    onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All pitches</option></select>
+        <button type="button" class="archive-btn" onclick="_baLoadTuningsGrid()" title="Re-fetch the tunings grid from the server">↻ Refresh</button>
+        <button type="button" id="ba-tunings-clear" class="archive-btn" onclick="_baTuningsClearFilters()" style="display:none" title="Clear all tuning filters">Clear filters</button>
+        <span id="ba-tunings-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
-      <div style="display:grid;grid-template-columns:280px 1fr;gap:0.8rem;align-items:start">
-        <div id="blues-archive-setlists-list" style="font-size:0.86rem;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0.4rem">Loading…</div>
-        <div id="blues-archive-setlists-detail" style="font-size:0.86rem;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0.6rem;min-height:200px">Pick a setlist on the left, or create a new one.</div>
-      </div>
+      <div id="ba-tunings-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
+      <div id="ba-tunings-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>
   </div>
   <!-- Detail panel — populated when an artist row is clicked.
@@ -1662,13 +1664,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260604.1135"></script>
-<script defer src="/search.js?v=20260604.1135"></script>
-<script defer src="/collection.js?v=20260604.1135"></script>
+<script defer src="/utils.js?v=20260605.1002"></script>
+<script defer src="/search.js?v=20260605.1002"></script>
+<script defer src="/collection.js?v=20260605.1002"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260604.1135"></script>
-<script defer src="/app.js?v=20260604.1135"></script>
+<script defer src="/modal.js?v=20260605.1002"></script>
+<script defer src="/app.js?v=20260605.1002"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1679,13 +1681,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260604.1135"></script>
-<script defer src="/queue.js?v=20260604.1135"></script>
+<script defer src="/loc.js?v=20260605.1002"></script>
+<script defer src="/queue.js?v=20260605.1002"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260604.1135";
+  window._SD_LAZY_VERSION = "20260605.1002";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1715,8 +1717,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260604.1135"></script>
-<script defer src="/offline.js?v=20260604.1135"></script>
+<script defer src="/idb.js?v=20260605.1002"></script>
+<script defer src="/offline.js?v=20260605.1002"></script>
 
 </body>
 </html>
