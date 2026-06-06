@@ -426,10 +426,14 @@ function _attachClearToOneInput(input) {
   if (input.closest(".cl-rootBox, .cl-component, .cl-card, .cl-modalContent, .cl-userButtonPopover")) return;
   // Datalist-only inputs and hidden inputs aren't worth clearing.
   if (input.type === "hidden") return;
-  if (!input.offsetParent && getComputedStyle(input).display === "none") {
-    // Defer — input might be in a hidden tab; observer will catch it on display
-    return;
-  }
+  // Used to bail here for inputs whose ancestor is display:none, on
+  // the theory that the MutationObserver would catch them later when
+  // the tab became visible. But the observer only watches childList
+  // / subtree mutations — not style / display changes — so inputs
+  // that exist at page-load inside a hidden tab were stuck without
+  // the × clear button forever. Wrap them anyway; the wrap is a
+  // simple inline-block span that does nothing visible until the
+  // input has content, and CSS handles the tab's display toggle.
   input.dataset.hasClearBtn = "1";
   let wrap = input.parentElement;
   if (!wrap || !wrap.classList?.contains("input-clear-wrap")) {
