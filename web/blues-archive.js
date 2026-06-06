@@ -2071,6 +2071,26 @@ function _baSortLyricsList(key) {
 }
 window._baSortLyricsList = _baSortLyricsList;
 
+// Small inline badge shown after the lyric title to indicate whether
+// the row has a Discogs master and/or release pin attached. Each glyph
+// is itself a link to the matching discogs.com page (target=_blank so
+// the SPA stays put / music keeps playing). Hover title reveals the
+// numeric id. Rendered as empty string when neither pin is set, so
+// unpinned rows look identical to before.
+function _baLyricPinBadge(l) {
+  if (!l) return "";
+  const mid = Number(l.discogs_master_id);
+  const rid = Number(l.discogs_release_id);
+  const parts = [];
+  if (Number.isFinite(mid) && mid > 0) {
+    parts.push(`<a href="https://www.discogs.com/master/${mid}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Discogs master ${mid}" style="text-decoration:none;margin-left:0.3rem;font-size:0.78em">🎼</a>`);
+  }
+  if (Number.isFinite(rid) && rid > 0) {
+    parts.push(`<a href="https://www.discogs.com/release/${rid}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Discogs release ${rid}" style="text-decoration:none;margin-left:0.3rem;font-size:0.78em">💿</a>`);
+  }
+  return parts.join("");
+}
+
 // Single-row HTML — extracted so saves can do surgical in-place
 // replacement without rebuilding the whole table (and blowing the
 // user's scroll position). Used by both the master Lyrics table and
@@ -2111,9 +2131,10 @@ function _baLyricRowHtml(l) {
                    `&r=${encodeURIComponent("master+")}` +
                    `&s=${encodeURIComponent("year:asc")}`;
   const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
-    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${searchLink} ${titleHtml}</td>
+    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${searchLink} ${titleHtml}${pinBadge}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
@@ -2140,9 +2161,10 @@ function _baLyricRowHtmlPopup(l, artistName) {
                    `&r=${encodeURIComponent("master+")}` +
                    `&s=${encodeURIComponent("year:asc")}`;
   const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
-    <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}</td>
+    <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}${pinBadge}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
     <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
