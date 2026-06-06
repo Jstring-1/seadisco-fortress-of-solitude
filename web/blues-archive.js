@@ -46,6 +46,8 @@ function _baPersistViewState() {
         unpinned:  _baLyricsUnpinned,
         empty:     _baLyricsEmpty,
         noArtist:  _baLyricsNoArtist,
+        pinned:    _baLyricsPinned,
+        favorites: _baLyricsFavorites,
         page:      _baLyricsPage,
         sort:      { key: _baLyricsListSort.key, dir: _baLyricsListSort.dir },
         scrollY:   window.scrollY,
@@ -307,6 +309,8 @@ function initBluesArchiveView() {
       _baLyricsUnpinned  = !!saved.lyrics.unpinned;
       _baLyricsEmpty     = !!saved.lyrics.empty;
       _baLyricsNoArtist  = !!saved.lyrics.noArtist;
+      _baLyricsPinned    = !!saved.lyrics.pinned;
+      _baLyricsFavorites = !!saved.lyrics.favorites;
       _baLyricsPage      = Number(saved.lyrics.page) || 0;
       if (saved.lyrics.sort?.key) {
         _baLyricsListSort.key = saved.lyrics.sort.key;
@@ -326,6 +330,10 @@ function initBluesArchiveView() {
       if (em) em.checked = !!saved.lyrics.empty;
       const na = document.getElementById("blues-archive-lyrics-no-artist");
       if (na) na.checked = !!saved.lyrics.noArtist;
+      const pn = document.getElementById("blues-archive-lyrics-pinned");
+      if (pn) pn.checked = !!saved.lyrics.pinned;
+      const fv = document.getElementById("blues-archive-lyrics-favorites");
+      if (fv) fv.checked = !!saved.lyrics.favorites;
       _baSwitchSubtab("lyrics");
       // Scroll restore — wait past the table render. RAF + ~250ms
       // settles the layout for long lists; clamp to body height so a
@@ -1409,6 +1417,8 @@ let _baLyricsUnmatched = false;
 let _baLyricsUnpinned = false;
 let _baLyricsEmpty = false;
 let _baLyricsNoArtist = false;
+let _baLyricsPinned = false;     // only rows with a release/master pin
+let _baLyricsFavorites = false;  // only rows the user has favorited
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", first_release_year: "num" };
@@ -1493,6 +1503,20 @@ function _baLyricsApplyNoArtist() {
   _baLoadLyrics();
 }
 window._baLyricsApplyNoArtist = _baLyricsApplyNoArtist;
+
+function _baLyricsApplyPinned() {
+  _baLyricsPinned = !!document.getElementById("blues-archive-lyrics-pinned")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyPinned = _baLyricsApplyPinned;
+
+function _baLyricsApplyFavorites() {
+  _baLyricsFavorites = !!document.getElementById("blues-archive-lyrics-favorites")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyFavorites = _baLyricsApplyFavorites;
 
 // Cheap pass: set every lyric's first_release_year from its linked
 // artist's discogs_releases (title match). Zero Discogs API calls.
@@ -1954,17 +1978,23 @@ function _baLyricsClearFilters() {
   const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
   const empty     = document.getElementById("blues-archive-lyrics-empty");
   const noArtist  = document.getElementById("blues-archive-lyrics-no-artist");
+  const pinned    = document.getElementById("blues-archive-lyrics-pinned");
+  const favorites = document.getElementById("blues-archive-lyrics-favorites");
   if (search)    search.value = "";
   if (tuningSel) tuningSel.value = "";
   if (unmatched) unmatched.checked = false;
   if (unpinned)  unpinned.checked  = false;
   if (empty)     empty.checked     = false;
   if (noArtist)  noArtist.checked  = false;
+  if (pinned)    pinned.checked    = false;
+  if (favorites) favorites.checked = false;
   _baLyricsTuning    = "";
   _baLyricsUnmatched = false;
   _baLyricsUnpinned  = false;
   _baLyricsEmpty     = false;
   _baLyricsNoArtist  = false;
+  _baLyricsPinned    = false;
+  _baLyricsFavorites = false;
   _baLyricsPage      = 0;
   _baLoadLyrics();
 }
@@ -2024,10 +2054,12 @@ async function _baLoadLyrics() {
   if (_baLyricsUnpinned)  params.set("unpinned",  "1");
   if (_baLyricsEmpty)     params.set("empty",     "1");
   if (_baLyricsNoArtist)  params.set("noArtist",  "1");
+  if (_baLyricsPinned)    params.set("pinned",    "1");
+  if (_baLyricsFavorites) params.set("favorites", "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current

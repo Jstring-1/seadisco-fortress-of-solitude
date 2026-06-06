@@ -7265,6 +7265,16 @@ export async function listLyrics(opts: {
    *  to begin with — they sort to the bottom under any ORDER BY so
    *  this is the only practical way to surface them. */
   noArtistOnly?: boolean;
+  /** True → only return rows the given user has favorited. Requires
+   *  favoriteUserId to be set; silently no-ops otherwise so an
+   *  unauthenticated caller can't trivially filter to someone else's
+   *  list. */
+  favoritesOnly?: boolean;
+  favoriteUserId?: string | null;
+  /** True → only return rows that have AT LEAST ONE Discogs pin
+   *  (release_id OR master_id non-NULL). The mirror image of
+   *  unpinnedOnly: surfaces lyrics that already resolve to an album. */
+  pinnedOnly?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -7336,6 +7346,13 @@ export async function listLyrics(opts: {
   }
   if (opts.noArtistOnly) {
     where.push(`(artist IS NULL OR LENGTH(TRIM(artist)) = 0)`);
+  }
+  if (opts.pinnedOnly) {
+    where.push(`(discogs_release_id IS NOT NULL OR discogs_master_id IS NOT NULL)`);
+  }
+  if (opts.favoritesOnly && opts.favoriteUserId) {
+    params.push(opts.favoriteUserId);
+    where.push(`id IN (SELECT lyric_id FROM blues_lyric_favorites WHERE clerk_user_id = $${params.length})`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));

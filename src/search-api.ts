@@ -10349,7 +10349,8 @@ app.post("/api/admin/lyrics", express.json({ limit: "200kb" }), async (req, res)
 
 // GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&sort=&order=&limit=&offset=
 app.get("/api/admin/lyrics", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+  const adminUserId = await requireAdmin(req, res);
+  if (!adminUserId) return;
   try {
     const q       = String(req.query.q ?? "").trim().slice(0, 200);
     const tuning  = String(req.query.tuning ?? "").trim().slice(0, 80);
@@ -10358,6 +10359,8 @@ app.get("/api/admin/lyrics", async (req, res) => {
     const unpinned  = req.query.unpinned  === "1" || req.query.unpinned  === "true";
     const empty     = req.query.empty     === "1" || req.query.empty     === "true";
     const noArtist  = req.query.noArtist  === "1" || req.query.noArtist  === "true";
+    const pinned    = req.query.pinned    === "1" || req.query.pinned    === "true";
+    const favorites = req.query.favorites === "1" || req.query.favorites === "true";
     // Sort column (whitelisted server-side) + direction. Anything else
     // is ignored / falls back to the default in listLyrics.
     const sort  = String(req.query.sort  ?? "").trim().slice(0, 30);
@@ -10372,6 +10375,9 @@ app.get("/api/admin/lyrics", async (req, res) => {
       unpinnedOnly: unpinned,
       emptyOnly: empty,
       noArtistOnly: noArtist,
+      pinnedOnly: pinned,
+      favoritesOnly: favorites,
+      favoriteUserId: favorites ? adminUserId : null,
       sort: sort || undefined,
       order,
       limit, offset,
