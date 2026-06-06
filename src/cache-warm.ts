@@ -306,6 +306,27 @@ async function _runWorker(
         await cacheRelease(id, "release", full as object);
         const title = String(full?.title ?? r?.title ?? "(untitled)");
         await recordCacheWarmRunHit(genreKey, styleKey, title, id);
+        // Also warm the parent master if this release has one and we
+        // haven't cached that master yet. Search results with the
+        // `master+` filter come back as type=master and the enrich
+        // endpoint looks up (id, type) exactly — without this, every
+        // master result was a cache-miss on the wide-card tracklist /
+        // image strip even when we'd cached dozens of its releases.
+        // One extra Discogs call per *new* master only; cached
+        // masters short-circuit via isReleaseCached.
+        const masterId = Number(full?.master_id);
+        if (Number.isFinite(masterId) && masterId > 0) {
+          try {
+            if (!(await isReleaseCached(masterId, "master"))) {
+              await _sleep(REQ_INTERVAL_MS);
+              const fullM = await _withRetry(`master ${masterId}`, () => client.getMasterRelease(masterId)) as any;
+              await cacheRelease(masterId, "master", fullM as object);
+            }
+          } catch (mErr: any) {
+            await recordCacheWarmRunError(genreKey, styleKey, `master ${masterId}: ${mErr?.message ?? String(mErr)}`);
+            await _sleep(REQ_INTERVAL_MS);
+          }
+        }
       } catch (err: any) {
         await recordCacheWarmRunError(genreKey, styleKey, `release ${id}: ${err?.message ?? String(err)}`);
         await _sleep(REQ_INTERVAL_MS);
