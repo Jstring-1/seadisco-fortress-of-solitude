@@ -2095,14 +2095,21 @@ function _baLyricPinBadge(l) {
   if (!l) return "";
   const mid = Number(l.discogs_master_id);
   const rid = Number(l.discogs_release_id);
-  const parts = [];
-  if (Number.isFinite(mid) && mid > 0) {
-    parts.push(`<a href="https://www.discogs.com/master/${mid}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Discogs master ${mid}" style="text-decoration:none;margin-left:0.3rem;font-size:0.78em">🎼</a>`);
-  }
-  if (Number.isFinite(rid) && rid > 0) {
-    parts.push(`<a href="https://www.discogs.com/release/${rid}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Discogs release ${rid}" style="text-decoration:none;margin-left:0.3rem;font-size:0.78em">💿</a>`);
-  }
-  return parts.join("");
+  const hasMaster  = Number.isFinite(mid) && mid > 0;
+  const hasRelease = Number.isFinite(rid) && rid > 0;
+  if (!hasMaster && !hasRelease) return "";
+  // Single 💿 glyph for either pin — prefer the master link when both
+  // exist (master is the canonical group), otherwise fall back to the
+  // release page. Hover title lists whichever ids are set so the user
+  // can still see the numbers.
+  const href = hasMaster
+    ? `https://www.discogs.com/master/${mid}`
+    : `https://www.discogs.com/release/${rid}`;
+  const tipParts = [];
+  if (hasMaster)  tipParts.push(`Discogs master ${mid}`);
+  if (hasRelease) tipParts.push(`Discogs release ${rid}`);
+  const tip = tipParts.join(" · ");
+  return `<a href="${href}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${tip}" style="text-decoration:none;margin-right:0.3rem;font-size:0.78em">💿</a>`;
 }
 
 // Single-row HTML — extracted so saves can do surgical in-place
@@ -2149,7 +2156,7 @@ function _baLyricRowHtml(l) {
   const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
-    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${titleHtml}${pinBadge}</td>
+    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
@@ -2180,7 +2187,7 @@ function _baLyricRowHtmlPopup(l, artistName) {
   const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
-    <td style="font-weight:600;color:var(--text);white-space:nowrap">${favStar}${searchLink} ${titleHtml}${pinBadge}</td>
+    <td style="font-weight:600;color:var(--text);white-space:nowrap">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
     <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
