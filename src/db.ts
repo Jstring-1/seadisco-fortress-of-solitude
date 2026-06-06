@@ -6010,7 +6010,42 @@ export async function getCacheEnrichmentBatch(
         )`,
       [ids, types]
     );
-    return r.rows;
+    const hits: Array<{ id: number; type: string; data: any }> = r.rows;
+    // Cross-type fallback: for any (id, 'master') pair we missed on,
+    // try to find ANY cached release whose data->>'master_id' matches
+    // the master id, and surface its tracklist/images under the master
+    // key. Better than returning empty — wide-card mode shows real
+    // track titles instead of a sparse card — at the cost of the
+    // tracks being from one specific pressing rather than the
+    // canonical master. Released a release_cache row tagged as the
+    // requested master so the client cache-key logic still works.
+    const hitKeys = new Set(hits.map(h => `${h.type}:${h.id}`));
+    const missedMasterIds = capped
+      .filter(p => p.type === "master" && !hitKeys.has(`master:${p.id}`))
+      .map(p => Number(p.id));
+    if (missedMasterIds.length) {
+      try {
+        // DISTINCT ON picks one representative release per master
+        // (lowest discogs_id = oldest cached row, deterministic).
+        const fb = await getPool().query(
+          `SELECT DISTINCT ON ((data->>'master_id')::bigint)
+                  (data->>'master_id')::bigint AS master_id,
+                  data
+             FROM release_cache
+            WHERE type = 'release'
+              AND (data->>'master_id') IS NOT NULL
+              AND (data->>'master_id')::bigint = ANY($1::bigint[])
+            ORDER BY (data->>'master_id')::bigint, discogs_id ASC`,
+          [missedMasterIds]
+        );
+        for (const row of fb.rows) {
+          const mid = Number(row.master_id);
+          if (!Number.isFinite(mid) || mid <= 0) continue;
+          hits.push({ id: mid, type: "master", data: row.data });
+        }
+      } catch { /* fallback is best-effort */ }
+    }
+    return hits;
   } catch { return []; }
 }
 
