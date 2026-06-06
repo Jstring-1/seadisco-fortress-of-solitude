@@ -1,5 +1,36 @@
 // ── Shared utilities for all pages (index, account, admin) ──────────────
 
+// Suppress the spurious "click" event that fires when the user
+// mousedowns inside a modal (e.g. dragging to select lyric text),
+// drags the cursor outside, and releases on the backdrop. The
+// browser dispatches click on the closest common ancestor (the
+// overlay), which then triggers every "click outside to close"
+// handler we have. Net result: edit overlays slammed shut every time
+// the user tried to select text and let go in the wrong place.
+//
+// We only fire when BOTH conditions hold:
+//   - the mousedown target was a descendant of the click target
+//     (so this really is a drag-out, not a normal click on a parent)
+//   - there's an active text selection at click time (so we don't
+//     misfire on legitimate clicks where the pointer happened to
+//     drift a few pixels between mousedown and mouseup)
+let _sdMouseDownTarget = null;
+if (typeof document !== "undefined") {
+  document.addEventListener("mousedown", (e) => { _sdMouseDownTarget = e.target; }, true);
+  document.addEventListener("click", (e) => {
+    const md = _sdMouseDownTarget;
+    _sdMouseDownTarget = null;
+    if (!md || md === e.target) return;
+    const tgt = e.target;
+    if (!tgt || typeof tgt.contains !== "function" || !tgt.contains(md)) return;
+    const sel = window.getSelection && window.getSelection();
+    const selText = sel ? String(sel.toString()) : "";
+    if (selText.length === 0) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
+}
+
 // Intercept clicks on .ba-lyric-search anchors (the 🔍 shortcuts in
 // the Blues Archive lyrics list, tunings grid, and lyric-scrape
 // "recently added" panel) so they run an in-page SPA search instead
@@ -1512,7 +1543,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260605.1025";
+  const SITE_VERSION = "build 20260605.2041";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
