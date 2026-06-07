@@ -1543,7 +1543,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260606.1228";
+  const SITE_VERSION = "build 20260606.2039";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1963,6 +1963,12 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // can match same-named neighbors (e.g. "John Lee (26)" vs "John
   // Lee Hooker"), and the wrong bio surfaces above results.
   const idAttr     = opts.entityId    ? ` data-lk-id="${escHtml(String(opts.entityId))}"`  : "";
+  // openId / openType drive the in-app "Open" shortcut at the top of
+  // the popup — clicking it opens the lyric viewer (openType=lyric) or
+  // the album modal (openType=release|master) directly instead of
+  // searching. Optional; the button is only added when both are set.
+  const openIdAttr   = opts.openId   != null && opts.openId   !== "" ? ` data-lk-open-id="${escHtml(String(opts.openId))}"`     : "";
+  const openTypeAttr = opts.openType ? ` data-lk-open-type="${escHtml(String(opts.openType))}"` : "";
   const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`                  : "";
   const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
   // <span> not <a> — these markups can be embedded inside card <a>
@@ -1970,15 +1976,17 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // anchor is encountered, which broke wide-card layout (each card
   // split across multiple grid cells). Click semantics are unchanged
   // because the onclick handler does the work.
-  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
   const scope = el.dataset.lkScope || "track";
   const label = el.dataset.lkLabel || "";
   const ctx   = {
-    trackArtist: el.dataset.lkArtist || "",
-    entityId:    el.dataset.lkId     || "",
+    trackArtist: el.dataset.lkArtist    || "",
+    entityId:    el.dataset.lkId        || "",
+    openId:      el.dataset.lkOpenId    || "",
+    openType:    el.dataset.lkOpenType  || "",
   };
   openLookupPopup(ev, scope, label, ctx);
 }
@@ -2044,6 +2052,8 @@ function openLookupPopup(ev, scope, label, ctx) {
   if (!label) return;
   const trackArtist = ctx?.trackArtist || "";
   const entityId    = ctx?.entityId    || "";
+  const openId      = ctx?.openId      || "";
+  const openType    = ctx?.openType    || "";
 
   // Build the YouTube search query — scope-aware for disambiguation.
   // We send users to the in-app YouTube view (results play in the
@@ -2065,6 +2075,15 @@ function openLookupPopup(ev, scope, label, ctx) {
   // option in everyday use and the visual primary slot is better spent
   // on the most-used SeaDisco / Wikipedia / YouTube entries.
   const internal = [];
+  // Direct "Open" shortcut — when the caller supplied openId+openType,
+  // bypass the search workflow entirely and open the target popup
+  // (lyric viewer, or release/master album modal) right from this
+  // menu. Sits at the very top because it's the action the user came
+  // for; the rest of the popup is search-around alternatives.
+  if (openId && (openType === "lyric" || openType === "release" || openType === "master")) {
+    const openLabel = openType === "lyric" ? "Open lyric" : (openType === "master" ? "Open master" : "Open release");
+    internal.push({ key: "open", icon: "↗", text: openLabel });
+  }
   // Admin-only EDIT — only relevant for artist scope. Opens the Blues
   // Archive artist detail popup if the artist is in the archive; if
   // it isn't, offers to add them. Sits at the top of the popup since
@@ -2166,7 +2185,32 @@ function openLookupPopup(ev, scope, label, ctx) {
       e.preventDefault();
       _closeLookupPopup();
       try {
-        if (b.key === "copy") {
+        if (b.key === "open") {
+          // Direct open — lyric viewer or album modal. Both functions
+          // are global on `window`; if missing (e.g. lyric viewer not
+          // loaded yet from a non-archive surface), fall back to a
+          // hash-route hint so the user isn't left clicking dead air.
+          const id = Number(openId);
+          if (Number.isFinite(id) && id > 0) {
+            if (openType === "lyric") {
+              if (typeof window._baOpenLyric === "function") {
+                try { window._baOpenLyric(id); } catch {}
+              } else if (typeof window._sdLoadModule === "function") {
+                window._sdLoadModule("/blues-archive.js")
+                  .then(() => { if (typeof window._baOpenLyric === "function") window._baOpenLyric(id); })
+                  .catch(() => {});
+              }
+            } else if (openType === "release" || openType === "master") {
+              const url = `https://www.discogs.com/${openType}/${id}`;
+              if (typeof window.openModal === "function") {
+                try { window.openModal(ev, id, openType, url); } catch {}
+              } else {
+                window.location.href = url;
+              }
+            }
+          }
+        }
+        else if (b.key === "copy") {
           // Universal copy-to-clipboard. Always copy ONLY the literal
           // `label` (the entity text the popup was opened for) — never
           // grab DOM textContent or any neighboring text. Reports of
