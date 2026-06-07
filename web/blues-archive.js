@@ -659,7 +659,7 @@ function _baRenderArtistDetail(a) {
         </tr></thead>
         <tbody>${lyrics.map(l => {
           const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
-            ? entityLookupLinkHtml("track", l.page_title, { trackArtist: a.name || "", title: `Lookup options for "${l.page_title}"` })
+            ? entityLookupLinkHtml("track", l.page_title, { trackArtist: a.name || "", openId: l.id, openType: "lyric", title: `Lookup options for "${l.page_title}"` })
             : escHtml(l.page_title || "");
           const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
           const yrHtml = yr
@@ -698,7 +698,7 @@ function _baRenderArtistDetail(a) {
           const url  = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${rel.id}`;
           const safeUrl = url.replace(/'/g, "\\'");
           const titleHtml = (typeof entityLookupLinkHtml === "function" && rel.title)
-            ? entityLookupLinkHtml("release", rel.title, { entityId: rel.id, title: `Lookup options for "${rel.title}"` })
+            ? entityLookupLinkHtml("release", rel.title, { entityId: rel.id, openId: rel.id, openType: type === "master" ? "master" : "release", title: `Lookup options for "${rel.title}"` })
             : escHtml(rel.title || "");
           // Type cell is an explicit anchor that opens the in-app
           // release/master popup. Title still routes through
@@ -2150,7 +2150,7 @@ function _baLyricPinBadge(l) {
 // the artist popup's lyric sub-table.
 function _baLyricRowHtml(l) {
   const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
-    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: l.artist || "", title: `Lookup options for "${l.page_title}"` })
+    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: l.artist || "", openId: l.id, openType: "lyric", title: `Lookup options for "${l.page_title}"` })
     : escHtml(l.page_title || "");
   const artistHtml = l.artist && typeof entityLookupLinkHtml === "function"
     ? entityLookupLinkHtml("artist", l.artist, { title: `Lookup options for "${l.artist}"` })
@@ -2204,7 +2204,7 @@ function _baLyricRowHtml(l) {
 // left, dropping the tuning into the snippet slot, etc.
 function _baLyricRowHtmlPopup(l, artistName) {
   const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
-    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: artistName || l.artist || "", title: `Lookup options for "${l.page_title}"` })
+    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: artistName || l.artist || "", openId: l.id, openType: "lyric", title: `Lookup options for "${l.page_title}"` })
     : escHtml(l.page_title || "");
   const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
   const yrHtml = yr
