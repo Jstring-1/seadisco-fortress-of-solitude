@@ -4358,9 +4358,63 @@ function openPlayerRelease() {
     openModal(null, rId, rType, rUrl);
     return;
   }
-  // YT track without a known Discogs release. Tell the user instead
-  // of silently doing nothing — the dim icon already telegraphs the
-  // "no link" state visually.
+  // Last-ditch heal: the queue entry was added from a path that never
+  // captured Discogs release context (most often the in-app YouTube
+  // search view — YT thumbnail still surfaces the album cover, so the
+  // queue row LOOKS complete, but data.releaseId is empty). Use the
+  // album + artist text the row DID save to do a fresh /search,
+  // pick the top master/release hit, open it, and backfill the queue
+  // entry so the next click is free. Gradually self-heals playlists
+  // as the user clicks through them.
+  let curEntry = null;
+  try { curEntry = typeof window._queueGetCurrentEntry === "function" ? window._queueGetCurrentEntry() : null; } catch {}
+  const albumTitle = String(curEntry?.data?.albumTitle || "").trim();
+  const artistTxt  = String(curEntry?.data?.artist     || "").trim();
+  if (albumTitle && window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Looking up album…", "info", 1200);
+    const qs = new URLSearchParams({
+      q: albumTitle, type: "master", per_page: "5", page: "1",
+    });
+    if (artistTxt) qs.set("artist", artistTxt);
+    (async () => {
+      try {
+        const r = await apiFetch(`/search?${qs.toString()}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        const hits = Array.isArray(j?.results) ? j.results : [];
+        // Prefer a master hit; fall through to release. Discogs's
+        // search payload tags each row with a type field already.
+        const pick = hits.find(h => h?.type === "master" && h?.id)
+                  || hits.find(h => h?.type === "release" && h?.id);
+        if (!pick) {
+          if (typeof showToast === "function") showToast("Couldn't find album info for this track", "info", 2500);
+          return;
+        }
+        const hType = pick.type === "master" ? "master" : "release";
+        const hId   = String(pick.id);
+        const hUrl  = `https://www.discogs.com/${hType}/${hId}`;
+        window._playerReleaseType = hType;
+        window._playerReleaseId   = hId;
+        window._playerReleaseUrl  = hUrl;
+        // Persist on the queue row so subsequent disc-icon clicks
+        // (and consume-on-play replays from the same id) skip the
+        // search entirely. Fire-and-forget.
+        if (curEntry?.externalId && typeof window._queueBackfillReleaseInfo === "function") {
+          try {
+            window._queueBackfillReleaseInfo(curEntry.externalId, {
+              releaseType: hType, releaseId: hId,
+            });
+          } catch {}
+        }
+        openModal(null, hId, hType, hUrl);
+      } catch (err) {
+        console.warn("[openPlayerRelease heal]", err);
+        if (typeof showToast === "function") showToast("Album info not available for this track", "info", 2500);
+      }
+    })();
+    return;
+  }
+  // No album text to search with — show the existing message.
   if (typeof showToast === "function") {
     showToast("Album info not available for this track", "info", 2500);
   }
