@@ -1433,9 +1433,14 @@ let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
   _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings") ? tab : "artists";
-  // Toggle button active state
+  // Toggle button active state. Both classes are kept in sync so any
+  // lingering CSS that targets the legacy `is-active` still works; the
+  // new loc-tab styling (after the header rearrangement) keys on
+  // `active`, matching wiki/youtube/gutenberg/chronam.
   document.querySelectorAll("#blues-archive-subtabs .ba-subtab").forEach(b => {
-    b.classList.toggle("is-active", b.dataset.baTab === _baSubtab);
+    const on = b.dataset.baTab === _baSubtab;
+    b.classList.toggle("is-active", on);
+    b.classList.toggle("active", on);
   });
   const ap = document.getElementById("blues-archive-artists-panel");
   const lp = document.getElementById("blues-archive-lyrics-panel");
