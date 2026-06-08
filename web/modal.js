@@ -1855,9 +1855,13 @@ let _ytPlayCount = 0;      // total loadVideoById calls — rotate the player ev
 // decode buffers across loadVideoById calls — a long auto-advance
 // session (e.g. queueing 50+ tracks) can push the tab to multi-GB. A
 // periodic destroy + recreate forces Chromium to GC the prior video's
-// state. Trade-off: a sub-second iframe rebuild every N tracks. 20 is
-// a reasonable middle ground.
-const _YT_PLAYER_ROTATE_EVERY = 20;
+// state. Trade-off: a sub-second iframe rebuild every N tracks.
+// Bumped down from 20 to 10 — heap snapshots on long playlists were
+// showing 100k+ Detached InternalNode entries, and the prior 20-track
+// gap let each iframe accumulate ~50-150MB of decode buffers between
+// rotations. 10 keeps the working set bounded without making the
+// rebuild stutter visible.
+const _YT_PLAYER_ROTATE_EVERY = 10;
 function loadYTVideo(id) {
   _ytHasPlayed = false;
   window._ytRetried = false;  // reset retry flag for new video
