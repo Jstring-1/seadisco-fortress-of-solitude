@@ -191,14 +191,42 @@ function _mbEsc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Attribute-safe escape: strips backslashes (so single-quotes can't be
+// re-introduced via a stray escape) then HTML-escapes + replaces
+// single quotes with &#39; so the value can be embedded inside an
+// onclick='…' single-quoted string without breaking the JS literal.
+function _mbAttr(s) {
+  return String(s ?? "")
+    .replace(/\\/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // Per-entity row rendering. Keeps the same outer shape (clickable row
 // → detail popup) so the user gets consistent affordances across MB
-// entity types.
+// entity types. The 🔍 icon at the front of the title routes through
+// entityLookupLinkHtml so the user can pop the search-options menu
+// (SeaDisco / Wikipedia / YouTube / Discogs / etc.) right from the
+// results grid — without leaving the MB view.
 function _mbRowHtml(entity, r) {
   const mbid = String(r.id || "");
   const safeId = mbid.replace(/'/g, "");
   const name = r.title || r.name || "(untitled)";
   const score = r.score != null ? `<span style="color:var(--muted);font-size:0.74rem;margin-left:0.4rem">${Number(r.score).toFixed(0)}%</span>` : "";
+  // Map MB entity → entityLookupLinkHtml scope so the popup's
+  // SeaDisco button fills the right form field on the resulting
+  // search.
+  const lookupScope = (entity === "artist" || entity === "label") ? entity
+                    : (entity === "recording" || entity === "work")  ? "track"
+                    : "release";
+  // 🔍 lookup affordance — invokes openLookupPopup directly so the
+  // displayed glyph stays a magnifier while the popup still searches
+  // for `name`. Stops propagation so clicking the icon doesn't also
+  // open the MB detail overlay.
+  const lookupHtml = `<a href="#" class="mb-row-lookup-link" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'${lookupScope}','${_mbAttr(name)}');return false" title="Search options for &quot;${_mbAttr(name)}&quot;" style="margin-right:0.4rem;color:var(--muted);text-decoration:none">🔍</a>`;
   const sub = [];
   if (entity === "artist") {
     if (r.type)     sub.push(_mbEsc(r.type));
@@ -229,7 +257,7 @@ function _mbRowHtml(entity, r) {
   const subHtml = sub.length ? `<div style="color:var(--muted);font-size:0.78rem">${sub.join(" · ")}</div>` : "";
   return `
     <div class="mb-row" data-mbid="${_mbEsc(mbid)}" onclick="_mbOpenDetail('${_mbEntity}','${safeId}')" style="padding:0.55rem 0.7rem;border-bottom:1px solid var(--border);cursor:pointer">
-      <div style="font-weight:600">${_mbEsc(name)}${score}</div>
+      <div style="font-weight:600">${lookupHtml}${_mbEsc(name)}${score}</div>
       ${subHtml}
     </div>
   `;
@@ -262,12 +290,12 @@ function _mbGoPage(p) {
 }
 window._mbGoPage = _mbGoPage;
 
-// Detail overlay. Hits /api/musicbrainz/:type/:mbid (the server attaches
-// the appropriate `inc=` defaults so we get linked entities for free)
-// and renders a scrolling panel with the upstream JSON pretty-printed
-// alongside a quick-link list (Wikipedia / Discogs / homepage from
-// url-rels). Enough for the v1 — richer per-entity rendering can layer
-// on top later without changing the data contract.
+// Detail overlay. Hits /api/musicbrainz/:type/:mbid (the server
+// attaches per-entity `inc=` defaults so we get linked entities for
+// free) and renders a Discogs-popup-styled panel: title + lookup
+// affordance, meta line, external-link strip, and entity-specific
+// content sections. Raw-JSON view is still available behind a toggle
+// for the curator who wants to inspect MB fields verbatim.
 async function _mbOpenDetail(type, mbid) {
   let overlay = document.getElementById("mb-detail-overlay");
   if (!overlay) {
@@ -282,12 +310,15 @@ async function _mbOpenDetail(type, mbid) {
     document.body.appendChild(overlay);
   }
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(900px,100%)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-        <h3 style="margin:0;font-size:1rem">Loading ${_mbEsc(type)}…</h3>
+    <div class="mb-detail-card" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(900px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.5rem">
+        <div style="min-width:0;flex:1">
+          <h3 class="mb-detail-title" style="margin:0 0 0.2rem;font-size:1.05rem">Loading…</h3>
+          <div class="mb-detail-meta" style="color:var(--muted);font-size:0.78rem"></div>
+        </div>
         <button class="archive-btn" onclick="document.getElementById('mb-detail-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
-      <div id="mb-detail-body" style="font-size:0.84rem;color:var(--muted)">Fetching…</div>
+      <div class="mb-detail-body" style="font-size:0.84rem;color:var(--text)">Fetching…</div>
     </div>
   `;
   try {
@@ -297,31 +328,283 @@ async function _mbOpenDetail(type, mbid) {
       throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
     }
     const j = await r.json();
-    const title = j.title || j.name || "(untitled)";
-    const links = Array.isArray(j.relations) ? j.relations.filter(rel => rel.type === "wikipedia" || rel.type === "wikidata" || rel.type === "discogs" || rel.type === "official homepage" || rel.type === "allmusic") : [];
-    const linksHtml = links.length ? `
-      <div style="margin:0.4rem 0">
-        ${links.map(rel => {
-          const url = rel.url?.resource || "";
-          if (!url) return "";
-          return `<a href="${_mbEsc(url)}" target="_blank" rel="noopener" style="display:inline-block;margin-right:0.6rem;color:var(--accent);text-decoration:none">${_mbEsc(rel.type)} ↗</a>`;
-        }).join("")}
-      </div>` : "";
-    overlay.querySelector("div > div h3").textContent = title;
-    overlay.querySelector("#mb-detail-body").innerHTML = `
-      <div style="color:var(--muted);font-size:0.78rem;margin-bottom:0.4rem">
-        ${_mbEsc(type)} · <code style="color:var(--accent)">${_mbEsc(mbid)}</code>
-        · <a href="https://musicbrainz.org/${_mbEsc(type)}/${_mbEsc(mbid)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Open on MusicBrainz ↗</a>
-        ${j.source === "cache" ? `<span style="color:#7c7" title="Served from local cache">· cached</span>` : ""}
-      </div>
-      ${linksHtml}
-      <pre style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:0.8rem;max-height:60vh;overflow:auto;color:var(--text);font-size:0.78rem;white-space:pre-wrap">${_mbEsc(JSON.stringify(j, null, 2))}</pre>
-    `;
+    _mbRenderDetail(overlay, type, mbid, j);
   } catch (e) {
-    overlay.querySelector("#mb-detail-body").innerHTML = `<div style="color:#e88">Load failed: ${_mbEsc(String(e?.message || e))}</div>`;
+    overlay.querySelector(".mb-detail-body").innerHTML =
+      `<div style="color:#e88">Load failed: ${_mbEsc(String(e?.message || e))}</div>`;
   }
 }
 window._mbOpenDetail = _mbOpenDetail;
+
+// Per-entity formatted detail. Mirrors the Discogs artist / release
+// popup shape: title row + meta line + external links + content
+// sections. Each entity-typed name gets routed through
+// entityLookupLinkHtml so the user can pop the search-options menu
+// (SeaDisco / Wikipedia / YouTube / etc.) right from this view.
+function _mbRenderDetail(overlay, type, mbid, j) {
+  const titleEl = overlay.querySelector(".mb-detail-title");
+  const metaEl  = overlay.querySelector(".mb-detail-meta");
+  const bodyEl  = overlay.querySelector(".mb-detail-body");
+  const name = j.title || j.name || "(untitled)";
+
+  // Title — wrapped in entityLookupLinkHtml so clicking the name
+  // opens the search-options popup. Scope by entity type so the
+  // resulting search routes through the right SeaDisco field.
+  const scope = (type === "artist" || type === "label") ? type
+              : (type === "recording" || type === "work")  ? "track"
+              : "release";
+  const titleHtml = (typeof entityLookupLinkHtml === "function")
+    ? entityLookupLinkHtml(scope, name, { title: `Lookup options for "${name}"` })
+    : _mbEsc(name);
+  titleEl.innerHTML = titleHtml;
+  if (j.disambiguation) {
+    titleEl.innerHTML += ` <span style="color:var(--muted);font-size:0.8rem;font-style:italic;font-weight:normal">(${_mbEsc(j.disambiguation)})</span>`;
+  }
+
+  // Meta line — entity-specific (lifespan/country/type for artist;
+  // date/country/format for release; etc.).
+  const metaParts = [];
+  metaParts.push(`<code style="color:var(--accent)">${_mbEsc(mbid)}</code>`);
+  metaParts.push(`<a href="https://musicbrainz.org/${_mbEsc(type)}/${_mbEsc(mbid)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MusicBrainz ↗</a>`);
+  if (type === "artist") {
+    if (j.type)    metaParts.push(_mbEsc(j.type));
+    if (j.gender)  metaParts.push(_mbEsc(j.gender));
+    if (j.country) metaParts.push(_mbEsc(j.country));
+    const ls = j["life-span"];
+    if (ls?.begin || ls?.end) {
+      metaParts.push(`${_mbEsc(ls?.begin || "?")} – ${_mbEsc(ls?.ended ? (ls?.end || "?") : "present")}`);
+    }
+  } else if (type === "release" || type === "release-group") {
+    if (j.date)             metaParts.push(_mbEsc(j.date));
+    if (j.country)          metaParts.push(_mbEsc(j.country));
+    if (j.status)           metaParts.push(_mbEsc(j.status));
+    if (j["primary-type"])  metaParts.push(_mbEsc(j["primary-type"]));
+    if (Array.isArray(j["secondary-types"]) && j["secondary-types"].length) {
+      metaParts.push(_mbEsc(j["secondary-types"].join(" / ")));
+    }
+    if (j.barcode)          metaParts.push("UPC " + _mbEsc(j.barcode));
+  } else if (type === "recording") {
+    if (j.length)               metaParts.push(_mbFormatMs(j.length));
+    if (j["first-release-date"]) metaParts.push(_mbEsc(j["first-release-date"]));
+    if (j.video)                metaParts.push("video");
+  } else if (type === "label") {
+    if (j.type)    metaParts.push(_mbEsc(j.type));
+    if (j.country) metaParts.push(_mbEsc(j.country));
+    if (j["label-code"]) metaParts.push("LC " + _mbEsc(j["label-code"]));
+    const ls = j["life-span"];
+    if (ls?.begin || ls?.end) metaParts.push(`${_mbEsc(ls?.begin || "?")} – ${_mbEsc(ls?.ended ? (ls?.end || "?") : "present")}`);
+  } else if (type === "work") {
+    if (j.type) metaParts.push(_mbEsc(j.type));
+    if (Array.isArray(j.iswcs) && j.iswcs.length) metaParts.push("ISWC " + _mbEsc(j.iswcs[0]));
+  }
+  if (j.source === "cache") metaParts.push(`<span style="color:#7c7" title="Served from local cache">cached</span>`);
+  metaEl.innerHTML = metaParts.join(' <span style="color:#555">·</span> ');
+
+  // Body — assemble sections then drop them in.
+  const sections = [];
+
+  // External links from url-rels relations.
+  sections.push(_mbRenderUrlRels(j));
+
+  // Artist-credit byline (release / release-group / recording) — each
+  // artist name is a separate lookup-popup link.
+  if (type === "release" || type === "release-group" || type === "recording") {
+    const ac = Array.isArray(j["artist-credit"]) ? j["artist-credit"] : [];
+    if (ac.length) {
+      const parts = ac.map(c => {
+        const aName = c.name || c.artist?.name || "";
+        const join  = c.joinphrase ?? c["joinphrase"] ?? "";
+        const aid   = c.artist?.id;
+        if (!aName) return "";
+        let link = (typeof entityLookupLinkHtml === "function")
+          ? entityLookupLinkHtml("artist", aName, { openId: aid, openType: aid ? "artist" : undefined, title: `Lookup options for "${aName}"` })
+          : _mbEsc(aName);
+        if (aid) {
+          link += ` <a href="#" onclick="event.preventDefault();event.stopPropagation();_mbOpenDetail('artist','${aid.replace(/'/g, "")}')" title="Open this MB artist" style="color:var(--muted);text-decoration:none;font-size:0.78em">↗</a>`;
+        }
+        return `${link}${_mbEsc(join)}`;
+      }).filter(Boolean).join("");
+      if (parts) sections.push(`<div style="margin:0.4rem 0"><span style="color:var(--muted);font-size:0.78rem">by</span> ${parts}</div>`);
+    }
+  }
+
+  // Tags (artist / release / recording / work / label) — chip strip.
+  const tags = Array.isArray(j.tags) ? j.tags.slice(0, 25) : [];
+  if (tags.length) {
+    sections.push(`<div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin:0.4rem 0">${
+      tags.map(t => `<span style="padding:0.15rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.7rem;color:var(--muted)">${_mbEsc(t.name || "")} <span style="color:#666">${Number(t.count) || ""}</span></span>`).join("")
+    }</div>`);
+  }
+
+  // Aliases (artist / label).
+  if (type === "artist" || type === "label") {
+    const aliases = Array.isArray(j.aliases) ? j.aliases.filter(a => a.name && a.name !== name).slice(0, 12) : [];
+    if (aliases.length) {
+      sections.push(`<div style="margin:0.6rem 0;color:var(--muted);font-size:0.8rem"><span style="color:var(--accent)">Aliases:</span> ${aliases.map(a => _mbEsc(a.name)).join(", ")}</div>`);
+    }
+  }
+
+  // Entity-specific lists.
+  if (type === "artist") {
+    sections.push(_mbRenderReleaseGroupsList(j["release-groups"] || []));
+  } else if (type === "release-group") {
+    sections.push(_mbRenderReleasesList(j.releases || []));
+  } else if (type === "release") {
+    sections.push(_mbRenderMediaTracklist(j.media || []));
+  } else if (type === "recording") {
+    sections.push(_mbRenderReleasesList(j.releases || [], "recording"));
+  } else if (type === "label") {
+    sections.push(_mbRenderReleasesList(j.releases || []));
+  } else if (type === "work") {
+    sections.push(_mbRenderWorkRels(j.relations || []));
+  }
+
+  // Raw JSON toggle — collapsed by default. The curator can expand to
+  // verify what MB returned without us having to render every field.
+  sections.push(`
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;color:var(--muted);font-size:0.78rem">Raw JSON</summary>
+      <pre style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:0.8rem;max-height:40vh;overflow:auto;color:var(--text);font-size:0.74rem;white-space:pre-wrap;margin-top:0.4rem">${_mbEsc(JSON.stringify(j, null, 2))}</pre>
+    </details>
+  `);
+
+  bodyEl.innerHTML = sections.filter(Boolean).join("\n");
+}
+
+function _mbRenderUrlRels(j) {
+  const rels = Array.isArray(j.relations) ? j.relations.filter(rel => rel["target-type"] === "url" || rel.url) : [];
+  if (!rels.length) return "";
+  // Sort: the well-known external sources first, then everything else.
+  const priority = ["wikipedia", "wikidata", "discogs", "allmusic", "official homepage", "imdb", "bandcamp", "soundcloud"];
+  rels.sort((a, b) => (priority.indexOf(a.type) + 1 || 99) - (priority.indexOf(b.type) + 1 || 99));
+  const out = rels.map(rel => {
+    const url = rel.url?.resource || "";
+    if (!url) return "";
+    return `<a href="${_mbEsc(url)}" target="_blank" rel="noopener" style="margin-right:0.7rem;color:var(--accent);text-decoration:none;font-size:0.82rem">${_mbEsc(rel.type)} ↗</a>`;
+  }).filter(Boolean);
+  if (!out.length) return "";
+  return `<div style="margin:0.4rem 0">${out.join("")}</div>`;
+}
+
+function _mbRenderReleaseGroupsList(groups) {
+  if (!groups.length) return "";
+  const sorted = [...groups].sort((a, b) => {
+    const aY = String(a["first-release-date"] || "").slice(0, 4);
+    const bY = String(b["first-release-date"] || "").slice(0, 4);
+    return aY.localeCompare(bY);
+  });
+  return `
+    <h4 style="font-size:0.86rem;color:var(--accent);margin:1rem 0 0.4rem">Release groups (${sorted.length})</h4>
+    <table class="api-log-table" style="font-size:0.82rem;width:100%">
+      <thead><tr>
+        <th style="text-align:left">Year</th>
+        <th style="text-align:left">Title</th>
+        <th style="text-align:left">Type</th>
+      </tr></thead>
+      <tbody>${sorted.map(g => {
+        const yr   = String(g["first-release-date"] || "").slice(0, 4);
+        const tp   = [g["primary-type"], ...(g["secondary-types"] || [])].filter(Boolean).join(" / ");
+        const safeId = String(g.id || "").replace(/'/g, "");
+        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release-group','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(g.title || "(untitled)")}</a>`;
+        return `<tr>
+          <td style="color:var(--muted);font-variant-numeric:tabular-nums">${_mbEsc(yr || "—")}</td>
+          <td>${titleLink}</td>
+          <td style="color:var(--muted);font-size:0.76rem">${_mbEsc(tp)}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>
+  `;
+}
+
+function _mbRenderReleasesList(releases, sourceType) {
+  if (!releases.length) return "";
+  const sorted = [...releases].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  return `
+    <h4 style="font-size:0.86rem;color:var(--accent);margin:1rem 0 0.4rem">Releases (${sorted.length})</h4>
+    <table class="api-log-table" style="font-size:0.82rem;width:100%">
+      <thead><tr>
+        <th style="text-align:left">Date</th>
+        <th style="text-align:left">Title</th>
+        <th style="text-align:left">Country</th>
+      </tr></thead>
+      <tbody>${sorted.map(rel => {
+        const safeId = String(rel.id || "").replace(/'/g, "");
+        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(rel.title || "(untitled)")}</a>`;
+        return `<tr>
+          <td style="color:var(--muted);font-variant-numeric:tabular-nums">${_mbEsc(rel.date || "—")}</td>
+          <td>${titleLink}</td>
+          <td style="color:var(--muted);font-size:0.76rem">${_mbEsc(rel.country || "")}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>
+  `;
+}
+
+function _mbRenderMediaTracklist(media) {
+  if (!media.length) return "";
+  return media.map((m, i) => {
+    const tracks = Array.isArray(m.tracks) ? m.tracks : (Array.isArray(m["track-list"]) ? m["track-list"] : []);
+    return `
+      <h4 style="font-size:0.86rem;color:var(--accent);margin:1rem 0 0.4rem">${_mbEsc(m.format || "Disc")} ${m.position || (i + 1)} (${tracks.length} track${tracks.length === 1 ? "" : "s"})</h4>
+      <table class="api-log-table" style="font-size:0.82rem;width:100%">
+        <tbody>${tracks.map(t => {
+          const trackTitle = t.title || t.recording?.title || "(untitled)";
+          const trackLen   = t.length || t.recording?.length;
+          const recId      = t.recording?.id;
+          const safeRecId  = String(recId || "").replace(/'/g, "");
+          const titleHtml = (typeof entityLookupLinkHtml === "function")
+            ? entityLookupLinkHtml("track", trackTitle, { title: `Lookup options for "${trackTitle}"` })
+            : _mbEsc(trackTitle);
+          const openLink = recId
+            ? ` <a href="#" onclick="event.preventDefault();event.stopPropagation();_mbOpenDetail('recording','${safeRecId}')" title="Open this MB recording" style="color:var(--muted);text-decoration:none;font-size:0.78em">↗</a>`
+            : "";
+          return `<tr>
+            <td style="width:2.5rem;color:var(--muted);font-variant-numeric:tabular-nums">${_mbEsc(t.position || "")}</td>
+            <td>${titleHtml}${openLink}</td>
+            <td style="width:4rem;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">${trackLen ? _mbFormatMs(trackLen) : ""}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    `;
+  }).join("");
+}
+
+function _mbRenderWorkRels(relations) {
+  if (!relations.length) return "";
+  const writers   = relations.filter(r => r["target-type"] === "artist" && (r.type === "composer" || r.type === "lyricist" || r.type === "writer"));
+  const recordings = relations.filter(r => r["target-type"] === "recording");
+  const out = [];
+  if (writers.length) {
+    out.push(`<div style="margin:0.6rem 0;font-size:0.82rem"><span style="color:var(--accent)">Writers:</span> ${
+      writers.map(w => {
+        const aName = w.artist?.name || "";
+        const aid   = w.artist?.id || "";
+        const safeId = aid.replace(/'/g, "");
+        if (!aName) return "";
+        const link = (typeof entityLookupLinkHtml === "function")
+          ? entityLookupLinkHtml("artist", aName, { title: `Lookup options for "${aName}"` })
+          : _mbEsc(aName);
+        const openLink = aid ? ` <a href="#" onclick="event.preventDefault();_mbOpenDetail('artist','${safeId}')" style="color:var(--muted);font-size:0.78em">↗</a>` : "";
+        return `${link}${openLink} <span style="color:var(--muted);font-size:0.75rem">(${_mbEsc(w.type)})</span>`;
+      }).join(", ")
+    }</div>`);
+  }
+  if (recordings.length) {
+    out.push(`<h4 style="font-size:0.86rem;color:var(--accent);margin:1rem 0 0.4rem">Recordings (${recordings.length})</h4>`);
+    out.push(`<ul style="margin:0;padding-left:1.2rem;font-size:0.82rem">${
+      recordings.map(r => {
+        const rid = r.recording?.id || "";
+        const safeId = rid.replace(/'/g, "");
+        const title = r.recording?.title || "(untitled)";
+        const link = rid
+          ? `<a href="#" onclick="event.preventDefault();_mbOpenDetail('recording','${safeId}')" style="color:var(--text);text-decoration:none">${_mbEsc(title)}</a>`
+          : _mbEsc(title);
+        return `<li style="margin:0.15rem 0">${link}</li>`;
+      }).join("")
+    }</ul>`);
+  }
+  return out.join("");
+}
 
 // Recent tab placeholder. Future: list the most recently-cached MB
 // entities (with link to re-open their detail). For now, just shows
