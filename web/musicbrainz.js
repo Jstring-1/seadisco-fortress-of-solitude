@@ -403,6 +403,13 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // Body — assemble sections then drop them in.
   const sections = [];
 
+  // Cross-link bar — when MB has a `discogs` URL relation we extract
+  // the Discogs artist / label id and offer one-click bridges into
+  // SeaDisco's search-by-id flow and (for artists) the Blues Archive
+  // adder. Gives the curator a fast path from MB → already-known
+  // SeaDisco state without copy-pasting ids.
+  sections.push(_mbRenderCrossLinks(type, j));
+
   // External links from url-rels relations.
   sections.push(_mbRenderUrlRels(j));
 
@@ -471,6 +478,118 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   bodyEl.innerHTML = sections.filter(Boolean).join("\n");
 }
 
+// Cross-link strip — for entity types that map onto Discogs (artist /
+// label), surface explicit buttons to (a) open the linked Discogs
+// page, (b) search SeaDisco scoped to that entity ID (fast by-id
+// path), and (c) — for artists — probe the Blues Archive and offer
+// either Open or Add. Probes are debounced and only fire when the
+// detail panel actually has a discogs URL relation to work with.
+function _mbRenderCrossLinks(type, j) {
+  if (type !== "artist" && type !== "label") return "";
+  const rels = Array.isArray(j.relations) ? j.relations : [];
+  const discogsRel = rels.find(r => r.type === "discogs" && r.url?.resource);
+  if (!discogsRel) return "";
+  const url = String(discogsRel.url?.resource || "");
+  // URLs look like https://www.discogs.com/artist/12345 (or /label/N).
+  // Extract the trailing numeric id; bail if the URL shape doesn't
+  // match so we don't post a garbage id to /api/blues-archive/check.
+  const m = url.match(/discogs\.com\/(artist|label)\/(\d+)/i);
+  if (!m) return "";
+  const kind  = m[1].toLowerCase();
+  const dcId  = m[2];
+  const name  = String(j.name || j.title || "");
+  const safeName = name.replace(/'/g, "&#39;");
+  // SeaDisco search-by-id — calls _lookupSearchSeaDisco's by-id path
+  // for artist/label. Routes through the existing artist-releases /
+  // label-releases endpoints so it's an exact match, not a name
+  // substring search.
+  const sdBtn = `<button type="button" class="archive-btn" onclick="_mbSearchSeaDiscoById('${kind}','${dcId}','${safeName}')" title="Search SeaDisco scoped to Discogs ${kind} id ${dcId} (exact match)">Open in SeaDisco</button>`;
+  const dcBtn = `<a href="${_mbEsc(url)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Open this Discogs ${kind} page">Discogs ↗</a>`;
+  let baBtn = "";
+  if (kind === "artist") {
+    // Blues Archive button — initially says "Add" with a question
+    // mark; on click we either jump to the existing row or fire the
+    // adder. Resolution happens lazily so we don't spam the check
+    // endpoint on every detail open.
+    baBtn = `<button type="button" class="archive-btn" id="mb-ba-btn-${dcId}" onclick="_mbResolveBluesArchive('${dcId}','${safeName}',this)" title="Probe the Blues Archive — open the row if it exists, else offer to add it">Blues Archive…</button>`;
+  }
+  return `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.6rem 0;padding:0.5rem;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px">${sdBtn}${dcBtn}${baBtn}</div>`;
+}
+
+// Imperative SeaDisco jump scoped to a Discogs id. Closes the MB
+// overlay, hands the existing entity-lookup search routine the id +
+// scope so it walks the same code path the popup's "Search SeaDisco"
+// button uses (with all the field-pinning + master+ default behavior).
+function _mbSearchSeaDiscoById(scope, dcId, name) {
+  document.getElementById("mb-detail-overlay")?.remove();
+  if (typeof window._lookupSearchSeaDisco === "function") {
+    try { window._lookupSearchSeaDisco(scope, name, dcId); return; } catch {}
+  }
+  // Fallback if _lookupSearchSeaDisco isn't loaded for some reason:
+  // build the deep-link URL ourselves. _sdRunPrefilledSearch is
+  // defined by search.js and runs in-SPA so the mini-player stays.
+  const qs = scope === "artist"
+    ? { a: name, r: "master+", s: "year:asc" }
+    : { l: name, r: "master+", s: "year:asc" };
+  if (typeof window._sdRunPrefilledSearch === "function") {
+    if (scope === "artist") window.currentArtistId = dcId; else window.currentLabelId = dcId;
+    window._sdRunPrefilledSearch(qs);
+  }
+}
+window._mbSearchSeaDiscoById = _mbSearchSeaDiscoById;
+
+// Probe + branch for the Blues Archive button. Calls the same check
+// endpoint the in-modal +blues icon uses; on a hit, jumps to the
+// archive artist popup; on a miss, fires the existing add-by-id
+// helper (which opens the editor with a pre-populated name + id).
+async function _mbResolveBluesArchive(dcId, name, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = "Checking…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        artistIds:   [Number(dcId)],
+        artistNames: name ? [name] : [],
+      }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const result = await r.json();
+    const hit = result.artistsById?.[String(dcId)]
+             || result.artists?.[String(name || "").trim().toLowerCase()];
+    if (hit && hit.id) {
+      // Already in archive — close the MB overlay and open the
+      // Blues Archive detail directly. switchView routing handles
+      // lazy-loading blues-archive.js if it's not in memory yet.
+      document.getElementById("mb-detail-overlay")?.remove();
+      if (typeof window._baOpenArtistFromBadge === "function") {
+        window._baOpenArtistFromBadge(hit.id);
+      } else if (typeof switchView === "function") {
+        switchView("blues-archive");
+        setTimeout(() => window._baOpenArtistFromBadge?.(hit.id), 200);
+      }
+      return;
+    }
+    // Not in archive — offer to add. The existing _bluesAddArtist
+    // helper opens the +blues add-by-id editor; we pass the MB-known
+    // name as the seed.
+    if (!confirm(`"${name}" isn't in the Blues Archive yet (Discogs id ${dcId}). Add now?`)) {
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = "Blues Archive…"; }
+      return;
+    }
+    if (typeof window._bluesAddArtist === "function") {
+      window._bluesAddArtist(Number(dcId), name, btnEl);
+    } else {
+      alert("Blues Archive adder not loaded yet — switch to Discover → Blues Archive once, then retry.");
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = "Blues Archive…"; }
+    }
+  } catch (err) {
+    console.warn("[mb blues archive resolve]", err);
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = "Blues Archive…"; }
+  }
+}
+window._mbResolveBluesArchive = _mbResolveBluesArchive;
+
 function _mbRenderUrlRels(j) {
   const rels = Array.isArray(j.relations) ? j.relations.filter(rel => rel["target-type"] === "url" || rel.url) : [];
   if (!rels.length) return "";
@@ -505,10 +624,16 @@ function _mbRenderReleaseGroupsList(groups) {
         const yr   = String(g["first-release-date"] || "").slice(0, 4);
         const tp   = [g["primary-type"], ...(g["secondary-types"] || [])].filter(Boolean).join(" / ");
         const safeId = String(g.id || "").replace(/'/g, "");
-        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release-group','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(g.title || "(untitled)")}</a>`;
+        // Title cell carries TWO affordances side-by-side: 🔍 pops
+        // the SeaDisco / Wikipedia / YouTube search-options menu for
+        // this release name; clicking the title text walks into the
+        // MB release-group detail (in-popup navigation).
+        const gName = g.title || "(untitled)";
+        const lookupHtml = `<a href="#" class="mb-row-lookup-link" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'release','${_mbAttr(gName)}');return false" title="Search options for &quot;${_mbAttr(gName)}&quot;" style="margin-right:0.3rem;color:var(--muted);text-decoration:none">🔍</a>`;
+        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release-group','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(gName)}</a>`;
         return `<tr>
           <td style="color:var(--muted);font-variant-numeric:tabular-nums">${_mbEsc(yr || "—")}</td>
-          <td>${titleLink}</td>
+          <td>${lookupHtml}${titleLink}</td>
           <td style="color:var(--muted);font-size:0.76rem">${_mbEsc(tp)}</td>
         </tr>`;
       }).join("")}</tbody>
@@ -529,10 +654,12 @@ function _mbRenderReleasesList(releases, sourceType) {
       </tr></thead>
       <tbody>${sorted.map(rel => {
         const safeId = String(rel.id || "").replace(/'/g, "");
-        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(rel.title || "(untitled)")}</a>`;
+        const rName = rel.title || "(untitled)";
+        const lookupHtml = `<a href="#" class="mb-row-lookup-link" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'release','${_mbAttr(rName)}');return false" title="Search options for &quot;${_mbAttr(rName)}&quot;" style="margin-right:0.3rem;color:var(--muted);text-decoration:none">🔍</a>`;
+        const titleLink = `<a href="#" onclick="event.preventDefault();_mbOpenDetail('release','${safeId}')" style="color:var(--text);text-decoration:none;font-weight:600">${_mbEsc(rName)}</a>`;
         return `<tr>
           <td style="color:var(--muted);font-variant-numeric:tabular-nums">${_mbEsc(rel.date || "—")}</td>
-          <td>${titleLink}</td>
+          <td>${lookupHtml}${titleLink}</td>
           <td style="color:var(--muted);font-size:0.76rem">${_mbEsc(rel.country || "")}</td>
         </tr>`;
       }).join("")}</tbody>
