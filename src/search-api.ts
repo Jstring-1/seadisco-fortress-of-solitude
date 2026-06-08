@@ -10898,18 +10898,31 @@ app.get("/api/blues-archive/releases", async (req, res) => {
   app.get("/api/musicbrainz/search", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
-      const type = String(req.query.type ?? "artist").trim().toLowerCase();
-      if (!_MB_ALLOWED.has(type)) {
-        res.status(400).json({ error: "type must be one of: " + Array.from(_MB_ALLOWED).join(", ") });
+      // Entity selector lives on `entity=`; `type=` is reserved for a
+      // *Lucene filter* (e.g. release type "Album"). The previous build
+      // overloaded `type=` and leaked the entity name into the filter
+      // map, producing queries like `muddy AND type:artist` — MB's
+      // artist index has no such `type` value (it expects person /
+      // group / orchestra), so every artist search came back empty.
+      // Old `type=` is still honoured as a fallback so any in-flight
+      // client cached during the broken window still works.
+      const entity = String(req.query.entity ?? req.query.type ?? "artist").trim().toLowerCase();
+      if (!_MB_ALLOWED.has(entity)) {
+        res.status(400).json({ error: "entity must be one of: " + Array.from(_MB_ALLOWED).join(", ") });
         return;
       }
       // Free-form q + a handful of structured fields. Anything else is
       // dropped at the build step so a curious caller can't poke at MB's
-      // long Lucene field list through this proxy.
+      // long Lucene field list through this proxy. `type` only goes
+      // into the filter map when it doesn't match the entity name —
+      // that keeps the legacy callers working without re-introducing
+      // the artist-search collapse.
       const filters: Record<string, string> = {};
       for (const k of ["q", "artist", "release", "recording", "label", "country", "date", "year", "tag", "type"]) {
         const v = String(req.query[k] ?? "").trim();
-        if (v) filters[k] = v;
+        if (!v) continue;
+        if (k === "type" && v.toLowerCase() === entity) continue;
+        filters[k] = v;
       }
       const limit  = Math.max(1, Math.min(100, parseInt(String(req.query.limit  ?? "25"), 10) || 25));
       const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"),  10) || 0);
@@ -10917,20 +10930,20 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       const lucene = mbBuildLuceneQuery(filters);
       if (!lucene) { res.status(400).json({ error: "at least one filter required" }); return; }
 
-      // Cache key: type + sha256(lucene + limit + offset). Hash so the
-      // text column stays a fixed width regardless of query length.
+      // Cache key: entity + sha256(lucene + limit + offset). Hash so
+      // the text column stays a fixed width regardless of query length.
       const hash = crypto.createHash("sha256")
-        .update(`${type}|${lucene}|${limit}|${offset}`)
+        .update(`${entity}|${lucene}|${limit}|${offset}`)
         .digest("hex");
-      const cached = await mbCacheGet(`search:${type}`, hash);
+      const cached = await mbCacheGet(`search:${entity}`, hash);
       if (cached) { res.json({ source: "cache", query: lucene, ...cached }); return; }
 
-      const data = await mbFetch<any>(`/${type}`, {
+      const data = await mbFetch<any>(`/${entity}`, {
         query: lucene,
         limit,
         offset,
       });
-      await mbCacheSet(`search:${type}`, hash, data);
+      await mbCacheSet(`search:${entity}`, hash, data);
       res.json({ source: "upstream", query: lucene, ...data });
     } catch (err: any) {
       console.error("[musicbrainz search]", err);

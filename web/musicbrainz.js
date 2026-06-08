@@ -126,14 +126,21 @@ async function _mbRunSearch(opts) {
   const entitySel = document.getElementById("mb-entity");
   if (entitySel) _mbEntity = entitySel.value;
   const params = new URLSearchParams();
-  params.set("type", _mbEntity);
+  // `entity` is the MB entity selector (artist / release / …). The
+  // `type` advanced field is a separate Lucene filter (release type =
+  // Album / Single / Live, label type = Original Production, etc.) —
+  // overloading the same param name into both slots made every
+  // artist search collapse to zero because the server then injected
+  // `type:artist` into the Lucene query, which MB's artist index has
+  // no value for.
+  params.set("entity", _mbEntity);
   const q = document.getElementById("mb-q")?.value?.trim() || "";
   if (q) params.set("q", q);
   for (const k of ["artist","release","recording","label","country","year","tag","type"]) {
     const v = document.getElementById(`mb-${k}`)?.value?.trim() || "";
     if (v) params.set(k, v);
   }
-  if (!q && ![...params.keys()].some(k => k !== "type")) {
+  if (!q && ![...params.keys()].some(k => k !== "entity")) {
     document.getElementById("mb-results").innerHTML =
       `<div class="loc-empty">Type a query or fill an advanced filter to search MusicBrainz.</div>`;
     document.getElementById("mb-pagination").innerHTML = "";
