@@ -10951,36 +10951,73 @@ app.get("/api/blues-archive/releases", async (req, res) => {
     }
   });
 
-  // GET /api/musicbrainz/wiki?title=X — proxied Wikipedia article
-  // fetch with caching in the musicbrainz_cache table (entity_type
-  // = "wiki", key = lowercased canonical title). On cache miss we
-  // delegate to the existing /api/wikipedia/lookup?full=1 logic by
-  // calling the public Wikipedia API directly — same code path the
-  // wiki view uses but the response is stored alongside MB rows so
-  // re-opening the same artist's bio is free. Admin-gated to match
-  // the rest of the MB surface.
+  // GET /api/musicbrainz/wiki?title=X | ?qid=Qxxxx — proxied Wikipedia
+  // article fetch with caching in the musicbrainz_cache table
+  // (entity_type = "wiki"). On cache miss we delegate to the existing
+  // /api/wikipedia/lookup?full=1 logic by calling the public Wikipedia
+  // API directly — same code path the wiki view uses but the response
+  // is stored alongside MB rows so re-opening the same artist's bio
+  // is free. Admin-gated to match the rest of the MB surface.
+  //
+  // QID path: many MB artists carry only a `wikidata` URL relation
+  // (no direct `wikipedia` relation). We resolve the QID to the
+  // English Wikipedia article title via the Wikidata `wbgetentities`
+  // sitelinks API, then proceed with the same Parse-API fetch as the
+  // title path. Cache key for QID lookups is "qid:Q…" so repeat opens
+  // skip the Wikidata round-trip too.
   app.get("/api/musicbrainz/wiki", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try {
       const titleRaw = String(req.query.title ?? "").trim();
-      if (!titleRaw) { res.status(400).json({ error: "title required" }); return; }
-      const cacheKey = titleRaw.toLowerCase();
-      const cached = await mbCacheGet("wiki", cacheKey);
-      if (cached) { res.json({ source: "cache", ...cached }); return; }
-      // Resolve canonical title via opensearch then fetch the full
-      // article HTML via the Parse API (same approach as the
-      // existing /api/wikipedia/lookup?full=1 endpoint).
+      const qidRaw = String(req.query.qid ?? "").trim();
+      if (!titleRaw && !qidRaw) { res.status(400).json({ error: "title or qid required" }); return; }
       const wikiHeaders = {
         "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
         "Accept": "application/json",
       };
-      const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&search=${encodeURIComponent(titleRaw)}`;
-      const sr = await fetch(searchUrl, { headers: wikiHeaders });
-      if (!sr.ok) { res.status(502).json({ error: "Wikipedia search failed", status: sr.status }); return; }
-      const sdata = await sr.json() as any;
-      const title = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
+      // Cache by qid when present so QID-driven lookups don't depend
+      // on having a title in hand.
+      let cacheKey: string;
+      let queryDisplay: string;
+      if (qidRaw) {
+        if (!/^Q\d+$/i.test(qidRaw)) { res.status(400).json({ error: "bad qid" }); return; }
+        cacheKey = `qid:${qidRaw.toUpperCase()}`;
+        queryDisplay = qidRaw;
+      } else {
+        cacheKey = titleRaw.toLowerCase();
+        queryDisplay = titleRaw;
+      }
+      const cached = await mbCacheGet("wiki", cacheKey);
+      if (cached) { res.json({ source: "cache", ...cached }); return; }
+
+      // QID path: ask Wikidata for the entity's enwiki sitelink. If
+      // there's no English Wikipedia article linked from this QID we
+      // cache the empty result so we don't re-hit Wikidata for that
+      // QID again.
+      let resolvedTitle: string | null = null;
+      if (qidRaw) {
+        const wdUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qidRaw.toUpperCase())}&props=sitelinks&sitefilter=enwiki&format=json`;
+        const wr = await fetch(wdUrl, { headers: wikiHeaders });
+        if (!wr.ok) { res.status(502).json({ error: "Wikidata lookup failed", status: wr.status }); return; }
+        const wdata = await wr.json() as any;
+        const entity = wdata?.entities?.[qidRaw.toUpperCase()];
+        resolvedTitle = entity?.sitelinks?.enwiki?.title ?? null;
+        if (!resolvedTitle) {
+          const empty = { found: false, queried: queryDisplay, via: "wikidata" };
+          await mbCacheSet("wiki", cacheKey, empty);
+          res.json({ source: "upstream", ...empty });
+          return;
+        }
+      } else {
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&search=${encodeURIComponent(titleRaw)}`;
+        const sr = await fetch(searchUrl, { headers: wikiHeaders });
+        if (!sr.ok) { res.status(502).json({ error: "Wikipedia search failed", status: sr.status }); return; }
+        const sdata = await sr.json() as any;
+        resolvedTitle = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
+      }
+      const title = resolvedTitle;
       if (!title) {
-        const empty = { found: false, queried: titleRaw };
+        const empty = { found: false, queried: queryDisplay };
         await mbCacheSet("wiki", cacheKey, empty);
         res.json({ source: "upstream", ...empty });
         return;
