@@ -386,28 +386,46 @@ function _mbRenderDetail(overlay, type, mbid, j) {
     if (ls?.begin || ls?.end) {
       metaParts.push(`${_mbEsc(ls?.begin || "?")} – ${_mbEsc(ls?.ended ? (ls?.end || "?") : "present")}`);
     }
+    // Rating: MB returns { value, votes-count }. Hide when zero votes.
+    const rat = j.rating;
+    if (rat && Number(rat.value) > 0) {
+      metaParts.push(`★ ${Number(rat.value).toFixed(1)}/5 <span style="color:#666">(${Number(rat["votes-count"]) || 0})</span>`);
+    }
+    if (Array.isArray(j.isnis) && j.isnis.length) metaParts.push("ISNI " + _mbEsc(j.isnis[0]));
+    if (Array.isArray(j.ipis)  && j.ipis.length)  metaParts.push("IPI "  + _mbEsc(j.ipis[0]));
   } else if (type === "release" || type === "release-group") {
     if (j.date)             metaParts.push(_mbEsc(j.date));
     if (j.country)          metaParts.push(_mbEsc(j.country));
     if (j.status)           metaParts.push(_mbEsc(j.status));
+    if (j.packaging)        metaParts.push(_mbEsc(j.packaging));
     if (j["primary-type"])  metaParts.push(_mbEsc(j["primary-type"]));
     if (Array.isArray(j["secondary-types"]) && j["secondary-types"].length) {
       metaParts.push(_mbEsc(j["secondary-types"].join(" / ")));
     }
     if (j.barcode)          metaParts.push("UPC " + _mbEsc(j.barcode));
+    if (j.asin)             metaParts.push("ASIN " + _mbEsc(j.asin));
+    const tr = j["text-representation"];
+    if (tr?.language || tr?.script) {
+      metaParts.push(`${_mbEsc(tr?.language || "")}${tr?.language && tr?.script ? "/" : ""}${_mbEsc(tr?.script || "")}`);
+    }
+    if (j["cover-art-archive"]?.artwork) metaParts.push(`<a href="https://coverartarchive.org/release/${_mbEsc(mbid)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">cover ↗</a>`);
   } else if (type === "recording") {
     if (j.length)               metaParts.push(_mbFormatMs(j.length));
     if (j["first-release-date"]) metaParts.push(_mbEsc(j["first-release-date"]));
     if (j.video)                metaParts.push("video");
+    if (Array.isArray(j.isrcs) && j.isrcs.length) metaParts.push("ISRC " + _mbEsc(j.isrcs[0]));
   } else if (type === "label") {
     if (j.type)    metaParts.push(_mbEsc(j.type));
     if (j.country) metaParts.push(_mbEsc(j.country));
     if (j["label-code"]) metaParts.push("LC " + _mbEsc(j["label-code"]));
     const ls = j["life-span"];
     if (ls?.begin || ls?.end) metaParts.push(`${_mbEsc(ls?.begin || "?")} – ${_mbEsc(ls?.ended ? (ls?.end || "?") : "present")}`);
+    if (Array.isArray(j.isnis) && j.isnis.length) metaParts.push("ISNI " + _mbEsc(j.isnis[0]));
+    if (Array.isArray(j.ipis)  && j.ipis.length)  metaParts.push("IPI "  + _mbEsc(j.ipis[0]));
   } else if (type === "work") {
     if (j.type) metaParts.push(_mbEsc(j.type));
     if (Array.isArray(j.iswcs) && j.iswcs.length) metaParts.push("ISWC " + _mbEsc(j.iswcs[0]));
+    if (Array.isArray(j.languages) && j.languages.length) metaParts.push(_mbEsc(j.languages.join(", ")));
   }
   if (j.source === "cache") metaParts.push(`<span style="color:#7c7" title="Served from local cache">cached</span>`);
   metaEl.innerHTML = metaParts.join(' <span style="color:#555">·</span> ');
@@ -421,6 +439,36 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // the Discogs id) so we don't render two competing affordances
   // for the same destination.
   sections.push(_mbRenderUrlRels(j));
+
+  // Area block (artist / label) — born-in / from / active-in. MB
+  // returns these as nested area objects with names; we render a
+  // compact "Origin / Active" line.
+  if (type === "artist" || type === "label") {
+    const areaParts = [];
+    if (j.area?.name)         areaParts.push(`<span style="color:var(--muted)">from</span> ${_mbEsc(j.area.name)}`);
+    if (j["begin-area"]?.name && j["begin-area"]?.name !== j.area?.name) {
+      areaParts.push(`<span style="color:var(--muted)">born</span> ${_mbEsc(j["begin-area"].name)}`);
+    }
+    if (j["end-area"]?.name) {
+      areaParts.push(`<span style="color:var(--muted)">ended</span> ${_mbEsc(j["end-area"].name)}`);
+    }
+    // Sort-name only shown when it differs meaningfully from the
+    // display name (e.g. "Hooker, John Lee" vs "John Lee Hooker") —
+    // otherwise it's noise.
+    if (j["sort-name"] && j["sort-name"] !== name) {
+      areaParts.push(`<span style="color:var(--muted)">sort-name</span> "${_mbEsc(j["sort-name"])}"`);
+    }
+    if (areaParts.length) {
+      sections.push(`<div style="margin:0.4rem 0;font-size:0.82rem">${areaParts.join(' <span style="color:#555">·</span> ')}</div>`);
+    }
+  }
+
+  // Annotation (free-form curator note attached to any MB entity —
+  // rare on artists / releases but used for release-groups + works to
+  // explain composition / version differences). Surface when present.
+  if (j.annotation) {
+    sections.push(`<div style="margin:0.6rem 0;padding:0.5rem 0.7rem;border-left:3px solid var(--border);color:var(--muted);font-size:0.82rem;font-style:italic;white-space:pre-wrap">${_mbEsc(j.annotation)}</div>`);
+  }
 
   // Artist-credit byline (release / release-group / recording) — each
   // artist name is a separate lookup-popup link.
@@ -466,6 +514,43 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   } else if (type === "release-group") {
     sections.push(_mbRenderReleasesList(j.releases || []));
   } else if (type === "release") {
+    // Parent release-group link, when MB attaches it.
+    if (j["release-group"]?.id) {
+      const rgId   = String(j["release-group"].id).replace(/'/g, "");
+      const rgName = j["release-group"].title || "";
+      sections.push(`<div style="margin:0.4rem 0;font-size:0.82rem"><span style="color:var(--muted)">part of</span> <a href="#" onclick="event.preventDefault();_mbOpenDetail('release-group','${rgId}')" style="color:var(--accent);text-decoration:none">${_mbEsc(rgName)}</a> ↗</div>`);
+    }
+    // Labels — each one shown with the catalog number for this
+    // release. Compact strip with the label name as a lookup-popup
+    // link so the curator can pivot to Discogs / SeaDisco by label.
+    const labelInfos = Array.isArray(j["label-info"]) ? j["label-info"] : [];
+    if (labelInfos.length) {
+      const labelHtml = labelInfos.map(li => {
+        const ln = li.label?.name || "";
+        const cn = li["catalog-number"] || "";
+        const lid = li.label?.id;
+        const safeLid = String(lid || "").replace(/'/g, "");
+        if (!ln && !cn) return "";
+        const lookupHtml = ln && (typeof entityLookupLinkHtml === "function")
+          ? entityLookupLinkHtml("label", ln, { title: `Lookup options for "${ln}"` })
+          : _mbEsc(ln);
+        const openLink = lid ? ` <a href="#" onclick="event.preventDefault();_mbOpenDetail('label','${safeLid}')" title="Open this MB label" style="color:var(--muted);text-decoration:none;font-size:0.78em">↗</a>` : "";
+        const catHtml = cn ? ` <code style="color:var(--accent);font-size:0.8em">${_mbEsc(cn)}</code>` : "";
+        return `<span style="margin-right:0.6rem">${lookupHtml}${openLink}${catHtml}</span>`;
+      }).filter(Boolean).join("");
+      if (labelHtml) sections.push(`<div style="margin:0.4rem 0;font-size:0.82rem"><span style="color:var(--muted)">Labels:</span> ${labelHtml}</div>`);
+    }
+    // Release events — only when there are multiple country/date
+    // combos worth surfacing (e.g. "US 1968-05, UK 1968-07"). A
+    // single event matches the meta line's date+country so we hide
+    // that case to avoid duplication.
+    const events = Array.isArray(j["release-events"]) ? j["release-events"] : [];
+    if (events.length > 1) {
+      sections.push(`<div style="margin:0.4rem 0;font-size:0.82rem;color:var(--muted)"><span style="color:var(--accent)">Released:</span> ${events.map(e => {
+        const c = e.area?.["iso-3166-1-codes"]?.[0] || e.area?.name || "";
+        return `${_mbEsc(e.date || "?")}${c ? " (" + _mbEsc(c) + ")" : ""}`;
+      }).join(", ")}</div>`);
+    }
     sections.push(_mbRenderMediaTracklist(j.media || []));
   } else if (type === "recording") {
     sections.push(_mbRenderReleasesList(j.releases || [], "recording"));
@@ -474,15 +559,6 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   } else if (type === "work") {
     sections.push(_mbRenderWorkRels(j.relations || []));
   }
-
-  // Raw JSON toggle — collapsed by default. The curator can expand to
-  // verify what MB returned without us having to render every field.
-  sections.push(`
-    <details style="margin-top:1rem">
-      <summary style="cursor:pointer;color:var(--muted);font-size:0.78rem">Raw JSON</summary>
-      <pre style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:0.8rem;max-height:40vh;overflow:auto;color:var(--text);font-size:0.74rem;white-space:pre-wrap;margin-top:0.4rem">${_mbEsc(JSON.stringify(j, null, 2))}</pre>
-    </details>
-  `);
 
   bodyEl.innerHTML = sections.filter(Boolean).join("\n");
 }
