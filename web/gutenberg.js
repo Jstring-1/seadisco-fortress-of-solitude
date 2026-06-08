@@ -249,6 +249,10 @@ async function runGutenbergSearch(q, opts) {
   if (!append) {
     _gutenbergSearchPage = 1;
     _gutenbergSearchQuery = q;
+    // Clear the stale pager immediately so a previous query's page
+    // chrome doesn't linger while the new request is in flight.
+    const _pagEl = document.getElementById("gutenberg-pagination");
+    if (_pagEl) _pagEl.innerHTML = "";
     // Persist the query + topic so a switchView round-trip restores
     // the search instead of dumping the user on the empty-state.
     try {

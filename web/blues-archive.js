@@ -389,6 +389,8 @@ async function _baLoadList() {
   // user's scroll position) until the new data arrives.
   const scrollY = window.scrollY;
   rowsEl.classList.add("ba-loading");
+  const _listPagEl = document.getElementById("blues-archive-pager");
+  if (_listPagEl && _baPage === 0) _listPagEl.innerHTML = "";
   try {
     const r = await apiFetch(`/api/blues-archive/artists?${params}`);
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
@@ -2087,6 +2089,10 @@ async function _baLoadLyrics() {
   // CSS class while the fetch runs.
   const scrollY = window.scrollY;
   rowsEl.classList.add("ba-loading");
+  // Site-wide policy: wipe stale pagination immediately on a fresh
+  // search so old page chrome doesn't linger while the fetch runs.
+  const _lyricsPagEl = document.getElementById("blues-archive-lyrics-pager");
+  if (_lyricsPagEl && _baLyricsPage === 0) _lyricsPagEl.innerHTML = "";
   try {
     const r = await apiFetch(`/api/admin/lyrics?${params}`);
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
@@ -2346,6 +2352,8 @@ async function _baLoadReleases() {
   if (clearBtn) clearBtn.style.display = (q || year || type || role) ? "" : "none";
   const scrollY = window.scrollY;
   rowsEl.classList.add("ba-loading");
+  const _relPagEl = document.getElementById("blues-archive-releases-pager");
+  if (_relPagEl && _baReleasesPage === 0) _relPagEl.innerHTML = "";
   try {
     const r = await apiFetch(`/api/blues-archive/releases?${params}`);
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
@@ -2521,6 +2529,8 @@ async function _baLoadTuningsGrid() {
   const rowsEl  = document.getElementById("ba-tunings-rows");
   const countEl = document.getElementById("ba-tunings-count");
   if (!rowsEl) return;
+  const _tunPagEl = document.getElementById("ba-tunings-pager");
+  if (_tunPagEl && _baTuningsPage === 0) _tunPagEl.innerHTML = "";
   const q        = (document.getElementById("ba-tunings-search")?.value   || "").trim();
   const artist   = (document.getElementById("ba-tunings-artist")?.value   || "").trim();
   const position = (document.getElementById("ba-tunings-position")?.value || "").trim();

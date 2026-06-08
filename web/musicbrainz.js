@@ -153,8 +153,13 @@ async function _mbRunSearch(opts) {
 
   const statusEl = document.getElementById("mb-status");
   const resultsEl = document.getElementById("mb-results");
+  const pagEl    = document.getElementById("mb-pagination");
   if (!append) {
     if (resultsEl) resultsEl.innerHTML = `<div class="loc-empty">Searching MusicBrainz…</div>`;
+    // Wipe the stale pager immediately so a previous result set's
+    // page chrome doesn't linger while the new request is in
+    // flight. Site-wide pagination-clears-on-new-search policy.
+    if (pagEl) pagEl.innerHTML = "";
   }
   if (statusEl) statusEl.textContent = "";
   try {
@@ -514,6 +519,34 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // explain composition / version differences). Surface when present.
   if (j.annotation) {
     sections.push(`<div style="margin:0.6rem 0;padding:0.5rem 0.7rem;border-left:3px solid var(--border);color:var(--muted);font-size:0.82rem;font-style:italic;white-space:pre-wrap">${_mbEsc(j.annotation)}</div>`);
+  }
+
+  // Wikipedia bio (collapsible, lazy-loaded). MB stores artist
+  // biographies via the `wikipedia` URL relation rather than a native
+  // field; we extract the article title from the rel URL and fetch
+  // the full article HTML through SeaDisco's existing
+  // /api/wikipedia/lookup endpoint (which already caches at the
+  // server). Collapsed by default to keep the popup compact;
+  // expansion triggers the fetch + render. Cached on the DOM node
+  // so a second expand is free.
+  const wikiRel = Array.isArray(j.relations)
+    ? j.relations.find(rel => rel.type === "wikipedia" && rel.url?.resource)
+    : null;
+  if (wikiRel) {
+    const wikiUrl = String(wikiRel.url.resource);
+    const m = wikiUrl.match(/\/wiki\/([^?#]+)/);
+    if (m) {
+      const title = decodeURIComponent(m[1]).replace(/_/g, " ");
+      sections.push(`
+        <div class="mb-wiki-bio" style="margin:0.6rem 0;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)">
+          <button type="button" class="mb-wiki-bio-toggle" onclick="_mbToggleWikiBio(this,'${_mbAttr(title)}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:0.5rem 0.7rem;border:none;background:transparent;color:var(--accent);font-size:0.86rem;cursor:pointer;font-family:inherit;text-align:left">
+            <span><span class="mb-wiki-bio-arrow">▶</span> Wikipedia bio — ${_mbEsc(title)}</span>
+            <a href="${_mbEsc(wikiUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--muted);text-decoration:none;font-size:0.78em">open ↗</a>
+          </button>
+          <div class="mb-wiki-bio-body" style="display:none"></div>
+        </div>
+      `);
+    }
   }
 
   // Artist-credit byline (release / release-group / recording) — each

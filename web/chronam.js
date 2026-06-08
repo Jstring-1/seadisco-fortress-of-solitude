@@ -134,6 +134,10 @@ async function runChronAmSearch(q, opts) {
   // counter once per second until the response lands.
   let loadingTimer = null;
   if (!append) {
+    // Clear the stale pager immediately so the previous query's page
+    // chrome doesn't linger while the new request is in flight.
+    const _pagEl = document.getElementById("chronam-pagination");
+    if (_pagEl) _pagEl.innerHTML = "";
     const start = Date.now();
     const draw = () => {
       const s = Math.round((Date.now() - start) / 1000);
