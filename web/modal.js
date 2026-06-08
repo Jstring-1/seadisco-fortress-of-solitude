@@ -195,6 +195,10 @@ function openModal(event, id, type, discogsUrl, opts) {
   u.searchParams.set("op", `${type}:${id}`);
   history.replaceState({}, "", u.toString());
   const overlay = document.getElementById("modal-overlay");
+  // Cancel any pending close-wipe — we're reopening before the
+  // deferred clear fired, so the prior contents will be overwritten
+  // by the new render anyway.
+  if (typeof window._cancelModalWipe === "function") window._cancelModalWipe();
   document.getElementById("album-info").innerHTML = "";
   document.getElementById("modal-loading").style.display = "block";
   overlay.classList.add("open");
@@ -259,7 +263,29 @@ function closeModal() {
   const u = new URL(window.location.href);
   u.searchParams.delete("op");
   history.replaceState({}, "", u.toString());
+  // Memory hygiene: wipe the popup's inner DOM tree so tracklists,
+  // cover thumb stacks, credits, sale listings, etc. can be GC'd.
+  // Previously closeModal only flipped the .open class so the entire
+  // last-opened album popup (often 500+ DOM nodes with inline event
+  // listeners on every track button) stayed pinned to #album-info
+  // forever. Heap snapshots showed 5,000+ card-track-* spans and
+  // 30,000+ EventListener entries accumulating per session. Deferred
+  // by 250ms so the CSS fade-out has finished rendering — wiping
+  // synchronously would flash an empty modal mid-animation. If the
+  // user reopens before the timer fires we cancel so the cached HTML
+  // stays for the imminent re-render.
+  if (_modalWipeTimer) clearTimeout(_modalWipeTimer);
+  _modalWipeTimer = setTimeout(() => {
+    const ai = document.getElementById("album-info");
+    if (ai) ai.innerHTML = "";
+    _modalWipeTimer = null;
+  }, 250);
 }
+let _modalWipeTimer = null;
+// Cancel a pending wipe if the modal is being reopened immediately.
+window._cancelModalWipe = function () {
+  if (_modalWipeTimer) { clearTimeout(_modalWipeTimer); _modalWipeTimer = null; }
+};
 
 // ── Tracklist collapse/expand ──────────────────────────────────────────────
 function toggleTracklist(headingEl) {
@@ -393,6 +419,7 @@ async function openVersionPopup(event, releaseId) {
   const overlay = document.getElementById("version-overlay");
   const info    = document.getElementById("version-info");
   const loading = document.getElementById("version-loading");
+  if (typeof window._cancelVersionWipe === "function") window._cancelVersionWipe();
   info.innerHTML = "";
   loading.style.display = "block";
   overlay.classList.add("open");
@@ -421,7 +448,19 @@ function closeVersionPopup() {
   const u = new URL(window.location.href);
   u.searchParams.delete("vr");
   history.replaceState({}, "", u.toString());
+  // Memory hygiene — see closeModal. Same deferred-wipe pattern so
+  // tracklists / credits / sale listings can be GC'd.
+  if (_versionWipeTimer) clearTimeout(_versionWipeTimer);
+  _versionWipeTimer = setTimeout(() => {
+    const vi = document.getElementById("version-info");
+    if (vi) vi.innerHTML = "";
+    _versionWipeTimer = null;
+  }, 250);
 }
+let _versionWipeTimer = null;
+window._cancelVersionWipe = function () {
+  if (_versionWipeTimer) { clearTimeout(_versionWipeTimer); _versionWipeTimer = null; }
+};
 
 // admin.html loads modal.js too but doesn't have the version-overlay
 // element. Guard the listener attach so the missing element doesn't
@@ -511,6 +550,7 @@ async function openWikiPopup(query) {
   const loading = document.getElementById("wiki-loading");
   const content = document.getElementById("wiki-content");
   if (!overlay) return;
+  if (typeof window._cancelWikiWipe === "function") window._cancelWikiWipe();
   overlay.classList.add("open");
   loading.style.display = "";
   content.innerHTML = "";
@@ -765,7 +805,20 @@ function closeWikiPopup() {
     u.searchParams.delete("wk");
     history.replaceState({}, "", u.toString());
   } catch {}
+  // Memory hygiene — see closeModal. Wiki article HTML can be huge
+  // (raw Parse-API output with images + tables); leaving it pinned to
+  // #wiki-content forever was a sizable retainer.
+  if (_wikiWipeTimer) clearTimeout(_wikiWipeTimer);
+  _wikiWipeTimer = setTimeout(() => {
+    const wc = document.getElementById("wiki-content");
+    if (wc) wc.innerHTML = "";
+    _wikiWipeTimer = null;
+  }, 250);
 }
+let _wikiWipeTimer = null;
+window._cancelWikiWipe = function () {
+  if (_wikiWipeTimer) { clearTimeout(_wikiWipeTimer); _wikiWipeTimer = null; }
+};
 
 document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
