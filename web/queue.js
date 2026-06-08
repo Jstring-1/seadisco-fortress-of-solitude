@@ -1023,6 +1023,10 @@ async function _renderQueueDrawer() {
   if (!_queue?.length) {
     if (countEl) countEl.textContent = "";
     listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks, LOC items, or archive items to add them.</div>`;
+    // Reset the shape memo so a future non-empty queue takes the full
+    // re-render path (which sets up the delegated remove listener).
+    delete listEl.dataset.shape;
+    delete listEl.dataset.playingKey;
     // Empty queue → drop the loaded-playlist label (label is only
     // meaningful while items are present).
     _syncLoadedPlaylistLabel();
@@ -1040,6 +1044,52 @@ async function _renderQueueDrawer() {
   // itself stays un-deduped so queueRemove can sweep every dupe.
   const visible = _queueVisibleList();
   if (countEl) countEl.textContent = `${visible.length} item${visible.length === 1 ? "" : "s"}`;
+  // Cheap structural fingerprint: length + ordered externalIds. When
+  // unchanged across renders (which is the common case during playback
+  // — only the playing track moves), we skip the full innerHTML rewrite
+  // and just flip the .is-playing class on the affected rows. This was
+  // the dominant source of detached-DOM accumulation: every track
+  // advance rebuilt all 500 rows, leaving 500×N detached InternalNodes
+  // pinned by SortableJS / closures until GC caught up.
+  const playingKey = _queuePlayingExternalId
+    ? String(_queuePlayingExternalId)
+    : (_queueCurrentPosition != null ? `pos:${_queueCurrentPosition}` : "");
+  const shapeKey = `${visible.length}|${visible.map(it => it.externalId).join(",")}`;
+  if (listEl.dataset.shape === shapeKey && listEl.dataset.removeBound === "1") {
+    // Same row set, just (potentially) different playing row. Toggle
+    // .is-playing + the equalizer overlay surgically. Saves ~500
+    // innerHTML rewrites per track advance on a long queue.
+    if (listEl.dataset.playingKey !== playingKey) {
+      listEl.querySelectorAll(".queue-row").forEach(row => {
+        const ext = row.querySelector(".queue-row-remove")?.dataset.ext || "";
+        const pos = row.dataset.position;
+        const isPlaying = playingKey
+          ? (playingKey.startsWith("pos:") ? `pos:${pos}` === playingKey : ext === playingKey)
+          : false;
+        const wasPlaying = row.classList.contains("is-playing");
+        if (isPlaying === wasPlaying) return;
+        row.classList.toggle("is-playing", isPlaying);
+        // Add/remove the EQ overlay only when needed.
+        const wrap = row.querySelector(".queue-row-thumb-wrap");
+        if (!wrap) return;
+        const existing = wrap.querySelector(".queue-row-eq");
+        if (isPlaying && !existing) {
+          wrap.insertAdjacentHTML("beforeend",
+            `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>`);
+        } else if (!isPlaying && existing) {
+          existing.remove();
+        }
+        // Tooltip on the play button reflects the new state.
+        const btn = row.querySelector(".queue-row-play");
+        if (btn) btn.title = isPlaying ? "Currently playing" : "Play this now";
+      });
+      listEl.dataset.playingKey = playingKey;
+    }
+    if (prevScroll > 0) listEl.scrollTop = prevScroll;
+    return;
+  }
+  listEl.dataset.shape = shapeKey;
+  listEl.dataset.playingKey = playingKey;
   listEl.innerHTML = visible.map(it => {
     const safeTitle  = escHtml(it.data?.title || "Untitled");
     const safeArtist = escHtml(it.data?.artist || "");
