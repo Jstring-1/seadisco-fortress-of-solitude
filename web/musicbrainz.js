@@ -462,6 +462,7 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // date/country/format for release; etc.).
   const metaParts = [];
   metaParts.push(`<code style="color:var(--accent)">${_mbEsc(mbid)}</code>`);
+  metaParts.push(`<a href="https://musicbrainz.org/${_mbEsc(type)}/${_mbEsc(mbid)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MusicBrainz ↗</a>`);
   if (type === "artist") {
     if (j.type)    metaParts.push(_mbEsc(j.type));
     if (j.gender)  metaParts.push(_mbEsc(j.gender));
@@ -512,7 +513,12 @@ function _mbRenderDetail(overlay, type, mbid, j) {
     if (Array.isArray(j.languages) && j.languages.length) metaParts.push(_mbEsc(j.languages.join(", ")));
   }
   if (j.source === "cache") metaParts.push(`<span style="color:#7c7" title="Served from local cache">cached</span>`);
-  metaEl.innerHTML = metaParts.join(' <span style="color:#555">·</span> ');
+  // Meta line lives at the bottom of the body (just above the external
+  // links chip strip) — leaves the popup header clean (title +
+  // disambiguation only) and groups the structural metadata with the
+  // outbound link bar as a footer block.
+  metaEl.innerHTML = "";
+  const metaFooterHtml = `<div style="margin:0.6rem 0 0.3rem;padding-top:0.5rem;border-top:1px solid var(--border);font-size:0.82rem;color:var(--muted)">${metaParts.join(' <span style="color:#555">·</span> ')}</div>`;
 
   // Body — assemble sections then drop them in.
   const sections = [];
@@ -709,6 +715,11 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   } else if (type === "work") {
     sections.push(_mbRenderWorkRels(j.relations || []));
   }
+
+  // Meta footer (mbid · MusicBrainz ↗ · type/gender/country/lifespan ·
+  // ISNI · cached) — sits directly above the external links so the
+  // structural metadata + outbound link bar read as a single footer.
+  sections.push(metaFooterHtml);
 
   // External links chip strip — rendered at the very bottom so the
   // popup leads with content (bio, tags, release lists, tracklists)
