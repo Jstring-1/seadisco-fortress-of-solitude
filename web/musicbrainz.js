@@ -20,8 +20,19 @@ let _mbPage   = 1;
 const _MB_PER_PAGE = 25;
 let _mbLastQs = "";
 let _mbLastTotal = 0;
+// ★ save state. _mbSaveIds is a Set of "type:mbid" strings, pulled
+// on init via /api/musicbrainz/saves/ids and maintained optimistically
+// on every star toggle. _mbSavedRows is the full save-row list,
+// fetched when the Saved tab opens.
+let _mbSaveIds = new Set();
+let _mbSavedRows = [];
+let _mbAdvancedOpen = false;
 
 function initMusicbrainzView() {
+  // Pull the user's existing save-id set so result rows render the
+  // correct ★/☆ glyph on first paint. Best-effort; an empty Set is
+  // a safe fallback (clicks would error-toast on a 401).
+  _mbLoadSaveIds().catch(() => {});
   // Wire entity dropdown change → toggle which advanced fields show.
   _mbToggleEntityFilters();
   // Restore form state from per-view persistence so a switchView
@@ -44,7 +55,8 @@ function initMusicbrainzView() {
           if (el && sav[k] != null) el.value = String(sav[k]);
         }
         _mbToggleEntityFilters();
-        if (sav.tab === "recent") { _mbSwitchTab("recent"); return; }
+        if (sav.adv) _mbToggleAdvanced(true);
+        if (sav.tab === "saved") { _mbSwitchTab("saved"); return; }
         // Defer search slightly so DOM settles.
         if (sav.q || _mbAnyAdvancedFilled()) {
           setTimeout(() => { try { _mbRunSearch(); } catch {} }, 0);
@@ -91,18 +103,32 @@ function _mbToggleEntityFilters() {
 window._mbToggleEntityFilters = _mbToggleEntityFilters;
 
 function _mbSwitchTab(tab) {
-  _mbTab = tab === "recent" ? "recent" : "search";
+  _mbTab = tab === "saved" ? "saved" : "search";
   document.querySelectorAll("#musicbrainz-tabs .loc-tab").forEach(b => {
     b.classList.toggle("active", b.dataset.mbTab === _mbTab);
   });
   const ps = document.querySelector(".musicbrainz-panel-search");
-  const pr = document.querySelector(".musicbrainz-panel-recent");
+  const pr = document.querySelector(".musicbrainz-panel-saved");
   if (ps) ps.style.display = _mbTab === "search" ? "" : "none";
-  if (pr) pr.style.display = _mbTab === "recent" ? "" : "none";
-  if (_mbTab === "recent") _mbLoadRecent();
+  if (pr) pr.style.display = _mbTab === "saved"  ? "" : "none";
+  if (_mbTab === "saved") _mbLoadSaved();
   _mbPersistState();
 }
 window._mbSwitchTab = _mbSwitchTab;
+
+// Toggle the advanced-panel disclosure. Mirrors main search's
+// toggleAdvanced — sticky open state is persisted with the rest of
+// the MB view state.
+function _mbToggleAdvanced(force) {
+  if (typeof force === "boolean") _mbAdvancedOpen = force;
+  else _mbAdvancedOpen = !_mbAdvancedOpen;
+  const panel = document.getElementById("mb-advanced-panel");
+  const arrow = document.getElementById("mb-advanced-arrow");
+  if (panel) panel.style.display = _mbAdvancedOpen ? "" : "none";
+  if (arrow) arrow.textContent   = _mbAdvancedOpen ? "▼" : "▶";
+  _mbPersistState();
+}
+window._mbToggleAdvanced = _mbToggleAdvanced;
 
 function _mbPersistState() {
   try {
@@ -110,6 +136,7 @@ function _mbPersistState() {
     const state = {
       entity: _mbEntity,
       tab:    _mbTab,
+      adv:    _mbAdvancedOpen,
       q:      document.getElementById("mb-q")?.value || "",
     };
     for (const k of ["artist","release","recording","label","country","year","tag","type"]) {
@@ -232,6 +259,13 @@ function _mbRowHtml(entity, r) {
   // for `name`. Stops propagation so clicking the icon doesn't also
   // open the MB detail overlay.
   const lookupHtml = `<a href="#" class="mb-row-lookup-link" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'${lookupScope}','${_mbAttr(name)}');return false" title="Search options for &quot;${_mbAttr(name)}&quot;" style="margin-right:0.4rem;color:var(--muted);text-decoration:none">🔍</a>`;
+  // ★ save affordance — toggles persistence to musicbrainz_saves.
+  // _mbSaveIds.has() resolves synchronously off the in-memory set
+  // populated at view-init, so the right glyph renders without a
+  // network probe per row.
+  const saveKey = `${entity}:${mbid}`;
+  const saved   = _mbSaveIds.has(saveKey);
+  const saveHtml = `<a href="#" class="mb-row-save-link" data-mb-save-id="${_mbAttr(saveKey)}" onclick="event.preventDefault();event.stopPropagation();_mbToggleSave('${entity}','${safeId}','${_mbAttr(name)}',this)" title="${saved ? 'Saved — click to remove' : 'Save'}" style="margin-right:0.4rem;color:${saved ? '#ffd166' : 'var(--muted)'};text-decoration:none">${saved ? '★' : '☆'}</a>`;
   const sub = [];
   if (entity === "artist") {
     if (r.type)     sub.push(_mbEsc(r.type));
@@ -262,7 +296,7 @@ function _mbRowHtml(entity, r) {
   const subHtml = sub.length ? `<div style="color:var(--muted);font-size:0.78rem">${sub.join(" · ")}</div>` : "";
   return `
     <div class="mb-row" data-mbid="${_mbEsc(mbid)}" onclick="_mbOpenDetail('${_mbEntity}','${safeId}')" style="padding:0.55rem 0.7rem;border-bottom:1px solid var(--border);cursor:pointer">
-      <div style="font-weight:600">${lookupHtml}${_mbEsc(name)}${score}</div>
+      <div style="font-weight:600">${saveHtml}${lookupHtml}${_mbEsc(name)}${score}</div>
       ${subHtml}
     </div>
   `;
@@ -547,6 +581,43 @@ function _mbRenderDetail(overlay, type, mbid, j) {
         </div>
       `);
     }
+  }
+
+  // Toggle handler for the Wikipedia bio panel — declared inline here
+  // so it captures the section's already-rendered DOM via the button
+  // arg. Lazy fetch on first expand; subsequent expands reuse the
+  // cached HTML on the DOM node. Server-side the /api/musicbrainz/wiki
+  // endpoint caches the article in musicbrainz_cache (entity_type
+  // "wiki"), so re-opening the same artist across sessions is free.
+  if (!window._mbToggleWikiBio) {
+    window._mbToggleWikiBio = async function (btn, title) {
+      const body = btn.nextElementSibling;
+      const arrowEl = btn.querySelector(".mb-wiki-bio-arrow");
+      if (!body) return;
+      const isOpen = body.style.display !== "none";
+      if (isOpen) {
+        body.style.display = "none";
+        if (arrowEl) arrowEl.textContent = "▶";
+        return;
+      }
+      body.style.display = "block";
+      if (arrowEl) arrowEl.textContent = "▼";
+      if (body.dataset.loaded === "1") return;
+      body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:var(--muted);font-size:0.82rem">Loading bio…</div>`;
+      try {
+        const r = await apiFetch(`/api/musicbrainz/wiki?title=${encodeURIComponent(title)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json();
+        if (!j.found || !j.html) {
+          body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:var(--muted);font-size:0.82rem">No Wikipedia article found.</div>`;
+          return;
+        }
+        body.innerHTML = `<div class="mb-wiki-bio-content" style="padding:0.6rem 0.8rem;max-height:60vh;overflow:auto;font-size:0.85rem;line-height:1.55;color:var(--text);border-top:1px solid var(--border)">${j.html}</div>`;
+        body.dataset.loaded = "1";
+      } catch (err) {
+        body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:#e88;font-size:0.82rem">Bio load failed: ${String(err?.message || err)}</div>`;
+      }
+    };
   }
 
   // Artist-credit byline (release / release-group / recording) — each
@@ -891,11 +962,109 @@ function _mbRenderWorkRels(relations) {
   return out.join("");
 }
 
-// Recent tab placeholder. Future: list the most recently-cached MB
-// entities (with link to re-open their detail). For now, just shows
-// a note explaining what the tab will do.
-async function _mbLoadRecent() {
-  const el = document.getElementById("mb-recent");
-  if (!el) return;
-  el.innerHTML = `<div class="loc-empty">Recently-cached MB entities will land here. (Coming with the next iteration — for now switch back to Search to re-run a query.)</div>`;
+// ── Saves ──────────────────────────────────────────────────────
+// Per-admin ★ bookmark list. All four functions short-circuit on
+// 401 so an unauth state doesn't spam errors.
+async function _mbLoadSaveIds() {
+  try {
+    const r = await apiFetch("/api/musicbrainz/saves/ids");
+    if (!r.ok) return;
+    const { ids = [] } = await r.json();
+    _mbSaveIds = new Set(ids);
+  } catch {}
 }
+
+async function _mbToggleSave(entityType, mbid, name, btnEl) {
+  const key = `${entityType}:${mbid}`;
+  const wasSaved = _mbSaveIds.has(key);
+  // Optimistic flip — repaint immediately, revert on failure.
+  if (wasSaved) _mbSaveIds.delete(key); else _mbSaveIds.add(key);
+  document.querySelectorAll(`[data-mb-save-id="${CSS.escape(key)}"]`).forEach(el => {
+    el.textContent = _mbSaveIds.has(key) ? "★" : "☆";
+    el.style.color = _mbSaveIds.has(key) ? "#ffd166" : "var(--muted)";
+    el.title       = _mbSaveIds.has(key) ? "Saved — click to remove" : "Save";
+  });
+  try {
+    const r = wasSaved
+      ? await apiFetch(`/api/musicbrainz/saves/${encodeURIComponent(entityType)}/${encodeURIComponent(mbid)}`, { method: "DELETE" })
+      : await apiFetch("/api/musicbrainz/saves", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entity_type: entityType, mbid, name, meta: null }),
+        });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // Newly-saved rows: a refresh of the Saved tab's cached list is
+    // cheaper than a synthetic insert, so just blow the cache so
+    // next open re-fetches. The Saved tab is rarely opened so this
+    // is a one-shot cost.
+    _mbSavedRows = [];
+  } catch (e) {
+    // Revert optimistic flip on failure.
+    if (wasSaved) _mbSaveIds.add(key); else _mbSaveIds.delete(key);
+    document.querySelectorAll(`[data-mb-save-id="${CSS.escape(key)}"]`).forEach(el => {
+      el.textContent = _mbSaveIds.has(key) ? "★" : "☆";
+      el.style.color = _mbSaveIds.has(key) ? "#ffd166" : "var(--muted)";
+    });
+    console.warn("[mb save toggle]", e);
+  }
+}
+window._mbToggleSave = _mbToggleSave;
+
+async function _mbLoadSaved() {
+  const el = document.getElementById("mb-saved-results");
+  if (!el) return;
+  const typeSel = document.getElementById("mb-saved-type")?.value || "";
+  el.innerHTML = `<div class="loc-empty">Loading saves…</div>`;
+  try {
+    const qs = typeSel ? `?type=${encodeURIComponent(typeSel)}` : "";
+    const r = await apiFetch(`/api/musicbrainz/saves${qs}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    _mbSavedRows = rows;
+    _mbRenderSaved();
+  } catch (e) {
+    el.innerHTML = `<div class="loc-empty" style="color:#e88">Load failed: ${_mbEsc(String(e?.message || e))}</div>`;
+  }
+}
+window._mbLoadSaved = _mbLoadSaved;
+
+function _mbRenderSaved() {
+  const el = document.getElementById("mb-saved-results");
+  const countEl = document.getElementById("mb-saved-count");
+  if (!el) return;
+  const filterRaw = document.getElementById("mb-saved-filter")?.value?.trim().toLowerCase() || "";
+  const rows = _mbSavedRows.filter(r => {
+    if (!filterRaw) return true;
+    return (r.name || "").toLowerCase().includes(filterRaw)
+        || (r.entity_type || "").toLowerCase().includes(filterRaw);
+  });
+  if (countEl) countEl.textContent = `${rows.length.toLocaleString()} of ${_mbSavedRows.length.toLocaleString()}`;
+  if (!rows.length) {
+    el.innerHTML = `<div class="loc-empty">${_mbSavedRows.length ? "No matches." : "No saves yet — click ★ on a search result to start a list."}</div>`;
+    return;
+  }
+  el.innerHTML = rows.map(row => {
+    const safeId = String(row.mbid || "").replace(/'/g, "");
+    const saveKey = `${row.entity_type}:${row.mbid}`;
+    const when = row.saved_at ? new Date(row.saved_at).toLocaleDateString() : "";
+    const meta = row.meta || {};
+    const sub = [];
+    sub.push(_mbEsc(row.entity_type));
+    if (meta.disambiguation) sub.push(`<em>${_mbEsc(meta.disambiguation)}</em>`);
+    if (meta.country)        sub.push(_mbEsc(meta.country));
+    if (meta.date)           sub.push(_mbEsc(meta.date));
+    if (when) sub.push(`<span style="color:#666">saved ${_mbEsc(when)}</span>`);
+    const saveBtn = `<a href="#" class="mb-row-save-link" data-mb-save-id="${_mbAttr(saveKey)}" onclick="event.preventDefault();event.stopPropagation();_mbToggleSave('${_mbEsc(row.entity_type)}','${safeId}','${_mbAttr(row.name || "")}',this)" title="Remove from saves" style="margin-right:0.4rem;color:#ffd166;text-decoration:none">★</a>`;
+    const lookupScope = (row.entity_type === "artist" || row.entity_type === "label") ? row.entity_type
+                      : (row.entity_type === "recording" || row.entity_type === "work") ? "track"
+                      : "release";
+    const lookupBtn = `<a href="#" class="mb-row-lookup-link" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'${lookupScope}','${_mbAttr(row.name || "")}');return false" title="Search options" style="margin-right:0.4rem;color:var(--muted);text-decoration:none">🔍</a>`;
+    return `
+      <div class="mb-row" data-mbid="${_mbEsc(row.mbid)}" onclick="_mbOpenDetail('${_mbEsc(row.entity_type)}','${safeId}')" style="padding:0.55rem 0.7rem;border-bottom:1px solid var(--border);cursor:pointer">
+        <div style="font-weight:600">${saveBtn}${lookupBtn}${_mbEsc(row.name || "(untitled)")}</div>
+        <div style="color:var(--muted);font-size:0.78rem">${sub.join(" · ")}</div>
+      </div>
+    `;
+  }).join("");
+}
+window._mbRenderSaved = _mbRenderSaved;
