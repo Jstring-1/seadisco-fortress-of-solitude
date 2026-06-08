@@ -5621,6 +5621,13 @@ body.card-mode-wide .card-tracklist .card-tracklist-rows {
 .main-filters { grid-template-columns: repeat(15, 1fr); }
 .main-filters > label:nth-child(-n+3) { grid-column: span 5; }
 .main-filters > label:nth-child(n+4)  { grid-column: span 3; }
+/* MusicBrainz advanced filters: 4-col desktop grid. Row 1 carries the
+   entity-name fields (Artist/Release/Recording/Label), row 2 the short
+   filters (Country/Year/Tag/Type). _mbToggleEntityFilters hides labels
+   that don't apply to the current entity, so the grid reflows naturally
+   when a subset is visible. */
+.mb-filters { grid-template-columns: repeat(4, 1fr); }
+
 /* Collection: 3 columns on desktop */
 .cw-filters { grid-template-columns: repeat(3, 1fr); }
 
@@ -5632,6 +5639,9 @@ body.card-mode-wide .card-tracklist .card-tracklist-rows {
   .main-filters { grid-template-columns: repeat(2, 1fr); }
   .main-filters > label:nth-child(-n+3),
   .main-filters > label:nth-child(n+4) { grid-column: auto; }
+
+  /* MB advanced grid collapses to 2 cols on mobile (matches main). */
+  .mb-filters { grid-template-columns: repeat(2, 1fr); }
 
   /* Collection: 6-col grid for flexible row sizing */
   .cw-filters {

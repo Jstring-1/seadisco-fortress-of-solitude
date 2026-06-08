@@ -95,7 +95,12 @@ function _mbToggleEntityFilters() {
     "label":         new Set(["label", "country", "tag", "type"]),
   };
   const allow = allowByEntity[_mbEntity] || new Set();
-  document.querySelectorAll("#mb-advanced [data-mb-filter]").forEach(lbl => {
+  // Panel id is mb-advanced-panel — the previous selector targeted
+  // a nonexistent #mb-advanced, so every filter stayed visible
+  // regardless of entity. That let users type into fields MB doesn't
+  // honour on the selected index (e.g. Label on the artist index),
+  // and the Lucene query came back with garbage.
+  document.querySelectorAll("#mb-advanced-panel [data-mb-filter]").forEach(lbl => {
     const k = lbl.dataset.mbFilter;
     lbl.style.display = allow.has(k) ? "" : "none";
   });
