@@ -585,7 +585,22 @@ function switchView(view, skipPushState = false) {
     document.getElementById("artist-alts").innerHTML = "";
     const ws1 = document.getElementById("random-records"); if (ws1) ws1.style.display = "none";
     bridgeSearchToCw();
-    switchRecordsTab(_cwTab || "collection", true);
+    // Restore persisted cw-* filter values + active sub-tab when the
+    // form is empty (first entry this session / reload). Filled fields
+    // are left alone so intra-session navigation doesn't clobber what
+    // the user just typed. _sdReadViewState is the unified helper in
+    // shared.js; falls back to localStorage("cw-filters") via
+    // restoreFilterState for the field values.
+    const _cwAnyFilled = _cwFilterIds.some(id => (document.getElementById(id)?.value ?? "").trim());
+    if (!_cwAnyFilled && typeof restoreFilterState === "function") {
+      try { restoreFilterState(); } catch {}
+    }
+    let _tabForEntry = _cwTab || "collection";
+    try {
+      const _sav = window._sdReadViewState && window._sdReadViewState("records");
+      if (_sav?.tab && typeof _sav.tab === "string") _tabForEntry = _sav.tab;
+    } catch {}
+    switchRecordsTab(_tabForEntry, true);
   } else {
     if (searchView) searchView.style.display = "";
     // Search is public — show the form for everyone (signed-in or
@@ -1256,6 +1271,14 @@ function switchRecordsTab(tab, skipPush) {
   // Filters are shared across collection/wantlist — just save current state
   saveFilterState();
   _cwTab = tab;
+  // Stash the active sub-tab so a switchView("records") on return
+  // lands on the same tab instead of the collection default. Cheap;
+  // _sdSaveViewState handles the JSON shape.
+  try {
+    if (typeof window._sdSaveViewState === "function") {
+      window._sdSaveViewState("records", { tab });
+    }
+  } catch {}
   // Re-apply the sort dropdown for the new tab (per-tab localStorage,
   // with the favorites/wantlist defaulting to "added" desc).
   if (typeof restoreCwSort === "function") restoreCwSort();

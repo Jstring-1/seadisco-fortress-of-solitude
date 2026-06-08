@@ -47,6 +47,33 @@ let _gutenbergFindDebounce   = null;
 function initGutenbergView() {
   const view = document.getElementById("gutenberg-view");
   if (!view) return;
+  // Restore persisted search on every entry: lets bouncing to Records
+  // / Search / another Discover sub-tab and back re-paint the same
+  // results the user left. Empty fields => skip (no clobber if the
+  // user just typed something this session). Idempotent on no-op
+  // (runGutenbergSearch returns empty-state when both q + topic are
+  // blank).
+  try {
+    const qEl     = document.getElementById("gutenberg-q");
+    const topicEl = document.getElementById("gutenberg-topic");
+    const cur = (qEl?.value || "").trim() || (topicEl?.value || "").trim();
+    if (!cur && typeof window._sdReadViewState === "function") {
+      const sav = window._sdReadViewState("gutenberg");
+      if (sav && (sav.q || sav.topic)) {
+        if (qEl)     qEl.value     = String(sav.q     || "");
+        if (topicEl) topicEl.value = String(sav.topic || "");
+        const picker = document.getElementById("gutenberg-topic-picker");
+        if (picker && sav.topic) {
+          const has = Array.from(picker.options).some(o => o.value === String(sav.topic));
+          picker.value = has ? String(sav.topic) : "";
+        }
+        // Defer the search until after the rest of init wires things up.
+        setTimeout(() => {
+          try { runGutenbergSearch(String(sav.q || "")); } catch {}
+        }, 0);
+      }
+    }
+  } catch {}
   // Run once per page lifecycle — repeat calls are idempotent.
   if (!view.dataset.initialized) {
     view.dataset.initialized = "1";
@@ -222,6 +249,13 @@ async function runGutenbergSearch(q, opts) {
   if (!append) {
     _gutenbergSearchPage = 1;
     _gutenbergSearchQuery = q;
+    // Persist the query + topic so a switchView round-trip restores
+    // the search instead of dumping the user on the empty-state.
+    try {
+      if (typeof window._sdSaveViewState === "function") {
+        window._sdSaveViewState("gutenberg", { q, topic });
+      }
+    } catch {}
     // Feed the unified focus-dropdown history (× delete) like every
     // other discovery search input.
     if (typeof saveSearchHistory === "function") {

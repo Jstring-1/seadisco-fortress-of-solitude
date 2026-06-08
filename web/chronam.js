@@ -20,6 +20,25 @@ const _chronamItemsById = new Map();
 function initChronAmView() {
   const view = document.getElementById("chronam-view");
   if (!view) return;
+  // Restore persisted search on every entry (before the one-shot init
+  // gate below) so a switchView round-trip drops the user back into
+  // the same results. Skip when the form is already populated this
+  // session — we never clobber what the user just typed.
+  try {
+    const qEl = document.getElementById("chronam-q");
+    const cur = (qEl?.value || "").trim();
+    if (!cur && typeof window._sdReadViewState === "function") {
+      const sav = window._sdReadViewState("chronam");
+      if (sav && sav.q) {
+        if (qEl) qEl.value = String(sav.q);
+        const d1 = document.getElementById("chronam-date1");
+        const d2 = document.getElementById("chronam-date2");
+        if (d1 && sav.date1) d1.value = String(sav.date1);
+        if (d2 && sav.date2) d2.value = String(sav.date2);
+        setTimeout(() => { try { runChronAmSearch(String(sav.q)); } catch {} }, 0);
+      }
+    }
+  } catch {}
   if (view.dataset.initialized) return;
   view.dataset.initialized = "1";
 
@@ -100,6 +119,12 @@ async function runChronAmSearch(q, opts) {
   if (typeof saveSearchHistory === "function") {
     try { saveSearchHistory("chronam"); } catch {}
   }
+  // Stash query + date range so a switchView round-trip restores it.
+  try {
+    if (typeof window._sdSaveViewState === "function") {
+      window._sdSaveViewState("chronam", { q: query, date1, date2 });
+    }
+  } catch {}
 
   const sort = document.getElementById("chronam-sort")?.value || "relevance";
   const page = append ? _chronamLastPage + 1 : 1;
