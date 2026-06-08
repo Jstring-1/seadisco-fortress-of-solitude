@@ -3590,7 +3590,7 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 // Bump this whenever the cached payload shape or fetch strategy
 // changes; _maybeRefreshArchive will discard older-schema caches and
 // rebuild on next boot. Avoids stuck-stale-cache after deploys.
-//   v2: added rows=1000 paging (was rows=300 hardcoded)
+//   v3: added rows=1000 paging (was rows=300 hardcoded)
 //   v3: tried (collection:X OR uploader:X) — works but unnecessarily
 //       wide; v5 below uses uploader: alone
 //   v4: reverted to collection:X — confirmed too narrow (300 vs 2541)
@@ -10985,10 +10985,10 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       // pipeline.
       if (qidRaw) {
         if (!/^Q\d+$/i.test(qidRaw)) { res.status(400).json({ error: "bad qid" }); return; }
-        cacheKey = `v2:qid:${qidRaw.toUpperCase()}`;
+        cacheKey = `v3:qid:${qidRaw.toUpperCase()}`;
         queryDisplay = qidRaw;
       } else {
-        cacheKey = `v2:${titleRaw.toLowerCase()}`;
+        cacheKey = `v3:${titleRaw.toLowerCase()}`;
         queryDisplay = titleRaw;
       }
       const cached = await mbCacheGet("wiki", cacheKey);
@@ -11083,10 +11083,11 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       // the "class contains X" check matches Wikipedia's compound
       // class lists ("infobox vcard", "navbox authority-control" etc).
       html = stripTagBlock(html, /<(table)\b[^>]*class="[^"]*(?:infobox|navbox|sidebar|vertical-navbox|metadata|ambox|mbox-small|toccolours|wikitable plainrowheaders|succession)[^"]*"[^>]*>/gi);
-      // Drop hatnotes, thumb image boxes, edit-section spans,
-      // reference superscripts, audio file boxes, gallery, references
-      // list, mw-empty-elt.
-      html = stripTagBlock(html, /<(div)\b[^>]*class="[^"]*(?:hatnote|thumb\b|navbox|reflist|references|gallery|mw-references-wrap|sistersitebox|mw-stack|side-box|notice|asbox|metadata)[^"]*"[^>]*>/gi);
+      // Drop hatnotes, edit-section spans, reference superscripts,
+      // gallery, references list, sister-site boxes — but keep
+      // <div class="thumb">…</div> (image thumbnails with captions)
+      // which is what gives the bio its actual pictures.
+      html = stripTagBlock(html, /<(div)\b[^>]*class="[^"]*(?:hatnote|navbox|reflist|references|gallery|mw-references-wrap|sistersitebox|mw-stack|side-box|notice|asbox|metadata)[^"]*"[^>]*>/gi);
       html = stripTagBlock(html, /<(span)\b[^>]*class="[^"]*mw-editsection[^"]*"[^>]*>/gi);
       html = stripTagBlock(html, /<(sup)\b[^>]*class="[^"]*(?:reference|noprint)[^"]*"[^>]*>/gi);
       html = stripTagBlock(html, /<(ol)\b[^>]*class="[^"]*references[^"]*"[^>]*>/gi);
