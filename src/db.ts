@@ -713,6 +713,23 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+
+  // ── MusicBrainz cache ──────────────────────────────────────────────
+  // Mirrors the release_cache shape, but keyed by (entity_type, key).
+  // For entity lookups, `key` is the MBID. For search responses, it's
+  // a sha256 of the query+params so identical searches collapse onto
+  // one row. JSONB blob holds the upstream MB response verbatim.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS musicbrainz_cache (
+      entity_type TEXT NOT NULL,
+      key         TEXT NOT NULL,
+      data        JSONB NOT NULL,
+      cached_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(entity_type, key)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_type_key_idx ON musicbrainz_cache (entity_type, key)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_cached_at_idx ON musicbrainz_cache (cached_at DESC)`);
   // seen_at: NULL = pre-warmed-only (cache-warm job pulled it but no
   // human has opened the modal yet). Set to NOW() on the first user
   // click. Feed queries filter WHERE seen_at IS NOT NULL so warmed-
@@ -5249,6 +5266,28 @@ export async function getCachedRelease(
  *  from a user click (or any path where surfacing in the feed is
  *  appropriate). Pass `warmOnly: true` for the cache-warm job so
  *  the row stays out of the feed until a user actually opens it. */
+// ── MusicBrainz cache helpers ──────────────────────────────────────
+// (Mirror cacheRelease / getCacheEnrichmentBatch but for MB rows.)
+export async function mbCacheGet(entityType: string, key: string): Promise<any | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT data FROM musicbrainz_cache WHERE entity_type = $1 AND key = $2 LIMIT 1`,
+      [entityType, key],
+    );
+    return r.rows[0]?.data ?? null;
+  } catch { return null; }
+}
+
+export async function mbCacheSet(entityType: string, key: string, data: object): Promise<void> {
+  await getPool().query(
+    `INSERT INTO musicbrainz_cache (entity_type, key, data, cached_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (entity_type, key)
+     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
+    [entityType, key, JSON.stringify(data)],
+  );
+}
+
 export async function cacheRelease(
   discogsId: number,
   type: DiscogsCacheType,
