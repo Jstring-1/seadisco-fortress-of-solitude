@@ -727,13 +727,19 @@ function _renderArchiveList() {
               ? ` · showing ${_archiveSearchResults.length}` : ""
           }`
         : "");
+  // Tab strip is now static markup inside loc-header (so the
+  // title→tabs gap matches every other discovery view). Just sync
+  // the active class on the existing buttons — no re-render of the
+  // tab strip itself.
+  const archiveTabs = document.querySelectorAll("#archive-view .archive-tab");
+  archiveTabs.forEach(b => {
+    const which = b.classList.contains("archive-tab-search")  ? "search"
+                : b.classList.contains("archive-tab-saved")   ? "saved"
+                : b.classList.contains("archive-tab-curated") ? "curated"
+                : "";
+    b.classList.toggle("active", which === _archiveTab);
+  });
   listEl.innerHTML = `
-    <div class="loc-tabs archive-tabs">
-      <button type="button" class="loc-tab archive-tab archive-tab-search${showSearch ? " active" : ""}" onclick="_archiveSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab archive-tab archive-tab-saved${showSaved ? " active" : ""}" onclick="_archiveSwitchTab('saved')">Saved</button>
-      <button type="button" class="loc-tab archive-tab archive-tab-curated${showCurated ? " active" : ""}" onclick="_archiveSwitchTab('curated')">Curated</button>
-    </div>
-
     <div class="archive-panel archive-panel-search" style="display:${showSearch ? "" : "none"}">
       <form class="loc-form archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
         <div class="loc-form-row">
