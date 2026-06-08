@@ -661,8 +661,13 @@ function _mbRenderDetail(overlay, type, mbid, j) {
             .mb-wiki-bio-content a:hover { text-decoration: underline; }
             .mb-wiki-bio-content ul, .mb-wiki-bio-content ol { margin: 0.3rem 0 0.7rem 1.2rem; padding: 0; }
             .mb-wiki-bio-content li { margin: 0.15rem 0; }
-            .mb-wiki-bio-content img { max-width: 100%; height: auto; border-radius: 4px; }
-            .mb-wiki-bio-content figure, .mb-wiki-bio-content .thumb { max-width: 100% !important; margin: 0.6rem 0 !important; float: none !important; }
+            .mb-wiki-bio-content img { max-width: 100%; height: auto; border-radius: 4px; display: block; }
+            .mb-wiki-bio-content figure, .mb-wiki-bio-content .thumb { max-width: min(280px, 100%) !important; margin: 0.4rem 0 0.6rem 0.8rem !important; float: right !important; clear: right; }
+            .mb-wiki-bio-content figure img, .mb-wiki-bio-content .thumb img { width: 100%; height: auto; }
+            .mb-wiki-bio-content .thumbcaption, .mb-wiki-bio-content figcaption { font-size: 0.75rem; color: var(--muted); padding: 0.25rem 0.3rem 0; line-height: 1.35; }
+            .mb-wiki-bio-content .thumbinner { padding: 0.25rem; border: 1px solid var(--border); border-radius: 4px; background: rgba(255,255,255,0.02); }
+            .mb-wiki-bio-content .magnify { display: none; }
+            .mb-wiki-bio-content::after { content: ""; display: block; clear: both; }
             .mb-wiki-bio-content table { max-width: 100%; border-collapse: collapse; margin: 0.4rem 0; font-size: 0.82rem; }
             .mb-wiki-bio-content table td, .mb-wiki-bio-content table th { padding: 0.2rem 0.4rem; border: 1px solid var(--border); }
             .mb-wiki-bio-content blockquote { margin: 0.4rem 0; padding: 0.3rem 0.7rem; border-left: 3px solid var(--border); color: var(--muted); }
