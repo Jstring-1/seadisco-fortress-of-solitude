@@ -174,7 +174,13 @@ function addNavTab(view) {
       el.removeAttribute("title");
       const rtab = el.dataset.rtab;
       if (rtab) {
-        el.onclick = () => { _cwTab = rtab; switchView("records"); };
+        el.onclick = () => {
+          _cwTab = rtab;
+          // Same URL-explicit semantics as the bootstrap path so the
+          // persisted last-tab can't silently override this click.
+          window._sdCwTabFromUrl = true;
+          switchView("records");
+        };
       }
     });
     // Enable swap-to-collection button
@@ -618,10 +624,21 @@ function switchView(view, skipPushState = false) {
       try { restoreFilterState(); } catch {}
     }
     let _tabForEntry = _cwTab || "collection";
-    try {
-      const _sav = window._sdReadViewState && window._sdReadViewState("records");
-      if (_sav?.tab && typeof _sav.tab === "string") _tabForEntry = _sav.tab;
-    } catch {}
+    // Only fall back to the persisted last-tab when the caller didn't
+    // explicitly request a sub-tab. The bootstrap sets window
+    // ._sdCwTabFromUrl whenever the URL carries v=collection / wantlist
+    // / lists / inventory / favorites (or a tab= param on v=records).
+    // Without this gate the persisted "favorites" silently wins over
+    // explicit /?v=collection nav clicks — every Collection / Wantlist
+    // link looked broken because it routed to favorites.
+    if (!window._sdCwTabFromUrl) {
+      try {
+        const _sav = window._sdReadViewState && window._sdReadViewState("records");
+        if (_sav?.tab && typeof _sav.tab === "string") _tabForEntry = _sav.tab;
+      } catch {}
+    }
+    // One-shot: clear so subsequent in-SPA switches honour persistence.
+    try { delete window._sdCwTabFromUrl; } catch {}
     switchRecordsTab(_tabForEntry, true);
   } else {
     if (searchView) searchView.style.display = "";

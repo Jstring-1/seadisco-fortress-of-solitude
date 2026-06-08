@@ -72,6 +72,9 @@ window._ensureAdminFlag = _ensureAdminFlag;
     if (!window._clerk?.user) { showToast("Sign in to view your " + tab, "error"); switchView("account", true); }
     else {
       _cwTab = tab;
+      // Tell switchView the tab was explicitly requested via URL so it
+      // doesn't silently restore a different persisted last-tab.
+      window._sdCwTabFromUrl = true;
       const sort = p.get("s") || p.get("sort");
       if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
       switchView("records", true);
@@ -105,6 +108,9 @@ window._ensureAdminFlag = _ensureAdminFlag;
       if (rawView === "records") {
         const tab = p.get("tab") || "collection";
         _cwTab = tab;
+        // Only treat as URL-explicit when the URL actually carried tab=.
+        // Bare /?v=records still uses the persisted last-tab.
+        if (p.get("tab")) window._sdCwTabFromUrl = true;
         const sort = p.get("s") || p.get("sort");
         if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
       }
