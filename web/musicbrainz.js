@@ -556,31 +556,52 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   }
 
   // Wikipedia bio (collapsible, lazy-loaded). MB stores artist
-  // biographies via the `wikipedia` URL relation rather than a native
-  // field; we extract the article title from the rel URL and fetch
-  // the full article HTML through SeaDisco's existing
-  // /api/wikipedia/lookup endpoint (which already caches at the
-  // server). Collapsed by default to keep the popup compact;
-  // expansion triggers the fetch + render. Cached on the DOM node
-  // so a second expand is free.
-  const wikiRel = Array.isArray(j.relations)
-    ? j.relations.find(rel => rel.type === "wikipedia" && rel.url?.resource)
-    : null;
-  if (wikiRel) {
-    const wikiUrl = String(wikiRel.url.resource);
-    const m = wikiUrl.match(/\/wiki\/([^?#]+)/);
-    if (m) {
-      const title = decodeURIComponent(m[1]).replace(/_/g, " ");
-      sections.push(`
-        <div class="mb-wiki-bio" style="margin:0.6rem 0;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)">
-          <button type="button" class="mb-wiki-bio-toggle" onclick="_mbToggleWikiBio(this,'${_mbAttr(title)}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:0.5rem 0.7rem;border:none;background:transparent;color:var(--accent);font-size:0.86rem;cursor:pointer;font-family:inherit;text-align:left">
-            <span><span class="mb-wiki-bio-arrow">▶</span> Wikipedia bio — ${_mbEsc(title)}</span>
-            <a href="${_mbEsc(wikiUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--muted);text-decoration:none;font-size:0.78em">open ↗</a>
-          </button>
-          <div class="mb-wiki-bio-body" style="display:none"></div>
-        </div>
-      `);
+  // biographies via either a direct `wikipedia` URL relation or, more
+  // commonly nowadays, a `wikidata` relation that points at the QID
+  // (the server then resolves QID → enwiki title via Wikidata's
+  // wbgetentities API). Either way the panel hits the same
+  // /api/musicbrainz/wiki endpoint, which caches results on hit.
+  // Prefer direct wikipedia rel when present (skips the QID round-
+  // trip); fall back to wikidata otherwise.
+  let wikiOpenUrl = "";
+  let wikiLabel = "";
+  let wikiLookupArg = ""; // "title:<x>" or "qid:Qxxx"
+  if (Array.isArray(j.relations)) {
+    const wpRel = j.relations.find(rel => rel.type === "wikipedia" && rel.url?.resource);
+    if (wpRel) {
+      const wikiUrl = String(wpRel.url.resource);
+      const m = wikiUrl.match(/\/wiki\/([^?#]+)/);
+      if (m) {
+        const title = decodeURIComponent(m[1]).replace(/_/g, " ");
+        wikiOpenUrl = wikiUrl;
+        wikiLabel = title;
+        wikiLookupArg = `title:${title}`;
+      }
     }
+    if (!wikiLookupArg) {
+      const wdRel = j.relations.find(rel => rel.type === "wikidata" && rel.url?.resource);
+      if (wdRel) {
+        const wdUrl = String(wdRel.url.resource);
+        const qm = wdUrl.match(/\/(Q\d+)\b/i);
+        if (qm) {
+          const qid = qm[1].toUpperCase();
+          wikiOpenUrl = wdUrl;
+          wikiLabel = `via Wikidata ${qid}`;
+          wikiLookupArg = `qid:${qid}`;
+        }
+      }
+    }
+  }
+  if (wikiLookupArg) {
+    sections.push(`
+      <div class="mb-wiki-bio" style="margin:0.6rem 0;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)">
+        <button type="button" class="mb-wiki-bio-toggle" onclick="_mbToggleWikiBio(this,'${_mbAttr(wikiLookupArg)}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:0.5rem 0.7rem;border:none;background:transparent;color:var(--accent);font-size:0.86rem;cursor:pointer;font-family:inherit;text-align:left">
+          <span><span class="mb-wiki-bio-arrow">▶</span> Wikipedia bio — ${_mbEsc(wikiLabel)}</span>
+          <a href="${_mbEsc(wikiOpenUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--muted);text-decoration:none;font-size:0.78em">open ↗</a>
+        </button>
+        <div class="mb-wiki-bio-body" style="display:none"></div>
+      </div>
+    `);
   }
 
   // Toggle handler for the Wikipedia bio panel — declared inline here
@@ -590,7 +611,7 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // endpoint caches the article in musicbrainz_cache (entity_type
   // "wiki"), so re-opening the same artist across sessions is free.
   if (!window._mbToggleWikiBio) {
-    window._mbToggleWikiBio = async function (btn, title) {
+    window._mbToggleWikiBio = async function (btn, lookupArg) {
       const body = btn.nextElementSibling;
       const arrowEl = btn.querySelector(".mb-wiki-bio-arrow");
       if (!body) return;
@@ -605,7 +626,17 @@ function _mbRenderDetail(overlay, type, mbid, j) {
       if (body.dataset.loaded === "1") return;
       body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:var(--muted);font-size:0.82rem">Loading bio…</div>`;
       try {
-        const r = await apiFetch(`/api/musicbrainz/wiki?title=${encodeURIComponent(title)}`);
+        // lookupArg is "title:<x>" or "qid:Qxxx". Both go through
+        // /api/musicbrainz/wiki — the server resolves qid → enwiki
+        // title via Wikidata.
+        let qs;
+        if (lookupArg.startsWith("qid:")) {
+          qs = `qid=${encodeURIComponent(lookupArg.slice(4))}`;
+        } else {
+          const t = lookupArg.startsWith("title:") ? lookupArg.slice(6) : lookupArg;
+          qs = `title=${encodeURIComponent(t)}`;
+        }
+        const r = await apiFetch(`/api/musicbrainz/wiki?${qs}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
         if (!j.found || !j.html) {
