@@ -219,6 +219,30 @@ async function _mbRunSearch(opts) {
 }
 window._mbRunSearch = _mbRunSearch;
 
+// Tag-pill click handler — closes any open detail overlay, switches
+// the entity selector to match the tagged entity type, fills the
+// query box with MB Lucene `tag:"<name>"` syntax, and fires a fresh
+// search. Tag names with embedded quotes are escaped MB-side via
+// backslash, but we keep the search string simple and rely on URL
+// encoding for transport.
+function _mbSearchByTag(tag, entityType) {
+  try {
+    document.getElementById("mb-detail-overlay")?.remove();
+    if (Array.isArray(_mbDetailStack)) _mbDetailStack.length = 0;
+  } catch {}
+  const entSel = document.getElementById("mb-entity");
+  if (entSel && entityType) {
+    const opt = Array.from(entSel.options || []).find(o => o.value === entityType);
+    if (opt) entSel.value = entityType;
+  }
+  const qEl = document.getElementById("mb-q");
+  if (qEl) qEl.value = `tag:"${String(tag).replace(/"/g, '\\"')}"`;
+  // Make sure we're on the Search tab, not Saved.
+  try { _mbSwitchTab("search"); } catch {}
+  _mbRunSearch();
+}
+window._mbSearchByTag = _mbSearchByTag;
+
 function _mbEsc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -649,18 +673,33 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   }
 
   // Tags (artist / release / recording / work / label) — chip strip.
+  // Each chip is a link that fires a new MB search filtered to the
+  // current entity type by `tag:"<name>"` (MB Lucene syntax). Number
+  // is the community vote count — net upvotes on that tag for this
+  // entity, not a result count.
   const tags = Array.isArray(j.tags) ? j.tags.slice(0, 25) : [];
   if (tags.length) {
     sections.push(`<div style="display:flex;gap:0.3rem;flex-wrap:wrap;margin:0.4rem 0">${
-      tags.map(t => `<span style="padding:0.15rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.7rem;color:var(--muted)">${_mbEsc(t.name || "")} <span style="color:#666">${Number(t.count) || ""}</span></span>`).join("")
+      tags.map(t => {
+        const tn = t.name || "";
+        if (!tn) return "";
+        return `<a href="#" onclick="event.preventDefault();_mbSearchByTag('${_mbAttr(tn)}','${_mbAttr(type)}')" title="Search ${_mbEsc(type)}s tagged &quot;${_mbEsc(tn)}&quot;" style="padding:0.15rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.7rem;color:var(--muted);text-decoration:none;cursor:pointer">${_mbEsc(tn)} <span style="color:#666">${Number(t.count) || ""}</span></a>`;
+      }).join("")
     }</div>`);
   }
 
-  // Aliases (artist / label).
+  // Aliases (artist / label) — each alias name routes through the
+  // standard lookup-options popup so the curator can pivot to a
+  // SeaDisco / Discogs / Blues Archive / MB search by the alias.
   if (type === "artist" || type === "label") {
     const aliases = Array.isArray(j.aliases) ? j.aliases.filter(a => a.name && a.name !== name).slice(0, 12) : [];
     if (aliases.length) {
-      sections.push(`<div style="margin:0.6rem 0;color:var(--muted);font-size:0.8rem"><span style="color:var(--accent)">Aliases:</span> ${aliases.map(a => _mbEsc(a.name)).join(", ")}</div>`);
+      const aliasHtml = aliases.map(a => {
+        return (typeof entityLookupLinkHtml === "function")
+          ? entityLookupLinkHtml(scope, a.name, { title: `Lookup options for "${a.name}"` })
+          : _mbEsc(a.name);
+      }).join(", ");
+      sections.push(`<div style="margin:0.6rem 0;color:var(--muted);font-size:0.8rem"><span style="color:var(--accent)">Aliases:</span> ${aliasHtml}</div>`);
     }
   }
 
