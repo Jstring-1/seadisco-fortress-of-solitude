@@ -12,7 +12,7 @@ import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCoun
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
-import { mbCacheGet, mbCacheSet } from "./db.js";
+import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10949,6 +10949,122 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       console.error("[musicbrainz search]", err);
       res.status(500).json({ error: err?.message ?? String(err) });
     }
+  });
+
+  // GET /api/musicbrainz/wiki?title=X — proxied Wikipedia article
+  // fetch with caching in the musicbrainz_cache table (entity_type
+  // = "wiki", key = lowercased canonical title). On cache miss we
+  // delegate to the existing /api/wikipedia/lookup?full=1 logic by
+  // calling the public Wikipedia API directly — same code path the
+  // wiki view uses but the response is stored alongside MB rows so
+  // re-opening the same artist's bio is free. Admin-gated to match
+  // the rest of the MB surface.
+  app.get("/api/musicbrainz/wiki", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const titleRaw = String(req.query.title ?? "").trim();
+      if (!titleRaw) { res.status(400).json({ error: "title required" }); return; }
+      const cacheKey = titleRaw.toLowerCase();
+      const cached = await mbCacheGet("wiki", cacheKey);
+      if (cached) { res.json({ source: "cache", ...cached }); return; }
+      // Resolve canonical title via opensearch then fetch the full
+      // article HTML via the Parse API (same approach as the
+      // existing /api/wikipedia/lookup?full=1 endpoint).
+      const wikiHeaders = {
+        "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+        "Accept": "application/json",
+      };
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&search=${encodeURIComponent(titleRaw)}`;
+      const sr = await fetch(searchUrl, { headers: wikiHeaders });
+      if (!sr.ok) { res.status(502).json({ error: "Wikipedia search failed", status: sr.status }); return; }
+      const sdata = await sr.json() as any;
+      const title = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
+      if (!title) {
+        const empty = { found: false, queried: titleRaw };
+        await mbCacheSet("wiki", cacheKey, empty);
+        res.json({ source: "upstream", ...empty });
+        return;
+      }
+      const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&disabletoc=1&page=${encodeURIComponent(title)}`;
+      const thumbUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
+      const [pr, tr] = await Promise.all([
+        fetch(parseUrl, { headers: wikiHeaders }),
+        fetch(thumbUrl, { headers: wikiHeaders }).catch(() => null),
+      ]);
+      if (!pr.ok) { res.status(502).json({ error: "Wikipedia parse failed", status: pr.status }); return; }
+      const pdata = await pr.json() as any;
+      const rawHtml = pdata?.parse?.text?.["*"] ?? "";
+      // Light sanitization — strip script/style/inline handlers/link tags.
+      const html = String(rawHtml)
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+        .replace(/<link\b[^>]*>/gi, "")
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+        .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
+        .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'");
+      const finalTitle = pdata?.parse?.title ?? title;
+      let thumbnail: string | null = null;
+      try {
+        if (tr) {
+          const tj = await tr.json() as any;
+          const pages = tj?.query?.pages;
+          if (pages) {
+            const first = Object.values(pages)[0] as any;
+            thumbnail = first?.thumbnail?.source ?? null;
+          }
+        }
+      } catch {}
+      const payload = {
+        found: true,
+        title: finalTitle,
+        html,
+        thumbnail,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(finalTitle.replace(/ /g, "_"))}`,
+      };
+      await mbCacheSet("wiki", cacheKey, payload);
+      res.json({ source: "upstream", ...payload });
+    } catch (err: any) {
+      console.error("[musicbrainz wiki]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+
+  // ── Saves ──────────────────────────────────────────────────────
+  // Per-admin ★ bookmarks for the MB Saved tab. List returns
+  // newest-first; the id-list endpoint hands back the compact
+  // "type:mbid" key set the client uses to decorate row stars.
+  app.get("/api/musicbrainz/saves", async (req, res) => {
+    const userId = await requireAdmin(req, res); if (!userId) return;
+    try {
+      const entityType = String(req.query.type ?? "").trim() || undefined;
+      const rows = await listMbSaves(userId, entityType);
+      res.json({ rows });
+    } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.get("/api/musicbrainz/saves/ids", async (req, res) => {
+    const userId = await requireAdmin(req, res); if (!userId) return;
+    try { res.json({ ids: await listMbSaveIds(userId) }); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.post("/api/musicbrainz/saves", express.json({ limit: "32kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res); if (!userId) return;
+    try {
+      const entityType = String(req.body?.entity_type ?? "").trim();
+      const mbid       = String(req.body?.mbid ?? "").trim();
+      const name       = String(req.body?.name ?? "").trim();
+      const meta       = req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : null;
+      if (!entityType || !mbid || !name) { res.status(400).json({ error: "entity_type, mbid, name required" }); return; }
+      const added = await addMbSave(userId, entityType, mbid, name, meta);
+      res.json({ ok: true, added });
+    } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.delete("/api/musicbrainz/saves/:type/:mbid", async (req, res) => {
+    const userId = await requireAdmin(req, res); if (!userId) return;
+    try {
+      const removed = await removeMbSave(userId, String(req.params.type), String(req.params.mbid));
+      res.json({ ok: true, removed });
+    } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
 
   app.get("/api/musicbrainz/:type/:mbid", async (req, res) => {
