@@ -619,16 +619,87 @@ function _mbRenderUrlRels(j) {
     ? j.relations.filter(rel => (rel["target-type"] === "url" || rel.url) && rel.type !== "discogs")
     : [];
   if (!rels.length) return "";
-  // Sort: the well-known external sources first, then everything else.
-  const priority = ["wikipedia", "wikidata", "allmusic", "official homepage", "imdb", "bandcamp", "soundcloud"];
+  // Sort: well-known external sources first, then everything else.
+  const priority = ["wikipedia", "wikidata", "allmusic", "official homepage", "imdb", "bandcamp", "soundcloud", "youtube", "spotify"];
   rels.sort((a, b) => (priority.indexOf(a.type) + 1 || 99) - (priority.indexOf(b.type) + 1 || 99));
+  // Per-source visual hint: a glyph that's recognisable at a glance,
+  // a label scrubbed of the relation-type cruft ("free streaming" →
+  // the host name when possible), and a fallback for unknowns. Each
+  // link renders as a chip — bordered pill the same shape as the tag
+  // strip — so the section reads as a tidy link bar instead of loose
+  // accent text.
   const out = rels.map(rel => {
-    const url = rel.url?.resource || "";
+    const url = String(rel.url?.resource || "");
     if (!url) return "";
-    return `<a href="${_mbEsc(url)}" target="_blank" rel="noopener" style="margin-right:0.7rem;color:var(--accent);text-decoration:none;font-size:0.82rem">${_mbEsc(rel.type)} ↗</a>`;
+    const meta = _mbLinkMeta(rel.type, url);
+    return `<a href="${_mbEsc(url)}" target="_blank" rel="noopener" class="mb-url-chip" title="${_mbEsc(rel.type)} · ${_mbEsc(url)}" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.2rem 0.55rem;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,0.02);color:var(--accent);text-decoration:none;font-size:0.78rem"><span aria-hidden="true">${meta.icon}</span>${_mbEsc(meta.label)} <span style="color:var(--muted);font-size:0.78em">↗</span></a>`;
   }).filter(Boolean);
   if (!out.length) return "";
-  return `<div style="margin:0.4rem 0">${out.join("")}</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin:0.5rem 0">${out.join("")}</div>`;
+}
+
+// Map an MB relation type + url to a display chip's icon + label.
+// "free streaming" / "streaming" / "other databases" are MB's generic
+// catch-alls — we lift the actual host name out of the URL so the
+// chip reads "Spotify" instead of "free streaming". Falls back to
+// the raw relation type for anything we haven't curated.
+function _mbLinkMeta(relType, url) {
+  const host = (() => {
+    try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
+  })();
+  const KNOWN = {
+    "wikipedia.org":     { icon: "W", label: "Wikipedia" },
+    "wikidata.org":      { icon: "W", label: "Wikidata" },
+    "allmusic.com":      { icon: "♪", label: "AllMusic" },
+    "imdb.com":          { icon: "▣", label: "IMDb" },
+    "bandcamp.com":      { icon: "■", label: "Bandcamp" },
+    "soundcloud.com":    { icon: "☁", label: "SoundCloud" },
+    "youtube.com":       { icon: "▶", label: "YouTube" },
+    "youtu.be":          { icon: "▶", label: "YouTube" },
+    "music.youtube.com": { icon: "▶", label: "YouTube Music" },
+    "spotify.com":       { icon: "●", label: "Spotify" },
+    "open.spotify.com":  { icon: "●", label: "Spotify" },
+    "music.apple.com":   { icon: "♪", label: "Apple Music" },
+    "tidal.com":         { icon: "≋", label: "Tidal" },
+    "amazon.com":        { icon: "▾", label: "Amazon" },
+    "deezer.com":        { icon: "♬", label: "Deezer" },
+    "rateyourmusic.com": { icon: "★", label: "RYM" },
+    "setlist.fm":        { icon: "≡", label: "Setlist.fm" },
+    "secondhandsongs.com": { icon: "♫", label: "SecondHandSongs" },
+    "genius.com":        { icon: "G", label: "Genius" },
+    "last.fm":           { icon: "♫", label: "Last.fm" },
+    "viaf.org":          { icon: "ⓘ", label: "VIAF" },
+    "isni.org":          { icon: "ⓘ", label: "ISNI" },
+    "loc.gov":           { icon: "🏛", label: "LOC" },
+    "id.loc.gov":        { icon: "🏛", label: "LOC" },
+    "musicbrainz.org":   { icon: "M", label: "MusicBrainz" },
+    "facebook.com":      { icon: "f", label: "Facebook" },
+    "instagram.com":     { icon: "◉", label: "Instagram" },
+    "twitter.com":       { icon: "𝕏", label: "Twitter" },
+    "x.com":             { icon: "𝕏", label: "X" },
+    "myspace.com":       { icon: "m", label: "MySpace" },
+    "archive.org":       { icon: "▤", label: "Archive.org" },
+    "vimeo.com":         { icon: "▶", label: "Vimeo" },
+    "soundtrackcollector.com": { icon: "♫", label: "Soundtrack Collector" },
+  };
+  if (host && KNOWN[host]) return KNOWN[host];
+  // Friendlier fallbacks for the generic MB relation types.
+  const friendly = {
+    "official homepage": { icon: "🏠", label: "Homepage" },
+    "free streaming":    { icon: "▶", label: host || "Streaming" },
+    "streaming":         { icon: "▶", label: host || "Streaming" },
+    "other databases":   { icon: "ⓘ", label: host || "Database" },
+    "social network":    { icon: "◉", label: host || "Social" },
+    "purchase for download": { icon: "↓", label: host || "Purchase" },
+    "purchase for mail-order": { icon: "✉", label: host || "Purchase" },
+    "lyrics":            { icon: "📜", label: host || "Lyrics" },
+    "image":             { icon: "🖼", label: host || "Image" },
+    "blog":              { icon: "✎", label: host || "Blog" },
+    "fanpage":           { icon: "◉", label: host || "Fan page" },
+  };
+  if (friendly[relType]) return friendly[relType];
+  // Last resort: the relation type itself with a generic link icon.
+  return { icon: "↗", label: relType || (host || "Link") };
 }
 
 // Extract the Discogs id (artist or label) from an MB entity's
