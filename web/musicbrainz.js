@@ -642,7 +642,39 @@ function _mbRenderDetail(overlay, type, mbid, j) {
           body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:var(--muted);font-size:0.82rem">No Wikipedia article found.</div>`;
           return;
         }
-        body.innerHTML = `<div class="mb-wiki-bio-content" style="padding:0.6rem 0.8rem;max-height:60vh;overflow:auto;font-size:0.85rem;line-height:1.55;color:var(--text);border-top:1px solid var(--border)">${j.html}</div>`;
+        // Inject a scoped <style> block once so the article HTML
+        // inherits sane typography inside the popup — Wikipedia ships
+        // its own class names with no inline styles, so a scoped block
+        // here is enough to tame heading sizes, link colors, image
+        // sizing, list indents and table widths. Marker on
+        // documentElement prevents duplicate injections across opens.
+        if (!document.documentElement.dataset.mbWikiBioStyled) {
+          const style = document.createElement("style");
+          style.textContent = `
+            .mb-wiki-bio-content { padding: 0.8rem 1rem 0.6rem; max-height: 60vh; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; color: var(--text); border-top: 1px solid var(--border); }
+            .mb-wiki-bio-content p { margin: 0 0 0.7rem; }
+            .mb-wiki-bio-content p:last-child { margin-bottom: 0.2rem; }
+            .mb-wiki-bio-content h2 { font-size: 0.98rem; margin: 1.1rem 0 0.4rem; padding-bottom: 0.2rem; border-bottom: 1px solid var(--border); color: var(--accent); font-weight: 600; }
+            .mb-wiki-bio-content h3 { font-size: 0.9rem; margin: 0.9rem 0 0.35rem; color: var(--accent); font-weight: 600; }
+            .mb-wiki-bio-content h4, .mb-wiki-bio-content h5, .mb-wiki-bio-content h6 { font-size: 0.85rem; margin: 0.7rem 0 0.3rem; color: var(--accent); font-weight: 600; }
+            .mb-wiki-bio-content a { color: var(--accent); text-decoration: none; }
+            .mb-wiki-bio-content a:hover { text-decoration: underline; }
+            .mb-wiki-bio-content ul, .mb-wiki-bio-content ol { margin: 0.3rem 0 0.7rem 1.2rem; padding: 0; }
+            .mb-wiki-bio-content li { margin: 0.15rem 0; }
+            .mb-wiki-bio-content img { max-width: 100%; height: auto; border-radius: 4px; }
+            .mb-wiki-bio-content figure, .mb-wiki-bio-content .thumb { max-width: 100% !important; margin: 0.6rem 0 !important; float: none !important; }
+            .mb-wiki-bio-content table { max-width: 100%; border-collapse: collapse; margin: 0.4rem 0; font-size: 0.82rem; }
+            .mb-wiki-bio-content table td, .mb-wiki-bio-content table th { padding: 0.2rem 0.4rem; border: 1px solid var(--border); }
+            .mb-wiki-bio-content blockquote { margin: 0.4rem 0; padding: 0.3rem 0.7rem; border-left: 3px solid var(--border); color: var(--muted); }
+            .mb-wiki-bio-content code, .mb-wiki-bio-content pre { font-size: 0.8rem; background: rgba(255,255,255,0.04); padding: 0.05rem 0.3rem; border-radius: 3px; }
+            .mb-wiki-bio-content .IPA, .mb-wiki-bio-content .nowrap { white-space: nowrap; }
+            .mb-wiki-bio-content sup, .mb-wiki-bio-content sub { font-size: 0.7em; }
+            .mb-wiki-bio-content hr { border: none; border-top: 1px solid var(--border); margin: 0.8rem 0; }
+          `;
+          document.head.appendChild(style);
+          document.documentElement.dataset.mbWikiBioStyled = "1";
+        }
+        body.innerHTML = `<div class="mb-wiki-bio-content">${j.html}</div>`;
         body.dataset.loaded = "1";
       } catch (err) {
         body.innerHTML = `<div style="padding:0.6rem 0.7rem;color:#e88;font-size:0.82rem">Bio load failed: ${String(err?.message || err)}</div>`;

@@ -10979,12 +10979,16 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       // on having a title in hand.
       let cacheKey: string;
       let queryDisplay: string;
+      // v2 prefix marks the post-sanitization-pass schema so older
+      // cached HTML (which still carried infoboxes / navboxes / refs)
+      // is bypassed on first read and re-fetched against the new
+      // pipeline.
       if (qidRaw) {
         if (!/^Q\d+$/i.test(qidRaw)) { res.status(400).json({ error: "bad qid" }); return; }
-        cacheKey = `qid:${qidRaw.toUpperCase()}`;
+        cacheKey = `v2:qid:${qidRaw.toUpperCase()}`;
         queryDisplay = qidRaw;
       } else {
-        cacheKey = titleRaw.toLowerCase();
+        cacheKey = `v2:${titleRaw.toLowerCase()}`;
         queryDisplay = titleRaw;
       }
       const cached = await mbCacheGet("wiki", cacheKey);
@@ -11031,15 +11035,88 @@ app.get("/api/blues-archive/releases", async (req, res) => {
       if (!pr.ok) { res.status(502).json({ error: "Wikipedia parse failed", status: pr.status }); return; }
       const pdata = await pr.json() as any;
       const rawHtml = pdata?.parse?.text?.["*"] ?? "";
-      // Light sanitization — strip script/style/inline handlers/link tags.
-      const html = String(rawHtml)
+      // Sanitization + readability pass. We strip the chrome that
+      // makes raw Wikipedia HTML unreadable inside a small popup:
+      // infoboxes / navboxes / sidebars / metadata banners, [edit]
+      // spans, reference superscripts, hatnotes, audio boxes, and the
+      // tail sections (References / See also / External links /
+      // Bibliography / Further reading / Notes) which depend on
+      // structures we've removed anyway. Internal /wiki/ links are
+      // rewritten to absolute https://en.wikipedia.org URLs with
+      // target=_blank so they open Wikipedia in a new tab instead of
+      // 404'ing inside the popup.
+      const stripTagBlock = (s: string, openRe: RegExp): string => {
+        // Greedy-but-balanced removal of <tag …>…</tag> for the same
+        // tag name as matched by openRe (first capture = tag name).
+        // We avoid a full HTML parser by walking the string from each
+        // open match and counting nested tag opens/closes.
+        let out = "";
+        let i = 0;
+        while (i < s.length) {
+          openRe.lastIndex = i;
+          const m = openRe.exec(s);
+          if (!m) { out += s.slice(i); break; }
+          out += s.slice(i, m.index);
+          const tag = m[1].toLowerCase();
+          let depth = 1;
+          let j = openRe.lastIndex;
+          const openTag = new RegExp(`<${tag}\\b`, "gi");
+          const closeTag = new RegExp(`</${tag}\\s*>`, "gi");
+          while (depth > 0 && j < s.length) {
+            openTag.lastIndex = j;
+            closeTag.lastIndex = j;
+            const o = openTag.exec(s);
+            const c = closeTag.exec(s);
+            if (!c) { j = s.length; break; }
+            if (o && o.index < c.index) { depth++; j = openTag.lastIndex; }
+            else { depth--; j = closeTag.lastIndex; }
+          }
+          i = j;
+        }
+        return out;
+      };
+      let html = String(rawHtml)
         .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
         .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-        .replace(/<link\b[^>]*>/gi, "")
+        .replace(/<link\b[^>]*>/gi, "");
+      // Drop infobox / navbox / sidebar / metadata / ambox tables —
+      // the "class contains X" check matches Wikipedia's compound
+      // class lists ("infobox vcard", "navbox authority-control" etc).
+      html = stripTagBlock(html, /<(table)\b[^>]*class="[^"]*(?:infobox|navbox|sidebar|vertical-navbox|metadata|ambox|mbox-small|toccolours|wikitable plainrowheaders|succession)[^"]*"[^>]*>/gi);
+      // Drop hatnotes, thumb image boxes, edit-section spans,
+      // reference superscripts, audio file boxes, gallery, references
+      // list, mw-empty-elt.
+      html = stripTagBlock(html, /<(div)\b[^>]*class="[^"]*(?:hatnote|thumb\b|navbox|reflist|references|gallery|mw-references-wrap|sistersitebox|mw-stack|side-box|notice|asbox|metadata)[^"]*"[^>]*>/gi);
+      html = stripTagBlock(html, /<(span)\b[^>]*class="[^"]*mw-editsection[^"]*"[^>]*>/gi);
+      html = stripTagBlock(html, /<(sup)\b[^>]*class="[^"]*(?:reference|noprint)[^"]*"[^>]*>/gi);
+      html = stripTagBlock(html, /<(ol)\b[^>]*class="[^"]*references[^"]*"[^>]*>/gi);
+      // Cut everything from the first References / See also / External
+      // links / Notes / Bibliography / Further reading heading down —
+      // these sections depend on reference + navbox machinery we've
+      // already removed.
+      const cutHeadings = [
+        "References", "See_also", "External_links", "Notes",
+        "Bibliography", "Further_reading", "Discography", "Sources",
+      ];
+      for (const id of cutHeadings) {
+        const re = new RegExp(`<h[1-6][^>]*>\\s*<span[^>]*id="${id}"`, "i");
+        const m = html.match(re);
+        if (m) {
+          // Back up to the start of the heading tag.
+          const idx = html.indexOf("<", html.lastIndexOf("<h", m.index));
+          html = html.slice(0, idx >= 0 ? idx : m.index);
+        }
+      }
+      // Rewrite internal /wiki/X links to absolute URLs that open in
+      // a new tab, and neutralise any remaining JS-flavoured links /
+      // inline event handlers.
+      html = html
         .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
         .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
         .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
-        .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'");
+        .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
+        .replace(/<a\b([^>]*?)href="\/wiki\/([^"#?]+)([^"]*)"([^>]*)>/gi,
+          (_m, pre, page, rest, post) => `<a${pre}href="https://en.wikipedia.org/wiki/${page}${rest}" target="_blank" rel="noopener"${post}>`);
       const finalTitle = pdata?.parse?.title ?? title;
       let thumbnail: string | null = null;
       try {
