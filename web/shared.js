@@ -1482,7 +1482,7 @@ function renderSharedHeader(opts) {
   // you're on one. data-view is set to "discover" so syncDiscoverTabActive
   // (defined below) can flip the active class when any of the four
   // sub-views is active.
-  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"]);
+  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz"]);
   // Last-visited sub-view inside the Discover group. Persisted by
   // _sdRememberDiscoverView on every switchView call so the top-nav
   // Discover button drops the user back where they left off (LOC by
@@ -1576,7 +1576,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260607.1943";
+  const SITE_VERSION = "build 20260607.1956";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
