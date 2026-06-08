@@ -1576,7 +1576,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260607.2051";
+  const SITE_VERSION = "build 20260607.2055";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2161,6 +2161,14 @@ function openLookupPopup(ev, scope, label, ctx) {
   if (scope === "track" || scope === "artist" || scope === "release") {
     internal.push({ key: "archive", icon: "📼", text: "Archive.org" });
   }
+  // MusicBrainz — admin-only. MB indexes every scope we care about
+  // (artist / release / recording / work / label / release-group), so
+  // the option shows up regardless of which entity the popup was
+  // opened for. The handler translates SeaDisco's "track" scope to
+  // MB's "recording" and "release"-style scopes stay literal.
+  if (window._isAdmin && scope !== "catno") {
+    internal.push({ key: "mb", icon: "M", text: "Search MusicBrainz" });
+  }
 
   // YouTube is now an IN-APP search — popup overlay so users don't
   // lose context when initiated from an album / version modal.
@@ -2483,6 +2491,42 @@ function openLookupPopup(ev, scope, label, ctx) {
             ? `"${label}" "${trackArtist}"`
             : `"${label}"`;
           if (typeof openArchivePopup === "function") openArchivePopup(archiveQ);
+        }
+        else if (b.key === "mb") {
+          // Switch to the MB Discovery view and pre-fill the search
+          // form with this entity's name + best-fit MB entity type.
+          // Lazy-loads musicbrainz.js if not already in memory, then
+          // calls _mbRunSearch to fire the query without a page
+          // reload (mini-player stays alive). SeaDisco's "track"
+          // scope maps to MB's "recording"; release/release-group
+          // both make sense for a release-scoped popup so we default
+          // to release-group (the canonical "album" entity).
+          const mbEntity = scope === "artist" ? "artist"
+                         : scope === "label"  ? "label"
+                         : scope === "track"  ? "recording"
+                         : "release-group";
+          const fire = () => {
+            try {
+              if (typeof switchView === "function") switchView("musicbrainz", false);
+              setTimeout(() => {
+                try {
+                  const sel = document.getElementById("mb-entity");
+                  if (sel) { sel.value = mbEntity; if (typeof window._mbToggleEntityFilters === "function") window._mbToggleEntityFilters(); }
+                  const qEl = document.getElementById("mb-q");
+                  if (qEl) qEl.value = label;
+                  if (scope === "track" && trackArtist) {
+                    const aEl = document.getElementById("mb-artist");
+                    if (aEl) aEl.value = trackArtist;
+                  }
+                  if (typeof window._mbRunSearch === "function") window._mbRunSearch();
+                } catch {}
+              }, 60);
+            } catch {}
+          };
+          if (typeof window._mbRunSearch === "function") fire();
+          else if (typeof window._sdLoadModule === "function") {
+            window._sdLoadModule("/musicbrainz.js").then(fire).catch(() => {});
+          } else { fire(); }
         }
       } catch (err) { console.error("lookup action failed:", err); }
     });
