@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260607.2106" />
+  <link rel="stylesheet" href="/style.css?v=20260607.2117" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260607.2106"></script>
+<script defer src="/shared.js?v=20260607.2117"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1015,44 +1015,71 @@ e.g.  miles davis | coltrane
     <h2 class="loc-title">MusicBrainz</h2>
     <div class="loc-tabs" id="musicbrainz-tabs">
       <button type="button" class="loc-tab loc-tab-search active" data-mb-tab="search" onclick="_mbSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab" data-mb-tab="recent"  onclick="_mbSwitchTab('recent')">Recent</button>
+      <button type="button" class="loc-tab" data-mb-tab="saved" onclick="_mbSwitchTab('saved')">Saved</button>
     </div>
   </div>
 
   <div class="musicbrainz-panel-search">
-    <form class="loc-form" onsubmit="event.preventDefault();_mbRunSearch()">
-      <div class="loc-form-row" style="flex-wrap:wrap;gap:0.5rem">
-        <select id="mb-entity" style="padding:0.45rem 0.5rem;font-size:0.85rem" onchange="_mbToggleEntityFilters()" title="Which kind of MusicBrainz entity to search">
-          <option value="artist">Artist</option>
-          <option value="release">Release</option>
-          <option value="release-group">Release group</option>
-          <option value="recording">Recording</option>
-          <option value="work">Work</option>
-          <option value="label">Label</option>
-        </select>
-        <input id="mb-q" type="search" placeholder="Free-text query (Lucene)" style="flex:1;min-width:240px;padding:0.5rem 0.7rem;font-size:0.9rem" autocomplete="off">
-        <button type="submit" class="loc-submit">Search</button>
+    <!-- Layout mirrors the main search form: prominent query row at
+         top, secondary controls strip below (entity selector +
+         Advanced toggle + sort), expandable advanced filter grid. -->
+    <form id="mb-search-form" onsubmit="event.preventDefault();_mbRunSearch()">
+      <div class="search-row" style="display:flex;gap:0.5rem;align-items:center">
+        <input id="mb-q" type="search" placeholder="Search MusicBrainz" autocomplete="off" style="flex:1;min-width:0;padding:0.55rem 0.75rem;font-size:0.95rem">
+        <button type="submit" class="loc-submit" style="flex-shrink:0">Search</button>
       </div>
-      <!-- Advanced filter row — visible when expanded. Mirrors the
-           main search advanced panel. -->
-      <div id="mb-advanced" style="display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.82rem;color:var(--muted)">
-        <label data-mb-filter="artist">Artist <input id="mb-artist" type="text" placeholder="exact / partial" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="release">Release <input id="mb-release" type="text" placeholder="title" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="recording">Recording <input id="mb-recording" type="text" placeholder="track" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="label">Label <input id="mb-label" type="text" placeholder="name" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="country">Country <input id="mb-country" type="text" placeholder="US / GB / …" maxlength="2" style="width:55px;padding:0.3rem 0.4rem;font-size:0.82rem;text-transform:uppercase"></label>
-        <label data-mb-filter="year">Year <input id="mb-year" type="text" placeholder="1968 or 1965 TO 1972" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="tag">Tag <input id="mb-tag" type="text" placeholder="blues, rock, …" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
-        <label data-mb-filter="type">Type <input id="mb-type" type="text" placeholder="album / single / live" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+      <div class="type-sort-row" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.5rem;font-size:0.82rem;color:var(--muted)">
+        <button type="button" id="mb-advanced-toggle" onclick="_mbToggleAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem"><span id="mb-advanced-arrow">▶</span> Advanced</button>
+        <span style="color:#333;margin:0 0.4rem">|</span>
+        <label style="display:flex;align-items:center;gap:0.35rem">Entity
+          <select id="mb-entity" style="padding:0.3rem 0.4rem;font-size:0.82rem" onchange="_mbToggleEntityFilters();_mbPersistState()">
+            <option value="artist">Artist</option>
+            <option value="release-group">Release group</option>
+            <option value="release">Release</option>
+            <option value="recording">Recording</option>
+            <option value="work">Work</option>
+            <option value="label">Label</option>
+          </select>
+        </label>
+      </div>
+      <div id="mb-advanced-panel" style="display:none;margin-top:0.5rem">
+        <div class="filters-grid main-filters" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.5rem">
+          <label data-mb-filter="artist">Artist <input id="mb-artist" type="text" placeholder="exact / partial"></label>
+          <label data-mb-filter="release">Release <input id="mb-release" type="text" placeholder="title"></label>
+          <label data-mb-filter="recording">Recording <input id="mb-recording" type="text" placeholder="track"></label>
+          <label data-mb-filter="label">Label <input id="mb-label" type="text" placeholder="name"></label>
+          <label data-mb-filter="country">Country <input id="mb-country" type="text" placeholder="US / GB / …" maxlength="2" style="text-transform:uppercase"></label>
+          <label data-mb-filter="year">Year <input id="mb-year" type="text" placeholder="1968 or 1965 TO 1972"></label>
+          <label data-mb-filter="tag">Tag <input id="mb-tag" type="text" placeholder="blues, rock, …"></label>
+          <label data-mb-filter="type">Type <input id="mb-type" type="text" placeholder="album / single / live"></label>
+        </div>
       </div>
     </form>
-    <div id="mb-status" class="loc-status"></div>
+    <div id="mb-status" class="loc-status" style="margin-top:0.7rem"></div>
     <div id="mb-results" class="musicbrainz-results-list"></div>
     <div id="mb-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
   </div>
 
-  <div class="musicbrainz-panel-recent" style="display:none">
-    <div id="mb-recent" class="musicbrainz-results-list"><div class="loc-empty">Loading recently-cached…</div></div>
+  <div class="musicbrainz-panel-saved" style="display:none">
+    <!-- Saved tab: per-admin starred MB entities, grouped by type.
+         Filter strip lets the curator narrow by entity type without
+         re-fetching; sorted newest-saved-first by default. -->
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap;font-size:0.82rem;color:var(--muted)">
+      <label>Type
+        <select id="mb-saved-type" onchange="_mbLoadSaved()">
+          <option value="">All</option>
+          <option value="artist">Artists</option>
+          <option value="release-group">Release groups</option>
+          <option value="release">Releases</option>
+          <option value="recording">Recordings</option>
+          <option value="work">Works</option>
+          <option value="label">Labels</option>
+        </select>
+      </label>
+      <input id="mb-saved-filter" type="search" placeholder="Filter saved…" oninput="_mbRenderSaved()" style="flex:1;min-width:200px;padding:0.35rem 0.55rem;font-size:0.82rem">
+      <span id="mb-saved-count" style="margin-left:auto;color:var(--muted)"></span>
+    </div>
+    <div id="mb-saved-results" class="musicbrainz-results-list"><div class="loc-empty">Loading saves…</div></div>
   </div>
 </div>
 
@@ -1746,13 +1773,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260607.2106"></script>
-<script defer src="/search.js?v=20260607.2106"></script>
-<script defer src="/collection.js?v=20260607.2106"></script>
+<script defer src="/utils.js?v=20260607.2117"></script>
+<script defer src="/search.js?v=20260607.2117"></script>
+<script defer src="/collection.js?v=20260607.2117"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260607.2106"></script>
-<script defer src="/app.js?v=20260607.2106"></script>
+<script defer src="/modal.js?v=20260607.2117"></script>
+<script defer src="/app.js?v=20260607.2117"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1763,13 +1790,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260607.2106"></script>
-<script defer src="/queue.js?v=20260607.2106"></script>
+<script defer src="/loc.js?v=20260607.2117"></script>
+<script defer src="/queue.js?v=20260607.2117"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260607.2106";
+  window._SD_LAZY_VERSION = "20260607.2117";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1799,8 +1826,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260607.2106"></script>
-<script defer src="/offline.js?v=20260607.2106"></script>
+<script defer src="/idb.js?v=20260607.2117"></script>
+<script defer src="/offline.js?v=20260607.2117"></script>
 
 </body>
 </html>
