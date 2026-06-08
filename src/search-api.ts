@@ -11,6 +11,8 @@ import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
+import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
+import { mbCacheGet, mbCacheSet } from "./db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10875,6 +10877,176 @@ app.get("/api/blues-archive/releases", async (req, res) => {
   }
 });
 
+
+// ── MusicBrainz proxy + cache ──────────────────────────────────────
+// Admin-only at the moment. All upstream MB calls go through the
+// rate-limited client + cache table so a search that's already been
+// run is satisfied locally without burning the 1 req/s budget.
+//
+// /api/musicbrainz/search  → entity-type-aware search (artist /
+//   release / release-group / recording / work / label)
+// /api/musicbrainz/:type/:mbid → lookup a single MB entity
+//   (relationships + media + tags included for richness)
+{
+  // crypto + module imports inlined via the file's top-level import
+  // block. We use sha256 to fingerprint search-query+filter combos so
+  // the same search is collapsed onto one cache row.
+  const _MB_ALLOWED = new Set([
+    "artist", "release", "release-group", "recording", "work", "label",
+  ]);
+
+  app.get("/api/musicbrainz/search", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const type = String(req.query.type ?? "artist").trim().toLowerCase();
+      if (!_MB_ALLOWED.has(type)) {
+        res.status(400).json({ error: "type must be one of: " + Array.from(_MB_ALLOWED).join(", ") });
+        return;
+      }
+      // Free-form q + a handful of structured fields. Anything else is
+      // dropped at the build step so a curious caller can't poke at MB's
+      // long Lucene field list through this proxy.
+      const filters: Record<string, string> = {};
+      for (const k of ["q", "artist", "release", "recording", "label", "country", "date", "year", "tag", "type"]) {
+        const v = String(req.query[k] ?? "").trim();
+        if (v) filters[k] = v;
+      }
+      const limit  = Math.max(1, Math.min(100, parseInt(String(req.query.limit  ?? "25"), 10) || 25));
+      const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"),  10) || 0);
+
+      const lucene = mbBuildLuceneQuery(filters);
+      if (!lucene) { res.status(400).json({ error: "at least one filter required" }); return; }
+
+      // Cache key: type + sha256(lucene + limit + offset). Hash so the
+      // text column stays a fixed width regardless of query length.
+      const hash = crypto.createHash("sha256")
+        .update(`${type}|${lucene}|${limit}|${offset}`)
+        .digest("hex");
+      const cached = await mbCacheGet(`search:${type}`, hash);
+      if (cached) { res.json({ source: "cache", query: lucene, ...cached }); return; }
+
+      const data = await mbFetch<any>(`/${type}`, {
+        query: lucene,
+        limit,
+        offset,
+      });
+      await mbCacheSet(`search:${type}`, hash, data);
+      res.json({ source: "upstream", query: lucene, ...data });
+    } catch (err: any) {
+      console.error("[musicbrainz search]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+
+  app.get("/api/musicbrainz/:type/:mbid", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const type = String(req.params.type ?? "").toLowerCase();
+      const mbid = String(req.params.mbid ?? "");
+      if (!_MB_ALLOWED.has(type)) { res.status(400).json({ error: "bad type" }); return; }
+      // MBIDs are 36-char UUID strings; loose validation guards against
+      // accidental path-injection. MB accepts both upper and lower hex.
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(mbid)) {
+        res.status(400).json({ error: "bad mbid" }); return;
+      }
+      // inc= is the include list; we hard-code a useful default per
+      // entity type so the response carries linked-entity payloads
+      // (artist → release-groups + tags; release → recordings + labels +
+      // media; recording → artists + releases + tags). Callers can
+      // override via ?inc= but we never let arbitrary strings through —
+      // only a whitelist of MB-documented include keywords.
+      const incRaw = String(req.query.inc ?? "").trim();
+      const incDefaults: Record<string, string> = {
+        "artist":        "url-rels+release-groups+tags+aliases+ratings",
+        "release":       "artist-credits+labels+recordings+release-groups+media+tags+url-rels",
+        "release-group": "artists+releases+tags+ratings+url-rels",
+        "recording":     "artists+releases+tags+url-rels",
+        "work":          "artist-rels+recording-rels+tags",
+        "label":         "url-rels+tags+aliases",
+      };
+      let inc = incDefaults[type];
+      if (incRaw) {
+        const allowed = new Set([
+          "url-rels", "artist-rels", "recording-rels", "release-rels", "release-group-rels",
+          "release-groups", "releases", "recordings", "labels", "media",
+          "tags", "ratings", "aliases", "artists", "artist-credits",
+        ]);
+        const requested = incRaw.split(/[+,\s]+/).filter(Boolean);
+        const safe = requested.filter(k => allowed.has(k));
+        if (safe.length) inc = safe.join("+");
+      }
+
+      const cacheKey = inc ? `${mbid}|${inc}` : mbid;
+      const cached = await mbCacheGet(type, cacheKey);
+      if (cached) { res.json({ source: "cache", ...cached }); return; }
+
+      const data = await mbFetch<any>(`/${type}/${mbid}`, { inc });
+      await mbCacheSet(type, cacheKey, data);
+      res.json({ source: "upstream", ...data });
+    } catch (err: any) {
+      console.error("[musicbrainz lookup]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+}
+
+// GET /api/blues-archive/releases/export.csv — flat CSV dump of every
+// release stored across all blues_artists.discogs_releases JSONB
+// arrays. Mirrors the artists / lyrics CSV style: UTF-8 BOM, Excel-
+// friendly quoting, formula-injection guard.
+app.get("/api/blues-archive/releases/export.csv", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const result = await listBluesArchiveReleases({ limit: 500000, offset: 0 });
+    const cols = ["artist_id", "artist_name", "id", "type", "title", "year", "role", "label", "format"];
+    const csvCell = (v: any): string => {
+      if (v == null) return "";
+      if (Array.isArray(v) || typeof v === "object") v = JSON.stringify(v);
+      const s = String(v);
+      if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = cols.join(",");
+    const body = (result.rows || []).map((row: any) => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+    const csv = "﻿" + header + "\n" + body + "\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-releases-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (err: any) {
+    console.error("[blues-archive releases export.csv]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// GET /api/blues-archive/tunings/export.csv — CSV dump of the static
+// tunings grid (#, artist, title, position, pitch, notes).
+app.get("/api/blues-archive/tunings/export.csv", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const result = await listBluesTunings({ limit: 100000, offset: 0 });
+    const cols = ["row_num", "artist", "title", "position", "pitch", "notes"];
+    const csvCell = (v: any): string => {
+      if (v == null) return "";
+      if (Array.isArray(v) || typeof v === "object") v = JSON.stringify(v);
+      const s = String(v);
+      if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = cols.join(",");
+    const body = (result.rows || []).map((row: any) => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+    const csv = "﻿" + header + "\n" + body + "\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-tunings-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (err: any) {
+    console.error("[blues-archive tunings export.csv]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
 
 // POST /api/blues-archive/merge body { fromId, intoId }
 // Reassigns the source artist's lyrics (by name match) to the target,

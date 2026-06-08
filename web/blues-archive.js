@@ -2914,6 +2914,59 @@ async function _baExportArtistsPdf() {
 }
 window._baExportArtistsPdf = _baExportArtistsPdf;
 
+// Releases + Tunings CSV exports — mirror the lyrics CSV flow.
+// Endpoints stream the full table; the download trigger is the same
+// blob → object URL → anchor.click pattern used elsewhere.
+async function _baExportReleasesCsv() {
+  const btn = document.getElementById("blues-export-releases-btn");
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/releases/export.csv");
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const blob = await r.blob();
+    const fname = `seadisco-releases-${new Date().toISOString().slice(0, 10)}.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    alert("Export failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+window._baExportReleasesCsv = _baExportReleasesCsv;
+
+async function _baExportTuningsCsv() {
+  const btn = document.getElementById("blues-export-tunings-btn");
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/tunings/export.csv");
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const blob = await r.blob();
+    const fname = `seadisco-tunings-${new Date().toISOString().slice(0, 10)}.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    alert("Export failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+window._baExportTuningsCsv = _baExportTuningsCsv;
+
 // Single dispatcher for every admin-only action that's powered by
 // /blues-admin.js. Each kind maps to a function name; we lazy-load
 // the module on first call, then invoke. Keeps the inline onclick
