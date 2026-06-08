@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260607.1943" />
+  <link rel="stylesheet" href="/style.css?v=20260607.1956" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260607.1943"></script>
+<script defer src="/shared.js?v=20260607.1956"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -764,6 +764,12 @@ e.g.  miles davis | coltrane
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-blues-archive" class="rr-tab" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
+    <!-- MusicBrainz tab — admin-only proxied search across MB's
+         artist / release / recording / work / label entity types.
+         All responses cached server-side. Mirrors the blues-archive
+         gating. -->
+    <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
+    <span id="extras-tab-musicbrainz" class="rr-tab" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
   </div>
 </div>
 
@@ -990,6 +996,56 @@ e.g.  miles davis | coltrane
      containers (loc-view, gutenberg-view, chronam-view) before the
      footer — when it was below the footer the footer rendered above
      the archive content. -->
+<!-- MusicBrainz view (admin-only). Search artist / release /
+     release-group / recording / work / label with Lucene-flavoured
+     filter fields. Every upstream MB call is cached server-side via
+     musicbrainz_cache so re-running the same query is local. -->
+<div id="musicbrainz-view" class="content-narrow" style="display:none">
+  <div class="loc-header">
+    <h2 class="loc-title">MusicBrainz</h2>
+    <div class="loc-tabs" id="musicbrainz-tabs">
+      <button type="button" class="loc-tab loc-tab-search active" data-mb-tab="search" onclick="_mbSwitchTab('search')">Search</button>
+      <button type="button" class="loc-tab" data-mb-tab="recent"  onclick="_mbSwitchTab('recent')">Recent</button>
+    </div>
+  </div>
+
+  <div class="musicbrainz-panel-search">
+    <form class="loc-form" onsubmit="event.preventDefault();_mbRunSearch()">
+      <div class="loc-form-row" style="flex-wrap:wrap;gap:0.5rem">
+        <select id="mb-entity" style="padding:0.45rem 0.5rem;font-size:0.85rem" onchange="_mbToggleEntityFilters()" title="Which kind of MusicBrainz entity to search">
+          <option value="artist">Artist</option>
+          <option value="release">Release</option>
+          <option value="release-group">Release group</option>
+          <option value="recording">Recording</option>
+          <option value="work">Work</option>
+          <option value="label">Label</option>
+        </select>
+        <input id="mb-q" type="search" placeholder="Free-text query (Lucene)" style="flex:1;min-width:240px;padding:0.5rem 0.7rem;font-size:0.9rem" autocomplete="off">
+        <button type="submit" class="loc-submit">Search</button>
+      </div>
+      <!-- Advanced filter row — visible when expanded. Mirrors the
+           main search advanced panel. -->
+      <div id="mb-advanced" style="display:flex;gap:0.5rem;flex-wrap:wrap;font-size:0.82rem;color:var(--muted)">
+        <label data-mb-filter="artist">Artist <input id="mb-artist" type="text" placeholder="exact / partial" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="release">Release <input id="mb-release" type="text" placeholder="title" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="recording">Recording <input id="mb-recording" type="text" placeholder="track" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="label">Label <input id="mb-label" type="text" placeholder="name" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="country">Country <input id="mb-country" type="text" placeholder="US / GB / …" maxlength="2" style="width:55px;padding:0.3rem 0.4rem;font-size:0.82rem;text-transform:uppercase"></label>
+        <label data-mb-filter="year">Year <input id="mb-year" type="text" placeholder="1968 or 1965 TO 1972" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="tag">Tag <input id="mb-tag" type="text" placeholder="blues, rock, …" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+        <label data-mb-filter="type">Type <input id="mb-type" type="text" placeholder="album / single / live" style="padding:0.3rem 0.4rem;font-size:0.82rem"></label>
+      </div>
+    </form>
+    <div id="mb-status" class="loc-status"></div>
+    <div id="mb-results" class="musicbrainz-results-list"></div>
+    <div id="mb-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
+  </div>
+
+  <div class="musicbrainz-panel-recent" style="display:none">
+    <div id="mb-recent" class="musicbrainz-results-list"><div class="loc-empty">Loading recently-cached…</div></div>
+  </div>
+</div>
+
 <div id="blues-archive-view" class="content-narrow" style="display:none">
   <div class="blues-archive-list">
     <!-- Header: title + subtab nav, mirroring the loc-header pattern
@@ -1113,6 +1169,7 @@ e.g.  miles davis | coltrane
           <option value="UnofficialRelease">UnofficialRelease</option>
         </select>
         <button type="button" class="archive-btn" onclick="_baLoadReleases();_baLoadStats();" title="Re-fetch the releases list from the server">↻ Refresh</button>
+        <button type="button" id="blues-export-releases-btn" class="archive-btn" onclick="_baExportReleasesCsv()" title="Download every release row as a CSV (artist, title, year, type, role, label, format). UTF-8 with BOM.">Export CSV</button>
         <button type="button" id="blues-archive-releases-clear" class="archive-btn" onclick="_baReleasesClearFilters()" style="display:none" title="Clear search, year, type, and role filters; back to the full list.">Clear filters</button>
         <span id="blues-archive-releases-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
@@ -1131,6 +1188,7 @@ e.g.  miles davis | coltrane
         <select id="ba-tunings-position" onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All positions</option></select>
         <select id="ba-tunings-pitch"    onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All pitches</option></select>
         <button type="button" class="archive-btn" onclick="_baLoadTuningsGrid()" title="Re-fetch the tunings grid from the server">↻ Refresh</button>
+        <button type="button" id="blues-export-tunings-btn" class="archive-btn" onclick="_baExportTuningsCsv()" title="Download the tunings grid as a CSV (artist, title, position, pitch, notes). UTF-8 with BOM.">Export CSV</button>
         <button type="button" id="ba-tunings-clear" class="archive-btn" onclick="_baTuningsClearFilters()" style="display:none" title="Clear all tuning filters">Clear filters</button>
         <span id="ba-tunings-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
@@ -1675,13 +1733,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260607.1943"></script>
-<script defer src="/search.js?v=20260607.1943"></script>
-<script defer src="/collection.js?v=20260607.1943"></script>
+<script defer src="/utils.js?v=20260607.1956"></script>
+<script defer src="/search.js?v=20260607.1956"></script>
+<script defer src="/collection.js?v=20260607.1956"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260607.1943"></script>
-<script defer src="/app.js?v=20260607.1943"></script>
+<script defer src="/modal.js?v=20260607.1956"></script>
+<script defer src="/app.js?v=20260607.1956"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1692,13 +1750,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260607.1943"></script>
-<script defer src="/queue.js?v=20260607.1943"></script>
+<script defer src="/loc.js?v=20260607.1956"></script>
+<script defer src="/queue.js?v=20260607.1956"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260607.1943";
+  window._SD_LAZY_VERSION = "20260607.1956";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1728,8 +1786,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260607.1943"></script>
-<script defer src="/offline.js?v=20260607.1943"></script>
+<script defer src="/idb.js?v=20260607.1956"></script>
+<script defer src="/offline.js?v=20260607.1956"></script>
 
 </body>
 </html>
