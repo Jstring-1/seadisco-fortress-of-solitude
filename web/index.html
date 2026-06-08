@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260607.1935" />
+  <link rel="stylesheet" href="/style.css?v=20260607.1943" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260607.1935"></script>
+<script defer src="/shared.js?v=20260607.1943"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -785,7 +785,7 @@ e.g.  miles davis | coltrane
     <h2 class="loc-title">Wikipedia</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_wikiSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab loc-tab-saved" onclick="_wikiSwitchTab('saved')">Saved</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_wikiSwitchTab('saved')" title="Sign in to save Wikipedia articles for later">Saved</button>
     </div>
   </div>
 
@@ -814,7 +814,7 @@ e.g.  miles davis | coltrane
     <h2 class="loc-title">YouTube</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_youtubeSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab loc-tab-saved" onclick="_youtubeSwitchTab('saved')">Saved</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_youtubeSwitchTab('saved')" title="Sign in to save YouTube videos for later">Saved</button>
     </div>
   </div>
 
@@ -852,7 +852,7 @@ e.g.  miles davis | coltrane
     <h2 class="loc-title">Project Gutenberg</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_gutenbergSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab loc-tab-saved" onclick="_gutenbergSwitchTab('saved')">Saved</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_gutenbergSwitchTab('saved')" title="Sign in to save books to your library">Saved</button>
     </div>
   </div>
 
@@ -934,7 +934,7 @@ e.g.  miles davis | coltrane
     <h2 class="loc-title">Historic Newspapers</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_chronamSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab loc-tab-saved" onclick="_chronamSwitchTab('saved')">Saved</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_chronamSwitchTab('saved')" title="Sign in to save newspaper pages for later">Saved</button>
     </div>
   </div>
 
@@ -992,35 +992,34 @@ e.g.  miles davis | coltrane
      the archive content. -->
 <div id="blues-archive-view" class="content-narrow" style="display:none">
   <div class="blues-archive-list">
-    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap">
-      <h2 style="margin:0;font-size:1.05rem">Blues Archive</h2>
-      <!-- Bulk admin actions — IDs match what /blues-admin.js looks up. -->
-      <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
-      <button type="button" class="archive-btn" onclick="_baOpenLyricEditor(null)" title="Manually add a new lyric row. Title + artist are unique per source_host so the same song title under different artists is allowed.">+ Add lyric</button>
-      <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
-      <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsCsv')" title="Download every blues_artists row as a CSV (with the discogs_releases JSONB column flattened to JSON). UTF-8 with BOM, opens cleanly in Excel/Sheets.">Export artists CSV</button>
-      <button type="button" id="blues-export-artists-pdf-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsPdf')" title="Download every blues_artists row as a printable / ereader-friendly PDF, sorted alphabetically by name. Per artist: dates, hometown, pseudonyms, bands, bio, and every Discogs release sorted oldest→newest. No lyrics — those are in the separate Export lyrics PDF.">Export artists PDF</button>
-      <button type="button" id="blues-export-lyrics-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsCsv')" title="Download every blues_lyrics row as a CSV (title, artist, tuning, plaintext, page URL, etc.). UTF-8 with BOM.">Export lyrics CSV</button>
-      <button type="button" id="blues-export-lyrics-pdf-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsPdf')" title="Download every blues_lyrics row as a printable / ereader-friendly PDF, sorted alphabetically by song title with a per-letter page break. Title + artist · tuning · year + full plaintext per song.">Export lyrics PDF</button>
-      <button type="button" id="blues-export-lyrics-doc-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsDoc')" title="Download every blues_lyrics row as a Word-openable .doc, grouped by artist. Opens in Word / Pages / LibreOffice / Google Docs and is editable as a normal document.">Export lyrics DOC</button>
-      <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+    <!-- Header: title + subtab nav, mirroring the loc-header pattern
+         used by wiki/youtube/gutenberg/chronam so every discovery
+         page presents the same top affordance. Bulk action buttons
+         that used to live up here have moved into their respective
+         per-subtab toolbars to cut top-of-page clutter. -->
+    <div class="loc-header">
+      <h2 class="loc-title">Blues Archive <span id="blues-archive-count" style="font-size:0.72rem;color:var(--muted);font-weight:normal;margin-left:0.5rem"></span></h2>
+      <div class="loc-tabs" id="blues-archive-subtabs">
+        <button type="button" class="loc-tab loc-tab-search active ba-subtab" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
+      </div>
     </div>
     <!-- Stats strip — curation dashboard. Click a chip to jump to a
          filtered view (e.g. orphans → Lyrics tab with the unmatched
          filter on). Populated by /api/blues-archive/stats. -->
     <div id="blues-archive-stats" style="display:flex;gap:0.6rem;flex-wrap:wrap;font-size:0.7rem;margin-bottom:0.6rem;color:var(--muted)"></div>
-    <!-- Sub-tabs: switch between the artists list and the searchable
-         master lyrics list. Both surfaces use the same admin-gated
-         endpoints; client-side toggle hides/shows the right panel. -->
-    <div id="blues-archive-subtabs" style="display:flex;gap:0.4rem;margin-bottom:0.6rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem">
-      <button type="button" class="archive-btn ba-subtab is-active" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
-      <button type="button" class="archive-btn ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
-      <button type="button" class="archive-btn ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
-      <button type="button" class="archive-btn ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
-    </div>
     <div id="blues-archive-artists-panel">
-      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem">
-        <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="flex:1;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_bluesArchiveDebouncedSearch()">
+      <!-- Artists-tab toolbar: search + Artists-specific bulk actions
+           (add, full Discogs enrich, CSV/PDF exports). Moved here from
+           the top header so they only show when this subtab is active. -->
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
+        <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_bluesArchiveDebouncedSearch()">
+        <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
+        <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
+        <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsCsv')" title="Download every blues_artists row as a CSV (with the discogs_releases JSONB column flattened to JSON). UTF-8 with BOM, opens cleanly in Excel/Sheets.">Export CSV</button>
+        <button type="button" id="blues-export-artists-pdf-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsPdf')" title="Download every blues_artists row as a printable / ereader-friendly PDF, sorted alphabetically by name. Per artist: dates, hometown, pseudonyms, bands, bio, and every Discogs release sorted oldest→newest. No lyrics — those are in the separate Export lyrics PDF.">Export PDF</button>
         <button type="button" class="archive-btn" onclick="_baLoadList();_baLoadStats();" title="Re-fetch the artist list from the server">↻ Refresh</button>
       </div>
       <!-- Active-filter indicator. Populated by _baRenderArtistsFilterIndicator
@@ -1059,6 +1058,10 @@ e.g.  miles davis | coltrane
         <button type="button" class="archive-btn" onclick="_baLoadLyrics();_baLoadStats();" title="Re-fetch the lyrics list from the server">↻ Refresh</button>
         <button type="button" class="archive-btn" onclick="_baClearVisitedLyrics()" title="Clear the dim 'visited' state from every lyric row so they all read as unread again. Local to this browser.">Reset visited</button>
         <button type="button" class="archive-btn" onclick="_baOpenBansOverlay()" title="View / remove rows from the rescrape ban list. Banned titles and banned artist names are SKIPPED by the wiki rescrape so deleted artists don't get re-added.">Bans</button>
+        <button type="button" class="archive-btn" onclick="_baOpenLyricEditor(null)" title="Manually add a new lyric row. Title + artist are unique per source_host so the same song title under different artists is allowed.">+ Add lyric</button>
+        <button type="button" id="blues-export-lyrics-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsCsv')" title="Download every blues_lyrics row as a CSV (title, artist, tuning, plaintext, page URL, etc.). UTF-8 with BOM.">Export CSV</button>
+        <button type="button" id="blues-export-lyrics-pdf-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsPdf')" title="Download every blues_lyrics row as a printable / ereader-friendly PDF, sorted alphabetically by song title with a per-letter page break. Title + artist · tuning · year + full plaintext per song.">Export PDF</button>
+        <button type="button" id="blues-export-lyrics-doc-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsDoc')" title="Download every blues_lyrics row as a Word-openable .doc, grouped by artist. Opens in Word / Pages / LibreOffice / Google Docs and is editable as a normal document.">Export DOC</button>
         <!-- Refresh recent: incremental update driven by MediaWiki's
              list=recentchanges (last 30 days, new pages only by
              default). Much faster than the full walk — typically a
@@ -1672,13 +1675,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260607.1935"></script>
-<script defer src="/search.js?v=20260607.1935"></script>
-<script defer src="/collection.js?v=20260607.1935"></script>
+<script defer src="/utils.js?v=20260607.1943"></script>
+<script defer src="/search.js?v=20260607.1943"></script>
+<script defer src="/collection.js?v=20260607.1943"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260607.1935"></script>
-<script defer src="/app.js?v=20260607.1935"></script>
+<script defer src="/modal.js?v=20260607.1943"></script>
+<script defer src="/app.js?v=20260607.1943"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1689,13 +1692,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260607.1935"></script>
-<script defer src="/queue.js?v=20260607.1935"></script>
+<script defer src="/loc.js?v=20260607.1943"></script>
+<script defer src="/queue.js?v=20260607.1943"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260607.1935";
+  window._SD_LAZY_VERSION = "20260607.1943";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1725,8 +1728,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260607.1935"></script>
-<script defer src="/offline.js?v=20260607.1935"></script>
+<script defer src="/idb.js?v=20260607.1943"></script>
+<script defer src="/offline.js?v=20260607.1943"></script>
 
 </body>
 </html>
