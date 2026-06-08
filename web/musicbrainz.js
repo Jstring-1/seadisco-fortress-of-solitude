@@ -290,13 +290,20 @@ function _mbGoPage(p) {
 }
 window._mbGoPage = _mbGoPage;
 
+// Navigation stack — every entity we've opened in the current
+// overlay session, in order. Clicking a nested entity ↗ pushes a
+// new frame; the ← back button pops back to the previous. Cleared
+// on overlay close (× / outside-click) so a fresh open always starts
+// at a single-entry stack.
+const _mbDetailStack = [];
+
 // Detail overlay. Hits /api/musicbrainz/:type/:mbid (the server
 // attaches per-entity `inc=` defaults so we get linked entities for
 // free) and renders a Discogs-popup-styled panel: title + lookup
 // affordance, meta line, external-link strip, and entity-specific
-// content sections. Raw-JSON view is still available behind a toggle
-// for the curator who wants to inspect MB fields verbatim.
-async function _mbOpenDetail(type, mbid) {
+// content sections. Caches the response on each stack frame so the
+// ← back navigation re-renders without a second network call.
+async function _mbOpenDetail(type, mbid, opts = {}) {
   let overlay = document.getElementById("mb-detail-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -306,8 +313,22 @@ async function _mbOpenDetail(type, mbid) {
       zIndex: "300", display: "flex", alignItems: "flex-start",
       justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
     });
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        overlay.remove();
+        _mbDetailStack.length = 0;
+      }
+    };
     document.body.appendChild(overlay);
+  }
+  // Stack management: a normal open pushes a new frame; the ← back
+  // handler passes { fromBack: true } so we don't push the frame we
+  // just popped back to. We don't dedupe same (type, mbid) frames —
+  // walking a release → its artist → that artist's release-group →
+  // a different release in the same group is a legitimate path the
+  // user might want to retrace.
+  if (!opts.fromBack) {
+    _mbDetailStack.push({ type, mbid, j: null });
   }
   overlay.innerHTML = `
     <div class="mb-detail-card" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(900px,100%)">
@@ -316,18 +337,30 @@ async function _mbOpenDetail(type, mbid) {
           <h3 class="mb-detail-title" style="margin:0 0 0.2rem;font-size:1.05rem">Loading…</h3>
           <div class="mb-detail-meta" style="color:var(--muted);font-size:0.78rem"></div>
         </div>
-        <button class="archive-btn" onclick="document.getElementById('mb-detail-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+        <div style="display:flex;gap:0.3rem;align-items:start">
+          ${_mbDetailStack.length > 1
+            ? `<button class="archive-btn mb-detail-back" onclick="_mbDetailBack()" title="Back to ${_mbEsc(_mbDetailStack[_mbDetailStack.length - 2].type)}" style="padding:0.25rem 0.6rem">← Back</button>`
+            : ""}
+          <button class="archive-btn" onclick="document.getElementById('mb-detail-overlay')?.remove();_mbDetailStack.length=0" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+        </div>
       </div>
       <div class="mb-detail-body" style="font-size:0.84rem;color:var(--text)">Fetching…</div>
     </div>
   `;
   try {
-    const r = await apiFetch(`/api/musicbrainz/${encodeURIComponent(type)}/${encodeURIComponent(mbid)}`);
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    // Frames already on the stack carry their fetched JSON, so a back
+    // nav re-renders without a network round trip.
+    const top = _mbDetailStack[_mbDetailStack.length - 1];
+    let j = top?.j;
+    if (!j) {
+      const r = await apiFetch(`/api/musicbrainz/${encodeURIComponent(type)}/${encodeURIComponent(mbid)}`);
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+      }
+      j = await r.json();
+      if (top) top.j = j;
     }
-    const j = await r.json();
     _mbRenderDetail(overlay, type, mbid, j);
   } catch (e) {
     overlay.querySelector(".mb-detail-body").innerHTML =
@@ -335,6 +368,19 @@ async function _mbOpenDetail(type, mbid) {
   }
 }
 window._mbOpenDetail = _mbOpenDetail;
+
+// Back-button handler: pops the top of the navigation stack and
+// re-renders whatever frame is now at the top. Cached JSON from the
+// previous fetch means no network call. No-op if the stack is too
+// shallow (the × handler is what closes the overlay entirely).
+function _mbDetailBack() {
+  if (_mbDetailStack.length <= 1) return;
+  _mbDetailStack.pop();
+  const prev = _mbDetailStack[_mbDetailStack.length - 1];
+  if (!prev) return;
+  _mbOpenDetail(prev.type, prev.mbid, { fromBack: true });
+}
+window._mbDetailBack = _mbDetailBack;
 
 // Per-entity formatted detail. Mirrors the Discogs artist / release
 // popup shape: title row + meta line + external links + content
