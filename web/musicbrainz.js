@@ -462,7 +462,6 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   // date/country/format for release; etc.).
   const metaParts = [];
   metaParts.push(`<code style="color:var(--accent)">${_mbEsc(mbid)}</code>`);
-  metaParts.push(`<a href="https://musicbrainz.org/${_mbEsc(type)}/${_mbEsc(mbid)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">MusicBrainz ↗</a>`);
   if (type === "artist") {
     if (j.type)    metaParts.push(_mbEsc(j.type));
     if (j.gender)  metaParts.push(_mbEsc(j.gender));
@@ -517,36 +516,6 @@ function _mbRenderDetail(overlay, type, mbid, j) {
 
   // Body — assemble sections then drop them in.
   const sections = [];
-
-  // External links from url-rels relations. Discogs intentionally
-  // omitted — its functionality is folded into the title's lookup
-  // popup (which routes SeaDisco / Blues Archive operations through
-  // the Discogs id) so we don't render two competing affordances
-  // for the same destination.
-  sections.push(_mbRenderUrlRels(j));
-
-  // Area block (artist / label) — born-in / from / active-in. MB
-  // returns these as nested area objects with names; we render a
-  // compact "Origin / Active" line.
-  if (type === "artist" || type === "label") {
-    const areaParts = [];
-    if (j.area?.name)         areaParts.push(`<span style="color:var(--muted)">from</span> ${_mbEsc(j.area.name)}`);
-    if (j["begin-area"]?.name && j["begin-area"]?.name !== j.area?.name) {
-      areaParts.push(`<span style="color:var(--muted)">born</span> ${_mbEsc(j["begin-area"].name)}`);
-    }
-    if (j["end-area"]?.name) {
-      areaParts.push(`<span style="color:var(--muted)">ended</span> ${_mbEsc(j["end-area"].name)}`);
-    }
-    // Sort-name only shown when it differs meaningfully from the
-    // display name (e.g. "Hooker, John Lee" vs "John Lee Hooker") —
-    // otherwise it's noise.
-    if (j["sort-name"] && j["sort-name"] !== name) {
-      areaParts.push(`<span style="color:var(--muted)">sort-name</span> "${_mbEsc(j["sort-name"])}"`);
-    }
-    if (areaParts.length) {
-      sections.push(`<div style="margin:0.4rem 0;font-size:0.82rem">${areaParts.join(' <span style="color:#555">·</span> ')}</div>`);
-    }
-  }
 
   // Annotation (free-form curator note attached to any MB entity —
   // rare on artists / releases but used for release-groups + works to
@@ -740,6 +709,12 @@ function _mbRenderDetail(overlay, type, mbid, j) {
   } else if (type === "work") {
     sections.push(_mbRenderWorkRels(j.relations || []));
   }
+
+  // External links chip strip — rendered at the very bottom so the
+  // popup leads with content (bio, tags, release lists, tracklists)
+  // and exits with the external-link bar. Discogs + streaming/purchase
+  // rel types are filtered inside _mbRenderUrlRels.
+  sections.push(_mbRenderUrlRels(j));
 
   bodyEl.innerHTML = sections.filter(Boolean).join("\n");
 }
