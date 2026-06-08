@@ -1515,6 +1515,39 @@ function renderSharedHeader(opts) {
       } catch {}
       if (typeof switchView === "function") switchView(target);
     };
+
+    // ── Unified per-view state persistence ────────────────────────────
+    // Lets each view stash its in-progress search / scroll position so
+    // bouncing to another view and back doesn't lose context. Single
+    // localStorage object keyed by view name; entries age out at 24h to
+    // avoid surprise restores after a long absence. The shapes are
+    // free-form per view (records save form ids + active subtab;
+    // youtube saves a q string; etc.) — each view's snapshot/restore
+    // helpers own their schema.
+    const _SD_VIEW_STATE_KEY     = "sd_view_state_v1";
+    const _SD_VIEW_STATE_MAX_AGE = 24 * 60 * 60 * 1000;
+    window._sdSaveViewState = function (view, payload) {
+      if (!view) return;
+      try {
+        const root = JSON.parse(localStorage.getItem(_SD_VIEW_STATE_KEY) || "{}");
+        root[view] = { at: Date.now(), data: payload || {} };
+        // Sweep stale entries opportunistically so the blob stays small.
+        for (const [k, v] of Object.entries(root)) {
+          if (Date.now() - Number(v?.at || 0) > _SD_VIEW_STATE_MAX_AGE) delete root[k];
+        }
+        localStorage.setItem(_SD_VIEW_STATE_KEY, JSON.stringify(root));
+      } catch {}
+    };
+    window._sdReadViewState = function (view) {
+      if (!view) return null;
+      try {
+        const root = JSON.parse(localStorage.getItem(_SD_VIEW_STATE_KEY) || "{}");
+        const v = root[view];
+        if (!v) return null;
+        if (Date.now() - Number(v.at || 0) > _SD_VIEW_STATE_MAX_AGE) return null;
+        return v.data || null;
+      } catch { return null; }
+    };
   }
 
   // Record tab — starts disabled until signed in. `startEmpty` adds
@@ -1543,7 +1576,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260607.1256";
+  const SITE_VERSION = "build 20260607.1935";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
