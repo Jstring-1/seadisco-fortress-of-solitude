@@ -1114,7 +1114,11 @@ async function _renderQueueDrawer() {
     // (i.ytimg.com is CDN-hosted and respects no-referrer).
     let thumbUrl = it.data?.image || "";
     if (!thumbUrl && it.source === "yt") {
-      thumbUrl = `https://i.ytimg.com/vi/${encodeURIComponent(it.externalId)}/mqdefault.jpg`;
+      // default.jpg (120x90) instead of mqdefault.jpg (320x180) — the
+      // drawer slot is 40x40 so we never use the extra pixels and the
+      // larger image is 8× more bitmap data sitting in GPU memory once
+      // decoded. For a 400-track queue that's ~10 MB saved.
+      thumbUrl = `https://i.ytimg.com/vi/${encodeURIComponent(it.externalId)}/default.jpg`;
     }
     const thumbHtml = thumbUrl
       ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" onerror="this.classList.add('thumb-broken')">`
