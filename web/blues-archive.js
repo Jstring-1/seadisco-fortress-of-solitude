@@ -2681,65 +2681,81 @@ window._baTuningsClearFilters = _baTuningsClearFilters;
 // the Lyrics sub-tab with the unmatched filter on, "Missing tuning"
 // jumps with the tuning filter set to (unspecified), etc.
 async function _baLoadStats() {
-  const el = document.getElementById("blues-archive-stats");
-  if (!el) return;
+  const artistsEl = document.getElementById("blues-archive-stats");
+  const lyricsEl  = document.getElementById("blues-archive-stats-lyrics");
+  if (!artistsEl && !lyricsEl) return;
   try {
     const r = await apiFetch("/api/blues-archive/stats");
-    if (!r.ok) { el.innerHTML = ""; return; }
+    if (!r.ok) {
+      if (artistsEl) artistsEl.innerHTML = "";
+      if (lyricsEl)  lyricsEl.innerHTML  = "";
+      return;
+    }
     const s = await r.json();
     const chip = (label, n, opts = {}) => {
       // Hide chips with zero instances — clicking them produces an
       // empty filtered view and they only add noise to the strip.
-      // The "Artists" total chip is always shown so the strip has at
-      // least one anchor when the DB is freshly empty.
+      // alwaysShow keeps the anchor chip (Artists total / Lyrics total)
+      // even when the DB is freshly empty.
       const count = Number(n) || 0;
       if (count === 0 && !opts.alwaysShow) return "";
       const click = opts.onclick ? ` onclick="${opts.onclick}"` : "";
       const cur = opts.onclick ? "cursor:pointer;" : "";
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
-      // title= tooltip on every chip so the hover spells out what
-      // the bucket means + (for clickable ones) what the click does.
       return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}font-size:0.7rem;padding:0.05rem 0.25rem;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
     };
-    el.innerHTML = [
-      chip("Artists", s.artists_total, {
-        alwaysShow: true,
-        onclick: "_baJumpArtists('')",
-        title: "Total rows in the blues_artists table. Click to view all artists (clears any active category filter).",
-      }),
-      chip("With lyrics + releases", s.artists_with_both, {
-        onclick: "_baJumpArtists('with_both')",
-        title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored. Click to filter the Artists tab.",
-      }),
-      chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, {
-        onclick: "_baJumpArtists('with_lyrics_only')",
-        title: "Artists with lyrics but no Discogs releases stored. Click to filter the Artists tab — use 'Get all info from Discogs' on /admin Blues DB to enrich.",
-      }),
-      chip("With releases only", s.artists_with_releases - s.artists_with_both, {
-        onclick: "_baJumpArtists('with_releases_only')",
-        title: "Artists with releases but no matched lyrics yet. Click to filter the Artists tab. Usually a name mismatch with the lyrics table.",
-      }),
-      chip("Empty", s.artists_empty, {
-        tone: "warn",
-        onclick: "_baJumpArtists('empty')",
-        title: "Artists with neither lyrics nor releases — candidates for purge or enrichment. Click to filter the Artists tab.",
-      }),
-      chip("Lyrics total", s.lyrics_total, {
-        onclick: "_baJumpAllLyrics()",
-        title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com). Click to view all lyrics (clears any active filter).",
-      }),
-      chip("Orphan lyrics", s.lyrics_orphan, {
-        tone: "warn",
-        onclick: "_baJumpOrphans()",
-        title: "Lyrics whose artist string doesn't link to a blues_artists row (artist_id IS NULL). Click to jump to the Lyrics tab with the unmatched filter on.",
-      }),
-      chip("Missing tuning", s.lyrics_missing_tuning, {
-        tone: "warn",
-        onclick: "_baJumpMissingTuning()",
-        title: "Lyrics with no tuning extracted from the wiki page (tuning IS NULL). Click to jump to the Lyrics tab pre-filtered to '(unspecified)'.",
-      }),
-    ].join("");
-  } catch { el.innerHTML = ""; }
+    // Artists panel: only the artist-side buckets. Empty is included
+    // when nonzero so the curator can still find dead rows.
+    if (artistsEl) {
+      artistsEl.innerHTML = [
+        chip("Artists", s.artists_total, {
+          alwaysShow: true,
+          onclick: "_baJumpArtists('')",
+          title: "Total rows in the blues_artists table. Click to view all artists (clears any active category filter).",
+        }),
+        chip("With lyrics + releases", s.artists_with_both, {
+          onclick: "_baJumpArtists('with_both')",
+          title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored. Click to filter the Artists tab.",
+        }),
+        chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, {
+          onclick: "_baJumpArtists('with_lyrics_only')",
+          title: "Artists with lyrics but no Discogs releases stored. Click to filter the Artists tab — use 'Get all info from Discogs' on /admin Blues DB to enrich.",
+        }),
+        chip("With releases only", s.artists_with_releases - s.artists_with_both, {
+          onclick: "_baJumpArtists('with_releases_only')",
+          title: "Artists with releases but no matched lyrics yet. Click to filter the Artists tab. Usually a name mismatch with the lyrics table.",
+        }),
+        chip("Empty", s.artists_empty, {
+          tone: "warn",
+          onclick: "_baJumpArtists('empty')",
+          title: "Artists with neither lyrics nor releases — candidates for purge or enrichment. Click to filter the Artists tab.",
+        }),
+      ].join("");
+    }
+    // Lyrics panel: only the lyrics-side buckets.
+    if (lyricsEl) {
+      lyricsEl.innerHTML = [
+        chip("Lyrics total", s.lyrics_total, {
+          alwaysShow: true,
+          onclick: "_baJumpAllLyrics()",
+          title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com). Click to clear any active filter.",
+        }),
+        chip("Orphan lyrics", s.lyrics_orphan, {
+          tone: "warn",
+          onclick: "_baJumpOrphans()",
+          title: "Lyrics whose artist string doesn't link to a blues_artists row (artist_id IS NULL). Click to filter to unmatched only.",
+        }),
+        chip("Missing tuning", s.lyrics_missing_tuning, {
+          tone: "warn",
+          onclick: "_baJumpMissingTuning()",
+          title: "Lyrics with no tuning extracted from the wiki page (tuning IS NULL). Click to filter to '(unspecified)'.",
+        }),
+      ].join("");
+    }
+  } catch {
+    if (artistsEl) artistsEl.innerHTML = "";
+    if (lyricsEl)  lyricsEl.innerHTML  = "";
+  }
 }
 // Expose alongside _baLoadList so blues-admin.js can repaint the
 // stats strip when the editor mutates a row (e.g. clearing a photo
