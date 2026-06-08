@@ -615,8 +615,18 @@ function _mbRenderUrlRels(j) {
   // page, search SeaDisco by id, edit Blues Archive row) once we've
   // threaded the id through entityId. Rendering a separate Discogs ↗
   // anchor here was redundant clutter.
+  //
+  // Streaming + purchase relation types also filtered out — the
+  // entries are mostly platform-deep links (Spotify / Apple Music /
+  // Tidal / iTunes / Amazon) that don't help a curator and bloat
+  // the chip strip. The lookup popup's "YouTube" entry covers the
+  // playback intent for the rare case it's wanted.
+  const HIDDEN_REL_TYPES = new Set([
+    "discogs", "free streaming", "streaming",
+    "purchase for download", "purchase for mail-order", "download for free",
+  ]);
   const rels = Array.isArray(j.relations)
-    ? j.relations.filter(rel => (rel["target-type"] === "url" || rel.url) && rel.type !== "discogs")
+    ? j.relations.filter(rel => (rel["target-type"] === "url" || rel.url) && !HIDDEN_REL_TYPES.has(rel.type))
     : [];
   if (!rels.length) return "";
   // Sort: well-known external sources first, then everything else.
