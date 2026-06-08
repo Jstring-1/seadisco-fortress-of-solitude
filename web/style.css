@@ -2509,16 +2509,25 @@ body.sd-anon .loc-save-badge,
 body.sd-anon .archive-save-btn,
 body.sd-anon .wiki-save-btn,
 body.sd-anon .yt-save-btn,
-body.sd-anon .loc-tab-saved,
-body.sd-anon .archive-tab-saved,
-body.sd-anon .wiki-tab-saved,
-body.sd-anon .youtube-saved-tab,
 body.sd-anon .card-badge.badge-favorite,
 body.sd-anon .card-badge.badge-collection,
 body.sd-anon .card-badge.badge-wantlist,
 body.sd-anon .card-badge.badge-list,
 body.sd-anon .card-badge.badge-inventory {
   display: none !important;
+}
+/* Saved sub-tabs across discovery views stay VISIBLE for anon
+   visitors but render disabled so they can see the feature exists
+   without being able to click into a sign-in-required surface. The
+   click handler short-circuits with a toast prompting sign-in (see
+   index.html onclick hooks). */
+body.sd-anon .loc-tab-saved,
+body.sd-anon .archive-tab-saved,
+body.sd-anon .wiki-tab-saved,
+body.sd-anon .youtube-saved-tab {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .mini-player-bar {
