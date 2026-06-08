@@ -347,6 +347,13 @@ function initBluesArchiveView() {
           });
         }, 280);
       }
+    } else if (saved?.subtab && (saved.subtab === "artists" || saved.subtab === "releases" || saved.subtab === "tunings")) {
+      // Non-lyrics subtabs: filter / sort / page state lives in module
+      // vars that persist within the session (display:none keeps the
+      // input values, the JS state is never reset). Just land the user
+      // on the right tab — _baSwitchSubtab triggers the appropriate
+      // _baLoad* call which honours the persisted state.
+      _baSwitchSubtab(saved.subtab);
     }
   }
 }
