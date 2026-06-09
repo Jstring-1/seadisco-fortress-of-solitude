@@ -9463,8 +9463,9 @@ app.post("/api/admin/blues/:id(\\d+)/discogs-preview", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
   const force = req.query.force === "1" || req.query.force === "true";
+  const autoFind = req.query.autoFind === "1" || req.query.autoFind === "true";
   try {
-    const out = await previewBluesArtistFromDiscogs(client, id, force);
+    const out = await previewBluesArtistFromDiscogs(client, id, force, { autoFind });
     res.json({ ok: true, ...out });
   } catch (err: any) {
     console.error("[blues discogs-preview]", err);

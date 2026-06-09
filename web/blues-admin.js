@@ -1074,13 +1074,17 @@ async function bluesDbRefreshFromDiscogs() {
   const orig = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = "Loading Discogs…"; }
   try {
-    const r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1`, { method: "POST" });
+    // autoFind=1 lets the endpoint search Discogs by name when the
+    // row has no discogs_id yet — covers newly-added artists who
+    // were saved with just a name. Existing rows with an id ignore
+    // this and run the same preview as before.
+    const r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1&autoFind=1`, { method: "POST" });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert("Refresh failed: " + (err.error ?? r.status));
+      alert("Fetch failed: " + (err.error ?? r.status));
       return;
     }
-    const { patch = {} } = await r.json();
+    const { patch = {}, foundDiscogsId } = await r.json();
     // Apply the patch to the open form. Each field gets the value
     // Discogs returned; the curator can edit it inline before saving.
     // Arrays render as JSON in textareas (matches the editor's load
@@ -1117,12 +1121,15 @@ async function bluesDbRefreshFromDiscogs() {
     // Refresh the editor's external-links bar in case discogs_id changed.
     if (typeof _bluesDbUpdateEditorLinks === "function") _bluesDbUpdateEditorLinks();
     if (typeof showToast === "function") {
-      showToast(`Discogs preview loaded — review and hit Save to commit (${changed} field${changed === 1 ? "" : "s"})`, "ok");
+      const lead = foundDiscogsId
+        ? `Discogs match found (id ${foundDiscogsId}) — review + Save to commit`
+        : `Discogs preview loaded — review and hit Save to commit`;
+      showToast(`${lead} (${changed} field${changed === 1 ? "" : "s"})`, "ok");
     }
   } catch (e) {
-    alert("Refresh failed: " + (e?.message || e));
+    alert("Fetch failed: " + (e?.message || e));
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = orig || "Refresh from Discogs"; }
+    if (btn) { btn.disabled = false; btn.textContent = orig || "Fetch from Discogs"; }
   }
 }
 window.bluesDbRefreshFromDiscogs = bluesDbRefreshFromDiscogs;
