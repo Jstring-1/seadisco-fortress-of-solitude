@@ -1094,6 +1094,7 @@ e.g.  miles davis | coltrane
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="connections" onclick="_baSwitchSubtab('connections')">Connections</button>
       </div>
     </div>
     <div id="blues-archive-artists-panel">
@@ -1236,6 +1237,39 @@ e.g.  miles davis | coltrane
       </div>
       <div id="ba-tunings-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="ba-tunings-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+    </div>
+    <!-- Connections subtab — visualisation of blues_artist_links.
+         Three switchable view modes: force-directed network (default),
+         focused hub-and-spoke (one artist + their direct relations),
+         and adjacency matrix (sortable table). Relation-type filter
+         chips toggle which edge kinds are drawn. Data comes from
+         /api/blues-archive/connections (admin-gated). -->
+    <div id="blues-archive-connections-panel" style="display:none">
+      <div style="display:flex;gap:0.6rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap;font-size:0.82rem">
+        <span style="color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-size:0.74rem">View</span>
+        <div id="ba-conn-view-tabs" style="display:inline-flex;gap:0.3rem">
+          <button type="button" class="archive-btn ba-conn-view-btn" data-view="network" onclick="_baConnSwitchView('network')" title="Force-directed network graph">Network</button>
+          <button type="button" class="archive-btn ba-conn-view-btn" data-view="hub" onclick="_baConnSwitchView('hub')" title="Pick one artist; see their direct connections">Hub &amp; spoke</button>
+          <button type="button" class="archive-btn ba-conn-view-btn" data-view="matrix" onclick="_baConnSwitchView('matrix')" title="Sortable table of every link">Matrix</button>
+        </div>
+        <span style="color:#444">|</span>
+        <span style="color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;font-size:0.74rem">Show</span>
+        <div id="ba-conn-kind-toggles" style="display:inline-flex;gap:0.3rem;flex-wrap:wrap"></div>
+        <span id="ba-conn-stats" style="margin-left:auto;color:var(--muted);font-size:0.78rem"></span>
+        <button type="button" class="archive-btn" onclick="_baLoadConnections({force:true})" title="Re-fetch from the server">↻</button>
+      </div>
+      <!-- Hub-and-spoke artist picker (only visible in hub view) -->
+      <div id="ba-conn-hub-picker" style="display:none;gap:0.4rem;align-items:center;margin-bottom:0.6rem;font-size:0.82rem">
+        <span style="color:var(--muted)">Center on</span>
+        <select id="ba-conn-hub-select" onchange="_baConnRender()" style="padding:0.35rem 0.5rem;font-size:0.85rem;min-width:240px"></select>
+      </div>
+      <!-- Cytoscape mounts here for network/hub modes. Matrix view
+           replaces the container's innerHTML with a <table>. Fixed
+           min-height so the layout doesn't pop when toggling. -->
+      <div id="ba-conn-canvas" style="min-height:560px;border:1px solid var(--border);border-radius:6px;background:rgba(0,0,0,0.25);position:relative">
+        <div id="ba-conn-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.86rem">Loading connections…</div>
+      </div>
+      <p style="font-size:0.74rem;color:#666;margin-top:0.5rem">Add or edit links in the artist editor (Linked artists section). Each pair stored once; symmetric.</p>
     </div>
   </div>
   <!-- Detail panel — populated when an artist row is clicked.

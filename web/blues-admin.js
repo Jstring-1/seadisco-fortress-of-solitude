@@ -1643,13 +1643,25 @@ async function bluesDbLoadLinks(id) {
 }
 window.bluesDbLoadLinks = bluesDbLoadLinks;
 
+// Relation-type catalogue shared with the Connections viz. Keep in
+// sync with _BA_CONN_KINDS in blues-archive.js and the CHECK in
+// blues_artist_links / addBluesArtistLink in db.ts.
+const _BA_LINK_KINDS = ["pseudonym", "band", "spouse", "traveled", "mentor", "family"];
+const _BA_LINK_KIND_TITLES = {
+  pseudonym: "Same person, different recording name",
+  band:      "Played together (band, sideman, side project)",
+  spouse:    "Married / domestic partner (e.g. Memphis Minnie + Joe McCoy)",
+  traveled:  "Toured / traveled together (looser than band)",
+  mentor:    "Taught / mentored (e.g. Patton → Howlin' Wolf)",
+  family:    "Family — parent / child / sibling",
+};
 function _bluesDbRenderLinks(rows) {
   const listEl = document.getElementById("blues-editor-links-list");
   if (!listEl) return;
   if (!rows.length) { listEl.innerHTML = `<span style="color:var(--muted);font-style:italic">No links yet.</span>`; return; }
   const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   listEl.innerHTML = rows.map(r => {
-    const label = r.kind === "band" ? "band" : "pseudonym";
+    const label = _BA_LINK_KINDS.includes(r.kind) ? r.kind : "pseudonym";
     return `<span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.45rem;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:rgba(255,255,255,0.03)">
       <span style="color:var(--muted);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em">${label}</span>
       <span>${esc(r.name)}</span>
@@ -1738,14 +1750,20 @@ async function _bluesDbLinkPickerLoad(fromId) {
       return;
     }
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
-    el.innerHTML = choices.map(row => `
-      <div style="padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;gap:0.6rem">
-        <span style="font-weight:600;color:var(--text)">${esc(row.name || "")}</span>
-        <span style="display:inline-flex;gap:0.35rem">
-          <button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${esc(row.name || "")}', 'pseudonym')" title="Same person, different recording name">Pseudonym</button>
-          <button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${esc(row.name || "")}', 'band')" title="Played together (band, sideman, side project)">Band</button>
-        </span>
-      </div>`).join("");
+    el.innerHTML = choices.map(row => {
+      const safeName = esc(row.name || "");
+      // Six relation-type buttons. The cap on options inside the picker
+      // is deliberate — anything beyond `family` is freeform text in
+      // notes, not its own relation kind.
+      const btns = _BA_LINK_KINDS.map(k => {
+        const label = k.charAt(0).toUpperCase() + k.slice(1);
+        return `<button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${safeName}', '${k}')" title="${_BA_LINK_KIND_TITLES[k] || k}">${label}</button>`;
+      }).join("");
+      return `<div style="padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--text)">${safeName}</span>
+        <span style="display:inline-flex;gap:0.3rem;flex-wrap:wrap">${btns}</span>
+      </div>`;
+    }).join("");
   } catch (e) {
     el.innerHTML = `<div style="color:#e88">Failed: ${e?.message || e}</div>`;
   }
