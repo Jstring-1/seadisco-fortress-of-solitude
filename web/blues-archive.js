@@ -3571,17 +3571,41 @@ let _baConnKindsOn = (() => {
 })();
 let _baConnHubId = null;
 
-function _baEnsureCytoscape() {
-  if (window.cytoscape) return Promise.resolve(window.cytoscape);
-  if (_baCytoscapeLoading) return _baCytoscapeLoading;
-  _baCytoscapeLoading = new Promise((resolve, reject) => {
+function _baLoadScript(src) {
+  return new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js";
+    s.src = src;
     s.async = true;
-    s.onload = () => resolve(window.cytoscape);
-    s.onerror = () => reject(new Error("Cytoscape CDN load failed"));
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`CDN load failed: ${src}`));
     document.head.appendChild(s);
   });
+}
+function _baEnsureCytoscape() {
+  if (window.cytoscape && window._baFcoseLoaded) return Promise.resolve(window.cytoscape);
+  if (_baCytoscapeLoading) return _baCytoscapeLoading;
+  // Cytoscape core, then layout-base + cose-base + fcose extension.
+  // fcose gives much better spread than the built-in cose for sparse
+  // graphs (Leadbelly chain, Hokum Boys chain etc. were piling up).
+  // If the fcose chain fails to load we silently fall back to cose
+  // by setting _baFcoseLoaded=false; the graph still renders.
+  _baCytoscapeLoading = _baLoadScript("https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js")
+    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"))
+    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"))
+    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"))
+    .then(() => {
+      if (window.cytoscape && window.cytoscapeFcose) {
+        try { window.cytoscape.use(window.cytoscapeFcose); window._baFcoseLoaded = true; }
+        catch { window._baFcoseLoaded = false; }
+      }
+      return window.cytoscape;
+    })
+    .catch(err => {
+      // If the fcose pieces fail but cytoscape itself loaded, keep
+      // going with the built-in cose layout.
+      if (window.cytoscape) { window._baFcoseLoaded = false; return window.cytoscape; }
+      throw err;
+    });
   return _baCytoscapeLoading;
 }
 
@@ -3758,13 +3782,25 @@ function _baConnRenderGraph(canvas, edges, mode) {
           "curve-style": "bezier",
         }},
       ],
-      // Layout tuned for legibility: more repulsion + longer edges
-      // pull cluster members apart so labels stop overlapping. The
-      // canvas is ~560px tall, so these numbers correspond to roughly
-      // a quarter of the viewport per ideal edge.
+      // Layout tuned for legibility: fcose if available (better
+      // quality on sparse graphs), built-in cose as fallback. Both
+      // use long ideal edges + high repulsion so chain members
+      // (Leadbelly → Blind Lemon → King Solomon …) fan out instead
+      // of stacking on top of each other.
       layout: mode === "hub"
-        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 60, padding: 30 }
-        : { name: "cose", animate: false, idealEdgeLength: 180, nodeRepulsion: 24000, nodeOverlap: 40, gravity: 0.25, componentSpacing: 120, padding: 30, numIter: 1500 },
+        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 80, padding: 40 }
+        : (window._baFcoseLoaded
+            ? { name: "fcose", quality: "proof", animate: false, randomize: true,
+                nodeRepulsion: 12000, idealEdgeLength: 220, edgeElasticity: 0.25,
+                nodeSeparation: 120, gravity: 0.15, gravityRange: 4.0,
+                gravityCompound: 1.5, gravityRangeCompound: 2.0,
+                packComponents: true, componentSpacing: 80, padding: 40,
+                numIter: 4000, tile: false }
+            : { name: "cose", animate: false, randomize: true,
+                idealEdgeLength: 220, nodeRepulsion: 60000, nodeOverlap: 80,
+                edgeElasticity: 80, gravity: 0.15, componentSpacing: 200,
+                padding: 40, numIter: 2500, initialTemp: 200,
+                coolingFactor: 0.95, minTemp: 1.0 }),
       wheelSensitivity: 0.2,
     });
     _baConnCy.on("tap", "node", evt => {
