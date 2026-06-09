@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260608.2025" />
+  <link rel="stylesheet" href="/style.css?v=20260608.2029" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260608.2025"></script>
+<script defer src="/shared.js?v=20260608.2029"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -742,18 +742,13 @@ e.g.  miles davis | coltrane
      active view is one of those four and marks the active tab. -->
 <div id="extras-tabs" class="content-narrow rr-header extras-tabs" style="display:none">
   <div class="rr-title-wrap">
-    <!-- YouTube tab is admin/demo-only; its leading separator hides
-         alongside it, so when YT is hidden the strip reads
-         LOC / Archive / Wikipedia. -->
-    <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
-    <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-loc"     class="rr-tab" onclick="switchView('loc')"     title="Library of Congress audio archive — public-domain American music">LOC</span>
     <span class="rr-tab-sep">/</span>
     <span id="extras-tab-archive" class="rr-tab" onclick="switchView('archive')" title="Search audio on the Internet Archive plus our featured curated collections">Archive</span>
     <span class="rr-tab-sep">/</span>
     <span id="extras-tab-wiki"    class="rr-tab" onclick="switchView('wiki')"    title="Wikipedia article search">Wikipedia</span>
-    <!-- Gutenberg tab is admin/demo-only (like YouTube); its leading
-         separator hides alongside it. -->
+    <!-- Gutenberg tab is admin/demo-only; its leading separator hides
+         alongside it. -->
     <span id="extras-tab-gutenberg-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-gutenberg" class="rr-tab rr-tab-restricted" onclick="switchView('gutenberg')" title="Project Gutenberg — free public-domain books (admin/demo only)" style="display:none">Gutenberg</span>
     <!-- Chronicling America tab is admin/demo-only initially; separator
@@ -770,6 +765,9 @@ e.g.  miles davis | coltrane
          gating. -->
     <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
+    <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
+    <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
+    <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
   </div>
 </div>
 
@@ -1777,13 +1775,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260608.2025"></script>
-<script defer src="/search.js?v=20260608.2025"></script>
-<script defer src="/collection.js?v=20260608.2025"></script>
+<script defer src="/utils.js?v=20260608.2029"></script>
+<script defer src="/search.js?v=20260608.2029"></script>
+<script defer src="/collection.js?v=20260608.2029"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260608.2025"></script>
-<script defer src="/app.js?v=20260608.2025"></script>
+<script defer src="/modal.js?v=20260608.2029"></script>
+<script defer src="/app.js?v=20260608.2029"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1794,13 +1792,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260608.2025"></script>
-<script defer src="/queue.js?v=20260608.2025"></script>
+<script defer src="/loc.js?v=20260608.2029"></script>
+<script defer src="/queue.js?v=20260608.2029"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260608.2025";
+  window._SD_LAZY_VERSION = "20260608.2029";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1830,8 +1828,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260608.2025"></script>
-<script defer src="/offline.js?v=20260608.2025"></script>
+<script defer src="/idb.js?v=20260608.2029"></script>
+<script defer src="/offline.js?v=20260608.2029"></script>
 
 </body>
 </html>
