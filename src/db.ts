@@ -1186,6 +1186,22 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
+  // Expand the kind CHECK to include the broader relationship types
+  // used by the Connections tab. Drop + re-add covers both first-boot
+  // (constraint may or may not exist) and existing deployments (legacy
+  // constraint only allowed pseudonym/band). Wrapped in DO so a missing
+  // constraint or an already-correct one is a silent no-op.
+  await getPool().query(`
+    DO $$
+    BEGIN
+      ALTER TABLE blues_artist_links DROP CONSTRAINT IF EXISTS blues_artist_links_kind_check;
+      ALTER TABLE blues_artist_links ADD CONSTRAINT blues_artist_links_kind_check
+        CHECK (kind IN ('pseudonym', 'band', 'spouse', 'traveled', 'mentor', 'family'));
+    EXCEPTION WHEN OTHERS THEN
+      -- swallow: a parallel boot may race the constraint swap
+      NULL;
+    END $$;
+  `);
 
   // ── Scrape ban list ──────────────────────────────────────────────
   // When the curator deletes an artist (or a single lyric) they can
@@ -8027,15 +8043,20 @@ export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Pr
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
 // the PK enforces single-row-per-pair regardless of click direction.
+export type BluesArtistLinkKind =
+  | "pseudonym" | "band" | "spouse" | "traveled" | "mentor" | "family";
+export const BLUES_ARTIST_LINK_KINDS: ReadonlyArray<BluesArtistLinkKind> = [
+  "pseudonym", "band", "spouse", "traveled", "mentor", "family",
+];
 export async function addBluesArtistLink(
   aId: number,
   bId: number,
-  kind: "pseudonym" | "band",
+  kind: BluesArtistLinkKind,
 ): Promise<void> {
   if (!Number.isFinite(aId) || !Number.isFinite(bId) || aId === bId) {
     throw new Error("Invalid artist ids");
   }
-  if (kind !== "pseudonym" && kind !== "band") {
+  if (!BLUES_ARTIST_LINK_KINDS.includes(kind)) {
     throw new Error("Invalid kind");
   }
   const lo = Math.min(aId, bId);
@@ -8049,6 +8070,34 @@ export async function addBluesArtistLink(
      ON CONFLICT (lo_id, hi_id) DO UPDATE SET kind = EXCLUDED.kind`,
     [lo, hi, kind],
   );
+}
+
+// Snapshot of the entire connection graph for the Connections viz.
+// Nodes carry just the bits the client needs to draw (id, name, photo)
+// and a `degree` field so the viz can size nodes by connectedness.
+// Isolated artists (zero links) are excluded — they'd add noise to the
+// graph without informing any relationship.
+export async function listBluesConnectionsGraph(): Promise<{
+  nodes: Array<{ id: number; name: string; photo_url: string | null; degree: number }>;
+  edges: Array<{ lo_id: number; hi_id: number; kind: BluesArtistLinkKind }>;
+}> {
+  const er = await getPool().query<{ lo_id: number; hi_id: number; kind: BluesArtistLinkKind }>(
+    `SELECT lo_id, hi_id, kind FROM blues_artist_links ORDER BY lo_id, hi_id`,
+  );
+  const edges = er.rows;
+  if (!edges.length) return { nodes: [], edges: [] };
+  const ids = new Set<number>();
+  for (const e of edges) { ids.add(e.lo_id); ids.add(e.hi_id); }
+  const nr = await getPool().query<{ id: number; name: string; photo_url: string | null; degree: number }>(
+    `SELECT a.id, a.name, a.photo_url,
+            (SELECT COUNT(*)::int FROM blues_artist_links l
+              WHERE l.lo_id = a.id OR l.hi_id = a.id) AS degree
+       FROM blues_artists a
+      WHERE a.id = ANY($1::int[])
+      ORDER BY lower(a.name) ASC`,
+    [[...ids]],
+  );
+  return { nodes: nr.rows, edges };
 }
 
 export async function removeBluesArtistLink(aId: number, bId: number): Promise<void> {

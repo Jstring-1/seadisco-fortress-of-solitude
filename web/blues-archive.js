@@ -364,7 +364,7 @@ function initBluesArchiveView() {
           });
         }, 280);
       }
-    } else if (saved?.subtab && (saved.subtab === "artists" || saved.subtab === "releases" || saved.subtab === "tunings")) {
+    } else if (saved?.subtab && (saved.subtab === "artists" || saved.subtab === "releases" || saved.subtab === "tunings" || saved.subtab === "connections")) {
       // Non-lyrics subtabs: filter / sort / page state lives in module
       // vars that persist within the session (display:none keeps the
       // input values, the JS state is never reset). Just land the user
@@ -652,8 +652,17 @@ function _baRenderArtistDetail(a) {
   // aliases/collaborators above. These point at OTHER blues_artists
   // rows by id so the chip can open that artist's profile directly.
   const linksAll = Array.isArray(a.links) ? a.links : [];
-  const linkPseudo = linksAll.filter(l => l.kind === "pseudonym");
-  const linkBand   = linksAll.filter(l => l.kind === "band");
+  // All six relation kinds, grouped. Pseudonym + band are the legacy
+  // pair; spouse / traveled / mentor / family were added with the
+  // Connections tab. Each group renders only if non-empty.
+  const _baLinkKindLabels = {
+    pseudonym: "Pseudonym",
+    band:      "Band / played with",
+    spouse:    "Spouse / partner",
+    traveled:  "Traveled with",
+    mentor:    "Mentor / taught",
+    family:    "Family",
+  };
   const linkChipHtml = (label, items) => items.length
     ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;margin-top:0.4rem">
          <span style="font-size:0.74rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
@@ -663,8 +672,10 @@ function _baRenderArtistDetail(a) {
          }).join("")}
        </div>`
     : "";
-  const linksHtml = linkChipHtml("Linked: pseudonym", linkPseudo)
-                  + linkChipHtml("Linked: band / member", linkBand);
+  const linksHtml = Object.keys(_baLinkKindLabels).map(k => {
+    const rows = linksAll.filter(l => l.kind === k);
+    return linkChipHtml(`Linked: ${_baLinkKindLabels[k].toLowerCase()}`, rows);
+  }).join("");
   const lyricsRaw = Array.isArray(a.lyrics) ? a.lyrics : [];
   const releasesRaw = Array.isArray(a.releases) ? a.releases : [];
   const lyrics   = _baSortApply(lyricsRaw,   _baLyricsSort,   _BA_LYRICS_TYPES);
@@ -1511,7 +1522,7 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings") ? tab : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings" || tab === "connections") ? tab : "artists";
   // Toggle button active state. Both classes are kept in sync so any
   // lingering CSS that targets the legacy `is-active` still works; the
   // new loc-tab styling (after the header rearrangement) keys on
@@ -1525,10 +1536,12 @@ function _baSwitchSubtab(tab) {
   const lp = document.getElementById("blues-archive-lyrics-panel");
   const rp = document.getElementById("blues-archive-releases-panel");
   const tp = document.getElementById("blues-archive-tunings-panel");
-  if (ap) ap.style.display = _baSubtab === "artists"  ? "" : "none";
-  if (lp) lp.style.display = _baSubtab === "lyrics"   ? "" : "none";
-  if (rp) rp.style.display = _baSubtab === "releases" ? "" : "none";
-  if (tp) tp.style.display = _baSubtab === "tunings"  ? "" : "none";
+  const cp = document.getElementById("blues-archive-connections-panel");
+  if (ap) ap.style.display = _baSubtab === "artists"     ? "" : "none";
+  if (lp) lp.style.display = _baSubtab === "lyrics"      ? "" : "none";
+  if (rp) rp.style.display = _baSubtab === "releases"    ? "" : "none";
+  if (tp) tp.style.display = _baSubtab === "tunings"     ? "" : "none";
+  if (cp) cp.style.display = _baSubtab === "connections" ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
@@ -1547,6 +1560,8 @@ function _baSwitchSubtab(tab) {
   } else if (_baSubtab === "tunings") {
     if (!_baTuningsFacetsLoaded) _baLoadTuningsFacets();
     _baLoadTuningsGrid();
+  } else if (_baSubtab === "connections") {
+    _baLoadConnections();
   }
   // Persist after every subtab switch so a quick "Lyrics → Search"
   // round trip pulls the user back to Lyrics on return.
@@ -3520,3 +3535,284 @@ async function _baOrphanCreateAsNew(lyricId) {
   }
 }
 window._baOrphanCreateAsNew = _baOrphanCreateAsNew;
+
+// ─── Connections subtab ──────────────────────────────────────────────
+// Visualisation of blues_artist_links. Three view modes — network
+// (force-directed Cytoscape graph), hub (one artist centred with their
+// direct relations), and matrix (sortable table). Cytoscape.js is
+// lazy-loaded from CDN on first open. Relation-type toggle chips let
+// the curator narrow the graph by edge kind. Whole-graph payload is
+// small (one row per link) so we fetch once + cache in memory.
+
+const _BA_CONN_KINDS = [
+  { id: "pseudonym", label: "Pseudonym", color: "#d9c281" },
+  { id: "band",      label: "Band",      color: "#7aa86b" },
+  { id: "spouse",    label: "Spouse",    color: "#d27b9c" },
+  { id: "traveled",  label: "Traveled",  color: "#7bb3d2" },
+  { id: "mentor",    label: "Mentor",    color: "#c97a4a" },
+  { id: "family",    label: "Family",    color: "#a07ad0" },
+];
+const _BA_CONN_VIEW_KEY = "sd_ba_conn_view";
+const _BA_CONN_KINDS_KEY = "sd_ba_conn_kinds";
+let _baConnGraph = null;     // {nodes, edges} from API
+let _baConnCy = null;        // active Cytoscape instance
+let _baCytoscapeLoading = null;
+let _baConnView = (() => {
+  try { return localStorage.getItem(_BA_CONN_VIEW_KEY) || "network"; }
+  catch { return "network"; }
+})();
+let _baConnKindsOn = (() => {
+  try {
+    const raw = localStorage.getItem(_BA_CONN_KINDS_KEY);
+    const arr = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(arr) && arr.length) return new Set(arr);
+  } catch {}
+  return new Set(_BA_CONN_KINDS.map(k => k.id));
+})();
+let _baConnHubId = null;
+
+function _baEnsureCytoscape() {
+  if (window.cytoscape) return Promise.resolve(window.cytoscape);
+  if (_baCytoscapeLoading) return _baCytoscapeLoading;
+  _baCytoscapeLoading = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js";
+    s.async = true;
+    s.onload = () => resolve(window.cytoscape);
+    s.onerror = () => reject(new Error("Cytoscape CDN load failed"));
+    document.head.appendChild(s);
+  });
+  return _baCytoscapeLoading;
+}
+
+async function _baLoadConnections(opts = {}) {
+  const empty = document.getElementById("ba-conn-empty");
+  if (empty) empty.textContent = "Loading connections…";
+  if (!_baConnGraph || opts.force) {
+    try {
+      const r = await apiFetch("/api/blues-archive/connections");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      _baConnGraph = await r.json();
+    } catch (e) {
+      if (empty) empty.textContent = `Load failed: ${e?.message || e}`;
+      return;
+    }
+  }
+  _baRenderConnToolbar();
+  _baConnRender();
+}
+window._baLoadConnections = _baLoadConnections;
+
+function _baRenderConnToolbar() {
+  // View-mode button highlight
+  document.querySelectorAll("#ba-conn-view-tabs .ba-conn-view-btn").forEach(b => {
+    const on = b.dataset.view === _baConnView;
+    b.style.background = on ? "var(--accent)" : "";
+    b.style.color = on ? "#111" : "";
+    b.style.borderColor = on ? "var(--accent)" : "";
+  });
+  // Kind toggle chips
+  const togWrap = document.getElementById("ba-conn-kind-toggles");
+  if (togWrap) {
+    const counts = {};
+    for (const e of (_baConnGraph?.edges || [])) counts[e.kind] = (counts[e.kind] || 0) + 1;
+    togWrap.innerHTML = _BA_CONN_KINDS.map(k => {
+      const on = _baConnKindsOn.has(k.id);
+      const n = counts[k.id] || 0;
+      return `<button type="button" onclick="_baConnToggleKind('${k.id}')" title="${k.label}" style="padding:0.2rem 0.55rem;border:1px solid ${on ? k.color : "#333"};border-radius:999px;background:${on ? "rgba(255,255,255,0.04)" : "transparent"};color:${on ? k.color : "#555"};cursor:pointer;font-size:0.74rem">${k.label} <span style="opacity:0.6">${n}</span></button>`;
+    }).join("");
+  }
+  // Hub picker visibility
+  const pickWrap = document.getElementById("ba-conn-hub-picker");
+  if (pickWrap) pickWrap.style.display = _baConnView === "hub" ? "inline-flex" : "none";
+  if (_baConnView === "hub") _baRenderHubPicker();
+  // Stats line
+  const statsEl = document.getElementById("ba-conn-stats");
+  if (statsEl) {
+    const n = _baConnGraph?.nodes?.length || 0;
+    const e = _baConnGraph?.edges?.length || 0;
+    statsEl.textContent = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
+  }
+}
+
+function _baRenderHubPicker() {
+  const sel = document.getElementById("ba-conn-hub-select");
+  if (!sel) return;
+  const nodes = (_baConnGraph?.nodes || []).slice().sort((a, b) => (b.degree || 0) - (a.degree || 0) || a.name.localeCompare(b.name));
+  if (!_baConnHubId && nodes.length) _baConnHubId = nodes[0].id;
+  sel.innerHTML = nodes.map(n => `<option value="${n.id}" ${n.id === _baConnHubId ? "selected" : ""}>${escHtml(n.name)} (${n.degree})</option>`).join("");
+  sel.onchange = () => { _baConnHubId = Number(sel.value); _baConnRender(); };
+}
+
+function _baConnToggleKind(k) {
+  if (_baConnKindsOn.has(k)) _baConnKindsOn.delete(k);
+  else _baConnKindsOn.add(k);
+  try { localStorage.setItem(_BA_CONN_KINDS_KEY, JSON.stringify([..._baConnKindsOn])); } catch {}
+  _baRenderConnToolbar();
+  _baConnRender();
+}
+window._baConnToggleKind = _baConnToggleKind;
+
+function _baConnSwitchView(v) {
+  if (v !== "network" && v !== "hub" && v !== "matrix") return;
+  _baConnView = v;
+  try { localStorage.setItem(_BA_CONN_VIEW_KEY, v); } catch {}
+  _baRenderConnToolbar();
+  _baConnRender();
+}
+window._baConnSwitchView = _baConnSwitchView;
+
+function _baConnRender() {
+  const canvas = document.getElementById("ba-conn-canvas");
+  if (!canvas || !_baConnGraph) return;
+  const empty = document.getElementById("ba-conn-empty");
+  if (empty) empty.remove();
+  // Tear down any prior Cytoscape — matrix view replaces the canvas
+  // entirely, network/hub reuse but need a fresh container.
+  if (_baConnCy) { try { _baConnCy.destroy(); } catch {} _baConnCy = null; }
+  const filteredEdges = (_baConnGraph.edges || []).filter(e => _baConnKindsOn.has(e.kind));
+  if (_baConnView === "matrix") {
+    _baConnRenderMatrix(canvas, filteredEdges);
+  } else {
+    _baConnRenderGraph(canvas, filteredEdges, _baConnView);
+  }
+}
+window._baConnRender = _baConnRender;
+
+function _baConnRenderGraph(canvas, edges, mode) {
+  // Reset canvas to a fresh mount node for Cytoscape.
+  canvas.innerHTML = `<div id="ba-conn-cy" style="position:absolute;inset:0"></div>`;
+  const mount = canvas.querySelector("#ba-conn-cy");
+  _baEnsureCytoscape().then(cy => {
+    const nodesById = new Map((_baConnGraph.nodes || []).map(n => [n.id, n]));
+    let edgesToDraw = edges;
+    let nodesToDraw;
+    if (mode === "hub") {
+      // Hub mode: centre artist + their direct neighbours. Edges
+      // limited to those touching the centre.
+      const center = _baConnHubId;
+      if (!center) { mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">No artist selected.</div>`; return; }
+      edgesToDraw = edges.filter(e => e.lo_id === center || e.hi_id === center);
+      const keep = new Set([center]);
+      for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
+      nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
+    } else {
+      const keep = new Set();
+      for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
+      nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
+    }
+    if (!nodesToDraw.length) {
+      mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">No links match the current filter.</div>`;
+      return;
+    }
+    const colorByKind = Object.fromEntries(_BA_CONN_KINDS.map(k => [k.id, k.color]));
+    const cyEls = [
+      ...nodesToDraw.map(n => ({
+        data: { id: String(n.id), label: n.name, degree: n.degree || 1 },
+      })),
+      ...edgesToDraw.map(e => ({
+        data: {
+          id: `e${e.lo_id}-${e.hi_id}-${e.kind}`,
+          source: String(e.lo_id),
+          target: String(e.hi_id),
+          kind: e.kind,
+          color: colorByKind[e.kind] || "#888",
+        },
+      })),
+    ];
+    _baConnCy = cy({
+      container: mount,
+      elements: cyEls,
+      style: [
+        { selector: "node", style: {
+          "background-color": "#1a3a4a",
+          "border-color": "var(--accent)",
+          "border-width": 1,
+          "label": "data(label)",
+          "color": "#ddd",
+          "font-size": 10,
+          "text-valign": "bottom",
+          "text-margin-y": 4,
+          "text-outline-color": "#000",
+          "text-outline-width": 2,
+          "width":  "mapData(degree, 1, 20, 14, 46)",
+          "height": "mapData(degree, 1, 20, 14, 46)",
+        }},
+        { selector: `node[id = '${mode === "hub" ? _baConnHubId : ""}']`, style: {
+          "background-color": "var(--accent)",
+          "border-color": "#fff",
+          "border-width": 2,
+        }},
+        { selector: "edge", style: {
+          "line-color":  "data(color)",
+          "target-arrow-shape": "none",
+          "width": 1.5,
+          "opacity": 0.7,
+          "curve-style": "bezier",
+        }},
+      ],
+      layout: mode === "hub"
+        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 30 }
+        : { name: "cose", animate: false, idealEdgeLength: 120, nodeRepulsion: 6000, gravity: 0.4 },
+      wheelSensitivity: 0.2,
+    });
+    _baConnCy.on("tap", "node", evt => {
+      const id = Number(evt.target.data("id"));
+      if (!Number.isFinite(id)) return;
+      if (mode === "hub") {
+        _baConnHubId = id;
+        _baRenderHubPicker();
+        _baConnRender();
+      } else {
+        _baOpenArtist(id);
+      }
+    });
+  }).catch(err => {
+    mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e88">Graph library load failed: ${escHtml(String(err?.message || err))}</div>`;
+  });
+}
+
+let _baConnMatrixSort = { key: "lo_name", dir: "asc" };
+function _baConnRenderMatrix(canvas, edges) {
+  const nodesById = new Map((_baConnGraph.nodes || []).map(n => [n.id, n]));
+  const labelByKind = Object.fromEntries(_BA_CONN_KINDS.map(k => [k.id, k]));
+  const rows = edges.map(e => ({
+    lo_id: e.lo_id, hi_id: e.hi_id, kind: e.kind,
+    lo_name: nodesById.get(e.lo_id)?.name || `#${e.lo_id}`,
+    hi_name: nodesById.get(e.hi_id)?.name || `#${e.hi_id}`,
+  }));
+  const dir = _baConnMatrixSort.dir === "desc" ? -1 : 1;
+  rows.sort((a, b) => {
+    const k = _baConnMatrixSort.key;
+    return String(a[k] || "").localeCompare(String(b[k] || "")) * dir;
+  });
+  const arrow = (k) => _baConnMatrixSort.key === k ? (_baConnMatrixSort.dir === "asc" ? " ▲" : " ▼") : "";
+  canvas.innerHTML = `
+    <div style="padding:0.6rem 0.8rem;max-height:560px;overflow:auto">
+      <table class="api-log-table" style="font-size:0.84rem;width:100%">
+        <thead><tr>
+          <th style="cursor:pointer" onclick="_baConnSortMatrix('lo_name')">Artist A${arrow("lo_name")}</th>
+          <th style="cursor:pointer" onclick="_baConnSortMatrix('kind')">Relation${arrow("kind")}</th>
+          <th style="cursor:pointer" onclick="_baConnSortMatrix('hi_name')">Artist B${arrow("hi_name")}</th>
+        </tr></thead>
+        <tbody>${rows.map(r => {
+          const k = labelByKind[r.kind] || { label: r.kind, color: "#888" };
+          return `<tr>
+            <td><a href="#" onclick="event.preventDefault();_baOpenArtist(${r.lo_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(r.lo_name)}</a></td>
+            <td><span style="padding:0.12rem 0.5rem;border:1px solid ${k.color};border-radius:999px;font-size:0.74rem;color:${k.color}">${escHtml(k.label)}</span></td>
+            <td><a href="#" onclick="event.preventDefault();_baOpenArtist(${r.hi_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(r.hi_name)}</a></td>
+          </tr>`;
+        }).join("") || `<tr><td colspan="3" style="color:var(--muted);font-style:italic;padding:0.6rem 0">No links match the current filter.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
+function _baConnSortMatrix(key) {
+  if (_baConnMatrixSort.key === key) {
+    _baConnMatrixSort.dir = _baConnMatrixSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _baConnMatrixSort = { key, dir: "asc" };
+  }
+  _baConnRender();
+}
+window._baConnSortMatrix = _baConnSortMatrix;
