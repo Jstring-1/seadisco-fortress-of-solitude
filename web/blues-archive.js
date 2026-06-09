@@ -3544,13 +3544,19 @@ window._baOrphanCreateAsNew = _baOrphanCreateAsNew;
 // the curator narrow the graph by edge kind. Whole-graph payload is
 // small (one row per link) so we fetch once + cache in memory.
 
+// Vivid, evenly-spaced hues on the dark canvas — the original palette
+// was muted enough that nearly every line read as the same desaturated
+// grey-ish tone. Spaced ~60° apart on the colour wheel so adjacent
+// kinds still stay distinguishable: gold, green, magenta, cyan, orange,
+// violet. All ≥ 70% saturation at ~60% lightness so edges and chips
+// pop against the rgba(0,0,0,0.25) graph background.
 const _BA_CONN_KINDS = [
-  { id: "pseudonym", label: "Pseudonym", color: "#d9c281" },
-  { id: "band",      label: "Band",      color: "#7aa86b" },
-  { id: "spouse",    label: "Spouse",    color: "#d27b9c" },
-  { id: "traveled",  label: "Traveled",  color: "#7bb3d2" },
-  { id: "mentor",    label: "Mentor",    color: "#c97a4a" },
-  { id: "family",    label: "Family",    color: "#a07ad0" },
+  { id: "pseudonym", label: "Pseudonym", color: "#f5d442" }, // gold
+  { id: "band",      label: "Band",      color: "#4ade80" }, // bright green
+  { id: "spouse",    label: "Spouse",    color: "#ec4899" }, // hot pink
+  { id: "traveled",  label: "Traveled",  color: "#22d3ee" }, // cyan
+  { id: "mentor",    label: "Mentor",    color: "#f97316" }, // orange
+  { id: "family",    label: "Family",    color: "#a855f7" }, // violet
 ];
 const _BA_CONN_VIEW_KEY = "sd_ba_conn_view";
 const _BA_CONN_KINDS_KEY = "sd_ba_conn_kinds";
@@ -3777,8 +3783,10 @@ function _baConnRenderGraph(canvas, edges, mode) {
         { selector: "edge", style: {
           "line-color":  "data(color)",
           "target-arrow-shape": "none",
-          "width": 1.5,
-          "opacity": 0.7,
+          // Thicker + higher opacity so the relation hue actually reads
+          // — at 1.5/0.7 the new vivid palette still washed out.
+          "width": 2.5,
+          "opacity": 0.95,
           "curve-style": "bezier",
         }},
       ],
