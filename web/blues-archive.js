@@ -3660,7 +3660,7 @@ function _baRenderConnToolbar() {
     togWrap.innerHTML = _BA_CONN_KINDS.map(k => {
       const on = _baConnKindsOn.has(k.id);
       const n = counts[k.id] || 0;
-      return `<button type="button" onclick="_baConnToggleKind('${k.id}')" title="${k.label}" style="padding:0.2rem 0.55rem;border:1px solid ${on ? k.color : "#333"};border-radius:999px;background:${on ? "rgba(255,255,255,0.04)" : "transparent"};color:${on ? k.color : "#555"};cursor:pointer;font-size:0.74rem">${k.label} <span style="opacity:0.6">${n}</span></button>`;
+      return `<button type="button" onclick="_baConnToggleKind('${k.id}')" title="${k.label}" style="padding:0.2rem 0.55rem;border:1px solid ${on ? k.color : "#333"};border-radius:999px;background:${on ? "rgba(255,255,255,0.04)" : "transparent"};color:${on ? k.color : "#555"};cursor:pointer;font-size:0.74rem">${k.label}<span style="opacity:0.6;margin-left:0.4em">${n}</span></button>`;
     }).join("");
   }
   // Hub picker visibility
@@ -3671,13 +3671,15 @@ function _baRenderConnToolbar() {
   const focusWrap = document.getElementById("ba-conn-focus-picker");
   if (focusWrap) focusWrap.style.display = _baConnView === "network" ? "inline-flex" : "none";
   if (_baConnView === "network") _baRenderFocusPicker();
-  // Stats line
+  // Stats line — same text echoed into whichever stats span is on
+  // the active picker row (network's focus row vs. hub's centre row).
+  const n = _baConnGraph?.nodes?.length || 0;
+  const e = _baConnGraph?.edges?.length || 0;
+  const statsText = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
   const statsEl = document.getElementById("ba-conn-stats");
-  if (statsEl) {
-    const n = _baConnGraph?.nodes?.length || 0;
-    const e = _baConnGraph?.edges?.length || 0;
-    statsEl.textContent = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
-  }
+  if (statsEl) statsEl.textContent = statsText;
+  const statsHubEl = document.getElementById("ba-conn-stats-hub");
+  if (statsHubEl) statsHubEl.textContent = statsText;
 }
 
 function _baRenderFocusPicker() {
