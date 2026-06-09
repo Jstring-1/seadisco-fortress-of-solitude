@@ -953,6 +953,29 @@ async function _enrichOneFromDiscogsArtist(
  *  populate its open form so the curator can review + save (or
  *  edit) rather than committing blindly. force flag affects which
  *  fields are eligible (photo/notes/releases). */
+// Preview a Discogs artist by id alone — no blues_artists row required.
+// Used by the editor's "Fetch from Discogs" button when adding a NEW
+// artist who hasn't been saved yet: type name + discogs_id, click
+// Fetch, see the full Discogs record poured into the form, then Save.
+// Synthesises a blank row so _enrichOneFromDiscogsArtist's diff logic
+// treats every Discogs-derived field as new (force:true also avoids
+// the "only fill blanks" gate).
+export async function previewDiscogsArtistById(
+  client: DiscogsClient,
+  discogsId: number,
+): Promise<{ patch: Record<string, any> }> {
+  if (!Number.isFinite(discogsId) || discogsId <= 0) {
+    throw new Error("Invalid Discogs id");
+  }
+  const row: any = { discogs_id: discogsId, name: "" };
+  const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force: true });
+  // The diff in _enrichOneFromDiscogsArtist would normally drop
+  // discogs_id since the synthetic row already has it; re-add so the
+  // form populates the field for the user.
+  patch.discogs_id = discogsId;
+  return { patch };
+}
+
 export async function previewBluesArtistFromDiscogs(
   client: DiscogsClient,
   id: number,

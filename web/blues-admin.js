@@ -1066,19 +1066,33 @@ function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (
 // the preview includes overwrite-eligible fields (photo, notes,
 // releases-replaced); non-force would only fill blanks.
 async function bluesDbRefreshFromDiscogs() {
-  const id = _bluesDbState.editingId;
-  if (!id) return;
   const form = document.getElementById("blues-editor-form");
   if (!form) return;
+  const id = _bluesDbState.editingId;
   const btn = document.getElementById("blues-editor-discogs-refresh");
   const orig = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = "Loading Discogs…"; }
   try {
-    // autoFind=1 lets the endpoint search Discogs by name when the
-    // row has no discogs_id yet — covers newly-added artists who
-    // were saved with just a name. Existing rows with an id ignore
-    // this and run the same preview as before.
-    const r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1&autoFind=1`, { method: "POST" });
+    // Three modes depending on what the form/row has:
+    //  1. Unsaved row + form discogs_id  → preview by id (no DB row needed)
+    //  2. Saved row (any id state)       → preview-by-row with autoFind=1
+    //                                       (server falls back to name search
+    //                                       when the row has no id yet).
+    //  3. Unsaved row + no discogs_id    → not enough to act on; bail with
+    //                                       a hint to either type an id or
+    //                                       save first.
+    const formDiscogsId = (form.elements.namedItem("discogs_id")?.value || "").trim();
+    let r;
+    let usedById = false;
+    if (id) {
+      r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1&autoFind=1`, { method: "POST" });
+    } else if (formDiscogsId) {
+      r = await apiFetch(`/api/admin/blues/discogs-preview-by-id?id=${encodeURIComponent(formDiscogsId)}`, { method: "POST" });
+      usedById = true;
+    } else {
+      alert("Type a Discogs ID first, or save the artist by name and click Fetch again.");
+      return;
+    }
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       alert("Fetch failed: " + (err.error ?? r.status));
@@ -1444,7 +1458,10 @@ async function bluesDbOpenEditor(id) {
     mbBtn.style.display = "none";
     wikiBtn.style.display = "none";
     discogsBtn.style.display = "none";
-    if (discogsRefreshBtn) discogsRefreshBtn.style.display = "none";
+    // Fetch from Discogs IS shown for new rows — it now supports the
+    // "type name + discogs_id, click Fetch, populate form" flow via
+    // the by-id endpoint when no editingId exists.
+    if (discogsRefreshBtn) discogsRefreshBtn.style.display = "";
     if (mergeBtn) mergeBtn.style.display = "none";
     ytBtn.style.display = "none";
   }
