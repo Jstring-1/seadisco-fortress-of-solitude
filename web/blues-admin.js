@@ -1779,16 +1779,20 @@ function _bluesDbRenderLinks(rows) {
     return `<span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.45rem;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:rgba(255,255,255,0.03)">
       <span style="color:var(--muted);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em">${label}</span>
       <span>${esc(r.name)}</span>
-      <a href="#" onclick="event.preventDefault();bluesDbRemoveLink(${r.id})" title="Remove link" style="color:#e88;text-decoration:none;font-weight:600">×</a>
+      <a href="#" onclick="event.preventDefault();bluesDbRemoveLink(${r.id}, '${label}')" title="Remove ${label} link" style="color:#e88;text-decoration:none;font-weight:600">×</a>
     </span>`;
   }).join("");
 }
 
-async function bluesDbRemoveLink(otherId) {
+async function bluesDbRemoveLink(otherId, kind) {
   const id = _bluesDbState.editingId;
   if (!id) return;
   try {
-    const r = await apiFetch(`/api/admin/blues/${id}/links/${otherId}`, { method: "DELETE" });
+    // Scope to a single kind so removing the "family" chip on a pair
+    // that's also "band" doesn't wipe both. Omit ?kind for the legacy
+    // "remove all kinds" behavior (kept as a fallback).
+    const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+    const r = await apiFetch(`/api/admin/blues/${id}/links/${otherId}${q}`, { method: "DELETE" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     await bluesDbLoadLinks(id);
   } catch (e) {
