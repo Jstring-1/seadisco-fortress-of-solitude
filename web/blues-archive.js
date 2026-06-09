@@ -3576,6 +3576,17 @@ let _baConnKindsOn = (() => {
   return new Set(_BA_CONN_KINDS.map(k => k.id));
 })();
 let _baConnHubId = null;
+// Network-mode focus: when set, the network view only draws the
+// connected component reachable from this id via the currently-enabled
+// link kinds. null = whole graph. Persisted across reloads.
+const _BA_CONN_FOCUS_KEY = "sd_ba_conn_focus";
+let _baConnFocusId = (() => {
+  try {
+    const v = localStorage.getItem(_BA_CONN_FOCUS_KEY);
+    const n = v ? Number(v) : NaN;
+    return Number.isFinite(n) ? n : null;
+  } catch { return null; }
+})();
 
 function _baLoadScript(src) {
   return new Promise((resolve, reject) => {
@@ -3656,6 +3667,10 @@ function _baRenderConnToolbar() {
   const pickWrap = document.getElementById("ba-conn-hub-picker");
   if (pickWrap) pickWrap.style.display = _baConnView === "hub" ? "inline-flex" : "none";
   if (_baConnView === "hub") _baRenderHubPicker();
+  // Network-mode focus picker visibility + population
+  const focusWrap = document.getElementById("ba-conn-focus-picker");
+  if (focusWrap) focusWrap.style.display = _baConnView === "network" ? "inline-flex" : "none";
+  if (_baConnView === "network") _baRenderFocusPicker();
   // Stats line
   const statsEl = document.getElementById("ba-conn-stats");
   if (statsEl) {
@@ -3663,6 +3678,62 @@ function _baRenderConnToolbar() {
     const e = _baConnGraph?.edges?.length || 0;
     statsEl.textContent = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
   }
+}
+
+function _baRenderFocusPicker() {
+  const sel = document.getElementById("ba-conn-focus-select");
+  if (!sel) return;
+  const nodes = (_baConnGraph?.nodes || []).slice()
+    .sort((a, b) => (b.degree || 0) - (a.degree || 0) || a.name.localeCompare(b.name));
+  const cur = _baConnFocusId;
+  sel.innerHTML = `<option value="">— show everyone —</option>` +
+    nodes.map(n => `<option value="${n.id}" ${n.id === cur ? "selected" : ""}>${escHtml(n.name)} (${n.degree})</option>`).join("");
+  // Stats: how many artists are reachable from the focus
+  const statsEl = document.getElementById("ba-conn-focus-stats");
+  if (statsEl) {
+    if (!cur) { statsEl.textContent = ""; }
+    else {
+      const reachable = _baBfsReachable(cur, _baConnKindsOn);
+      statsEl.textContent = `${reachable.size} reachable artist${reachable.size === 1 ? "" : "s"}`;
+    }
+  }
+}
+
+function _baConnSetFocus(idStr) {
+  const n = Number(idStr);
+  _baConnFocusId = Number.isFinite(n) && n > 0 ? n : null;
+  try {
+    if (_baConnFocusId) localStorage.setItem(_BA_CONN_FOCUS_KEY, String(_baConnFocusId));
+    else localStorage.removeItem(_BA_CONN_FOCUS_KEY);
+  } catch {}
+  _baRenderConnToolbar();
+  _baConnRender();
+}
+window._baConnSetFocus = _baConnSetFocus;
+
+// BFS from `startId` through the supplied set of enabled kinds. Returns
+// a Set of every node id reachable (inclusive of start). Adjacency is
+// built on the fly from _baConnGraph.edges to keep things simple — the
+// link table is small.
+function _baBfsReachable(startId, kindsOn) {
+  if (!_baConnGraph || !Number.isFinite(startId)) return new Set();
+  const adj = new Map();
+  for (const e of _baConnGraph.edges || []) {
+    if (!kindsOn.has(e.kind)) continue;
+    if (!adj.has(e.lo_id)) adj.set(e.lo_id, []);
+    if (!adj.has(e.hi_id)) adj.set(e.hi_id, []);
+    adj.get(e.lo_id).push(e.hi_id);
+    adj.get(e.hi_id).push(e.lo_id);
+  }
+  const seen = new Set([startId]);
+  const queue = [startId];
+  while (queue.length) {
+    const u = queue.shift();
+    for (const v of (adj.get(u) || [])) {
+      if (!seen.has(v)) { seen.add(v); queue.push(v); }
+    }
+  }
+  return seen;
 }
 
 function _baRenderHubPicker() {
@@ -3727,9 +3798,18 @@ function _baConnRenderGraph(canvas, edges, mode) {
       for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
       nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
     } else {
-      const keep = new Set();
-      for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
-      nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
+      // Network mode. If a focus artist is selected, BFS through the
+      // currently-enabled kinds to find every reachable node and limit
+      // the draw to that connected component. Empty focus = whole graph.
+      if (_baConnFocusId) {
+        const reachable = _baBfsReachable(_baConnFocusId, _baConnKindsOn);
+        edgesToDraw = edges.filter(e => reachable.has(e.lo_id) && reachable.has(e.hi_id));
+        nodesToDraw = [...reachable].map(id => nodesById.get(id)).filter(Boolean);
+      } else {
+        const keep = new Set();
+        for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
+        nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
+      }
     }
     if (!nodesToDraw.length) {
       mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">No links match the current filter.</div>`;
@@ -3775,7 +3855,9 @@ function _baConnRenderGraph(canvas, edges, mode) {
           "width":  "mapData(degree, 1, 20, 16, 50)",
           "height": "mapData(degree, 1, 20, 16, 50)",
         }},
-        { selector: `node[id = '${mode === "hub" ? _baConnHubId : ""}']`, style: {
+        // Highlight the focused/centred node — hub mode uses _baConnHubId,
+        // network mode uses _baConnFocusId when set.
+        { selector: `node[id = '${mode === "hub" ? _baConnHubId : (_baConnFocusId || "")}']`, style: {
           "background-color": "var(--accent)",
           "border-color": "#fff",
           "border-width": 2,
