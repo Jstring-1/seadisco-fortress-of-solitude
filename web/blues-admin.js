@@ -1470,8 +1470,77 @@ async function bluesDbOpenEditor(id) {
   // main row payload). Fires only for existing rows; new rows show
   // a "save first" prompt.
   try { bluesDbLoadLinks(id || null); } catch {}
+  try { bluesDbLoadReferences(id || null); } catch {}
   overlay.style.display = "flex";
 }
+
+// ── References panel ─────────────────────────────────────────────────
+// Finds rows whose freeform aliases / collaborators / notes mention
+// this artist's name but aren't yet structurally linked. Auto-runs on
+// editor open. Each result row carries the 6 link-kind buttons so the
+// curator can promote it in one click. After a successful link, the
+// row drops from the list (re-fetches the full set).
+async function bluesDbLoadReferences(id) {
+  const listEl = document.getElementById("blues-editor-refs-list");
+  const statusEl = document.getElementById("blues-editor-refs-status");
+  if (!listEl) return;
+  if (!id) { listEl.textContent = "Save first to scan."; if (statusEl) statusEl.textContent = ""; return; }
+  listEl.textContent = "Scanning…";
+  if (statusEl) statusEl.textContent = "";
+  try {
+    const r = await apiFetch(`/api/admin/blues/${id}/references`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    if (!rows.length) {
+      listEl.innerHTML = `<span style="color:var(--muted);font-style:italic">No unlinked references found.</span>`;
+      if (statusEl) statusEl.textContent = "";
+      return;
+    }
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    listEl.innerHTML = rows.map(row => {
+      const matched = (row.matched || []).join(", ") || "—";
+      const btns = _BA_LINK_KINDS.map(k => {
+        const label = k.charAt(0).toUpperCase() + k.slice(1);
+        return `<button type="button" class="archive-btn" onclick="_bluesDbRefLink(${id}, ${row.id}, '${k}')" title="${_BA_LINK_KIND_TITLES[k] || k}" style="font-size:0.72rem;padding:0.12rem 0.4rem">${label}</button>`;
+      }).join("");
+      return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.25rem 0;border-bottom:1px solid rgba(255,255,255,0.04);flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--text);min-width:160px">${esc(row.name)}</span>
+        <span style="color:var(--muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em">via ${esc(matched)}</span>
+        <span style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;margin-left:auto">${btns}</span>
+      </div>`;
+    }).join("");
+    if (statusEl) statusEl.textContent = `${rows.length} match${rows.length === 1 ? "" : "es"}`;
+  } catch (e) {
+    listEl.innerHTML = `<span style="color:#e88">Scan failed: ${e?.message || e}</span>`;
+  }
+}
+window.bluesDbLoadReferences = bluesDbLoadReferences;
+
+async function _bluesDbRefLink(fromId, otherId, kind) {
+  const statusEl = document.getElementById("blues-editor-refs-status");
+  if (statusEl) statusEl.textContent = `Linking as ${kind}…`;
+  try {
+    const r = await apiFetch(`/api/admin/blues/${fromId}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otherId, kind }),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`);
+    }
+    // Refresh both panels — the new link shows up in Linked artists
+    // and the row drops out of References.
+    await Promise.all([
+      bluesDbLoadLinks(fromId),
+      bluesDbLoadReferences(fromId),
+    ]);
+    if (statusEl) statusEl.textContent = `Linked as ${kind}.`;
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+window._bluesDbRefLink = _bluesDbRefLink;
 
 // Build hrefs for the editor's external-lookup bar from whatever
 // IDs are currently in the form. Falls back to a name search if no
@@ -1789,11 +1858,12 @@ async function _bluesDbLinkPickerLoad(fromId) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const { rows = [] } = await r.json();
     const choices = rows.filter(row => row.id !== fromId);
-    if (!choices.length) {
-      el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches.</div>`;
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    // Empty results + no query → nothing actionable; ask for a name.
+    if (!choices.length && !q) {
+      el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches. Type a name to add a new artist.</div>`;
       return;
     }
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
     // JSON.stringify gives a JS-safe quoted literal (handles apostrophes
     // like "Ramblin' Thomas" without breaking the outer JS string);
     // then HTML-escape so the result is safe inside an onclick=""
@@ -1803,7 +1873,7 @@ async function _bluesDbLinkPickerLoad(fromId) {
     const jsArg = s => JSON.stringify(String(s ?? ""))
       .replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    el.innerHTML = choices.map(row => {
+    const choiceRows = choices.map(row => {
       const safeName = esc(row.name || "");
       const jsName = jsArg(row.name || "");
       // Six relation-type buttons. The cap on options inside the picker
@@ -1818,6 +1888,25 @@ async function _bluesDbLinkPickerLoad(fromId) {
         <span style="display:inline-flex;gap:0.3rem;flex-wrap:wrap">${btns}</span>
       </div>`;
     }).join("");
+    // "Add new artist and link" row — only shown when the search has
+    // a query (otherwise we don't know what to call the new row).
+    // Creates a bare row with just the name then immediately links it,
+    // so the user can keep building the web without bouncing between
+    // editor screens.
+    let createRow = "";
+    if (q) {
+      const jsQ = jsArg(q);
+      const safeQ = esc(q);
+      const createBtns = _BA_LINK_KINDS.map(k => {
+        const label = k.charAt(0).toUpperCase() + k.slice(1);
+        return `<button type="button" class="archive-btn archive-btn-suggest" onclick="_bluesDbAddAndLink(${fromId}, ${jsQ}, '${k}')" title="Create '${safeQ}' as a new blues_artists row and link as ${k}" style="font-size:0.78rem">${label}</button>`;
+      }).join("");
+      createRow = `<div style="padding:0.4rem 0;margin-top:0.3rem;border-top:1px dashed var(--border);display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--accent)">+ Add new artist "${safeQ}" and link</span>
+        <span style="display:inline-flex;gap:0.3rem;flex-wrap:wrap">${createBtns}</span>
+      </div>`;
+    }
+    el.innerHTML = choiceRows + createRow;
   } catch (e) {
     el.innerHTML = `<div style="color:#e88">Failed: ${e?.message || e}</div>`;
   }
@@ -1843,6 +1932,51 @@ async function _bluesDbConfirmLink(fromId, otherId, otherName, kind) {
   }
 }
 window._bluesDbConfirmLink = _bluesDbConfirmLink;
+
+// Create a bare blues_artists row with just `name`, then immediately
+// link it to the row currently in the editor. Keeps the picker open so
+// the curator can chain more adds without bouncing between screens.
+async function _bluesDbAddAndLink(fromId, name, kind) {
+  const statusEl = document.getElementById("blues-link-status");
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  if (statusEl) statusEl.textContent = `Creating "${trimmed}" + linking as ${kind}…`;
+  try {
+    // Step 1: create the new row. POST /api/admin/blues with just name.
+    const cr = await apiFetch("/api/admin/blues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!cr.ok) {
+      const t = await cr.text().catch(() => "");
+      throw new Error(`Create failed: HTTP ${cr.status}: ${t.slice(0, 200)}`);
+    }
+    const created = await cr.json();
+    const newId = created?.id;
+    if (!newId) throw new Error("Create returned no id");
+    // Step 2: link the new row to the editor's current row.
+    const lr = await apiFetch(`/api/admin/blues/${fromId}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otherId: newId, kind }),
+    });
+    if (!lr.ok) {
+      const t = await lr.text().catch(() => "");
+      throw new Error(`Link failed: HTTP ${lr.status}: ${t.slice(0, 200)}`);
+    }
+    if (statusEl) statusEl.textContent = `Created + linked "${trimmed}" as ${kind}.`;
+    // Refresh the editor's Linked artists list (and References, in case
+    // a stale mention there matched the new row). Re-run the picker
+    // search so the new row appears + the user can chain more adds.
+    try { await bluesDbLoadLinks(fromId); } catch {}
+    try { await bluesDbLoadReferences(fromId); } catch {}
+    try { await _bluesDbLinkPickerLoad(fromId); } catch {}
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+window._bluesDbAddAndLink = _bluesDbAddAndLink;
 
 async function bluesDbDeleteFromEditor() {
   const id = _bluesDbState.editingId;
