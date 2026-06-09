@@ -3576,6 +3576,12 @@ button.wiki-link-btn:active {
 }
 .rr-tab.rr-tab-disabled:hover { color: #444 !important; }
 .rr-tab-sep { color: #444; }
+/* Admin/restricted discovery tabs — visual cue that they're gated.
+   Dimmer amber tint distinguishes from the regular muted grey without
+   shouting. Active + hover states still take precedence. */
+.rr-tab.rr-tab-restricted { color: #8a7a4a; }
+.rr-tab.rr-tab-restricted:hover { color: #c9b377; }
+.rr-tab.rr-tab-restricted.rr-tab-active { color: #d9c281; }
 /* External-source sub-nav strip (LOC / Wikipedia / Archive / YouTube).
    Shares .rr-header + .rr-tab styling so it visually matches the home
    Recent / Suggestions / Submitted / Feed strip. The bottom border

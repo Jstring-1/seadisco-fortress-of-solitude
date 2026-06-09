@@ -79,6 +79,23 @@ if (typeof window !== "undefined") {
   }, { passive: true });
 }
 
+// Artist-popup collapsed-section state. localStorage-backed map keyed
+// by section name ("bio" / "tunings" / "lyrics" / "releases"). True =
+// collapsed. Persists across sessions per the user's last choice.
+const _BA_POPUP_COLLAPSE_KEY = "sd_ba_artist_popup_collapse";
+function _baGetCollapsedState() {
+  try {
+    const o = JSON.parse(localStorage.getItem(_BA_POPUP_COLLAPSE_KEY) || "{}");
+    return o && typeof o === "object" ? o : {};
+  } catch { return {}; }
+}
+function _baSetSectionCollapsed(section, collapsed) {
+  const s = _baGetCollapsedState();
+  s[section] = !!collapsed;
+  try { localStorage.setItem(_BA_POPUP_COLLAPSE_KEY, JSON.stringify(s)); } catch {}
+}
+window._baSetSectionCollapsed = _baSetSectionCollapsed;
+
 // Visited-lyric tracker. localStorage-backed Set so the snippet column
 // dims for already-opened rows on revisit (like a browser's visited
 // link colour). Cap at 5000 to bound the JSON blob. Mutations are
@@ -725,6 +742,73 @@ function _baRenderArtistDetail(a) {
         }).join("")}</tbody>
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No releases stored. Use the existing "Get all info from Discogs" button on the Blues DB tab to populate them.</p>`;
+  // Collapsible-section state. Each <details> reads its `open` from the
+  // persisted map (default = open) and writes back on toggle. The state
+  // is keyed by section name so all artist popups share the user's
+  // last choice for that section.
+  const collapsed = _baGetCollapsedState();
+  const isOpen = (k) => !collapsed[k]; // default = expanded
+  const sectionStyle = "margin:1rem 0;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.8rem;background:rgba(255,255,255,0.015)";
+  const summaryStyle = "cursor:pointer;font-size:0.92rem;color:var(--accent);font-weight:600;padding:0.2rem 0;list-style:none;user-select:none";
+  const onToggle = (k) => `onclick="event.stopPropagation()" ontoggle="window._baSetSectionCollapsed && window._baSetSectionCollapsed('${k}', !this.open)"`;
+  // Bio / Notes — photo + meta + chips + notes paragraph. The header
+  // row (name + dates + action buttons) stays outside the collapse so
+  // the user always knows who they're looking at.
+  const bioBody = `
+    <div style="display:flex;gap:1rem;margin-top:0.6rem;align-items:flex-start;flex-wrap:wrap">
+      ${photo}
+      <div style="flex:1;min-width:240px">
+        ${meta ? `<div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem">${meta}</div>` : ""}
+        ${linksHtml}
+        ${aliasBandsHtml}
+        ${bio || `<p style="color:var(--muted);font-style:italic;margin:0.6rem 0">No notes recorded.</p>`}
+      </div>
+    </div>`;
+  // Tunings — combines (a) per-lyric tuning chip strip and (b) the
+  // static tunings grid from src/data/tunings.csv. The grid rows
+  // include a flag for "no matching lyric in our table" so the curator
+  // can spot CSV titles that haven't been scraped yet or are filed
+  // under a slightly different page_title.
+  const tuningsArr = Array.isArray(a.tunings) ? a.tunings : [];
+  const gridTunings = Array.isArray(a.gridTunings) ? a.gridTunings : [];
+  const gridUnmatchedCount = gridTunings.filter(g => !g.lyric_id).length;
+  const chipStripHtml = tuningsArr.length
+    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.4rem 0 0.6rem">${
+        tuningsArr.map(t => `<a href="#" onclick="event.preventDefault();_baJumpTuningForArtist('${escHtml((t.tuning || "").replace(/'/g, "\\'"))}', '${escHtml((a.name || "").replace(/'/g, "\\'"))}')" style="padding:0.2rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.74rem;color:var(--accent);text-decoration:none">${escHtml(t.tuning)} <span style="color:var(--muted)">· ${t.n}</span></a>`).join("")
+      }</div>`
+    : "";
+  const gridTableHtml = gridTunings.length
+    ? `<table class="api-log-table" style="font-size:0.82rem;width:100%;margin-top:0.3rem">
+        <thead><tr>
+          <th>Title</th>
+          <th>Position</th>
+          <th>Pitch</th>
+          <th>Notes</th>
+          <th style="text-align:right">Lyric</th>
+        </tr></thead>
+        <tbody>${gridTunings.map(g => {
+          const unmatched = !g.lyric_id;
+          const titleCell = unmatched
+            ? `<span title="No matching lyric in blues_lyrics yet" style="color:#e8a">${escHtml(g.title || "")}</span>`
+            : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyric(${g.lyric_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(g.title || "")}</a>`;
+          const flag = unmatched
+            ? `<span title="No matching lyric" style="color:#e8a">unmatched</span>`
+            : `<span style="color:var(--muted)">✓</span>`;
+          return `<tr>
+            <td style="white-space:nowrap">${titleCell}</td>
+            <td style="white-space:nowrap;color:var(--accent)">${escHtml(g.position || "")}</td>
+            <td style="white-space:nowrap;color:var(--muted)">${escHtml(g.pitch || "")}</td>
+            <td style="font-size:0.78rem;color:#888">${escHtml(g.notes || "")}</td>
+            <td style="text-align:right;font-size:0.78rem">${flag}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>`
+    : "";
+  const tuningsBody = (chipStripHtml || gridTableHtml)
+    ? `${chipStripHtml}${gridTableHtml}${gridUnmatchedCount ? `<p style="font-size:0.78rem;color:#e8a;margin:0.5rem 0 0">${gridUnmatchedCount} CSV tuning${gridUnmatchedCount === 1 ? "" : "s"} not matched to a lyric in blues_lyrics.</p>` : ""}`
+    : `<p style="color:var(--muted);font-style:italic;margin:0.4rem 0">No tunings recorded for this artist.</p>`;
+  const tuningsCount = tuningsArr.length;
+  const tuningsLabel = `Tunings${tuningsCount ? ` (${tuningsCount})` : ""}${gridTunings.length ? ` · grid: ${gridTunings.length}${gridUnmatchedCount ? `, ${gridUnmatchedCount} unmatched` : ""}` : ""}`;
   detail.innerHTML = `
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
       <button class="archive-btn" onclick="_baBackToList()" title="Close">×</button>
@@ -740,29 +824,22 @@ function _baRenderArtistDetail(a) {
         <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete + don't re-add</button>
       </span>
     </div>
-    <div style="display:flex;gap:1rem;margin-bottom:1.2rem;align-items:flex-start;flex-wrap:wrap">
-      ${photo}
-      <div style="flex:1;min-width:240px">
-        ${meta ? `<div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem">${meta}</div>` : ""}
-        ${linksHtml}
-        ${aliasBandsHtml}
-        ${bio}
-      </div>
-    </div>
-    <h3 style="font-size:0.92rem;color:var(--accent);margin:1rem 0 0.5rem">Lyrics (${lyrics.length})</h3>
-    ${(() => {
-      const tunings = Array.isArray(a.tunings) ? a.tunings : [];
-      if (!tunings.length) return "";
-      // Tuning chip strip — click filters the master Lyrics tab to
-      // this artist + tuning combo. Stays inside the popup so the user
-      // sees the filter applied to the larger list.
-      return `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.5rem">${
-        tunings.map(t => `<a href="#" onclick="event.preventDefault();_baJumpTuningForArtist('${escHtml((t.tuning || "").replace(/'/g, "\\'"))}', '${escHtml((a.name || "").replace(/'/g, "\\'"))}')" style="padding:0.2rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.74rem;color:var(--accent);text-decoration:none">${escHtml(t.tuning)} <span style="color:var(--muted)">· ${t.n}</span></a>`).join("")
-      }</div>`;
-    })()}
-    ${lyricsHtml}
-    <h3 style="font-size:0.92rem;color:var(--accent);margin:1.4rem 0 0.5rem">Releases — oldest to newest (${releases.length})</h3>
-    ${releasesHtml}
+    <details ${isOpen("bio") ? "open" : ""} ${onToggle("bio")} style="${sectionStyle}">
+      <summary style="${summaryStyle}">Bio / Notes</summary>
+      ${bioBody}
+    </details>
+    <details ${isOpen("tunings") ? "open" : ""} ${onToggle("tunings")} style="${sectionStyle}">
+      <summary style="${summaryStyle}">${tuningsLabel}</summary>
+      ${tuningsBody}
+    </details>
+    <details ${isOpen("lyrics") ? "open" : ""} ${onToggle("lyrics")} style="${sectionStyle}">
+      <summary style="${summaryStyle}">Lyrics (${lyrics.length})</summary>
+      <div style="margin-top:0.5rem">${lyricsHtml}</div>
+    </details>
+    <details ${isOpen("releases") ? "open" : ""} ${onToggle("releases")} style="${sectionStyle}">
+      <summary style="${summaryStyle}">Releases — oldest to newest (${releases.length})</summary>
+      <div style="margin-top:0.5rem">${releasesHtml}</div>
+    </details>
   `;
 }
 
