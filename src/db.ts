@@ -1186,6 +1186,32 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
+  // Allow multiple kinds per pair (Family AND Band, etc). PK widens
+  // from (lo, hi) to (lo, hi, kind). Idempotent: only swaps when the
+  // current PK is the old narrow shape. Existing rows survive — the
+  // values are unique on (lo,hi,kind) by definition once we drop the
+  // narrower constraint.
+  await getPool().query(`
+    DO $$
+    DECLARE
+      pk_cols text;
+    BEGIN
+      SELECT string_agg(att.attname, ',' ORDER BY att.attnum)
+        INTO pk_cols
+        FROM pg_constraint con
+        JOIN pg_class      cls ON cls.oid = con.conrelid
+        JOIN pg_attribute  att ON att.attrelid = cls.oid
+                              AND att.attnum = ANY(con.conkey)
+       WHERE cls.relname = 'blues_artist_links'
+         AND con.contype = 'p';
+      IF pk_cols = 'lo_id,hi_id' THEN
+        ALTER TABLE blues_artist_links DROP CONSTRAINT blues_artist_links_pkey;
+        ALTER TABLE blues_artist_links ADD PRIMARY KEY (lo_id, hi_id, kind);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'blues_artist_links PK widening skipped: %', SQLERRM;
+    END $$;
+  `);
   // Expand the kind CHECK to include the broader relationship types
   // used by the Connections tab. We look up EVERY CHECK constraint on
   // the table whose definition references `kind` and drop them all —
@@ -8226,13 +8252,13 @@ export async function addBluesArtistLink(
   }
   const lo = Math.min(aId, bId);
   const hi = Math.max(aId, bId);
-  // ON CONFLICT updates the kind — lets the user re-categorise an
-  // existing link (e.g. pseudonym → band) without having to delete +
-  // re-add it.
+  // PK is (lo, hi, kind) so multiple kinds per pair coexist (Family +
+  // Band, etc). ON CONFLICT DO NOTHING makes this idempotent — clicking
+  // Band twice on the same pair is a no-op rather than an error.
   await getPool().query(
     `INSERT INTO blues_artist_links (lo_id, hi_id, kind)
      VALUES ($1, $2, $3)
-     ON CONFLICT (lo_id, hi_id) DO UPDATE SET kind = EXCLUDED.kind`,
+     ON CONFLICT (lo_id, hi_id, kind) DO NOTHING`,
     [lo, hi, kind],
   );
 }
@@ -8265,14 +8291,27 @@ export async function listBluesConnectionsGraph(): Promise<{
   return { nodes: nr.rows, edges };
 }
 
-export async function removeBluesArtistLink(aId: number, bId: number): Promise<void> {
+export async function removeBluesArtistLink(
+  aId: number, bId: number, kind?: string,
+): Promise<void> {
   if (!Number.isFinite(aId) || !Number.isFinite(bId)) return;
   const lo = Math.min(aId, bId);
   const hi = Math.max(aId, bId);
-  await getPool().query(
-    `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`,
-    [lo, hi],
-  );
+  if (kind) {
+    // Scoped delete — pulls just one of multiple kinds on the same pair.
+    // Caller's responsibility to ensure `kind` is a valid value; the
+    // CHECK constraint on the table catches anything else.
+    await getPool().query(
+      `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2 AND kind = $3`,
+      [lo, hi, kind],
+    );
+  } else {
+    // No kind → wipe every link between the pair.
+    await getPool().query(
+      `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`,
+      [lo, hi],
+    );
+  }
 }
 
 export async function listBluesArtistLinks(aId: number): Promise<any[]> {

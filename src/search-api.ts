@@ -8836,8 +8836,13 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
   const id    = parseInt(req.params.id, 10);
   const other = parseInt(req.params.otherId, 10);
   if (!Number.isFinite(id) || !Number.isFinite(other)) { res.status(400).json({ error: "bad id" }); return; }
+  // Optional ?kind=X removes just one kind of link between the pair
+  // (the table now allows multiple kinds per pair). Omit kind to wipe
+  // every link between them.
+  const kindParam = String(req.query.kind ?? "").trim();
+  const kind = BLUES_ARTIST_LINK_KINDS.includes(kindParam as any) ? kindParam : undefined;
   try {
-    await removeBluesArtistLink(id, other);
+    await removeBluesArtistLink(id, other, kind);
     res.json({ ok: true });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
