@@ -3671,15 +3671,11 @@ function _baRenderConnToolbar() {
   const focusWrap = document.getElementById("ba-conn-focus-picker");
   if (focusWrap) focusWrap.style.display = _baConnView === "network" ? "inline-flex" : "none";
   if (_baConnView === "network") _baRenderFocusPicker();
-  // Stats line — same text echoed into whichever stats span is on
-  // the active picker row (network's focus row vs. hub's centre row).
+  // Stats line — single span on the top toolbar.
   const n = _baConnGraph?.nodes?.length || 0;
   const e = _baConnGraph?.edges?.length || 0;
-  const statsText = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
   const statsEl = document.getElementById("ba-conn-stats");
-  if (statsEl) statsEl.textContent = statsText;
-  const statsHubEl = document.getElementById("ba-conn-stats-hub");
-  if (statsHubEl) statsHubEl.textContent = statsText;
+  if (statsEl) statsEl.textContent = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
 }
 
 function _baRenderFocusPicker() {
