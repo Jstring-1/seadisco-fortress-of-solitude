@@ -8057,6 +8057,67 @@ export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Pr
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
 // the PK enforces single-row-per-pair regardless of click direction.
+// Find rows whose freeform fields mention this artist's name — used by
+// the editor's References panel. Looks at aliases (jsonb string array),
+// collaborators (jsonb array of strings or {name} objects), and notes
+// (plain text). Excludes the target row itself and any rows already
+// linked to it (so the panel only shows unconnected mentions). Returns
+// the matched field per row so the curator sees WHY it surfaced.
+export async function findBluesArtistReferences(
+  id: number,
+): Promise<Array<{ id: number; name: string; matched: string[] }>> {
+  const target = await getPool().query<{ name: string }>(
+    `SELECT name FROM blues_artists WHERE id = $1`,
+    [id],
+  );
+  if (!target.rows.length) return [];
+  const name = (target.rows[0].name || "").trim();
+  if (!name) return [];
+  const n = name.toLowerCase();
+  const r = await getPool().query<{ id: number; name: string; in_aliases: boolean; in_collabs: boolean; in_notes: boolean }>(
+    `WITH t AS (SELECT $2::text AS n)
+     SELECT
+       a.id, a.name,
+       EXISTS (
+         SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
+         WHERE lower(trim(v)) = (SELECT n FROM t)
+       ) AS in_aliases,
+       EXISTS (
+         SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+         WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
+       ) AS in_collabs,
+       (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0) AS in_notes
+       FROM blues_artists a
+      WHERE a.id <> $1
+        AND NOT EXISTS (
+          SELECT 1 FROM blues_artist_links l
+           WHERE (l.lo_id = $1 AND l.hi_id = a.id)
+              OR (l.lo_id = a.id AND l.hi_id = $1)
+        )
+        AND (
+          EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
+            WHERE lower(trim(v)) = (SELECT n FROM t)
+          )
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+            WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
+          )
+          OR (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0)
+        )
+      ORDER BY lower(a.name) ASC
+      LIMIT 100`,
+    [id, n],
+  );
+  return r.rows.map(row => {
+    const matched: string[] = [];
+    if (row.in_aliases) matched.push("aliases");
+    if (row.in_collabs) matched.push("collaborators");
+    if (row.in_notes)   matched.push("notes");
+    return { id: row.id, name: row.name, matched };
+  });
+}
+
 export type BluesArtistLinkKind =
   | "pseudonym" | "band" | "spouse" | "traveled" | "mentor" | "family";
 export const BLUES_ARTIST_LINK_KINDS: ReadonlyArray<BluesArtistLinkKind> = [
