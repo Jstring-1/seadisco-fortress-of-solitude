@@ -7841,6 +7841,24 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
       ORDER BY n DESC, tuning ASC`,
     [id, a.name],
   );
+  // Static tunings grid (from src/data/tunings.csv) for this artist.
+  // Match by case-insensitive trimmed name. Annotate each CSV row with
+  // the matching blues_lyrics row id (if any) so the popup can flag
+  // "this CSV title isn't in our lyrics table yet" — useful curation
+  // signal: either the lyric wasn't scraped, or it's filed under a
+  // slightly different page_title that needs reconciling.
+  const gr = await getPool().query(
+    `SELECT g.id, g.title, g.position, g.pitch, g.notes,
+            (SELECT l.id FROM blues_lyrics l
+              WHERE (l.artist_id = $1
+                     OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER($2)))
+                AND LOWER(TRIM(l.page_title)) = LOWER(TRIM(g.title))
+              LIMIT 1) AS lyric_id
+       FROM blues_tunings_grid g
+      WHERE LOWER(TRIM(g.artist)) = LOWER(TRIM($2))
+      ORDER BY g.title ASC, g.id ASC`,
+    [id, a.name],
+  );
   // Sort the JSONB releases array oldest→newest (NULL years last).
   const releases = Array.isArray(a.discogs_releases) ? a.discogs_releases.slice() : [];
   releases.sort((x: any, y: any) => {
@@ -7866,7 +7884,7 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
       ORDER BY l.kind ASC, lower(b.name) ASC`,
     [id],
   );
-  return { ...a, lyrics: lr.rows, tunings: tr.rows, releases, links: lk.rows };
+  return { ...a, lyrics: lr.rows, tunings: tr.rows, gridTunings: gr.rows, releases, links: lk.rows };
 }
 
 // ── Cached blues releases (admin Discovery view) ─────────────────

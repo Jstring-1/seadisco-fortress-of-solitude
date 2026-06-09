@@ -745,7 +745,7 @@ e.g.  miles davis | coltrane
     <!-- YouTube tab is admin/demo-only; its leading separator hides
          alongside it, so when YT is hidden the strip reads
          LOC / Archive / Wikipedia. -->
-    <span id="extras-tab-youtube" class="rr-tab" onclick="switchView('youtube')" title="YouTube submissions tools" style="display:none">YouTube</span>
+    <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-loc"     class="rr-tab" onclick="switchView('loc')"     title="Library of Congress audio archive — public-domain American music">LOC</span>
     <span class="rr-tab-sep">/</span>
@@ -755,21 +755,21 @@ e.g.  miles davis | coltrane
     <!-- Gutenberg tab is admin/demo-only (like YouTube); its leading
          separator hides alongside it. -->
     <span id="extras-tab-gutenberg-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-gutenberg" class="rr-tab" onclick="switchView('gutenberg')" title="Project Gutenberg — free public-domain books" style="display:none">Gutenberg</span>
+    <span id="extras-tab-gutenberg" class="rr-tab rr-tab-restricted" onclick="switchView('gutenberg')" title="Project Gutenberg — free public-domain books (admin/demo only)" style="display:none">Gutenberg</span>
     <!-- Chronicling America tab is admin/demo-only initially; separator
          hides alongside it. -->
     <span id="extras-tab-chronam-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-chronam" class="rr-tab" onclick="switchView('chronam')" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none">Newspapers</span>
+    <span id="extras-tab-chronam" class="rr-tab rr-tab-restricted" onclick="switchView('chronam')" title="Chronicling America — historic American newspapers (admin/demo only)" style="display:none">Newspapers</span>
     <!-- Blues Archive tab — admin-only unified view: blues artists +
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-blues-archive" class="rr-tab" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
+    <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
     <!-- MusicBrainz tab — admin-only proxied search across MB's
          artist / release / recording / work / label entity types.
          All responses cached server-side. Mirrors the blues-archive
          gating. -->
     <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-musicbrainz" class="rr-tab" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
+    <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
   </div>
 </div>
 
@@ -1028,27 +1028,21 @@ e.g.  miles davis | coltrane
         <input id="mb-q" type="search" placeholder="Search MusicBrainz" autocomplete="off" style="flex:1;min-width:0;padding:0.55rem 0.75rem;font-size:0.95rem">
         <button type="submit" class="loc-submit" style="flex-shrink:0">Search</button>
       </div>
-      <div class="type-sort-row" style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.5rem;font-size:0.82rem;color:var(--muted)">
-        <button type="button" id="mb-advanced-toggle" onclick="_mbToggleAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem"><span id="mb-advanced-arrow">▶</span> Advanced</button>
-        <span style="color:#333;margin:0 0.4rem">|</span>
-        <label style="display:flex;align-items:center;gap:0.35rem">Entity
-          <select id="mb-entity" style="padding:0.3rem 0.4rem;font-size:0.82rem" onchange="_mbToggleEntityFilters();_mbPersistState()">
-            <option value="artist">Artist</option>
-            <option value="release-group">Release group</option>
-            <option value="release">Release</option>
-            <option value="recording">Recording</option>
-            <option value="work">Work</option>
-            <option value="label">Label</option>
-          </select>
-        </label>
-      </div>
-      <div id="mb-advanced-panel" style="display:none;margin-top:0.5rem">
-        <!-- Row 1: entity-name fields (Artist / Release / Recording /
-             Label) — wide. Row 2: short filters (Country / Year / Tag
-             / Type). Each label sets data-mb-filter so the entity-aware
-             visibility logic in _mbToggleEntityFilters can hide fields
-             MB's selected index doesn't honour. -->
+      <div id="mb-advanced-panel" style="margin-top:0.5rem">
+        <!-- Entity selector + entity-aware filter grid on the same row.
+             Each label sets data-mb-filter so _mbToggleEntityFilters can
+             hide fields the selected MB index doesn't honour. -->
         <div class="filters-grid mb-filters">
+          <label>Entity
+            <select id="mb-entity" onchange="_mbToggleEntityFilters();_mbPersistState()">
+              <option value="artist">Artist</option>
+              <option value="release-group">Release group</option>
+              <option value="release">Release</option>
+              <option value="recording">Recording</option>
+              <option value="work">Work</option>
+              <option value="label">Label</option>
+            </select>
+          </label>
           <label data-mb-filter="artist">Artist <input id="mb-artist" type="text" placeholder="exact / partial"></label>
           <label data-mb-filter="release">Release <input id="mb-release" type="text" placeholder="title"></label>
           <label data-mb-filter="recording">Recording <input id="mb-recording" type="text" placeholder="track"></label>

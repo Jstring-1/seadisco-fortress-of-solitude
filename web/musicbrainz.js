@@ -55,7 +55,6 @@ function initMusicbrainzView() {
           if (el && sav[k] != null) el.value = String(sav[k]);
         }
         _mbToggleEntityFilters();
-        if (sav.adv) _mbToggleAdvanced(true);
         if (sav.tab === "saved") { _mbSwitchTab("saved"); return; }
         // Defer search slightly so DOM settles.
         if (sav.q || _mbAnyAdvancedFilled()) {
@@ -121,18 +120,10 @@ function _mbSwitchTab(tab) {
 }
 window._mbSwitchTab = _mbSwitchTab;
 
-// Toggle the advanced-panel disclosure. Mirrors main search's
-// toggleAdvanced — sticky open state is persisted with the rest of
-// the MB view state.
-function _mbToggleAdvanced(force) {
-  if (typeof force === "boolean") _mbAdvancedOpen = force;
-  else _mbAdvancedOpen = !_mbAdvancedOpen;
-  const panel = document.getElementById("mb-advanced-panel");
-  const arrow = document.getElementById("mb-advanced-arrow");
-  if (panel) panel.style.display = _mbAdvancedOpen ? "" : "none";
-  if (arrow) arrow.textContent   = _mbAdvancedOpen ? "▼" : "▶";
-  _mbPersistState();
-}
+// Advanced-panel disclosure is gone — the filter grid (incl. the
+// Entity selector) lives inline on one row. Stub kept so any saved
+// view state referring to the toggle is a no-op rather than a crash.
+function _mbToggleAdvanced() { /* no-op */ }
 window._mbToggleAdvanced = _mbToggleAdvanced;
 
 function _mbPersistState() {
