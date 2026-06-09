@@ -1073,22 +1073,23 @@ async function bluesDbRefreshFromDiscogs() {
   const orig = btn?.textContent;
   if (btn) { btn.disabled = true; btn.textContent = "Loading Discogs…"; }
   try {
-    // Three modes depending on what the form/row has:
-    //  1. Unsaved row + form discogs_id  → preview by id (no DB row needed)
-    //  2. Saved row (any id state)       → preview-by-row with autoFind=1
-    //                                       (server falls back to name search
-    //                                       when the row has no id yet).
-    //  3. Unsaved row + no discogs_id    → not enough to act on; bail with
-    //                                       a hint to either type an id or
-    //                                       save first.
+    // Priority (typed ID always wins so the user can override a stale
+    // saved id by typing the right one and clicking Fetch):
+    //  1. Form has discogs_id (typed or already loaded) → preview-by-id
+    //     against that exact ID. No DB row required, server doesn't
+    //     fall back to name search → no chance of grabbing the wrong
+    //     artist when the typed ID is good.
+    //  2. Saved row + form empty → server-side preview with autoFind=1
+    //     so it can take the top name match for a bare-name row.
+    //  3. New row + form empty → bail with a hint.
     const formDiscogsId = (form.elements.namedItem("discogs_id")?.value || "").trim();
     let r;
     let usedById = false;
-    if (id) {
-      r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1&autoFind=1`, { method: "POST" });
-    } else if (formDiscogsId) {
+    if (formDiscogsId) {
       r = await apiFetch(`/api/admin/blues/discogs-preview-by-id?id=${encodeURIComponent(formDiscogsId)}`, { method: "POST" });
       usedById = true;
+    } else if (id) {
+      r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1&autoFind=1`, { method: "POST" });
     } else {
       alert("Type a Discogs ID first, or save the artist by name and click Fetch again.");
       return;
