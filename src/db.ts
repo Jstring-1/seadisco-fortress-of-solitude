@@ -1187,19 +1187,33 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
   // Expand the kind CHECK to include the broader relationship types
-  // used by the Connections tab. Drop + re-add covers both first-boot
-  // (constraint may or may not exist) and existing deployments (legacy
-  // constraint only allowed pseudonym/band). Wrapped in DO so a missing
-  // constraint or an already-correct one is a silent no-op.
+  // used by the Connections tab. We look up EVERY CHECK constraint on
+  // the table whose definition references `kind` and drop them all —
+  // the inline CHECK in CREATE TABLE gets an auto-generated name on
+  // older deploys that doesn't necessarily match our preferred name,
+  // so a blind DROP IF EXISTS on one name would leave the legacy
+  // constraint in place alongside the new permissive one (and CHECK
+  // constraints AND together — the strict one wins, blocking every
+  // new kind from inserting). Idempotent and safe to run on every boot.
   await getPool().query(`
     DO $$
+    DECLARE
+      r record;
     BEGIN
-      ALTER TABLE blues_artist_links DROP CONSTRAINT IF EXISTS blues_artist_links_kind_check;
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'blues_artist_links'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE blues_artist_links DROP CONSTRAINT %I', r.conname);
+      END LOOP;
       ALTER TABLE blues_artist_links ADD CONSTRAINT blues_artist_links_kind_check
         CHECK (kind IN ('pseudonym', 'band', 'spouse', 'traveled', 'mentor', 'family'));
     EXCEPTION WHEN OTHERS THEN
-      -- swallow: a parallel boot may race the constraint swap
-      NULL;
+      RAISE NOTICE 'blues_artist_links kind CHECK migration skipped: %', SQLERRM;
     END $$;
   `);
 
