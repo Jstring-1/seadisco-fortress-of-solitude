@@ -957,12 +957,32 @@ export async function previewBluesArtistFromDiscogs(
   client: DiscogsClient,
   id: number,
   force: boolean,
-): Promise<{ patch: Record<string, any>; row: any }> {
+  opts: { autoFind?: boolean } = {},
+): Promise<{ patch: Record<string, any>; row: any; foundDiscogsId?: number }> {
   const row = await getBluesArtist(id);
   if (!row) throw new Error("artist not found");
-  if (!row.discogs_id) throw new Error("row has no discogs_id");
+  let foundDiscogsId: number | undefined;
+  // Newly-added artists arrive with just a name. If the caller opts in,
+  // search Discogs by name and take the top result. The id gets folded
+  // into the returned patch so the form populates it alongside every
+  // other Discogs-derived field — the curator can still edit/cancel
+  // before saving, so this isn't a silent commit.
+  if (!row.discogs_id) {
+    if (!opts.autoFind) throw new Error("row has no discogs_id");
+    if (!row.name) throw new Error("row has no name to search by");
+    const top = await _searchDiscogsArtist(client, row.name);
+    if (!top) throw new Error(`no Discogs match for "${row.name}"`);
+    row.discogs_id = top;
+    foundDiscogsId = top;
+  }
   const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force });
-  return { patch, row };
+  // When we auto-found the id, ensure it lands in the preview patch
+  // even if _enrichOneFromDiscogsArtist's diff logic dropped it as
+  // "unchanged" relative to the in-memory row we just mutated.
+  if (foundDiscogsId !== undefined && !("discogs_id" in patch)) {
+    patch.discogs_id = foundDiscogsId;
+  }
+  return { patch, row, foundDiscogsId };
 }
 
 /** Walk every row that has a discogs_id and pull the full artist
