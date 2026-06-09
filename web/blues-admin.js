@@ -301,7 +301,7 @@ function bluesDbRenderList() {
         <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco" class="blues-row-icon blues-row-search">⌕</a>
         <a href="${esc(discogsHref)}" target="_blank" rel="noopener" title="Search Discogs for this artist (use to find the canonical Discogs ID)" class="blues-row-icon blues-row-discogs">D</a>
         <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia popup" class="blues-row-icon blues-row-wiki">W</a>
-        <a href="#" class="blues-row-icon" title="Merge this artist into another (moves lyrics + releases, deletes this row)" onclick="event.preventDefault();bluesDbMergePicker(${r.id}, '${esc(r.name).replace(/'/g, "&#39;")}')">⇄</a>
+        <a href="#" class="blues-row-icon" title="Merge this artist into another (moves lyrics + releases, deletes this row)" onclick="event.preventDefault();bluesDbMergePicker(${r.id}, ${JSON.stringify(String(r.name || "")).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")})">⇄</a>
       </td>
       <td style="text-align:right" class="blues-hover-cell" data-hover-type="first-rel" data-row-id="${r.id}">${r.earliest_release_year ?? ""}</td>
       <td>${esc(styles)}</td>
@@ -1600,8 +1600,14 @@ async function _bluesDbMergePickerLoad(fromId) {
       return;
     }
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    // JSON.stringify → JS-safe quoted literal; HTML-escape so it
+    // survives sitting inside an onclick="" attribute. Handles
+    // apostrophes (Ramblin' Thomas) that otherwise close the JS string.
+    const jsArg = s => JSON.stringify(String(s ?? ""))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     el.innerHTML = choices.map(row => `
-      <div onclick="_bluesDbConfirmMerge(${fromId}, ${row.id}, '${esc(row.name || "")}')" style="cursor:pointer;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
+      <div onclick="_bluesDbConfirmMerge(${fromId}, ${row.id}, ${jsArg(row.name || "")})" style="cursor:pointer;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
         <span style="font-weight:600;color:var(--text)">${esc(row.name || "")}</span>
         <span style="color:var(--muted);font-size:0.76rem">${row.lyrics_count || 0}L · ${row.releases_count || 0}R</span>
       </div>`).join("");
@@ -1764,14 +1770,24 @@ async function _bluesDbLinkPickerLoad(fromId) {
       return;
     }
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    // JSON.stringify gives a JS-safe quoted literal (handles apostrophes
+    // like "Ramblin' Thomas" without breaking the outer JS string);
+    // then HTML-escape so the result is safe inside an onclick=""
+    // attribute. Previously we used HTML-encoded apostrophes inside a
+    // single-quoted JS string, which the HTML parser decoded back to
+    // a literal ' before JS ever saw it — closing the string mid-name.
+    const jsArg = s => JSON.stringify(String(s ?? ""))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     el.innerHTML = choices.map(row => {
       const safeName = esc(row.name || "");
+      const jsName = jsArg(row.name || "");
       // Six relation-type buttons. The cap on options inside the picker
       // is deliberate — anything beyond `family` is freeform text in
       // notes, not its own relation kind.
       const btns = _BA_LINK_KINDS.map(k => {
         const label = k.charAt(0).toUpperCase() + k.slice(1);
-        return `<button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${safeName}', '${k}')" title="${_BA_LINK_KIND_TITLES[k] || k}">${label}</button>`;
+        return `<button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, ${jsName}, '${k}')" title="${_BA_LINK_KIND_TITLES[k] || k}">${label}</button>`;
       }).join("");
       return `<div style="padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap">
         <span style="font-weight:600;color:var(--text)">${safeName}</span>
