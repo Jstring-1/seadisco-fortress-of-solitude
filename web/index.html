@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260609.0844" />
+  <link rel="stylesheet" href="/style.css?v=20260609.0847" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260609.0844"></script>
+<script defer src="/shared.js?v=20260609.0847"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1500,7 +1500,7 @@ e.g.  miles davis | coltrane
         <button type="button" class="archive-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
         <button type="button" class="archive-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
         <button type="button" class="archive-btn" id="blues-editor-discogs" onclick="bluesDbOpenDiscogsPicker()" title="Search Discogs by name and let YOU pick the right match (vs. silently taking the top result)" style="display:none">Pick Discogs match</button>
-        <button type="button" class="archive-btn" id="blues-editor-discogs-refresh" onclick="bluesDbRefreshFromDiscogs()" title="Pull the full Discogs artist record into the form (bio, releases, photo, aliases, etc.) for review. If this row has no discogs_id yet, takes the top Discogs search result by name — useful for newly added artists. For ambiguous names use 'Pick Discogs match' instead." style="display:none">Fetch from Discogs</button>
+        <button type="button" class="archive-btn" id="blues-editor-discogs-refresh" onclick="bluesDbRefreshFromDiscogs()" title="Pull the full Discogs artist record into the form (bio, releases, photo, aliases, etc.). Works in three modes: (1) new-artist form + Discogs ID typed → fetches that exact ID; (2) saved row with discogs_id → preview/refresh; (3) saved row, no ID → server takes the top name match. For ambiguous names use 'Pick Discogs match' instead." style="display:none">Fetch from Discogs</button>
         <button type="button" class="archive-btn" id="blues-editor-merge" onclick="bluesDbOpenMergePicker()" title="Merge this artist into another row — reassigns lyrics, merges discogs_releases, then deletes this row" style="display:none">Merge into…</button>
         <button type="button" class="archive-btn" id="blues-editor-yt" onclick="bluesDbEnrichEditorYt()" title="Search YouTube for the artist + first known recording, append top 3 video URLs (~100 quota units)" style="display:none">Find YouTube</button>
         <button type="button" class="archive-btn" onclick="bluesDbCloseEditor()">Cancel</button>
@@ -1816,13 +1816,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260609.0844"></script>
-<script defer src="/search.js?v=20260609.0844"></script>
-<script defer src="/collection.js?v=20260609.0844"></script>
+<script defer src="/utils.js?v=20260609.0847"></script>
+<script defer src="/search.js?v=20260609.0847"></script>
+<script defer src="/collection.js?v=20260609.0847"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260609.0844"></script>
-<script defer src="/app.js?v=20260609.0844"></script>
+<script defer src="/modal.js?v=20260609.0847"></script>
+<script defer src="/app.js?v=20260609.0847"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1833,13 +1833,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260609.0844"></script>
-<script defer src="/queue.js?v=20260609.0844"></script>
+<script defer src="/loc.js?v=20260609.0847"></script>
+<script defer src="/queue.js?v=20260609.0847"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260609.0844";
+  window._SD_LAZY_VERSION = "20260609.0847";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1869,8 +1869,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260609.0844"></script>
-<script defer src="/offline.js?v=20260609.0844"></script>
+<script defer src="/idb.js?v=20260609.0847"></script>
+<script defer src="/offline.js?v=20260609.0847"></script>
 
 </body>
 </html>
