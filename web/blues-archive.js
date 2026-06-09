@@ -3730,13 +3730,20 @@ function _baConnRenderGraph(canvas, edges, mode) {
           "border-width": 1,
           "label": "data(label)",
           "color": "#ddd",
-          "font-size": 10,
+          "font-size": 11,
           "text-valign": "bottom",
-          "text-margin-y": 4,
+          "text-halign": "center",
+          "text-margin-y": 6,
           "text-outline-color": "#000",
-          "text-outline-width": 2,
-          "width":  "mapData(degree, 1, 20, 14, 46)",
-          "height": "mapData(degree, 1, 20, 14, 46)",
+          "text-outline-width": 3,
+          // Long names get truncated rather than overflowing across
+          // neighbour labels. ~14 chars at 11px ≈ 100px wide which is
+          // roughly the layout's min spacing target.
+          "text-max-width": 110,
+          "text-wrap": "ellipsis",
+          "text-events": "yes",
+          "width":  "mapData(degree, 1, 20, 16, 50)",
+          "height": "mapData(degree, 1, 20, 16, 50)",
         }},
         { selector: `node[id = '${mode === "hub" ? _baConnHubId : ""}']`, style: {
           "background-color": "var(--accent)",
@@ -3751,9 +3758,13 @@ function _baConnRenderGraph(canvas, edges, mode) {
           "curve-style": "bezier",
         }},
       ],
+      // Layout tuned for legibility: more repulsion + longer edges
+      // pull cluster members apart so labels stop overlapping. The
+      // canvas is ~560px tall, so these numbers correspond to roughly
+      // a quarter of the viewport per ideal edge.
       layout: mode === "hub"
-        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 30 }
-        : { name: "cose", animate: false, idealEdgeLength: 120, nodeRepulsion: 6000, gravity: 0.4 },
+        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 60, padding: 30 }
+        : { name: "cose", animate: false, idealEdgeLength: 180, nodeRepulsion: 24000, nodeOverlap: 40, gravity: 0.25, componentSpacing: 120, padding: 30, numIter: 1500 },
       wheelSensitivity: 0.2,
     });
     _baConnCy.on("tap", "node", evt => {
