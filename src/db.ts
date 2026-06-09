@@ -8057,25 +8057,71 @@ export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Pr
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
 // the PK enforces single-row-per-pair regardless of click direction.
-// Find rows whose freeform fields mention this artist's name — used by
-// the editor's References panel. Looks at aliases (jsonb string array),
-// collaborators (jsonb array of strings or {name} objects), and notes
-// (plain text). Excludes the target row itself and any rows already
-// linked to it (so the panel only shows unconnected mentions). Returns
-// the matched field per row so the curator sees WHY it surfaced.
+// Find rows worth linking to this artist — used by the editor's
+// References panel. Pulls candidates from FIVE sources, all in one
+// query so the curator sees one merged list:
+//
+//   1. aliases     — other row's `aliases` jsonb mentions this name
+//   2. collaborators — other row's `collaborators` jsonb mentions this name
+//   3. notes       — other row's `notes` text mentions this name
+//   4. shared band — both this row AND the other row list the same band
+//                    name in their collaborators (a group both played in)
+//   5. discogs members — when this row IS a band/group, surface every
+//                        Discogs-supplied member (kind='member') that
+//                        exists as a blues_artists row by name match
+//
+// Excludes the target row itself and any rows already linked to it.
+// `matched` is a string[] of source labels so the panel can show WHY
+// each row surfaced.
 export async function findBluesArtistReferences(
   id: number,
 ): Promise<Array<{ id: number; name: string; matched: string[] }>> {
-  const target = await getPool().query<{ name: string }>(
-    `SELECT name FROM blues_artists WHERE id = $1`,
+  const target = await getPool().query<{ name: string; collaborators: any }>(
+    `SELECT name, collaborators FROM blues_artists WHERE id = $1`,
     [id],
   );
   if (!target.rows.length) return [];
   const name = (target.rows[0].name || "").trim();
   if (!name) return [];
   const n = name.toLowerCase();
-  const r = await getPool().query<{ id: number; name: string; in_aliases: boolean; in_collabs: boolean; in_notes: boolean }>(
-    `WITH t AS (SELECT $2::text AS n)
+  // Derive the two name-set parameters for sources 4 and 5.
+  //   sharedBandNames: every band/group name this row recorded a
+  //     collaborator entry for. Used to find OTHER rows that share
+  //     one of those band names → likely bandmates.
+  //   memberNames: every person this row's Discogs record listed as a
+  //     member (kind='member'). Used when THIS row is a group: those
+  //     are its line-up, surface any that exist as blues_artists rows.
+  const collabs = Array.isArray(target.rows[0].collaborators) ? target.rows[0].collaborators : [];
+  const sharedBandNames: string[] = [];
+  const memberNames: string[] = [];
+  for (const c of collabs) {
+    if (typeof c === "string") {
+      // Plain-string collaborators are ambiguous (could be a person OR
+      // a band). Treat them as potential bands for source 4 — the
+      // curator can ignore false matches. They don't drive source 5
+      // because there's no member/group distinction.
+      sharedBandNames.push(c);
+    } else if (c && typeof c === "object") {
+      const cn = String(c.name || "").trim();
+      if (!cn) continue;
+      if (c.kind === "group") sharedBandNames.push(cn);
+      else if (c.kind === "member") memberNames.push(cn);
+      else sharedBandNames.push(cn);
+    }
+  }
+  const sharedBandsLc = [...new Set(sharedBandNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
+  const membersLc    = [...new Set(memberNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
+
+  const r = await getPool().query<{
+    id: number; name: string;
+    in_aliases: boolean; in_collabs: boolean; in_notes: boolean;
+    shared_bands: string[] | null;
+    is_band: string | null;
+    via_member: boolean;
+  }>(
+    `WITH t AS (SELECT $2::text AS n),
+          shared_bands AS (SELECT unnest($3::text[]) AS bn),
+          members AS (SELECT unnest($4::text[]) AS mn)
      SELECT
        a.id, a.name,
        EXISTS (
@@ -8086,7 +8132,31 @@ export async function findBluesArtistReferences(
          SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
          WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
        ) AS in_collabs,
-       (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0) AS in_notes
+       (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0) AS in_notes,
+       -- Shared band names this row has in common with the target.
+       -- Aggregated into an array so the UI can show "shared band: X, Y".
+       (
+         SELECT array_agg(DISTINCT sb.bn)
+           FROM shared_bands sb
+          WHERE EXISTS (
+            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
+          )
+       ) AS shared_bands,
+       -- This row IS one of the bands the target lists in collaborators.
+       -- (Tampa Red has "Hokum Boys" in collaborators; this row's name
+       -- is "Hokum Boys" → surface so user can link as band.)
+       (
+         SELECT sb.bn FROM shared_bands sb
+          WHERE lower(trim(a.name)) = sb.bn
+          LIMIT 1
+       ) AS is_band,
+       -- This row matches a Discogs 'member' name on the target (the
+       -- target is a group; this row is one of its members).
+       EXISTS (
+         SELECT 1 FROM members m
+          WHERE lower(trim(a.name)) = m.mn
+       ) AS via_member
        FROM blues_artists a
       WHERE a.id <> $1
         AND NOT EXISTS (
@@ -8104,16 +8174,36 @@ export async function findBluesArtistReferences(
             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
           )
           OR (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0)
+          OR EXISTS (
+            SELECT 1
+              FROM shared_bands sb
+              JOIN jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v ON true
+             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
+          )
+          OR EXISTS (
+            SELECT 1 FROM shared_bands sb WHERE lower(trim(a.name)) = sb.bn
+          )
+          OR EXISTS (
+            SELECT 1 FROM members m WHERE lower(trim(a.name)) = m.mn
+          )
         )
       ORDER BY lower(a.name) ASC
       LIMIT 100`,
-    [id, n],
+    [id, n, sharedBandsLc, membersLc],
   );
   return r.rows.map(row => {
     const matched: string[] = [];
     if (row.in_aliases) matched.push("aliases");
     if (row.in_collabs) matched.push("collaborators");
     if (row.in_notes)   matched.push("notes");
+    if (row.shared_bands && row.shared_bands.length) {
+      // Keep the band names short — first 2 + ellipsis if more.
+      const list = row.shared_bands.slice(0, 2).join(", ");
+      const more = row.shared_bands.length > 2 ? ` (+${row.shared_bands.length - 2})` : "";
+      matched.push(`shared band: ${list}${more}`);
+    }
+    if (row.is_band) matched.push(`is the band "${row.is_band}"`);
+    if (row.via_member) matched.push("Discogs member");
     return { id: row.id, name: row.name, matched };
   });
 }
