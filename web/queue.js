@@ -63,6 +63,75 @@ let _repeatRefillInFlight = false;
 // one currently playing) instead of the next sequential one. Pairs
 // with repeat-all to give an endless shuffled walk through the queue.
 // Persisted in localStorage so user preference survives reloads.
+// Shuffled-deck state. Replaces the old "random pick with replacement"
+// model (which let the same track repeat back-to-back and silenced
+// other tracks over a long session). New model:
+//   _shuffleUpcoming — externalIds left to play in a Fisher-Yates
+//                      shuffled order; front = next pick
+//   _shuffleHistory  — externalIds already played, chronological;
+//                      last entry is the CURRENTLY playing track
+//                      (invariant). Powers shuffle-aware Prev.
+//   _shuffleNeedsRebuild — set when the queue mutates or shuffle is
+//                          toggled on; lazy rebuild on next pickNext
+//                          so we don't waste cycles on every reorder.
+// Repeat-all + shuffle: when the deck is exhausted, re-shuffle the
+// full visible pool (minus current) and keep going.
+let _shuffleUpcoming = [];
+let _shuffleHistory  = [];
+let _shuffleNeedsRebuild = true;
+function _shuffleInvalidate() { _shuffleNeedsRebuild = true; }
+function _shuffleResetState() {
+  _shuffleUpcoming = []; _shuffleHistory = []; _shuffleNeedsRebuild = true;
+}
+// Build a fresh upcoming-deck from the current visible queue minus
+// (a) the currently-playing track, (b) every track already in history.
+// Pure Fisher-Yates so the order is uniformly random.
+function _shuffleRebuildUpcoming(currentExt) {
+  const vis = _queueVisibleList();
+  const histSet = new Set(_shuffleHistory.map(String));
+  if (currentExt != null) histSet.add(String(currentExt));
+  const pool = vis.map(it => String(it.externalId)).filter(e => !histSet.has(e));
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  _shuffleUpcoming = pool;
+  _shuffleNeedsRebuild = false;
+}
+// Pick the next externalId per the shuffled deck. Returns null when the
+// deck is exhausted and we're not in repeat-all. Doesn't mutate history
+// here — _queuePlayItem is the single chokepoint that pushes to history.
+function _shufflePickNextExt(currentExt) {
+  if (_shuffleNeedsRebuild) _shuffleRebuildUpcoming(currentExt);
+  // Skip stale externalIds (track removed mid-shuffle).
+  const visIds = new Set(_queueVisibleList().map(it => String(it.externalId)));
+  while (_shuffleUpcoming.length && !visIds.has(_shuffleUpcoming[0])) {
+    _shuffleUpcoming.shift();
+  }
+  if (!_shuffleUpcoming.length) {
+    if (_queueRepeat === "all") {
+      // Deck done; clear history (a new pass through everyone) and
+      // rebuild. Keep current track out so we don't re-pick it first.
+      _shuffleHistory = currentExt != null ? [String(currentExt)] : [];
+      _shuffleRebuildUpcoming(currentExt);
+      while (_shuffleUpcoming.length && !visIds.has(_shuffleUpcoming[0])) {
+        _shuffleUpcoming.shift();
+      }
+    }
+  }
+  return _shuffleUpcoming.length ? _shuffleUpcoming.shift() : null;
+}
+// Prev in shuffle: walk back through actual play order. Invariant:
+// history[last] == currently playing. Pop it, push it onto upcoming so
+// hitting Next replays it, then return history[last] as the prev pick.
+function _shufflePickPrevExt() {
+  if (_shuffleHistory.length < 2) return null;
+  const cur = _shuffleHistory.pop();
+  if (cur) _shuffleUpcoming.unshift(cur);
+  return _shuffleHistory[_shuffleHistory.length - 1];
+}
+window._shuffleInvalidate = _shuffleInvalidate;
+
 const _SHUFFLE_KEY = "sd_queue_shuffle";
 let _queueShuffle = (() => {
   try { return localStorage.getItem(_SHUFFLE_KEY) === "1"; } catch { return false; }
@@ -71,6 +140,9 @@ function _queueGetShuffle() { return _queueShuffle; }
 function _queueToggleShuffle() {
   _queueShuffle = !_queueShuffle;
   try { localStorage.setItem(_SHUFFLE_KEY, _queueShuffle ? "1" : "0"); } catch {}
+  // Toggling shuffle resets the deck/history so the next pick is fresh
+  // and Prev doesn't dredge up state from a stale session.
+  _shuffleResetState();
   if (typeof window._syncMiniBarShuffleBtn === "function") {
     try { window._syncMiniBarShuffleBtn(); } catch {}
   }
@@ -485,17 +557,18 @@ async function _queuePlayNext() {
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
   }
-  // Shuffle: substitute a random visible item (excluding the one we
-  // just finished, if we can identify it) for `next`. This runs AFTER
-  // the normal next-pick + repeat-all wrap above so shuffle composes
-  // with repeat-all (the queue still loops, just in random order).
-  // Skip when there's only one item — no shuffle target.
+  // Shuffle: pop the next externalId from the shuffled deck (no
+  // repeats until everyone's been played). Falls back to `next` from
+  // the sequential pick above only when the deck is exhausted AND we
+  // aren't in repeat-all (otherwise the deck rebuilds inside the pick).
   if (_queueShuffle && vis.length > 1) {
-    const pool = currentIdx >= 0 && currentIdx < vis.length
-      ? vis.filter((_, i) => i !== currentIdx)
-      : vis;
-    if (pool.length) {
-      next = pool[Math.floor(Math.random() * pool.length)];
+    const curExt = _queuePlayingExternalId != null
+      ? String(_queuePlayingExternalId)
+      : (currentIdx >= 0 ? String(vis[currentIdx].externalId) : null);
+    const nextExt = _shufflePickNextExt(curExt);
+    if (nextExt != null) {
+      const found = vis.find(it => String(it.externalId) === nextExt);
+      if (found) next = found;
     }
   }
   return _queuePlayItem(next);
@@ -506,7 +579,22 @@ async function _queuePlayNext() {
 // and queuePlayHead. Sets _queueDispatching so the external-play hook
 // fired by _locPlay/openVideo doesn't re-insert the same item.
 let _queueDispatching = false;
-async function _queuePlayItem(entry) {
+async function _queuePlayItem(entry, opts = {}) {
+  // Shuffle history: push the externalId we're about to play unless
+  // the caller is doing a Prev-walk (where the history is already
+  // accurate after _shufflePickPrevExt mutated it). Also drop the id
+  // from upcoming if present (handles user clicking a specific row
+  // in the drawer — that track shouldn't re-appear in upcoming).
+  if (_queueShuffle && entry?.externalId != null && !opts.skipShuffleHistory) {
+    const ext = String(entry.externalId);
+    // Avoid pushing the same id twice in a row (defensive — Prev path
+    // already keeps history accurate, but a redundant jumpTo to the
+    // current track would otherwise stack duplicates).
+    if (_shuffleHistory[_shuffleHistory.length - 1] !== ext) {
+      _shuffleHistory.push(ext);
+    }
+    _shuffleUpcoming = _shuffleUpcoming.filter(e => e !== ext);
+  }
   console.debug("[_queuePlayItem]", {
     source: entry.source,
     externalId: entry.externalId,
@@ -1533,6 +1621,9 @@ async function queueClear() {
   // and clear the localStorage copy so a reload doesn't resurrect it.
   _loadedPlaylistName = null;
   _persistLoadedPlaylistName(null);
+  // Reset shuffle state — a cleared queue means there's no history
+  // worth preserving, and the next add+play should start a fresh deck.
+  _shuffleResetState();
   // Anon path: clear localStorage, stop playback, drop the drawer.
   if (!window._clerk?.user) {
     _queue = [];
@@ -1733,6 +1824,18 @@ function _queueHasPrev() {
 async function _queuePlayPrev() {
   await _queueLoad();
   if (!_queue?.length || _queueCurrentPosition == null) return false;
+  // Shuffle-aware Prev: walk back through the actual play history
+  // (the order the user heard tracks in), not the sequential queue
+  // order. Falls through to the sequential prev when there's no prior
+  // entry in history (e.g. just turned shuffle on).
+  if (_queueShuffle) {
+    const vis = _queueVisibleList();
+    const prevExt = _shufflePickPrevExt();
+    if (prevExt != null) {
+      const found = vis.find(it => String(it.externalId) === prevExt);
+      if (found) return _queuePlayItem(found, { skipShuffleHistory: true });
+    }
+  }
   const idx = _queue.findIndex(it => it.position === _queueCurrentPosition);
   if (idx < 0) return false;
   let prev = idx > 0 ? _queue[idx - 1] : null;
@@ -1761,6 +1864,10 @@ function _refreshPlayerNavButtons() {
   if (typeof updateVideoNavButtons === "function") {
     try { updateVideoNavButtons(); } catch {}
   }
+  // Queue mutated → shuffle deck may have stale ids. Mark for rebuild
+  // on next pick. History is preserved (still-valid play record) — the
+  // stale-id skip inside _shufflePickNextExt handles removals.
+  _shuffleInvalidate();
   _queueRefreshIdleBar();
 }
 
