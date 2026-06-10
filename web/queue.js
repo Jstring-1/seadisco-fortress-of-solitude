@@ -2556,6 +2556,14 @@ async function _playlistRefreshPicker() {
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
     const { items } = await r.json();
     const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    // JS-safe quoted literal for embedding the playlist name into an
+    // onclick="" attribute. Previously the code HTML-encoded apostrophes,
+    // which the HTML parser decoded back to ' before JS evaluation —
+    // breaking rename/delete on names like "Bob's Mix". JSON.stringify
+    // handles all special chars; HTML-escape so it survives the attribute.
+    const jsArg = (s) => JSON.stringify(String(s ?? ""))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const userRows = (Array.isArray(items) && items.length)
       ? items.map(p => `
         <li class="playlist-picker-row" data-id="${p.id}">
@@ -2564,8 +2572,8 @@ async function _playlistRefreshPicker() {
           <span class="playlist-picker-actions">
             <button type="button" class="playlist-picker-load"   onclick="_playlistLoad(${p.id})"  title="Load into queue">▶ Load</button>
             <button type="button" class="playlist-picker-share"  onclick="_playlistShare(${p.id})" title="Copy share link">🔗</button>
-            <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Rename">✏</button>
-            <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Delete">🗑</button>
+            <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, ${jsArg(p.name)})" title="Rename">✏</button>
+            <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, ${jsArg(p.name)})" title="Delete">🗑</button>
           </span>
         </li>`).join("")
       : `<li class="playlist-picker-empty-row"><div class="playlist-picker-empty">No saved playlists yet. Click 💾 in the queue drawer to save the current queue.</div></li>`;
