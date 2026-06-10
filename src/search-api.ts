@@ -8723,6 +8723,50 @@ app.get("/api/blues-archive/tunings/facets", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// POST /api/blues-archive/tunings — append a new tuning row. Admin
+// only. Body: { artist, title, track?, position?, pitch?, notes? }.
+// Artist + title are required (track-untitled rows put the title in
+// notes via the "With X:: <title>" convention; that path stays manual).
+app.post("/api/blues-archive/tunings", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const b = req.body ?? {};
+    const artist = String(b.artist ?? "").trim().slice(0, 200);
+    const title  = String(b.title  ?? "").trim().slice(0, 200);
+    if (!artist || !title) { res.status(400).json({ error: "artist and title required" }); return; }
+    const track    = (b.track    != null ? String(b.track).trim()    : "").slice(0, 40)  || null;
+    const position = (b.position != null ? String(b.position).trim() : "").slice(0, 80)  || null;
+    const pitch    = (b.pitch    != null ? String(b.pitch).trim()    : "").slice(0, 40)  || null;
+    const notes    = (b.notes    != null ? String(b.notes).trim()    : "").slice(0, 500) || null;
+    const r = await getPool().query<{ id: number }>(
+      `INSERT INTO blues_tunings_grid (artist, track, title, position, pitch, notes)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [artist, track, title, position, pitch, notes],
+    );
+    res.json({ ok: true, id: r.rows[0].id });
+  } catch (err: any) {
+    console.error("[blues tunings POST]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// DELETE /api/blues-archive/tunings/:id — remove one row. Admin only.
+app.delete("/api/blues-archive/tunings/:id(\\d+)", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
+  try {
+    const r = await getPool().query(
+      `DELETE FROM blues_tunings_grid WHERE id = $1`,
+      [id],
+    );
+    res.json({ ok: true, deleted: r.rowCount ?? 0 });
+  } catch (err: any) {
+    console.error("[blues tunings DELETE]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // ── Lyric ban list management ─────────────────────────────────────
 // CRUD over blues_lyrics_bans. The scrape consults these sets on
 // every run, so removing a row from here re-enables that title /
