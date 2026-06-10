@@ -5309,7 +5309,7 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
         const afterEl = n.parentNode?.querySelector(":scope > .ba-lyric-badge") || n;
         afterEl.insertAdjacentHTML(
           "afterend",
-          `<a href="/?v=blues-archive&baSubtab=tunings&q=${encodeURIComponent(tHit.title || "")}" class="ba-archive-badge ba-tuning-badge" data-ba-tuning-id="${tHit.id}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎼</a>`,
+          `<span class="ba-archive-badge ba-tuning-badge" data-ba-tuning-id="${tHit.id}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎼</span>`,
         );
       }
     }
