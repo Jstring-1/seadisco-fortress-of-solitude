@@ -7752,6 +7752,14 @@ tr.ba-lyric-visited .ba-lyric-snippet { color: #555; opacity: 0.7; }
 }
 .queue-row:last-child { border-bottom: none; }
 .queue-row.sortable-chosen { background: rgba(255,255,255,0.04); }
+/* Subtle row hover — was bright enough to wash out the title/artist
+   text. Dark tint (slight black overlay) instead of additive white
+   keeps the white text legible. */
+.queue-row:hover { background: rgba(0,0,0,0.25); }
+/* The play button inside the row would otherwise pick up the browser's
+   default <button> hover bg on some platforms. Force transparent so the
+   row's hover tint shows through unmodified. */
+.queue-row-play:hover { background: transparent; }
 .queue-row-handle {
   color: #555;
   cursor: grab;
