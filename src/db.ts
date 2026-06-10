@@ -1801,9 +1801,20 @@ export async function listBluesTunings(opts: {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const sortCol = _TUNINGS_SORT_COLS[String(opts.sort ?? "")] || "artist";
   const order   = opts.order === "desc" ? "DESC" : "ASC";
+  // Title sort uses a derived "display title": for collaborative-session
+  // rows the title column is blank and the real track name is stashed in
+  // notes as "With <collaborator>:: <track>" — same logic the client
+  // applies for display. Without this, every blank-title row sorts to
+  // the top of the page in title-asc order even though their VISIBLE
+  // titles are anything but "" — which is what the user saw.
+  const titleExpr = `COALESCE(NULLIF(title, ''),
+    CASE WHEN notes ~ '::' THEN trim(regexp_replace(notes, '^.*?::\\s*', ''))
+         ELSE notes END,
+    '')`;
+  const sortExpr = sortCol === "title" ? titleExpr : sortCol;
   const orderSql = sortCol === "artist"
-    ? `ORDER BY artist ${order}, title ASC`
-    : `ORDER BY ${sortCol} ${order} NULLS LAST, artist ASC, title ASC`;
+    ? `ORDER BY artist ${order}, ${titleExpr} ASC`
+    : `ORDER BY ${sortExpr} ${order} NULLS LAST, artist ASC, ${titleExpr} ASC`;
   const totalR = await getPool().query(
     `SELECT COUNT(*)::int AS n FROM blues_tunings_grid ${whereSql}`,
     params,
