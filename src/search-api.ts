@@ -8627,6 +8627,42 @@ app.get("/api/admin/blues/:id(\\d+)", async (req, res) => {
   } catch (err) { console.error("[blues get]", err); res.status(500).json({ error: String(err) }); }
 });
 
+// On unique-violation of discogs_id (PG SQLSTATE 23505), parse the
+// offending id out of the error detail, look up the row that already
+// claims it, and return a structured 409 the editor can render as a
+// "merge into…?" prompt rather than a useless raw error string.
+async function _handleBluesUniqueConflict(err: any, res: any): Promise<boolean> {
+  if (err?.code !== "23505") return false;
+  const detail = String(err.detail || "");
+  const constraint = String(err.constraint || "");
+  // Postgres reports `Key (discogs_id)=(12345) already exists.`. The
+  // constraint name is typically blues_artists_discogs_id_key — but the
+  // detail string is the same regardless of how PG named it, so we
+  // match on either.
+  const m = detail.match(/\(discogs_id\)=\((\d+)\)/);
+  if (!m && !constraint.includes("discogs_id")) return false;
+  const conflictId = m ? parseInt(m[1], 10) : NaN;
+  let existing: any = null;
+  if (Number.isFinite(conflictId)) {
+    try {
+      const r = await getPool().query(
+        `SELECT id, name, discogs_id, photo_url FROM blues_artists WHERE discogs_id = $1 LIMIT 1`,
+        [conflictId],
+      );
+      existing = r.rows[0] ?? null;
+    } catch { /* fall through */ }
+  }
+  res.status(409).json({
+    error: "discogs_id_conflict",
+    discogs_id: Number.isFinite(conflictId) ? conflictId : null,
+    existing,
+    message: existing
+      ? `Discogs ID ${conflictId} is already on "${existing.name}" (id ${existing.id}).`
+      : `Discogs ID is already on another artist.`,
+  });
+  return true;
+}
+
 app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const body = req.body ?? {};
@@ -8635,6 +8671,7 @@ app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) 
     const id = await insertBluesArtist(body);
     res.json({ ok: true, id });
   } catch (err: any) {
+    if (await _handleBluesUniqueConflict(err, res)) return;
     console.error("[blues insert]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
   }
@@ -8648,6 +8685,7 @@ app.put("/api/admin/blues/:id(\\d+)", express.json({ limit: "200kb" }), async (r
     await updateBluesArtist(id, req.body ?? {});
     res.json({ ok: true });
   } catch (err: any) {
+    if (await _handleBluesUniqueConflict(err, res)) return;
     console.error("[blues update]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
   }

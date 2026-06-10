@@ -1585,6 +1585,104 @@ function bluesDbCloseEditor() {
   document.getElementById("blues-editor-overlay").style.display = "none";
   _bluesDbState.editingId = null;
 }
+// Discogs ID conflict modal — shows the owning artist's name + id
+// alongside the editor's current artist and offers merge in either
+// direction. `editingId` is the row the user just tried to save; can
+// be null for the create-new-artist flow.
+function _bluesDbShowDiscogsConflict(payload, editingId) {
+  document.getElementById("ba-discogs-conflict-overlay")?.remove();
+  const existing = payload?.existing || null;
+  const did = payload?.discogs_id;
+  const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Convert the editor's currently-open row name for display.
+  const form = document.getElementById("blues-editor-form");
+  const myName = form?.elements?.namedItem("name")?.value?.trim() || "this row";
+  const overlay = document.createElement("div");
+  overlay.id = "ba-discogs-conflict-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+    zIndex: "380", display: "flex", alignItems: "flex-start",
+    justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+  });
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  // Merge endpoint expects (fromId, intoId) — fromId is the SOURCE row
+  // that gets DELETED after its lyrics + releases are moved into intoId.
+  // For an existing editor row + a found existing-row pair, both merge
+  // directions are useful. For the "Add artist" flow (editingId null),
+  // only "open the existing row" makes sense.
+  const canMergeBoth = editingId && existing && existing.id !== editingId;
+  // After a merge the editor closes so the user can reopen the surviving
+  // row + retry the Discogs id assignment if needed; the list + stats
+  // get reloaded so the deleted row drops from the table.
+  const escMyName = esc(myName);
+  const escExName = esc(existing?.name || "");
+  const escExId   = String(existing?.id ?? "");
+  const escDid    = did != null ? String(did) : "?";
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0;color:#e88">Discogs ID already in use</h3>
+        <button type="button" class="archive-btn" onclick="document.getElementById('ba-discogs-conflict-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="margin:0 0 0.6rem;color:var(--text)">
+        Discogs ID <strong>${escDid}</strong> already belongs to
+        ${existing ? `<strong>${escExName}</strong> (row id ${escExId})` : `another artist`}.
+      </p>
+      <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.8rem">
+        You're editing <strong>${escMyName}</strong>. Pick how to resolve:
+      </p>
+      <div style="display:flex;flex-direction:column;gap:0.4rem">
+        ${existing ? `<button type="button" class="archive-btn" onclick="_bluesDbOpenExistingFromConflict(${existing.id})">Open "${escExName}" instead (discard ${escMyName === "this row" ? "current changes" : `"${escMyName}" edits`})</button>` : ""}
+        ${canMergeBoth ? `
+          <button type="button" class="archive-btn" onclick="_bluesDbConflictMerge(${existing.id}, ${editingId}, ${JSON.stringify(existing?.name || "").replace(/"/g, "&quot;")})">Merge "${escExName}" INTO "${escMyName}" (keeps this row + Discogs ID)</button>
+          <button type="button" class="archive-btn" onclick="_bluesDbConflictMerge(${editingId}, ${existing.id}, ${JSON.stringify(myName).replace(/"/g, "&quot;")})">Merge "${escMyName}" INTO "${escExName}" (this row is deleted)</button>` : ""}
+        <button type="button" class="archive-btn" onclick="document.getElementById('ba-discogs-conflict-overlay')?.remove()">Cancel — edit the Discogs ID field instead</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window._bluesDbShowDiscogsConflict = _bluesDbShowDiscogsConflict;
+
+async function _bluesDbOpenExistingFromConflict(existingId) {
+  document.getElementById("ba-discogs-conflict-overlay")?.remove();
+  bluesDbCloseEditor();
+  // bluesDbOpenEditor is defined in this same file — opens the editor
+  // overlay for the row id. The user's current draft is discarded.
+  if (typeof bluesDbOpenEditor === "function") {
+    setTimeout(() => bluesDbOpenEditor(existingId), 30);
+  }
+}
+window._bluesDbOpenExistingFromConflict = _bluesDbOpenExistingFromConflict;
+
+async function _bluesDbConflictMerge(fromId, intoId, fromName) {
+  if (!confirm(`Merge "${fromName}" (id ${fromId}) into row ${intoId}? Lyrics + releases get moved; the source row is deleted. Cannot be undone.`)) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromId, intoId }),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      alert(`Merge failed: HTTP ${r.status}: ${t.slice(0, 200)}`);
+      return;
+    }
+    const j = await r.json();
+    document.getElementById("ba-discogs-conflict-overlay")?.remove();
+    // The editor's open row may have been the source (now deleted) OR
+    // the target (still exists). Close the editor either way and let
+    // the user reopen the surviving row to resume editing the Discogs
+    // ID if they want.
+    bluesDbCloseEditor();
+    bluesDbLoadStats();
+    bluesDbRenderList();
+    alert(`Merged. ${j.lyricsReassigned} lyrics reassigned, ${j.releasesAdded} releases added.`);
+  } catch (e) {
+    alert(`Merge failed: ${e?.message || e}`);
+  }
+}
+window._bluesDbConflictMerge = _bluesDbConflictMerge;
+
 async function bluesDbSaveEditor() {
   const form = document.getElementById("blues-editor-form");
   const data = {};
@@ -1603,7 +1701,14 @@ async function bluesDbSaveEditor() {
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert("Save failed: " + (err.error ?? r.status));
+      // Special-case the Discogs ID collision so the admin can resolve
+      // it inline (see who has it, jump to merge) instead of getting
+      // a raw error string they have to chase manually.
+      if (err.error === "discogs_id_conflict") {
+        _bluesDbShowDiscogsConflict(err, id);
+        return;
+      }
+      alert("Save failed: " + (err.message || err.error || r.status));
       return;
     }
     // For an edit (PUT): pull the saved row fresh and patch the cache
