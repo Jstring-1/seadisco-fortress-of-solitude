@@ -613,8 +613,11 @@ function _baRenderArtistDetail(a) {
     });
   }
   const dates = [a.birth_date, a.death_date].filter(Boolean).join(" – ");
-  // Schema field is `notes` (no `profile` column on blues_artists).
-  const bio = a.notes ? `<p style="font-size:0.86rem;line-height:1.5;color:var(--text);white-space:pre-wrap;margin:0.6rem 0">${escHtml(a.notes).slice(0, 4000)}</p>` : "";
+  // Schema field is `notes` (no `profile` column on blues_artists). No
+  // length cap — the column is plain TEXT and full Wikipedia bios run
+  // 8–20k chars. The popup section is collapsible (Bio/Notes details
+  // element) so a long bio doesn't shove the rest of the popup down.
+  const bio = a.notes ? `<p style="font-size:0.86rem;line-height:1.5;color:var(--text);white-space:pre-wrap;margin:0.6rem 0">${escHtml(a.notes)}</p>` : "";
   const photo = a.photo_url
     ? `<img src="${escHtml(a.photo_url)}" alt="" style="width:140px;height:140px;object-fit:cover;border-radius:4px;flex:0 0 auto" loading="lazy" />`
     : "";
