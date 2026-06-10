@@ -841,7 +841,9 @@ function _sdInjectEnrichmentIntoCards(row) {
           // playable URL so the action column stays aligned.
           const playlistBtn = url
             ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</span>`
-            : `<span class="card-track-playlist card-track-disabled" aria-hidden="true">♪</span>`;
+            : (window._isAdmin
+                ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Admin: save this unavailable track to a playlist (queue offers YT search when it comes up)">♪</span>`
+                : `<span class="card-track-playlist card-track-disabled" aria-hidden="true">♪</span>`);
           // Match the album-popup layout: position + title on the LEFT,
           // the media action cluster (▶ ＋ ♪) on the RIGHT. Grid
           // template in style.css matches: pos | title | actions.
@@ -1576,7 +1578,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260609.1953";
+  const SITE_VERSION = "build 20260609.2003";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
