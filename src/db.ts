@@ -7704,8 +7704,19 @@ export async function listBluesArchive(opts: {
   const params: any[] = [];
   const where: string[] = [];
   if (opts.search) {
-    params.push(`%${opts.search}%`);
-    where.push(`(a.name ILIKE $${params.length})`);
+    // Pure-digit input matches Discogs ID exactly; otherwise (or in
+    // addition) free-text matches the name. A 4-digit input that's
+    // also a plausible name fragment still falls through to ILIKE,
+    // so both axes work.
+    const raw = opts.search.trim();
+    params.push(`%${raw}%`);
+    const nameClause = `a.name ILIKE $${params.length}`;
+    if (/^\d+$/.test(raw)) {
+      params.push(parseInt(raw, 10));
+      where.push(`(${nameClause} OR a.discogs_id = $${params.length})`);
+    } else {
+      where.push(`(${nameClause})`);
+    }
   }
   // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
   // combo. Built as a correlated EXISTS so the index on
