@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260610.1030" />
+  <link rel="stylesheet" href="/style.css?v=20260610.1223" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260610.1030"></script>
+<script defer src="/shared.js?v=20260610.1223"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1102,7 +1102,7 @@ e.g.  miles davis | coltrane
            (add, full Discogs enrich, CSV/PDF exports). Moved here from
            the top header so they only show when this subtab is active. -->
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
-        <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_bluesArchiveDebouncedSearch()">
+        <input id="blues-archive-search" type="search" placeholder="Search artists by name or Discogs ID" style="flex:1;min-width:200px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_bluesArchiveDebouncedSearch()">
         <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
         <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
         <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsCsv')" title="Download every blues_artists row as a CSV (with the discogs_releases JSONB column flattened to JSON). UTF-8 with BOM, opens cleanly in Excel/Sheets.">Export CSV</button>
@@ -1842,13 +1842,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260610.1030"></script>
-<script defer src="/search.js?v=20260610.1030"></script>
-<script defer src="/collection.js?v=20260610.1030"></script>
+<script defer src="/utils.js?v=20260610.1223"></script>
+<script defer src="/search.js?v=20260610.1223"></script>
+<script defer src="/collection.js?v=20260610.1223"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260610.1030"></script>
-<script defer src="/app.js?v=20260610.1030"></script>
+<script defer src="/modal.js?v=20260610.1223"></script>
+<script defer src="/app.js?v=20260610.1223"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1859,13 +1859,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260610.1030"></script>
-<script defer src="/queue.js?v=20260610.1030"></script>
+<script defer src="/loc.js?v=20260610.1223"></script>
+<script defer src="/queue.js?v=20260610.1223"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260610.1030";
+  window._SD_LAZY_VERSION = "20260610.1223";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1895,8 +1895,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260610.1030"></script>
-<script defer src="/offline.js?v=20260610.1030"></script>
+<script defer src="/idb.js?v=20260610.1223"></script>
+<script defer src="/offline.js?v=20260610.1223"></script>
 
 </body>
 </html>
