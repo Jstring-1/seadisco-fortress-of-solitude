@@ -2694,6 +2694,7 @@ async function _baLoadTuningsGrid() {
           <td style="color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(String(r.position || ""))}">${escHtml(String(r.position || ""))}</td>
           <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(String(r.pitch || ""))}</td>
           <td style="color:var(--muted);font-size:0.78rem;overflow:hidden" title="${escHtml(displayNotes)}">${escHtml(displayNotes)}</td>
+          <td style="text-align:right;white-space:nowrap"><a href="#" onclick="event.preventDefault();_baDeleteTuning(${r.id}, ${JSON.stringify(displayTitle).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")})" title="Delete this tuning row" style="color:#e88;text-decoration:none;font-weight:600;padding:0.1rem 0.4rem">×</a></td>
         </tr>`;
       };
       rowsEl.innerHTML = `
@@ -2705,6 +2706,7 @@ async function _baLoadTuningsGrid() {
             <col style="width:100px">
             <col style="width:64px">
             <col>
+            <col style="width:32px">
           </colgroup>
           <thead><tr>
             ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
@@ -2713,6 +2715,7 @@ async function _baLoadTuningsGrid() {
             ${_baSortTh("Position", "position", S, "_baSortTunings")}
             ${_baSortTh("Pitch",    "pitch",    S, "_baSortTunings")}
             <th>Notes</th>
+            <th></th>
           </tr></thead>
           <tbody>${rows.map(rowHtml).join("")}</tbody>
         </table>`;
@@ -2725,6 +2728,93 @@ async function _baLoadTuningsGrid() {
   }
 }
 window._baLoadTuningsGrid = _baLoadTuningsGrid;
+
+// Tuning CRUD: add + delete (admin only — gated server-side too).
+async function _baDeleteTuning(id, title) {
+  if (!Number.isFinite(id) || id <= 0) return;
+  if (!confirm(`Delete tuning row${title ? ` for "${title}"` : ""}? Cannot be undone.`)) return;
+  try {
+    const r = await apiFetch(`/api/blues-archive/tunings/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(`Delete failed: ${err.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    _baLoadTuningsGrid();
+  } catch (e) {
+    alert(`Delete failed: ${e?.message || e}`);
+  }
+}
+window._baDeleteTuning = _baDeleteTuning;
+
+function _baOpenTuningAdd() {
+  let overlay = document.getElementById("ba-tuning-add-overlay");
+  if (overlay) overlay.remove();
+  overlay = document.createElement("div");
+  overlay.id = "ba-tuning-add-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+    zIndex: "360", display: "flex", alignItems: "flex-start",
+    justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+  });
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.8rem">
+        <h3 style="margin:0">Add tuning</h3>
+        <button type="button" class="archive-btn" onclick="document.getElementById('ba-tuning-add-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <form id="ba-tuning-add-form" onsubmit="event.preventDefault();_baSubmitTuningAdd()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem;font-size:0.86rem">
+        <label style="grid-column:1/-1">Artist <input name="artist" required style="width:100%" placeholder="e.g. Charley Patton"></label>
+        <label style="grid-column:1/-1">Title <input name="title" required style="width:100%" placeholder="e.g. Pony Blues"></label>
+        <label>Track # <input name="track" placeholder="e.g. 3 or 3-12"></label>
+        <label>Position <input name="position" placeholder="e.g. Open G"></label>
+        <label>Pitch <input name="pitch" placeholder="e.g. A"></label>
+        <label style="grid-column:1/-1">Notes <textarea name="notes" rows="3" style="width:100%" placeholder="Optional"></textarea></label>
+        <div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
+          <button type="button" class="archive-btn" onclick="document.getElementById('ba-tuning-add-overlay')?.remove()">Cancel</button>
+          <button type="submit" class="archive-btn archive-btn-suggest">Save</button>
+        </div>
+        <div id="ba-tuning-add-status" style="grid-column:1/-1;color:var(--muted);font-size:0.78rem;min-height:1em"></div>
+      </form>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.querySelector('input[name="artist"]')?.focus(), 30);
+}
+window._baOpenTuningAdd = _baOpenTuningAdd;
+
+async function _baSubmitTuningAdd() {
+  const form = document.getElementById("ba-tuning-add-form");
+  if (!form) return;
+  const statusEl = document.getElementById("ba-tuning-add-status");
+  const data = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    data[el.name] = el.value.trim();
+  }
+  if (!data.artist || !data.title) {
+    if (statusEl) statusEl.textContent = "Artist and Title are required.";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "Saving…";
+  try {
+    const r = await apiFetch("/api/blues-archive/tunings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (statusEl) statusEl.textContent = `Save failed: ${err.error || `HTTP ${r.status}`}`;
+      return;
+    }
+    document.getElementById("ba-tuning-add-overlay")?.remove();
+    _baLoadTuningsGrid();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Save failed: ${e?.message || e}`;
+  }
+}
+window._baSubmitTuningAdd = _baSubmitTuningAdd;
 
 function _baRenderTuningsPager() {
   const el = document.getElementById("ba-tunings-pager");
