@@ -2217,22 +2217,39 @@ async function _trackPlaylistAdd(btn) {
     const r = await apiFetch("/api/user/playlists");
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
     const { items } = await r.json();
-    if (!Array.isArray(items) || !items.length) {
-      body.innerHTML = `<div class="playlist-picker-empty">No playlists yet. Save the queue as a playlist first (💾 in the queue drawer), then you can add tracks to it.</div>`;
-      return;
-    }
+    const list = Array.isArray(items) ? items : [];
     const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
     const titleSafe = esc(item.data.title || "this track");
+    // Default new-playlist name = the track title (handy starting point).
+    const def = String(item.data.title || "New playlist").slice(0, 80);
+    const existingHtml = list.length
+      ? `<div class="playlist-picker-subnote" style="margin-top:0.7rem">Or add to an existing playlist:</div>
+         <ul class="playlist-picker-list">${list.map(p => `
+           <li class="playlist-picker-row" data-id="${p.id}">
+             <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
+             <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
+             <span class="playlist-picker-actions">
+               <button type="button" class="playlist-picker-load" onclick="_trackPlaylistDoAdd(${p.id})" title="Add to &quot;${esc(p.name)}&quot;">＋ Add</button>
+             </span>
+           </li>`).join("")}</ul>`
+      : `<div class="playlist-picker-empty" style="margin-top:0.7rem">No saved playlists yet.</div>`;
     body.innerHTML = `
-      <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong> to:</div>
-      <ul class="playlist-picker-list">${items.map(p => `
-        <li class="playlist-picker-row" data-id="${p.id}">
-          <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
-          <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
-          <span class="playlist-picker-actions">
-            <button type="button" class="playlist-picker-load" onclick="_trackPlaylistDoAdd(${p.id})" title="Add to &quot;${esc(p.name)}&quot;">＋ Add</button>
-          </span>
-        </li>`).join("")}</ul>`;
+      <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong> to a new playlist:</div>
+      <div class="playlist-save-newrow">
+        <input type="text" id="track-playlist-new-name" class="playlist-save-input" maxlength="80" value="${esc(def)}" placeholder="Playlist name" />
+        <button type="button" class="playlist-picker-load" onclick="_trackPlaylistAddToNew()">＋ Create</button>
+      </div>
+      ${existingHtml}`;
+    const input = body.querySelector("#track-playlist-new-name");
+    if (input) {
+      // Focus + select so the curator can immediately type/replace.
+      // Don't auto-focus when there are existing playlists — the common
+      // case is picking one of those, and stealing focus is annoying.
+      if (!list.length) setTimeout(() => { try { input.focus(); input.select(); } catch {} }, 30);
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); _trackPlaylistAddToNew(); }
+      });
+    }
   } catch (e) {
     console.warn("[_trackPlaylistAdd]", e);
     body.textContent = "Could not load playlists.";
@@ -2280,6 +2297,43 @@ async function _trackPlaylistDoAdd(id) {
   }
 }
 window._trackPlaylistDoAdd = _trackPlaylistDoAdd;
+
+// "+ Create": read the new-playlist name input, POST a fresh playlist
+// containing just the pending track. Same endpoint as the queue-save
+// flow, just with a single-item items array.
+async function _trackPlaylistAddToNew() {
+  const item = _trackPlaylistPendingItem;
+  if (!item) { _trackPlaylistClosePicker(); return; }
+  const input = _trackPlaylistPickerEl?.querySelector("#track-playlist-new-name");
+  const name = String(input?.value || "").trim();
+  if (!name) {
+    if (typeof showToast === "function") showToast("Enter a playlist name", "error");
+    return;
+  }
+  try {
+    const r = await apiFetch("/api/user/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        items: [{ source: item.source, externalId: item.externalId, data: item.data || {} }],
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (typeof showToast === "function") {
+        showToast(err.error || `Save failed (HTTP ${r.status})`, "error");
+      }
+      return;
+    }
+    if (typeof showToast === "function") showToast(`Created "${name}" with the track`);
+    _trackPlaylistClosePicker();
+  } catch (e) {
+    console.warn("[_trackPlaylistAddToNew]", e);
+    if (typeof showToast === "function") showToast("Could not create playlist", "error");
+  }
+}
+window._trackPlaylistAddToNew = _trackPlaylistAddToNew;
 
 // ── Default "play directly" rows for the playlist picker ───────────
 // Two synthetic entries that appear above the user's saved playlists:
