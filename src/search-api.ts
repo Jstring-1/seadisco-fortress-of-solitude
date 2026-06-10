@@ -11838,6 +11838,30 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
           if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
         }
       }
+
+      // Tunings: match the static blues_tunings_grid (CSV-seeded) by
+      // (artist, title). Indexed only when artist context is present —
+      // a track titled "Stop Breaking Down" could be either Robert
+      // Johnson's or Sonny Boy's, and the position/pitch differ. Key
+      // is lowercase title to mirror the tracks map.
+      out.tunings = {} as Record<string, any>;
+      if (artistNames.length) {
+        const namesLc = artistNames.map(n => n.trim().toLowerCase());
+        const r = await getPool().query(
+          `SELECT id, artist, title, position, pitch, notes
+             FROM blues_tunings_grid
+            WHERE LOWER(TRIM(title))  = ANY($1::text[])
+              AND LOWER(TRIM(artist)) = ANY($2::text[])`,
+          [titlesLc, namesLc],
+        );
+        for (const row of r.rows) {
+          const k = String(row.title).trim().toLowerCase();
+          if (!out.tunings[k]) out.tunings[k] = {
+            id: row.id, artist: row.artist, title: row.title,
+            position: row.position, pitch: row.pitch, notes: row.notes,
+          };
+        }
+      }
     }
 
     res.json(out);

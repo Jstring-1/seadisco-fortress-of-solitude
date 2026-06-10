@@ -4959,12 +4959,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
           : "";
         // ♪ → save this track into an existing playlist. Same size /
-        // style as the ＋ button. Only meaningful when the row has a
-        // playable URL (playlists store queue-shaped items keyed by the
-        // YouTube video id).
+        // style as the ＋ button. For non-admin: only when there's a
+        // playable URL. For admin: also rendered for unavailable tracks
+        // (no URL) so they can save them to a playlist and rely on the
+        // queue's YT-search affordance when the row comes up.
         const playlistAdd = url
           ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</a>`
-          : "";
+          : (window._isAdmin
+              ? ` <a href="#" class="queue-add-icon track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Admin: save this unavailable track to a playlist (the queue will offer a YT search link when it comes up)">♪</a>`
+              : "");
         // Crowd-sourced override badge (shown only when this row's URL
         // came from track_youtube_overrides, not Discogs's videos[]).
         // The 🎵 indicates "user-contributed". Admins get a tiny ✕
@@ -5278,17 +5281,38 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
   // Pinned matches (lyric.discogs_release_id == this release) get a
   // brighter tooltip; ambiguous artist-only matches get a softer one.
   trackNodes.forEach(n => {
-    if (n.parentNode?.querySelector(":scope > .ba-lyric-badge")) return;
     const t = (n.dataset.lkLabel || n.textContent || "").trim().toLowerCase();
-    const hit = t && result.tracks?.[t];
-    if (!hit) return;
-    const tip = hit.pinned
-      ? `Lyric pinned to this release${hit.artist ? ` (${hit.artist})` : ""} — open viewer`
-      : `Lyric in Blues Archive${hit.artist ? ` (${hit.artist})` : ""} — open viewer`;
-    n.insertAdjacentHTML(
-      "afterend",
-      `<a href="#" class="ba-archive-badge ba-lyric-badge${hit.pinned ? " ba-lyric-badge-pinned" : ""}" data-ba-lyric-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">📜</a>`,
-    );
+    // 📜 lyric badge
+    if (!n.parentNode?.querySelector(":scope > .ba-lyric-badge")) {
+      const hit = t && result.tracks?.[t];
+      if (hit) {
+        const tip = hit.pinned
+          ? `Lyric pinned to this release${hit.artist ? ` (${hit.artist})` : ""} — open viewer`
+          : `Lyric in Blues Archive${hit.artist ? ` (${hit.artist})` : ""} — open viewer`;
+        n.insertAdjacentHTML(
+          "afterend",
+          `<a href="#" class="ba-archive-badge ba-lyric-badge${hit.pinned ? " ba-lyric-badge-pinned" : ""}" data-ba-lyric-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">📜</a>`,
+        );
+      }
+    }
+    // 🎼 tuning badge — sits AFTER the lyric badge (or after the title
+    // when no lyric matched). Click jumps to the Tunings tab filtered
+    // to this artist+title combo so the curator can see the full
+    // position/pitch/notes row.
+    if (!n.parentNode?.querySelector(":scope > .ba-tuning-badge")) {
+      const tHit = t && result.tunings?.[t];
+      if (tHit) {
+        const meta = [tHit.position, tHit.pitch].filter(Boolean).join(" · ");
+        const tip = `Tuning recorded${tHit.artist ? ` (${tHit.artist})` : ""}${meta ? ` — ${meta}` : ""}`;
+        // Anchor sits after the existing lyric badge if one was just
+        // inserted; querySelector finds the latest sibling-after-title.
+        const afterEl = n.parentNode?.querySelector(":scope > .ba-lyric-badge") || n;
+        afterEl.insertAdjacentHTML(
+          "afterend",
+          `<a href="/?v=blues-archive&baSubtab=tunings&q=${encodeURIComponent(tHit.title || "")}" class="ba-archive-badge ba-tuning-badge" data-ba-tuning-id="${tHit.id}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎼</a>`,
+        );
+      }
+    }
   });
 }
 

@@ -536,6 +536,25 @@ async function _queuePlayItem(entry) {
     : null;
   _queueDispatching = true;
   try {
+    if (entry.source === "unavail") {
+      // Admin-saved unavailable track — no playback target. Mark as
+      // "current" so the drawer highlight moves to it (revealing the
+      // YT search link rendered in place of the play button), but
+      // don't dispatch to any engine. Auto-advance is triggered by
+      // the play-engine end events, so a stuck-on-unavail row needs
+      // explicit skip-to-next here.
+      _queueCurrentPosition = entry.position;
+      _queuePlayingExternalId = entry.externalId;
+      if (typeof showToast === "function") {
+        showToast(`"${entry.data?.title || "Track"}" is unavailable — opening YT search; skipping`, "info");
+      }
+      // Open YT search in a new tab so the curator can grab the URL.
+      const q = encodeURIComponent(`${entry.data?.artist || ""} ${entry.data?.title || ""}`.trim());
+      try { window.open(`https://www.youtube.com/results?search_query=${q}`, "_blank", "noopener"); } catch {}
+      // Advance after a beat so the drawer renders the highlight first.
+      setTimeout(() => { try { _queuePlayNext(); } catch {} }, 150);
+      return false;
+    }
     if (entry.source === "loc") {
       if (typeof _locPlay === "function") _locPlay(playItem);
     } else if (entry.source === "yt") {
@@ -1122,19 +1141,32 @@ async function _renderQueueDrawer() {
     }
     const thumbHtml = thumbUrl
       ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" onerror="this.classList.add('thumb-broken')">`
-      : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : "▶"}</span>`;
+      : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : (it.source === "unavail" ? "🔍" : "▶")}</span>`;
+    // Unavailable tracks (admin path) — no playable video. Render the
+    // title as an external YouTube search link instead of the play
+    // button so the curator can pull the track manually.
+    const isUnavail = it.source === "unavail";
+    const ytSearchHref = isUnavail
+      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`
+      : "";
+    const titleCell = isUnavail
+      ? `<a class="queue-row-play queue-row-play-unavail" href="${escHtml(ytSearchHref)}" target="_blank" rel="noopener" title="Unavailable — open YouTube search in a new tab">
+          <span class="queue-row-title">${safeTitle}</span>
+          ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
+        </a>`
+      : `<button class="queue-row-play" onclick="queueJumpTo(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="${isPlaying ? "Currently playing" : "Play this now"}">
+          <span class="queue-row-title">${safeTitle}</span>
+          ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
+        </button>`;
     return `
-      <div class="queue-row${isPlaying ? " is-playing" : ""}" data-position="${it.position}">
+      <div class="queue-row${isPlaying ? " is-playing" : ""}${isUnavail ? " queue-row-unavail" : ""}" data-position="${it.position}">
         <span class="queue-row-handle" title="Drag to reorder">⋮⋮</span>
-        <span class="queue-row-thumb-wrap" title="${sourceTitle}">
+        <span class="queue-row-thumb-wrap" title="${sourceTitle}${isUnavail ? " — unavailable" : ""}">
           ${thumbHtml}
           <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
         </span>
-        <button class="queue-row-play" onclick="queueJumpTo(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="${isPlaying ? "Currently playing" : "Play this now"}">
-          <span class="queue-row-title">${safeTitle}</span>
-          ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
-        </button>
+        ${titleCell}
         <!-- Remove targets the row by externalId rather than position.
              Positions can shift under us when other tracks are inserted
              via "next" mode (the server shifts everything down by N to
@@ -2166,7 +2198,35 @@ let _trackPlaylistPendingItem = null;
 
 function _trackPlaylistItemFromBtn(btn) {
   const url = btn?.dataset?.ytUrl || "";
+  const unavail = btn?.dataset?.unavailable === "1";
   const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+  // Admin "unavailable track" path: no URL but the user (admin) wants
+  // the title saved anyway. Build a synthetic externalId from the
+  // title+artist so the queue/playlist dedup keys behave; the queue
+  // drawer renders this row as a YT-search link instead of a play
+  // button via the `source: "unavail"` discriminator.
+  if (!videoId && unavail) {
+    const track  = btn.dataset.track  || "";
+    const artist = btn.dataset.artist || "";
+    // Deterministic id so re-saving the same track collapses to one
+    // row rather than stacking. Prefix avoids collisions with any
+    // real YT video id (which are 11 base64-ish chars).
+    const slug = `${track}|${artist}`.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-|]/g, "").slice(0, 96);
+    if (!slug) return null;
+    return {
+      source: "unavail",
+      externalId: `unavail:${slug}`,
+      data: {
+        title:       track,
+        artist:      artist,
+        albumTitle:  btn.dataset.album  || "",
+        ytUrl:       "",
+        unavailable: true,
+        releaseType: btn.dataset.releaseType || "",
+        releaseId:   btn.dataset.releaseId   || "",
+      },
+    };
+  }
   if (!videoId) return null;
   return {
     source: "yt",
