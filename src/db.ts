@@ -7704,18 +7704,20 @@ export async function listBluesArchive(opts: {
   const params: any[] = [];
   const where: string[] = [];
   if (opts.search) {
-    // Pure-digit input matches Discogs ID exactly; otherwise (or in
-    // addition) free-text matches the name. A 4-digit input that's
-    // also a plausible name fragment still falls through to ILIKE,
-    // so both axes work.
+    // Pure-digit input matches Discogs ID exactly. Free-text matches
+    // BOTH the name (fast index on lower(name)) and the notes column
+    // (linear scan, but ~1k row table — fine). A 4-digit input also
+    // ILIKE's name + notes so a numeric fragment like "1923" finds
+    // "...died 1923..." in a bio.
     const raw = opts.search.trim();
     params.push(`%${raw}%`);
-    const nameClause = `a.name ILIKE $${params.length}`;
+    const likePh = `$${params.length}`;
+    const nameOrNotes = `(a.name ILIKE ${likePh} OR a.notes ILIKE ${likePh})`;
     if (/^\d+$/.test(raw)) {
       params.push(parseInt(raw, 10));
-      where.push(`(${nameClause} OR a.discogs_id = $${params.length})`);
+      where.push(`(${nameOrNotes} OR a.discogs_id = $${params.length})`);
     } else {
-      where.push(`(${nameClause})`);
+      where.push(nameOrNotes);
     }
   }
   // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
