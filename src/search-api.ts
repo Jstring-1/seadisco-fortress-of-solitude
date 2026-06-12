@@ -9215,6 +9215,30 @@ app.post("/api/admin/all-blues/force-clear", async (req, res) => {
   catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// Wipe queue + edges + counters. Optionally also wipe the Discogs
+// artist-profile cache (?cache=1). Refuses while the worker is
+// running — admin must Stop first so we don't yank tables out from
+// under in-flight INSERTs.
+app.post("/api/admin/all-blues/wipe", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (isAllBluesRunning()) {
+    res.status(409).json({ error: "Stop the worker before wiping." });
+    return;
+  }
+  const alsoCache = String(req.query.cache ?? req.body?.cache ?? "") === "1";
+  try {
+    await getPool().query(`DELETE FROM all_blues_artist_queue`);
+    await getPool().query(`DELETE FROM all_blues_links`);
+    if (alsoCache) await getPool().query(`DELETE FROM discogs_artist_cache`);
+    await getPool().query(
+      `UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
+         artists_errored=0, links_inserted=0, last_error=NULL,
+         phase='idle' WHERE id=1`,
+    );
+    res.json({ ok: true, wipedCache: alsoCache });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Graph snapshot for the network view. Returns every node referenced
 // by any edge plus its display name from the cache (falls back to
 // "(unknown)" if we haven't fetched that artist yet). PUBLIC: any
@@ -9231,7 +9255,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
     // data created before the genre filter doesn't pollute the graph.
     // A row counts as "blues seed" only if it has seed_year populated.
     let edgeSql = `
-      SELECT l.src_id, l.dst_id, l.kind
+      SELECT l.src_id, l.dst_id, l.kind, l.release_ids
         FROM all_blues_links l
        WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
                       WHERE q.discogs_id = l.src_id AND q.seed_year IS NOT NULL)

@@ -409,13 +409,14 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
     const mentions = _scanMentionTargets(notes);
     if (!mentions.length) continue;
     releasesScanned++;
+    const releaseId = Number(row.discogs_id);
     for (const src of srcIds) {
       for (const mention of mentions) {
         if (mention.dst === src) continue;
         try {
           const ins = await getPool().query(
-            `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
-             SELECT $1, $2, $3, $4
+            `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt, release_ids)
+             SELECT $1, $2, $3, $4, ARRAY[$5::int]
               WHERE EXISTS (
                 SELECT 1 FROM all_blues_artist_queue
                  WHERE discogs_id=$1 AND seed_year IS NOT NULL
@@ -424,8 +425,13 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
                 SELECT 1 FROM all_blues_artist_queue
                  WHERE discogs_id=$2 AND seed_year IS NOT NULL
               )
-             ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
-            [src, mention.dst, mention.kind, mention.excerpt],
+             ON CONFLICT (src_id, dst_id, kind) DO UPDATE SET
+               release_ids = ARRAY(
+                 SELECT DISTINCT u FROM unnest(
+                   all_blues_links.release_ids || EXCLUDED.release_ids
+                 ) AS u
+               )`,
+            [src, mention.dst, mention.kind, mention.excerpt, releaseId],
           );
           if (ins.rowCount) edgesInserted++;
         } catch { /* CHECK violations etc — skip */ }
