@@ -9358,8 +9358,20 @@ app.get("/api/all-blues/graph", async (req, res) => {
     // edges where dst is a blues seed, also gate at query time so old
     // data created before the genre filter doesn't pollute the graph.
     // A row counts as "blues seed" only if it has seed_year populated.
+    //
+    // DISTINCT ON (canonical pair) collapses doubles into single edges:
+    // edges are stored directed (A→B AND B→A can both exist) and each
+    // kind is its own row, so the graph would render up to 12 parallel
+    // lines between the same pair. We canonicalize the endpoints with
+    // LEAST/GREATEST and keep just the highest-priority kind per pair.
+    // The detail popup queries the raw table by (src,dst) so it still
+    // shows every kind when the edge is clicked.
     let edgeSql = `
-      SELECT l.src_id, l.dst_id, l.kind, l.release_ids
+      SELECT DISTINCT ON (LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id))
+             LEAST(l.src_id, l.dst_id)    AS src_id,
+             GREATEST(l.src_id, l.dst_id) AS dst_id,
+             l.kind,
+             l.release_ids
         FROM all_blues_links l
        WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
                       WHERE q.discogs_id = l.src_id AND q.seed_year IS NOT NULL)
@@ -9371,6 +9383,18 @@ app.get("/api/all-blues/graph", async (req, res) => {
       params.push(kindList);
       edgeSql += ` AND l.kind = ANY($${params.length}::text[])`;
     }
+    edgeSql += `
+      ORDER BY LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id),
+        CASE l.kind
+          WHEN 'spouse'  THEN 1
+          WHEN 'family'  THEN 2
+          WHEN 'mentor'  THEN 3
+          WHEN 'band'    THEN 4
+          WHEN 'alias'   THEN 5
+          WHEN 'mention' THEN 6
+          ELSE 7
+        END
+    `;
     const edgesR = await getPool().query(edgeSql, params);
     const edges = edgesR.rows;
     const nodeIds = new Set<number>();
