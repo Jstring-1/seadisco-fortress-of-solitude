@@ -164,17 +164,42 @@ async function allBluesReload() {
   el.innerHTML = "";
 
   const kindColor = Object.fromEntries(_AB_KINDS.map(k => [k.key, k.color]));
+  // Build a multi-band gradient per edge so pairs with multiple
+  // kinds (family + band, etc.) show every color along the line
+  // with hard stops between segments.
+  const buildEdgeGradient = (kinds) => {
+    const list = Array.isArray(kinds) && kinds.length ? kinds : ["mention"];
+    const colors = list.map(k => kindColor[k] || "#888");
+    if (colors.length === 1) {
+      return { colors: `${colors[0]} ${colors[0]}`, positions: "0% 100%" };
+    }
+    const n = colors.length;
+    const stopColors = [];
+    const stopPositions = [];
+    for (let i = 0; i < n; i++) {
+      const start = (i / n) * 100;
+      const end   = ((i + 1) / n) * 100;
+      stopColors.push(colors[i], colors[i]);
+      stopPositions.push(start.toFixed(2) + "%", end.toFixed(2) + "%");
+    }
+    return { colors: stopColors.join(" "), positions: stopPositions.join(" ") };
+  };
   const elements = [
     ...focusedNodes.map(n => ({ data: { id: String(n.id), label: n.name, focused: n.id === _abFocusId ? 1 : 0 } })),
-    ...focusedEdges.map((e, i) => ({
-      data: {
-        id: `e${i}`,
-        source: String(e.src_id),
-        target: String(e.dst_id),
-        kind: e.kind,
-        color: kindColor[e.kind] || "#888",
-      },
-    })),
+    ...focusedEdges.map((e, i) => {
+      const kinds = Array.isArray(e.kinds) ? e.kinds : (e.kind ? [e.kind] : ["mention"]);
+      const grad = buildEdgeGradient(kinds);
+      return {
+        data: {
+          id: `e${i}`,
+          source: String(e.src_id),
+          target: String(e.dst_id),
+          kinds: kinds.join(","),
+          gradientColors: grad.colors,
+          gradientPositions: grad.positions,
+        },
+      };
+    }),
   ];
 
   if (_abCy) { try { _abCy.destroy(); } catch {} _abCy = null; }
@@ -200,7 +225,14 @@ async function allBluesReload() {
         "width": 22, "height": 22,
       }},
       { selector: "edge", style: {
-        "line-color": "data(color)", "width": 2.5, "opacity": 0.95,
+        // Banded linear gradient — one segment per kind on the pair.
+        // gradientColors lists each color twice with the corresponding
+        // gradientPositions creating hard stops between segments so
+        // there's no smooth blend.
+        "line-fill": "linear-gradient",
+        "line-gradient-stop-colors": "data(gradientColors)",
+        "line-gradient-stop-positions": "data(gradientPositions)",
+        "width": 2.8, "opacity": 0.95,
         "curve-style": "bezier",
       }},
       { selector: "node:selected", style: { "border-color": "#fbbf24", "border-width": 3 }},
