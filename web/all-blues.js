@@ -20,6 +20,8 @@ const _AB_YEARS_KEY = "sd_all_blues_years";
 let _abCy = null;
 let _abFirstLoad = true;
 let _abLastLayoutWasCached = false; // true if the latest render used preset positions
+let _abUnpositionedCount = 0; // how many nodes this render came in without saved positions
+let _abTotalNodeCount = 0;    // total nodes this render — for the Save button hint
 let _abForceFreshLayout = false;    // admin "Recompute layout" override — strip positions for one render
 let _abLastGraph = { nodes: [], edges: [] }; // most recent graph payload, used for focus search
 let _abFocusId = null;                       // current focused artist id (null = whole graph)
@@ -156,10 +158,17 @@ async function allBluesReload() {
     toYear:   String(toY),
   });
   let data;
+  let fetchedAt;
   try {
-    const r = await fetch(`/api/all-blues/graph?${qs}`);
+    // Add a cache-bust param so any intermediate caching layer
+    // (CDN, browser BFCache, service worker) can't serve a stale
+    // graph response after the worker has added new edges.
+    const r = await fetch(`/api/all-blues/graph?${qs}&_=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (!r.ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load graph</div>`; return; }
     data = await r.json();
+    fetchedAt = new Date();
   } catch (err) {
     el.innerHTML = `<div style="padding:1rem;color:#c66">Failed: ${_abEsc(err.message)}</div>`; return;
   }
@@ -182,7 +191,10 @@ async function allBluesReload() {
     }
   }
   const counts = document.getElementById("ab-graph-counts");
-  if (counts) counts.textContent = `· ${data.nodes.length} artists, ${data.edges.length} links ${focusBanner}`;
+  if (counts) {
+    const stamp = fetchedAt ? fetchedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+    counts.textContent = `· ${data.nodes.length} artists, ${data.edges.length} links ${focusBanner}${stamp ? ` · fetched ${stamp}` : ""}`;
+  }
   _abRenderFocusActive();
   if (!focusedNodes.length) {
     el.innerHTML = `<div style="padding:1rem;color:var(--muted)">No data yet.${window._isAdmin ? ` <a href="/admin#all-blues" style="color:inherit;text-decoration:underline">Run the worker</a> to populate the graph.` : ""}</div>`;
@@ -329,6 +341,8 @@ async function allBluesReload() {
     }),
   ];
   _abLastLayoutWasCached = useCachedPositions;
+  _abUnpositionedCount = focusedNodes.length - positionedNodes.length;
+  _abTotalNodeCount = focusedNodes.length;
   // Surface what's happening in the toolbar so the user can tell
   // whether the slow path (fcose) is running and how much of the
   // graph is cached.
@@ -640,9 +654,21 @@ function _abSyncSaveLayoutButton() {
     recomp.style.display = "none";
     return;
   }
-  // Save shows only when there are positions to save (i.e. we just
-  // ran fcose). Recompute is always available for admin.
-  save.style.display = _abCy && !_abLastLayoutWasCached ? "" : "none";
+  // Save shows when there's anything new worth persisting:
+  //   • A fresh fcose just ran (everything has new positions), OR
+  //   • Some visible nodes came in without saved positions (worker
+  //     added new seeds; they got scattered + a fcose recompute would
+  //     give them proper coords worth saving).
+  // Recompute is always available for admin so they can re-fit after
+  // any worker run.
+  const hasUnpositioned = _abUnpositionedCount > 0;
+  const showSave = _abCy && (!_abLastLayoutWasCached || hasUnpositioned);
+  save.style.display = showSave ? "" : "none";
+  if (showSave) {
+    save.title = hasUnpositioned
+      ? `${_abUnpositionedCount} of ${_abTotalNodeCount} nodes don't have saved positions yet — Save (or Recompute → Save) to fix.`
+      : "Save the current fcose layout so future loads use it directly.";
+  }
   recomp.style.display = "";
 }
 
@@ -673,8 +699,11 @@ async function _abSaveLayoutClick() {
     const j = await r.json();
     showToast?.(`Saved positions for ${j.updated} artists`, "success");
     // The current render is already what was saved — flip the cached
-    // flag so the Save button hides until the next fresh layout pass.
+    // flag and zero the unpositioned counter so the Save button hides
+    // until either fcose runs again or a Reload brings in more
+    // unpositioned worker-added nodes.
     _abLastLayoutWasCached = true;
+    _abUnpositionedCount = 0;
     _abSyncSaveLayoutButton();
   } catch (err) {
     showToast?.("Save failed: " + err.message, "error");
