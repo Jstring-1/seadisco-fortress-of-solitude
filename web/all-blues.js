@@ -22,7 +22,17 @@ let _abFocusId = null;                       // current focused artist id (null 
 let _abFocusName = "";                       // display name for the focused artist
 
 function _abEsc(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Escapes for both text content AND attribute values. Names with
+  // double or single quotes (e.g. JSON.stringify output embedded in
+  // an onclick="…") prematurely closed the attribute before quotes
+  // were in the escape set — the link styling stayed but onclick
+  // never fired. Now safe for any string in either context.
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function _abGetEnabledKinds() {
