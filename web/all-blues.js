@@ -836,10 +836,6 @@ async function _abOpenEdgePopup(srcId, dstId) {
              style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;color:inherit;text-decoration:none;cursor:pointer"
              title="Open profile — Blues Archive if available, otherwise the Constellations summary">${_abEsc(a.name)}</a>
           <div style="font-size:0.7rem;color:var(--muted);margin-top:0.1rem">#${a.id}</div>
-          <div style="margin-top:0.25rem">
-            <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
-               style="color:#60a5fa;font-size:0.7rem;text-decoration:none">Search… ↗</a>
-          </div>
         </div>
       </div>`;
   };
@@ -1109,12 +1105,6 @@ async function _abOpenArtistPopup(artistId) {
            title="Search SeaDisco, Wikipedia, YouTube, Discogs, etc.">${_abEsc(a.name)}</a>
         <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">
           #${a.id}${a.seed_year ? ` · first cached: ${_abEsc(a.seed_year)}` : ""}
-        </div>
-        <div style="margin-top:0.4rem;font-size:0.72rem;display:flex;gap:0.75rem;flex-wrap:wrap">
-          <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
-             style="color:#60a5fa;text-decoration:none"
-             title="Search SeaDisco / collection / Wikipedia / LOC / Archive.org / YouTube / Discogs / etc.">Search… ↗</a>
-          <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa">Discogs ↗</a>
         </div>
       </div>
     </div>
