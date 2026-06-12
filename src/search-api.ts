@@ -9623,23 +9623,37 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const allowed = new Set(["family","spouse","mentor","band","alias","mention","traveled"]);
     const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
     const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
+    // Optional year-range filter: only show artists whose seed_year
+    // (earliest cached blues release) falls in [fromYear, toYear].
+    // Edges only render between two surviving artists. Defaults are
+    // wide-open (1900-2100) so an unfiltered request behaves as
+    // before. NaN inputs collapse to the wide bounds.
+    const fromYearRaw = parseInt(String(req.query.fromYear ?? ""), 10);
+    const toYearRaw   = parseInt(String(req.query.toYear   ?? ""), 10);
+    const fromYear = Number.isFinite(fromYearRaw) ? fromYearRaw : 1900;
+    const toYear   = Number.isFinite(toYearRaw)   ? toYearRaw   : 2100;
     // Canonicalize direction (LEAST/GREATEST) then aggregate every
     // kind on that pair into a single array. The frontend renders the
     // edge as a banded gradient — one color stripe per kind — so a
     // pair with [family, band] shows orange + green on the same line
     // without needing two overlapping edges. The detail popup still
     // queries the raw table so click gives every kind individually.
+    // Endpoint-must-be-in-year-range filter is folded into the
+    // existing seed_year gate. NULL seed_year is excluded the same
+    // way (legacy non-blues rows or never-collected seeds).
+    const params: any[] = [fromYear, toYear];
     let edgeSql = `
       SELECT LEAST(l.src_id, l.dst_id)    AS src_id,
              GREATEST(l.src_id, l.dst_id) AS dst_id,
              array_agg(DISTINCT l.kind)   AS kinds
         FROM all_blues_links l
        WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
-                      WHERE q.discogs_id = l.src_id AND q.seed_year IS NOT NULL)
+                      WHERE q.discogs_id = l.src_id
+                        AND q.seed_year BETWEEN $1 AND $2)
          AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
-                      WHERE q.discogs_id = l.dst_id AND q.seed_year IS NOT NULL)
+                      WHERE q.discogs_id = l.dst_id
+                        AND q.seed_year BETWEEN $1 AND $2)
     `;
-    const params: any[] = [];
     if (kindList && kindList.length) {
       params.push(kindList);
       edgeSql += ` AND l.kind = ANY($${params.length}::text[])`;
