@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260611.2135" />
+  <link rel="stylesheet" href="/style.css?v=20260611.2139" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260611.2135"></script>
-<script defer src="/shared.js?v=20260611.2135"></script>
+<script defer src="/utils.js?v=20260611.2139"></script>
+<script defer src="/shared.js?v=20260611.2139"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -164,6 +164,8 @@
           <button id="ab-start" type="button" class="admin-btn" onclick="adminAllBluesStart()">Start</button>
           <button id="ab-stop" type="button" class="admin-btn" onclick="adminAllBluesStop()" style="display:none">Stop</button>
           <button type="button" class="admin-btn" onclick="adminAllBluesForceClear()" title="Clear stuck in-memory running flag">Force-clear</button>
+          <button type="button" class="admin-btn" onclick="adminAllBluesWipe(false)" title="Delete queue + edges (keeps the cached Discogs artist profiles so the next run skips API calls)">Delete data</button>
+          <button type="button" class="admin-btn" onclick="adminAllBluesWipe(true)" title="Also delete cached Discogs artist profiles — every artist will be re-fetched from Discogs on the next run">Delete data + cache</button>
         </div>
         <div id="ab-status" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
@@ -359,8 +361,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260611.2135"></script>
-<script defer src="/blues-admin.js?v=20260611.2135"></script>
+<script defer src="/modal.js?v=20260611.2139"></script>
+<script defer src="/blues-admin.js?v=20260611.2139"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1398,6 +1400,21 @@ async function adminAllBluesForceClear() {
   } catch (e) { alert("Force-clear failed: " + ((e && e.message) || e)); }
 }
 window.adminAllBluesForceClear = adminAllBluesForceClear;
+
+async function adminAllBluesWipe(alsoCache) {
+  const msg = alsoCache
+    ? "Delete ALL All Blues data INCLUDING the Discogs artist-profile cache?\n\nThe next run will re-fetch every artist from Discogs (slow, hits the API rate limit)."
+    : "Delete All Blues queue + edges?\n\nThe Discogs artist-profile cache stays so the next run skips API calls.";
+  if (!confirm(msg)) return;
+  try {
+    const url = "/api/admin/all-blues/wipe" + (alsoCache ? "?cache=1" : "");
+    const r = await apiFetch(url, { method: "POST" });
+    if (r.status === 409) { alert((await r.json().catch(() => ({}))).error || "Worker is running — Stop first."); return; }
+    if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
+    loadAllBluesAdmin();
+  } catch (e) { alert("Delete failed: " + ((e && e.message) || e)); }
+}
+window.adminAllBluesWipe = adminAllBluesWipe;
 
 // ── API Request Log ───────────────────────────────────────────────────
 let _apiLogSeq = 0;
