@@ -295,7 +295,16 @@ async function allBluesReload() {
   _abCy.on("tap", "node", (evt) => {
     const n = evt.target;
     const id = parseInt(n.data("id"), 10);
-    if (Number.isFinite(id)) _abOpenArtistPopup(id);
+    if (!Number.isFinite(id)) return;
+    // Small action menu near the click — both "open profile" and
+    // "focus in network" are useful but mean different things, so we
+    // ask rather than guess. evt.renderedPosition is the canvas-local
+    // position; convert to viewport coords for absolute positioning.
+    const cyEl = document.getElementById("all-blues-graph");
+    const rect = cyEl?.getBoundingClientRect();
+    const x = (rect?.left ?? 0) + (evt.renderedPosition?.x ?? 0);
+    const y = (rect?.top  ?? 0) + (evt.renderedPosition?.y ?? 0);
+    _abShowNodeActions(id, n.data("label") || `Artist ${id}`, x, y);
   });
 }
 window.allBluesReload = allBluesReload;
@@ -546,6 +555,71 @@ function _abOpenReleaseFromPopup(event, id, type) {
   }
 }
 window._abOpenReleaseFromPopup = _abOpenReleaseFromPopup;
+
+// ── Node action menu ──────────────────────────────────────────────
+// Small two-button floater that pops up at the click point when a
+// graph node is tapped. Lets the user disambiguate between "open
+// the artist profile popup" and "focus this artist in the network"
+// since both gestures are valuable but mean different things.
+
+function _abEnsureNodeMenu() {
+  let el = document.getElementById("ab-node-menu");
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = "ab-node-menu";
+  el.style.cssText = `
+    position:fixed;z-index:9997;display:none;
+    background:#0b1220;border:1px solid var(--border, #333);border-radius:6px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.5);
+    padding:0.25rem;font-size:0.82rem;min-width:180px`;
+  document.body.appendChild(el);
+  // Single global click-outside dismiss handler — attached once.
+  document.addEventListener("click", (e) => {
+    const m = document.getElementById("ab-node-menu");
+    if (!m || m.style.display === "none") return;
+    if (!m.contains(e.target)) _abCloseNodeMenu();
+  }, true);
+  return el;
+}
+
+function _abCloseNodeMenu() {
+  const el = document.getElementById("ab-node-menu");
+  if (el) el.style.display = "none";
+}
+window._abCloseNodeMenu = _abCloseNodeMenu;
+
+function _abShowNodeActions(artistId, artistName, x, y) {
+  const el = _abEnsureNodeMenu();
+  const nameArg = _abEsc(JSON.stringify(artistName));
+  // Two primary actions + a header showing which artist this menu is for.
+  el.innerHTML = `
+    <div style="padding:0.35rem 0.55rem 0.4rem;border-bottom:1px solid rgba(255,255,255,0.08);font-weight:600;font-size:0.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_abEsc(artistName)}">${_abEsc(artistName)}</div>
+    <button type="button"
+            onclick="_abCloseNodeMenu();_abOpenArtistPopup(${artistId})"
+            style="display:block;width:100%;text-align:left;padding:0.4rem 0.55rem;background:transparent;border:0;color:inherit;cursor:pointer;font-size:0.82rem"
+            onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+      <span style="margin-right:0.4rem">👤</span>Open profile
+    </button>
+    <button type="button"
+            onclick="_abCloseNodeMenu();_abFocusPick(${artistId}, ${nameArg})"
+            style="display:block;width:100%;text-align:left;padding:0.4rem 0.55rem;background:transparent;border:0;color:inherit;cursor:pointer;font-size:0.82rem"
+            onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+      <span style="margin-right:0.4rem">🎯</span>Focus on artist in network
+    </button>
+    <button type="button"
+            onclick="event.stopPropagation();_abCloseNodeMenu();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg})"
+            style="display:block;width:100%;text-align:left;padding:0.4rem 0.55rem;background:transparent;border:0;color:inherit;cursor:pointer;font-size:0.82rem"
+            onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+      <span style="margin-right:0.4rem">🔎</span>Search…
+    </button>`;
+  el.style.display = "block";
+  // Position relative to click; clamp to viewport.
+  const W = 220, H = 130;
+  const left = Math.min(window.innerWidth  - W - 8, Math.max(8, x));
+  const top  = Math.min(window.innerHeight - H - 8, Math.max(8, y + 8));
+  el.style.left = `${left}px`;
+  el.style.top  = `${top}px`;
+}
 
 // ── Artist profile popup ──────────────────────────────────────────
 // Tapping a graph node opens this: artist's name + thumb + bio,
