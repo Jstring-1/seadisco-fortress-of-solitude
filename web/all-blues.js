@@ -177,11 +177,15 @@ async function allBluesReload() {
         "border-color": "#94a3b8", "border-width": 1,
         "label": "data(label)", "color": "#e2e8f0",
         "font-size": 10,
-        // Label sits below the node with a thick dark outline so the
-        // text reads against any edge color or background tint.
+        // Label sits below the node with a thick dark outline AND a
+        // semi-transparent dark pill behind it. The combination keeps
+        // text readable over yellow focused nodes, over crossing
+        // amber/pink/cyan edges, and against the dim background.
         "text-valign": "bottom", "text-halign": "center",
-        "text-margin-y": 4,
-        "text-outline-width": 2, "text-outline-color": "#000", "text-outline-opacity": 0.85,
+        "text-margin-y": 5,
+        "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
+        "text-background-color": "#000", "text-background-opacity": 0.55,
+        "text-background-padding": 2, "text-background-shape": "round-rectangle",
         "text-wrap": "ellipsis", "text-max-width": 110,
         "width": 22, "height": 22,
       }},
@@ -203,8 +207,39 @@ async function allBluesReload() {
       }},
     ],
     layout: window.cytoscapeFcose
-      ? { name: "fcose", quality: "proof", animate: false, nodeRepulsion: 8000, idealEdgeLength: 90 }
-      : { name: "cose", animate: false, nodeRepulsion: 60000, idealEdgeLength: 220 },
+      ? {
+          name: "fcose",
+          quality: "proof",
+          animate: false,
+          // nodeDimensionsIncludeLabels is the key one for overlap —
+          // fcose factors the label box into the collision/repulsion
+          // math so wide names actually claim their own slot. Without
+          // it, the layout packs nodes tight and labels collide.
+          nodeDimensionsIncludeLabels: true,
+          // Beefier repulsion + longer edges + an explicit minimum
+          // node separation gives names room to breathe. Higher
+          // numIter (defaults to 2500) lets the simulated annealing
+          // settle further so tight clusters un-stick.
+          nodeRepulsion: () => 18000,
+          idealEdgeLength: () => 140,
+          edgeElasticity: () => 0.45,
+          nodeSeparation: 90,
+          gravity: 0.25,
+          gravityRange: 3.8,
+          numIter: 4000,
+          // tile + packComponents: spread disconnected sub-graphs
+          // across the canvas instead of stacking them at the origin.
+          tile: true, packComponents: true,
+          tilingPaddingVertical: 30, tilingPaddingHorizontal: 30,
+          randomize: true,
+        }
+      : {
+          name: "cose",
+          animate: false,
+          nodeDimensionsIncludeLabels: true,
+          nodeRepulsion: 90000, idealEdgeLength: 240,
+          numIter: 3000,
+        },
     wheelSensitivity: 0.2,
   });
   // Click handlers. Edges → detail popup; nodes → focus that artist.
