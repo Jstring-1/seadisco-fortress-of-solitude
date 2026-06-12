@@ -596,6 +596,16 @@ function _abCloseNodeMenu() {
 window._abCloseNodeMenu = _abCloseNodeMenu;
 
 function _abShowNodeActions(artistId, artistName, x, y) {
+  // Defer the open by one tick. The DOM click event from the cytoscape
+  // tap is still propagating when this function fires; without the
+  // setTimeout, the document-level "close on outside click" handler
+  // sees the menu we just made visible and the click target (a graph
+  // node, not inside the menu) and dismisses it immediately. Running
+  // on the next tick lets that click finish first, then we display.
+  setTimeout(() => _abShowNodeActionsImpl(artistId, artistName, x, y), 0);
+}
+
+function _abShowNodeActionsImpl(artistId, artistName, x, y) {
   const el = _abEnsureNodeMenu();
   const nameArg = _abEsc(JSON.stringify(artistName));
   // Two primary actions + a header showing which artist this menu is for.
