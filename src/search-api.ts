@@ -11,6 +11,7 @@ import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
+import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
 
@@ -9150,6 +9151,128 @@ app.all(/^\/api\/admin\/genre-cache-warm\/.*/, async (req, res) => {
   res.status(410).json({ error: "Replaced by /api/admin/cache-warm/* — refresh the admin page" });
 });
 
+// ── All Blues worker + graph ──────────────────────────────────────
+// Walks release_cache (year window, default 1900-1970), collects
+// artist IDs, fetches each artist's Discogs profile, parses inline
+// [aNNNNN] mentions into all_blues_links with kind inferred from
+// surrounding prose. Admin-gated; the graph endpoint also requires
+// admin since it surfaces inferred relationships.
+
+app.get("/api/admin/all-blues/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const stateR = await getPool().query(`SELECT * FROM all_blues_warm_state WHERE id=1`);
+    const state = stateR.rows[0] || {};
+    const qR = await getPool().query(
+      `SELECT status, COUNT(*)::int AS n FROM all_blues_artist_queue GROUP BY status`,
+    );
+    const queue: Record<string, number> = {};
+    for (const r of qR.rows) queue[r.status] = r.n;
+    const cacheR = await getPool().query(`SELECT COUNT(*)::int AS n FROM discogs_artist_cache`);
+    const linksR = await getPool().query(
+      `SELECT kind, COUNT(*)::int AS n FROM all_blues_links GROUP BY kind`,
+    );
+    const linksByKind: Record<string, number> = {};
+    for (const r of linksR.rows) linksByKind[r.kind] = r.n;
+    res.json({
+      running: isAllBluesRunning(),
+      active: getAllBluesActiveParams(),
+      state,
+      queue,
+      cached_artists: cacheR.rows[0]?.n ?? 0,
+      links_by_kind: linksByKind,
+    });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.post("/api/admin/all-blues/start", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const body = req.body ?? {};
+  const num = (v: any) => {
+    const n = parseInt(String(v ?? ""), 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  try {
+    const out = await startAllBluesRun({
+      fromYear:   num(body.fromYear),
+      toYear:     num(body.toYear),
+      resetQueue: !!body.resetQueue,
+    });
+    if (!out.ok) { res.status(409).json({ error: out.error || "could not start" }); return; }
+    res.json({ ok: true });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.post("/api/admin/all-blues/stop", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { requestAllBluesStop(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.post("/api/admin/all-blues/force-clear", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { forceClearAllBluesRunning(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Graph snapshot for the network view. Returns every node referenced
+// by any edge plus its display name from the cache (falls back to
+// "(unknown)" if we haven't fetched that artist yet). PUBLIC: any
+// signed-in or anonymous visitor can hit this — the page is shareable.
+// Only the worker controls (start/stop/status) stay admin-only.
+app.get("/api/all-blues/graph", async (req, res) => {
+  try {
+    const kinds = String(req.query.kinds ?? "").trim();
+    const allowed = new Set(["family","spouse","mentor","band","alias","mention"]);
+    const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
+    const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
+    let edgeSql = `SELECT src_id, dst_id, kind FROM all_blues_links`;
+    const params: any[] = [];
+    if (kindList && kindList.length) {
+      params.push(kindList);
+      edgeSql += ` WHERE kind = ANY($${params.length}::text[])`;
+    }
+    const edgesR = await getPool().query(edgeSql, params);
+    const edges = edgesR.rows;
+    const nodeIds = new Set<number>();
+    for (const e of edges) { nodeIds.add(e.src_id); nodeIds.add(e.dst_id); }
+    // Filter by degree
+    if (minDegree > 1) {
+      const deg = new Map<number, number>();
+      for (const e of edges) {
+        deg.set(e.src_id, (deg.get(e.src_id) ?? 0) + 1);
+        deg.set(e.dst_id, (deg.get(e.dst_id) ?? 0) + 1);
+      }
+      const kept = new Set<number>();
+      for (const [id, d] of deg) if (d >= minDegree) kept.add(id);
+      const filteredEdges = edges.filter(e => kept.has(e.src_id) && kept.has(e.dst_id));
+      const ids = Array.from(kept);
+      const namesR = ids.length
+        ? await getPool().query(
+            `SELECT discogs_id, name FROM discogs_artist_cache WHERE discogs_id = ANY($1::int[])`,
+            [ids],
+          )
+        : { rows: [] as any[] };
+      const nameMap = new Map<number, string>();
+      for (const r of namesR.rows) nameMap.set(r.discogs_id, r.name);
+      const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
+      res.json({ nodes, edges: filteredEdges });
+      return;
+    }
+    const ids = Array.from(nodeIds);
+    const namesR = ids.length
+      ? await getPool().query(
+          `SELECT discogs_id, name FROM discogs_artist_cache WHERE discogs_id = ANY($1::int[])`,
+          [ids],
+        )
+      : { rows: [] as any[] };
+    const nameMap = new Map<number, string>();
+    for (const r of namesR.rows) nameMap.set(r.discogs_id, r.name);
+    const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
+    res.json({ nodes, edges });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
 // Idempotent — re-running just refreshes the Wikidata-sourced fields and
 // leaves manual edits the admin made elsewhere alone.
@@ -13745,6 +13868,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     // runs are kicked manually via /api/admin/cache-warm/start.
     try { initCacheWarmModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] cache-warm init failed:", e);
+    }
+    try { initAllBluesModule(ADMIN_CLERK_ID); } catch (e) {
+      console.error("[startup] all-blues init failed:", e);
     }
   }
 });

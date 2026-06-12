@@ -1243,6 +1243,67 @@ export async function initDb() {
     END $$;
   `);
 
+  // ── All Blues: artist-profile cache + inferred link graph ─────────
+  // Independent of blues_artists / blues_artist_links. Populated by a
+  // background worker that walks release_cache (1900-1970), collects
+  // every Discogs artist ID it sees, then fetches each artist's
+  // /artists/:id profile and parses [aNNNNN] mentions out of the
+  // profile prose. Edge kind is inferred from nearby keywords
+  // (family / spouse / mentor / band / alias / mention).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_artist_cache (
+      discogs_id INTEGER PRIMARY KEY,
+      name       TEXT,
+      profile    TEXT,
+      data       JSONB NOT NULL,
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS discogs_artist_cache_cached_at_idx ON discogs_artist_cache (cached_at DESC)`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_links (
+      src_id     INTEGER NOT NULL,
+      dst_id     INTEGER NOT NULL,
+      kind       TEXT    NOT NULL DEFAULT 'mention',
+      excerpt    TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (src_id, dst_id, kind),
+      CHECK (src_id <> dst_id),
+      CHECK (kind IN ('family', 'spouse', 'mentor', 'band', 'alias', 'mention'))
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_links_dst_idx ON all_blues_links (dst_id)`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_artist_queue (
+      discogs_id INTEGER PRIMARY KEY,
+      status     TEXT NOT NULL DEFAULT 'pending',
+      added_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      fetched_at TIMESTAMPTZ,
+      error      TEXT
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_status_idx ON all_blues_artist_queue (status)`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_warm_state (
+      id              INT PRIMARY KEY DEFAULT 1,
+      running         BOOLEAN NOT NULL DEFAULT false,
+      phase           TEXT NOT NULL DEFAULT 'idle',
+      from_year       INT NOT NULL DEFAULT 1900,
+      to_year         INT NOT NULL DEFAULT 1970,
+      started_at      TIMESTAMPTZ,
+      last_tick_at    TIMESTAMPTZ,
+      artists_queued  INT NOT NULL DEFAULT 0,
+      artists_fetched INT NOT NULL DEFAULT 0,
+      artists_errored INT NOT NULL DEFAULT 0,
+      links_inserted  INT NOT NULL DEFAULT 0,
+      last_error      TEXT,
+      CHECK (id = 1)
+    )
+  `);
+  await getPool().query(
+    `INSERT INTO all_blues_warm_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`,
+  );
+
   // ── Scrape ban list ──────────────────────────────────────────────
   // When the curator deletes an artist (or a single lyric) they can
   // mark it BANNED so the wiki rescrape doesn't immediately put it
