@@ -1013,7 +1013,10 @@ async function _abOpenArtistPopup(artistId) {
         <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">
           #${a.id}${a.seed_year ? ` · first cached: ${_abEsc(a.seed_year)}` : ""}
         </div>
-        <div style="margin-top:0.4rem;font-size:0.72rem">
+        <div style="margin-top:0.4rem;font-size:0.72rem;display:flex;gap:0.75rem;flex-wrap:wrap">
+          <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
+             style="color:#60a5fa;text-decoration:none"
+             title="Search SeaDisco / collection / Wikipedia / LOC / Archive.org / YouTube / Discogs / etc.">Search… ↗</a>
           <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa">Discogs ↗</a>
         </div>
       </div>
