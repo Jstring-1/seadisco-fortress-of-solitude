@@ -2,9 +2,11 @@
 # Cache-bust bumper — invoked by the Claude Code PreToolUse Bash hook
 # in ~/.claude/settings.json. Reads the hook input JSON from stdin; if
 # the matched Bash command is a `git push` targeting THIS repo, bumps
-# the ?v=YYYYMMDD.HHMM strings in web/index.html and web/admin.html
+# the ?v=YYMMDD.<short-sha> strings in web/index.html and web/admin.html
 # and commits the bump so the bumped version actually ships with the
-# push the user just initiated.
+# push the user just initiated. The SHA half is `git rev-parse --short
+# HEAD` at bump time, so the visible build label links directly to the
+# commit being deployed.
 #
 # Bails silently for anything that isn't a `git push` against this
 # repo — every Bash tool call goes through the hook, so the fast path
@@ -99,26 +101,34 @@ fi
 cd "$REPO_DIR"
 [ -f web/index.html ] && [ -f web/admin.html ] || exit 0
 
-TS="$(date +%Y%m%d.%H%M)"
-CUR="$(grep -oE 'v=[0-9]{8}\.[0-9]{4}' web/index.html | head -1 | cut -d= -f2 || true)"
-# Already at this timestamp — skip (prevents an empty commit when two
-# pushes land in the same minute).
+# Build version is now YYMMDD.<short-sha> instead of YYYYMMDD.HHMM —
+# the SHA half links the visible build label and every cache-bust URL
+# directly to the commit being deployed, which is far more useful for
+# debugging than a wall-clock minute. Short SHA is whatever git's
+# default short length is (typically 7).
+SHORT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
+[ -n "$SHORT_SHA" ] || exit 0
+TS="$(date +%y%m%d).$SHORT_SHA"
+# Detect the current value — match BOTH the legacy YYYYMMDD.HHMM
+# format AND the new YYMMDD.<sha> format, so a one-time push migrates
+# every file from old → new and subsequent pushes recognize the new
+# format for the skip-if-same check.
+CUR="$(grep -oE 'v=([0-9]{8}\.[0-9]{4}|[0-9]{6}\.[0-9a-f]+)' web/index.html | head -1 | cut -d= -f2 || true)"
 if [ "$CUR" = "$TS" ]; then exit 0; fi
 
 # 1. Cache-bust query string in HTML (forces the browser to refetch
-#    each /shared.js?v=… etc. on a deploy).
-sed -i "s/v=[0-9]\{8\}\.[0-9]\{4\}/v=$TS/g" web/index.html web/admin.html
+#    each /shared.js?v=… etc. on a deploy). Pattern matches old + new.
+sed -i -E "s/v=([0-9]{8}\.[0-9]{4}|[0-9]{6}\.[0-9a-f]+)/v=$TS/g" web/index.html web/admin.html
 # 2. _SD_LAZY_VERSION in HTML — used by _sdLoadModule for the lazy
 #    chunks (account, orders, archive, youtube, inventory-editor).
 #    Without bumping this, lazy modules keep the previous deploy's
-#    version forever and stale code lingers. Pattern matches:
-#    _SD_LAZY_VERSION = "YYYYMMDD.HHMM"
-sed -i "s/_SD_LAZY_VERSION[[:space:]]*=[[:space:]]*\"[0-9]\{8\}\.[0-9]\{4\}\"/_SD_LAZY_VERSION = \"$TS\"/g" web/index.html
+#    version forever and stale code lingers.
+sed -i -E "s/_SD_LAZY_VERSION[[:space:]]*=[[:space:]]*\"([0-9]{8}\.[0-9]{4}|[0-9]{6}\.[0-9a-f]+)\"/_SD_LAZY_VERSION = \"$TS\"/g" web/index.html
 # 3. SITE_VERSION constant in shared.js — the small grey "build …"
-#    tag under the logo. Same timestamp as the cache-bust so the
-#    visible label always matches what the user just received.
+#    tag under the logo. Same value as the cache-bust so the visible
+#    label always matches what the user just received.
 if [ -f web/shared.js ]; then
-  sed -i "s/build [0-9]\{8\}\.[0-9]\{4\}/build $TS/g" web/shared.js
+  sed -i -E "s/build ([0-9]{8}\.[0-9]{4}|[0-9]{6}\.[0-9a-f]+)/build $TS/g" web/shared.js
 fi
 
 # Nothing actually changed (e.g. files had no matching pattern) —
