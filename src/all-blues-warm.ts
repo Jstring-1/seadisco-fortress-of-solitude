@@ -121,15 +121,23 @@ export async function startAllBluesRun(opts: {
   );
 
   if (opts.resetQueue) {
-    // Full reset: clear queue + edges. We keep discogs_artist_cache
-    // because the Discogs payloads are still valid — re-parsing them
-    // on the next fetch costs zero API calls. Counters reset too so
-    // the stats panel reflects the fresh run.
+    // Soft reset: clear queue + auto-scraped edges, but PRESERVE the
+    // edges that were imported from the Blues Archive (those carry
+    // the sentinel excerpt). Manual seeds in the queue get re-added
+    // immediately during the upcoming collect via ON CONFLICT, and
+    // discogs_artist_cache stays intact (Discogs payloads are still
+    // valid; re-parsing them costs zero API calls).
     await getPool().query(`DELETE FROM all_blues_artist_queue`);
-    await getPool().query(`DELETE FROM all_blues_links`);
+    await getPool().query(
+      `DELETE FROM all_blues_links
+        WHERE excerpt IS DISTINCT FROM $1`,
+      ["From Blues Archive (manually curated)"],
+    );
+    const remaining = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`);
     await getPool().query(
       `UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
-         artists_errored=0, links_inserted=0, last_error=NULL WHERE id=1`,
+         artists_errored=0, links_inserted=$1, last_error=NULL WHERE id=1`,
+      [remaining.rows[0]?.n ?? 0],
     );
   }
 
