@@ -638,7 +638,11 @@ async function _abSaveLayoutClick() {
   const btn = document.getElementById("ab-save-layout");
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
   try {
-    const r = await fetch("/api/admin/all-blues/positions", {
+    // Admin endpoint needs the Clerk session token — use apiFetch
+    // (from shared.js), which attaches the auth header. Plain fetch
+    // skips auth and returns 401.
+    const fetcher = window.apiFetch || fetch;
+    const r = await fetcher("/api/admin/all-blues/positions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ positions }),
