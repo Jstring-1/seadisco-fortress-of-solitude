@@ -9484,8 +9484,11 @@ app.get("/api/all-blues/edge", async (req, res) => {
   try {
     const src = parseInt(String(req.query.src ?? ""), 10);
     const dst = parseInt(String(req.query.dst ?? ""), 10);
-    if (!Number.isFinite(src) || !Number.isFinite(dst) || src <= 0 || dst <= 0) {
-      res.status(400).json({ error: "src and dst required" });
+    if (!Number.isFinite(src) || !Number.isFinite(dst) || src <= 0 || dst <= 0 || src === dst) {
+      res.status(400).json({
+        error: "src and dst must be distinct positive integers",
+        got: { src: String(req.query.src ?? ""), dst: String(req.query.dst ?? "") },
+      });
       return;
     }
     // Both directions — the graph is undirected for UI purposes, but
