@@ -254,36 +254,43 @@ async function allBluesReload() {
           name: "fcose",
           quality: "proof",
           animate: false,
-          // nodeDimensionsIncludeLabels is the key one for overlap —
-          // fcose factors the label box into the collision/repulsion
-          // math so wide names actually claim their own slot. Without
-          // it, the layout packs nodes tight and labels collide.
+          // Factor label dimensions into the repulsion math so wide
+          // names ("Bessie Smith And Her Blue Boys") claim their slot.
           nodeDimensionsIncludeLabels: true,
-          // Beefier repulsion + longer edges + an explicit minimum
-          // node separation gives names room to breathe. Higher
-          // numIter (defaults to 2500) lets the simulated annealing
-          // settle further so tight clusters un-stick.
-          nodeRepulsion: () => 18000,
-          idealEdgeLength: () => 140,
-          edgeElasticity: () => 0.45,
-          nodeSeparation: 90,
-          gravity: 0.25,
-          gravityRange: 3.8,
-          numIter: 4000,
-          // tile + packComponents: spread disconnected sub-graphs
-          // across the canvas instead of stacking them at the origin.
+          // Much heavier repulsion + much longer ideal edges + a
+          // generous minimum node separation. Earlier values had
+          // everything condensing into a single hairball; these
+          // numbers give the graph room to spread across the canvas.
+          nodeRepulsion: () => 90000,
+          idealEdgeLength: () => 280,
+          edgeElasticity: () => 0.25,
+          nodeSeparation: 180,
+          // Low gravity so dense central clusters don't get pulled
+          // tighter than the repulsion can push them apart. Big
+          // gravityRange so even nodes near the edges feel some pull
+          // back toward the canvas center, otherwise islands drift.
+          gravity: 0.08,
+          gravityRange: 5,
+          // More iterations to let the simulated annealing actually
+          // settle into the wider basin we asked for.
+          numIter: 6000,
+          // Disconnected sub-graphs get tiled across leftover canvas
+          // space with a fat padding so they sit clearly apart.
           tile: true, packComponents: true,
-          tilingPaddingVertical: 30, tilingPaddingHorizontal: 30,
+          tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
           randomize: true,
         }
       : {
           name: "cose",
           animate: false,
           nodeDimensionsIncludeLabels: true,
-          nodeRepulsion: 90000, idealEdgeLength: 240,
-          numIter: 3000,
+          nodeRepulsion: 200000, idealEdgeLength: 320,
+          gravity: 0.08,
+          numIter: 4000,
         },
     wheelSensitivity: 0.2,
+    minZoom: 0.05,
+    maxZoom: 4,
   });
   // Click handlers. Edges → detail popup; nodes → focus that artist.
   _abCy.on("tap", "edge", (evt) => {
