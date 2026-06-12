@@ -19,6 +19,8 @@ const _AB_FOCUS_KEY = "sd_all_blues_focus";
 const _AB_YEARS_KEY = "sd_all_blues_years";
 let _abCy = null;
 let _abFirstLoad = true;
+let _abLastLayoutWasCached = false; // true if the latest render used preset positions
+let _abForceFreshLayout = false;    // admin "Recompute layout" override — strip positions for one render
 let _abLastGraph = { nodes: [], edges: [] }; // most recent graph payload, used for focus search
 let _abFocusId = null;                       // current focused artist id (null = whole graph)
 let _abFocusName = "";                       // display name for the focused artist
@@ -205,8 +207,24 @@ async function allBluesReload() {
     }
     return { colors: stopColors.join(" "), positions: stopPositions.join(" ") };
   };
+  // Position cache: if EVERY visible node has a cached (x,y), use a
+  // preset layout — instant render. Otherwise fall back to fcose so
+  // new/unpositioned nodes still get a real layout pass. Admin's
+  // "Recompute layout" sets _abForceFreshLayout to bypass the cache
+  // for one render.
+  const allPositioned = !_abForceFreshLayout
+    && focusedNodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y));
+  _abForceFreshLayout = false;
   const elements = [
-    ...focusedNodes.map(n => ({ data: { id: String(n.id), label: n.name, focused: n.id === _abFocusId ? 1 : 0 } })),
+    ...focusedNodes.map(n => {
+      const el = {
+        data: { id: String(n.id), label: n.name, focused: n.id === _abFocusId ? 1 : 0 },
+      };
+      if (Number.isFinite(n.x) && Number.isFinite(n.y)) {
+        el.position = { x: n.x, y: n.y };
+      }
+      return el;
+    }),
     ...focusedEdges.map((e, i) => {
       const kinds = Array.isArray(e.kinds) ? e.kinds : (e.kind ? [e.kind] : ["mention"]);
       const grad = buildEdgeGradient(kinds);
@@ -222,6 +240,7 @@ async function allBluesReload() {
       };
     }),
   ];
+  _abLastLayoutWasCached = allPositioned;
 
   if (_abCy) { try { _abCy.destroy(); } catch {} _abCy = null; }
   _abCy = window.cytoscape({
@@ -289,49 +308,40 @@ async function allBluesReload() {
         "width": 4.5, "opacity": 1,
       }},
     ],
-    layout: window.cytoscapeFcose
-      ? {
-          name: "fcose",
-          quality: "proof",
-          animate: false,
-          // Factor label dimensions into the repulsion math so wide
-          // names ("Bessie Smith And Her Blue Boys") claim their slot.
-          nodeDimensionsIncludeLabels: true,
-          // Much heavier repulsion + much longer ideal edges + a
-          // generous minimum node separation. Earlier values had
-          // everything condensing into a single hairball; these
-          // numbers give the graph room to spread across the canvas.
-          nodeRepulsion: () => 90000,
-          idealEdgeLength: () => 280,
-          edgeElasticity: () => 0.25,
-          nodeSeparation: 180,
-          // Low gravity so dense central clusters don't get pulled
-          // tighter than the repulsion can push them apart. Big
-          // gravityRange so even nodes near the edges feel some pull
-          // back toward the canvas center, otherwise islands drift.
-          gravity: 0.08,
-          gravityRange: 5,
-          // More iterations to let the simulated annealing actually
-          // settle into the wider basin we asked for.
-          numIter: 6000,
-          // Disconnected sub-graphs get tiled across leftover canvas
-          // space with a fat padding so they sit clearly apart.
-          tile: true, packComponents: true,
-          tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
-          randomize: true,
-        }
-      : {
-          name: "cose",
-          animate: false,
-          nodeDimensionsIncludeLabels: true,
-          nodeRepulsion: 200000, idealEdgeLength: 320,
-          gravity: 0.08,
-          numIter: 4000,
-        },
+    layout: allPositioned
+      ? { name: "preset", animate: false, fit: true, padding: 40 }
+      : (window.cytoscapeFcose
+        ? {
+            name: "fcose",
+            quality: "proof",
+            animate: false,
+            nodeDimensionsIncludeLabels: true,
+            nodeRepulsion: () => 90000,
+            idealEdgeLength: () => 280,
+            edgeElasticity: () => 0.25,
+            nodeSeparation: 180,
+            gravity: 0.08,
+            gravityRange: 5,
+            numIter: 6000,
+            tile: true, packComponents: true,
+            tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
+            randomize: true,
+          }
+        : {
+            name: "cose",
+            animate: false,
+            nodeDimensionsIncludeLabels: true,
+            nodeRepulsion: 200000, idealEdgeLength: 320,
+            gravity: 0.08,
+            numIter: 4000,
+          }),
     wheelSensitivity: 0.2,
     minZoom: 0.05,
     maxZoom: 4,
   });
+  // Update the admin save-layout button visibility: only relevant when
+  // we just ran a real layout pass (not preset).
+  _abSyncSaveLayoutButton();
   // Click handlers. Edges → detail popup; nodes → focus that artist.
   _abCy.on("tap", "edge", (evt) => {
     const e = evt.target;
@@ -474,6 +484,70 @@ window._abFocusClear = _abFocusClear;
 // Year-range filter change handler: clamps to a valid range, persists
 // to localStorage, then reloads the graph. Hooked from the From/To
 // input onchange so any edit (keyboard, scroll-wheel, spinner) fires.
+// Layout cache controls (admin-only) — visible via _abSyncSaveLayoutButton.
+function _abSyncSaveLayoutButton() {
+  const save = document.getElementById("ab-save-layout");
+  const recomp = document.getElementById("ab-recompute-layout");
+  if (!save || !recomp) return;
+  if (!window._isAdmin) {
+    save.style.display = "none";
+    recomp.style.display = "none";
+    return;
+  }
+  // Save shows only when there are positions to save (i.e. we just
+  // ran fcose). Recompute is always available for admin.
+  save.style.display = _abCy && !_abLastLayoutWasCached ? "" : "none";
+  recomp.style.display = "";
+}
+
+async function _abSaveLayoutClick() {
+  if (!_abCy) return;
+  const positions = {};
+  _abCy.nodes().forEach(n => {
+    const id = parseInt(n.data("id"), 10);
+    const p = n.position();
+    if (Number.isFinite(id) && p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+      positions[id] = { x: p.x, y: p.y };
+    }
+  });
+  if (!Object.keys(positions).length) return;
+  const btn = document.getElementById("ab-save-layout");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  try {
+    const r = await fetch("/api/admin/all-blues/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ positions }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    showToast?.(`Saved positions for ${j.updated} artists`, "success");
+    // The current render is already what was saved — flip the cached
+    // flag so the Save button hides until the next fresh layout pass.
+    _abLastLayoutWasCached = true;
+    _abSyncSaveLayoutButton();
+  } catch (err) {
+    showToast?.("Save failed: " + err.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Save layout"; }
+  }
+}
+window._abSaveLayoutClick = _abSaveLayoutClick;
+
+function _abRecomputeLayoutClick() {
+  // Force-clear cached positions for the *visible* nodes, then reload
+  // — the graph endpoint returns positions but allPositioned will be
+  // false because we just stripped them in-memory. Result: fcose runs
+  // fresh. Admin then clicks Save layout to persist.
+  if (!_abCy) return;
+  _abCy.nodes().forEach(n => n.removeData?.("x"));
+  // Hacky but effective: reload and forcibly null the .x/.y of the
+  // incoming data so the layout-selection logic picks fcose.
+  _abForceFreshLayout = true;
+  allBluesReload();
+}
+window._abRecomputeLayoutClick = _abRecomputeLayoutClick;
+
 function _abYearInputChanged() {
   const fromI = document.getElementById("ab-from-year-filter");
   const toI   = document.getElementById("ab-to-year-filter");
