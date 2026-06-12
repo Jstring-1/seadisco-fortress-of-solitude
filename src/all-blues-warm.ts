@@ -392,8 +392,18 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
         AND COALESCE(TRIM(rc.data->>'notes'), '') <> ''`,
     [fromYear, toYear],
   );
+  const total = r.rows.length;
   let releasesScanned = 0;
   let edgesInserted = 0;
+  let edgesSinceLastTick = 0;
+  let lastTickAt = Date.now();
+  const TICK_EVERY_MS = 2000; // flush progress to DB at most every 2s
+  // Initial tick — peg last_tick_at so the panel reflects the phase
+  // having started even before the first insert lands.
+  await getPool().query(
+    `UPDATE all_blues_warm_state SET last_tick_at=NOW() WHERE id=1`,
+  );
+  console.log(`[all-blues] release-notes: ${total} releases to scan`);
   for (const row of r.rows) {
     if (_stopRequested) break;
     const data: any = row.data || {};
@@ -433,14 +443,30 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
                )`,
             [src, mention.dst, mention.kind, mention.excerpt, releaseId],
           );
-          if (ins.rowCount) edgesInserted++;
+          if (ins.rowCount) { edgesInserted++; edgesSinceLastTick++; }
         } catch { /* CHECK violations etc — skip */ }
       }
     }
+    // Periodic progress flush — pegs last_tick_at + bumps the rolling
+    // links_inserted counter so the admin panel reflects progress
+    // without waiting for the whole phase to finish. Throttled to
+    // every TICK_EVERY_MS so we don't double the DB load just to
+    // refresh a counter.
+    if (Date.now() - lastTickAt >= TICK_EVERY_MS) {
+      await getPool().query(
+        `UPDATE all_blues_warm_state SET last_tick_at=NOW(),
+           links_inserted = links_inserted + $1 WHERE id=1`,
+        [edgesSinceLastTick],
+      );
+      edgesSinceLastTick = 0;
+      lastTickAt = Date.now();
+    }
   }
+  // Flush any remaining un-ticked edges.
   await getPool().query(
-    `UPDATE all_blues_warm_state SET links_inserted = links_inserted + $1, last_tick_at=NOW() WHERE id=1`,
-    [edgesInserted],
+    `UPDATE all_blues_warm_state SET links_inserted = links_inserted + $1,
+       last_tick_at=NOW() WHERE id=1`,
+    [edgesSinceLastTick],
   );
-  console.log(`[all-blues] release-notes: scanned ${releasesScanned} releases/masters, inserted ${edgesInserted} edges`);
+  console.log(`[all-blues] release-notes: scanned ${releasesScanned}/${total} releases/masters, inserted ${edgesInserted} edges`);
 }
