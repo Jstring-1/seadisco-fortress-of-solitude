@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260610.2040" />
+  <link rel="stylesheet" href="/style.css?v=20260611.0020" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260610.2040"></script>
+<script defer src="/shared.js?v=20260611.0020"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -765,6 +765,10 @@ e.g.  miles davis | coltrane
          gating. -->
     <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
+    <!-- All Blues tab — admin-only network view of inferred artist
+         relationships from cached Discogs profiles. -->
+    <span id="extras-tab-all-blues-sep" class="rr-tab-sep" style="display:none">/</span>
+    <span id="extras-tab-all-blues" class="rr-tab rr-tab-restricted" onclick="switchView('all-blues')" title="All Blues — network view of cached artist relationships (admin only)" style="display:none">All Blues</span>
     <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
@@ -1078,6 +1082,51 @@ e.g.  miles davis | coltrane
     </div>
     <div id="mb-saved-results" class="musicbrainz-results-list"><div class="loc-empty">Loading saves…</div></div>
   </div>
+</div>
+
+<!-- All Blues view: admin-only network of inferred relationships
+     across cached Discogs blues artists. Worker controls + Cytoscape
+     graph. Loaded lazily by switchView('all-blues'). -->
+<div id="all-blues-view" class="content-narrow" style="display:none">
+  <div style="margin:0.6rem 0 0.4rem 0">
+    <div style="font-size:1.15rem;font-weight:600">All Blues</div>
+    <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem">
+      Network of inferred relationships parsed from cached Discogs artist profiles (1900–1970 by default).
+      Edges come from <code>[aNNNNN]</code> mentions in the prose; the kind is best-effort from the surrounding words.
+    </div>
+  </div>
+  <div id="all-blues-controls" style="display:none;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.7rem;margin-bottom:0.6rem;font-size:0.82rem">
+    <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center">
+      <label style="display:inline-flex;gap:0.3rem;align-items:center">From <input id="ab-from-year" type="number" value="1900" min="1900" max="2100" style="width:6em"></label>
+      <label style="display:inline-flex;gap:0.3rem;align-items:center">To <input id="ab-to-year" type="number" value="1970" min="1900" max="2100" style="width:6em"></label>
+      <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="ab-reset-queue" type="checkbox"> reset queue</label>
+      <button id="ab-start" type="button" class="archive-btn" onclick="allBluesStart()">Start</button>
+      <button id="ab-stop" type="button" class="archive-btn" onclick="allBluesStop()" style="display:none">Stop</button>
+      <button type="button" class="archive-btn" onclick="allBluesForceClear()" title="Clear stuck in-memory running flag">Force-clear</button>
+      <button type="button" class="archive-btn" onclick="allBluesRefreshStatus()">Refresh status</button>
+    </div>
+    <div id="ab-status" style="margin-top:0.4rem;color:var(--muted);white-space:pre-wrap;font-family:monospace;font-size:0.74rem"></div>
+  </div>
+  <div id="all-blues-filters" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem">
+    <span style="color:var(--muted)">Show:</span>
+    <span id="all-blues-kind-chips"></span>
+    <label style="display:inline-flex;gap:0.3rem;align-items:center">Min degree
+      <input id="ab-min-degree" type="number" value="1" min="1" max="20" style="width:4em" onchange="allBluesReload()">
+    </label>
+    <button type="button" class="archive-btn" onclick="allBluesReload()">Reload graph</button>
+    <span id="ab-graph-counts" style="color:var(--muted)"></span>
+  </div>
+  <div id="all-blues-focus-bar" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem">
+    <span style="color:var(--muted)">Focus:</span>
+    <input id="ab-focus-input" type="text" placeholder="Type an artist name…" autocomplete="off"
+      style="padding:0.2rem 0.45rem;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:4px;color:inherit;width:18em"
+      oninput="_abFocusInputChanged()" onkeydown="if(event.key==='Enter'){_abFocusSubmit();}else if(event.key==='Escape'){_abFocusClear();}">
+    <button type="button" class="archive-btn" onclick="_abFocusSubmit()">Focus</button>
+    <button type="button" class="archive-btn" onclick="_abFocusClear()">Clear</button>
+    <span id="ab-focus-active" style="color:var(--muted)"></span>
+    <div id="ab-focus-suggestions" style="flex-basis:100%;display:none;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0;background:rgba(0,0,0,0.25)"></div>
+  </div>
+  <div id="all-blues-graph" style="width:100%;height:720px;border:1px solid var(--border);border-radius:6px;background:rgba(0,0,0,0.15)"></div>
 </div>
 
 <div id="blues-archive-view" class="content-narrow" style="display:none">
@@ -1842,13 +1891,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260610.2040"></script>
-<script defer src="/search.js?v=20260610.2040"></script>
-<script defer src="/collection.js?v=20260610.2040"></script>
+<script defer src="/utils.js?v=20260611.0020"></script>
+<script defer src="/search.js?v=20260611.0020"></script>
+<script defer src="/collection.js?v=20260611.0020"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260610.2040"></script>
-<script defer src="/app.js?v=20260610.2040"></script>
+<script defer src="/modal.js?v=20260611.0020"></script>
+<script defer src="/app.js?v=20260611.0020"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1859,8 +1908,8 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260610.2040"></script>
-<script defer src="/queue.js?v=20260610.2040"></script>
+<script defer src="/loc.js?v=20260611.0020"></script>
+<script defer src="/queue.js?v=20260611.0020"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
@@ -1895,8 +1944,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260610.2040"></script>
-<script defer src="/offline.js?v=20260610.2040"></script>
+<script defer src="/idb.js?v=20260611.0020"></script>
+<script defer src="/offline.js?v=20260611.0020"></script>
 
 </body>
 </html>

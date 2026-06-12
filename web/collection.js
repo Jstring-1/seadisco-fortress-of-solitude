@@ -285,6 +285,7 @@ function switchView(view, skipPushState = false) {
   const gutenbergView = document.getElementById("gutenberg-view");
   const chronamView   = document.getElementById("chronam-view");
   const bluesArchiveView = document.getElementById("blues-archive-view");
+  const allBluesView = document.getElementById("all-blues-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -298,7 +299,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -327,6 +328,7 @@ function switchView(view, skipPushState = false) {
   if (gutenbergView) gutenbergView.style.display = "none";
   if (chronamView) chronamView.style.display = "none";
   if (bluesArchiveView) bluesArchiveView.style.display = "none";
+  if (allBluesView) allBluesView.style.display = "none";
   const musicbrainzView = document.getElementById("musicbrainz-view");
   if (musicbrainzView) musicbrainzView.style.display = "none";
 
@@ -512,6 +514,21 @@ function switchView(view, skipPushState = false) {
     if (typeof initBluesArchiveView === "function") initBluesArchiveView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/blues-archive.js").then(() => window.initBluesArchiveView?.()).catch(() => {});
+    }
+  } else if (view === "all-blues") {
+    // PUBLIC — network view of inferred relationships across cached
+    // Discogs blues artists. Graph endpoint is public; only the
+    // worker controls (Start/Stop) are admin-gated and hidden from
+    // non-admin visitors by initAllBluesView. The discovery tab +
+    // footer link only show for admins, but a direct URL works for
+    // anyone who has it.
+    if (allBluesView) allBluesView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initAllBluesView === "function") initAllBluesView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/all-blues.js").then(() => window.initAllBluesView?.()).catch(() => {});
     }
   } else if (view === "musicbrainz") {
     // Admin-only — proxied MB API search with full caching. Server
@@ -704,7 +721,7 @@ function switchView(view, skipPushState = false) {
   // whenever the current view is one of those four; mark the
   // active tab; otherwise hide the strip. YouTube tab is only
   // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
-  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz"];
+  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz", "all-blues"];
   const _extrasTabs = document.getElementById("extras-tabs");
   if (_extrasTabs) {
     if (_extrasViews.includes(view)) {
@@ -718,6 +735,7 @@ function switchView(view, skipPushState = false) {
         chronam:   document.getElementById("extras-tab-chronam"),
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
         musicbrainz:    document.getElementById("extras-tab-musicbrainz"),
+        "all-blues":    document.getElementById("extras-tab-all-blues"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -767,17 +785,26 @@ function switchView(view, skipPushState = false) {
         if (mbTab) mbTab.style.display = mbAccess ? "" : "none";
         if (mbSep) mbSep.style.display = mbAccess ? "" : "none";
       };
+      // All Blues: admin-only.
+      const _syncAllBlues = () => {
+        const abAccess = !!window._isAdmin;
+        const abSep = document.getElementById("extras-tab-all-blues-sep");
+        const abTab = tabs["all-blues"];
+        if (abTab) abTab.style.display = abAccess ? "" : "none";
+        if (abSep) abSep.style.display = abAccess ? "" : "none";
+      };
       _syncYt();
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
       _syncMusicbrainz();
+      _syncAllBlues();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
         // / MusicBrainz tabs pop in for admin/demo without requiring
         // a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncMusicbrainz(); }).catch(() => {});
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncMusicbrainz(); _syncAllBlues(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";

@@ -1780,6 +1780,7 @@ function renderSharedFooter(opts) {
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
+        <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="All Blues — network of inferred relationships across cached Discogs blues artists (admin only)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>All Blues</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -1937,6 +1938,11 @@ function renderSharedFooter(opts) {
       if (window._isAdmin || window._sdIsDemo) {
         const caA = document.getElementById("footer-chronam-link");
         if (caA) caA.style.display = "";
+      }
+      // All Blues — admin-only network view.
+      if (window._isAdmin) {
+        const abA = document.getElementById("footer-all-blues-link");
+        if (abA) abA.style.display = "";
       }
       if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the
