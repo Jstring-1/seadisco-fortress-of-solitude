@@ -1578,7 +1578,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260611.5ab47cd";
+  const SITE_VERSION = "build 260611.888b803";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1780,7 +1780,7 @@ function renderSharedFooter(opts) {
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
-        <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="All Blues — network of inferred relationships across cached Discogs blues artists (admin only)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>All Blues</a>
+        <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="Constellations — network of inferred relationships across cached Discogs blues artists" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>Constellations</a>
       </div>
       <div class="footer-col">
         ${isSPA
