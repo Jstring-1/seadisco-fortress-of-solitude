@@ -1273,6 +1273,11 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_links_dst_idx ON all_blues_links (dst_id)`);
+  // release_ids: which release/master IDs surfaced this edge (release-
+  // notes phase only — profile-prose mentions have no associated release
+  // and stay as empty arrays). Each insert appends + dedupes so an edge
+  // accumulates every blues release where the pair was credited together.
+  await getPool().query(`ALTER TABLE all_blues_links ADD COLUMN IF NOT EXISTS release_ids INT[] NOT NULL DEFAULT '{}'`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS all_blues_artist_queue (
       discogs_id INTEGER PRIMARY KEY,
