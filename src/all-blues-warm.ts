@@ -144,8 +144,14 @@ export async function startAllBluesRun(opts: {
   (async () => {
     try {
       await _runCollect(fromYear, toYear);
-      if (!_stopRequested) await _runReleaseNotes(fromYear, toYear);
-      if (!_stopRequested) await _runFetch(client);
+      // Build the seed-name → id map AFTER collect so it covers every
+      // primary credit harvested from release_cache AND every
+      // blues_artists manual seed. Used by both subsequent phases to
+      // resolve [a=Display Name] literal-name refs that have no
+      // attached Discogs id.
+      const nameToId = await _buildNameToIdMap();
+      if (!_stopRequested) await _runReleaseNotes(fromYear, toYear, nameToId);
+      if (!_stopRequested) await _runFetch(client, nameToId);
       console.log("[all-blues] worker exited cleanly");
       await setAppSetting(ACTIVE_KEY, null);
     } catch (err: any) {
@@ -275,7 +281,7 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
 
 // ── Phase 2: fetch each pending artist, parse mentions ────────────
 
-async function _runFetch(client: DiscogsClient): Promise<void> {
+async function _runFetch(client: DiscogsClient, nameToId: Map<string, number>): Promise<void> {
   console.log("[all-blues] fetch phase: draining queue");
   while (true) {
     if (_stopRequested) break;
@@ -321,27 +327,29 @@ async function _runFetch(client: DiscogsClient): Promise<void> {
       const profile: string = typeof data?.profile === "string" ? data.profile : "";
       let inserted = 0;
       if (profile) {
-        const edges = _extractMentions(discogsId, profile);
-        for (const e of edges) {
-          try {
-            // Edge gate: only insert if dst is itself a blues seed
-            // (seed_year IS NOT NULL). This keeps the network inside
-            // the blues universe — mentions to Dizzy Gillespie etc.
-            // are dropped because he isn't a primary artist on any
-            // cached blues release.
-            const r = await getPool().query(
-              `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
-               SELECT $1, $2, $3, $4
-                WHERE EXISTS (
-                  SELECT 1 FROM all_blues_artist_queue
-                   WHERE discogs_id=$2 AND seed_year IS NOT NULL
-                )
-               ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
-              [e.src, e.dst, e.kind, e.excerpt],
-            );
-            if (r.rowCount) inserted++;
-          } catch (linkErr) {
-            // Skip any rows that violate CHECK (src <> dst) etc.
+        const mentions = _scanMentions(profile, nameToId).filter(m => m.dst !== discogsId);
+        for (const mention of mentions) {
+          for (const kind of mention.kinds) {
+            try {
+              // Edge gate: only insert if dst is itself a blues seed
+              // (seed_year IS NOT NULL). One INSERT per kind so
+              // multi-tag mentions ("his wife and bandmate [a123]")
+              // yield two distinct rows that the popup can surface
+              // separately.
+              const r = await getPool().query(
+                `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
+                 SELECT $1, $2, $3, $4
+                  WHERE EXISTS (
+                    SELECT 1 FROM all_blues_artist_queue
+                     WHERE discogs_id=$2 AND seed_year IS NOT NULL
+                  )
+                 ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
+                [discogsId, mention.dst, kind, mention.excerpt],
+              );
+              if (r.rowCount) inserted++;
+            } catch (linkErr) {
+              // Skip any rows that violate CHECK (src <> dst) etc.
+            }
           }
         }
       }
@@ -372,56 +380,128 @@ async function _runFetch(client: DiscogsClient): Promise<void> {
 }
 
 // ── Mention extraction ─────────────────────────────────────────────
-// Discogs profiles use [a123456] (or [a=name]) BBCode for artist
-// references. We grab ~80 chars on either side as a "window" and
-// classify the edge kind from keywords in that window.
+// Two ref forms surface in Discogs prose:
+//   numeric: [a123456], [a=123], [a123|Display Name], [a=123|Display]
+//   literal: [a=Display Name], [a=Display Name (3)]
+// The literal form is used when the prose author didn't link to a
+// Discogs id. We match literals against the harvested seed-name map
+// (queue.name lowercased) so any name we know becomes an edge target.
 //
-// Priority (first match wins):
-//   spouse  — wife/husband/married/spouse
-//   family  — father/mother/son/daughter/brother/sister/uncle/aunt/
-//             cousin/niece/nephew/family/relative
-//   mentor  — mentor/taught/student of/teacher/tutored/learned from
-//   band    — band/group/joined/member of/played with/formed/sideman
-//   alias   — alias/aka/a.k.a./pseudonym/also known
-//   mention — fallback
+// Each mention is scored against EVERY kind pattern, not just the
+// first match — "his wife and bandmate [a123]" emits both spouse and
+// band edges. If no pattern matches we fall back to 'mention'.
 
 const KIND_PATTERNS: Array<[string, RegExp]> = [
-  ["spouse", /\b(wife|husband|married|spouse)\b/i],
-  ["family", /\b(father|mother|son|daughter|brother|sister|uncle|aunt|cousin|niece|nephew|family|relative|grandfather|grandmother|stepfather|stepmother)\b/i],
-  ["mentor", /\b(mentor|taught|student of|teacher|tutored|learned from|protege|protégé|apprentice)\b/i],
-  ["band",   /\b(band|group|joined|member of|played with|formed|sideman|backed|toured with|bandmate)\b/i],
-  ["alias",  /\b(alias|aka|a\.k\.a\.|pseudonym|also known|recorded as)\b/i],
+  ["spouse", /\b(wife|husband|married|spouse|romantic partner|lover|fianc[eé]e?|widow|widower)\b/i],
+  ["family", /\b(father|mother|son|daughter|brother|sister|uncle|aunt|cousin|niece|nephew|family|relative|grandfather|grandmother|stepfather|stepmother|child|parent|sibling|kin\b|sister\-in\-law|brother\-in\-law)\b/i],
+  ["mentor", /\b(mentor|mentored|taught|student of|teacher|tutored|learned from|proteg[eé]|apprentice|influenced by|inspired by|trained by|schooled|coached|under the tutelage)\b/i],
+  ["band",   /\b(band|group|joined|member of|played with|formed|sideman|backed|toured with|bandmate|collaborat(?:ed|or)|recorded with|duet|accompan(?:ied|ist)|played alongside|jammed|gigged|sang with)\b/i],
+  ["alias",  /\b(alias|aka|a\.k\.a\.|pseudonym|also known|recorded as|performing as|stage name|using the name)\b/i],
+  ["traveled", /\b(traveled with|travelled with|travelling with|traveling with|on the road with|tour(?:ed|ing) with|hoboed with|rambled with)\b/i],
 ];
 
-// Generic mention scanner — returns { dst, kind, excerpt } for every
-// [aNNNNN] in the text. Caller picks a src and turns these into edges.
-function _scanMentionTargets(text: string): Array<{ dst: number; kind: string; excerpt: string }> {
-  const re = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
-  const out: Array<{ dst: number; kind: string; excerpt: string }> = [];
-  const seenDst = new Set<number>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const dst = parseInt(m[1], 10);
-    if (!Number.isFinite(dst) || dst <= 0) continue;
-    if (seenDst.has(dst)) continue;
-    seenDst.add(dst);
-    const start = Math.max(0, m.index - 80);
-    const end   = Math.min(text.length, m.index + m[0].length + 80);
-    const window = text.slice(start, end);
-    let kind = "mention";
-    for (const [k, re2] of KIND_PATTERNS) {
-      if (re2.test(window)) { kind = k; break; }
+// Pull a sentence-bounded context window around `idx` so kind-keyword
+// matches don't bleed across unrelated sentences. Hard caps at ±300
+// chars in either direction so a missing punctuation mark doesn't
+// grab a whole bio. Falls back to the bounds when no sentence
+// terminator is found within the cap.
+function _sentenceWindow(text: string, idx: number, len: number): string {
+  const CAP = 300;
+  const lo = Math.max(0, idx - CAP);
+  const hi = Math.min(text.length, idx + len + CAP);
+  // Walk back from the match to find the previous . ! ? — accept \n
+  // as a sentence boundary too (multi-paragraph bios).
+  let start = lo;
+  for (let i = idx - 1; i >= lo; i--) {
+    const ch = text[i];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+      start = i + 1;
+      break;
     }
-    const excerpt = window.replace(/\s+/g, " ").trim().slice(0, 200);
-    out.push({ dst, kind, excerpt });
   }
-  return out;
+  // Walk forward from the end of the match to find the next .!?\n.
+  let end = hi;
+  for (let i = idx + len; i < hi; i++) {
+    const ch = text[i];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+      end = i + 1;
+      break;
+    }
+  }
+  return text.slice(start, end).replace(/\s+/g, " ").trim();
 }
 
-function _extractMentions(srcId: number, profile: string): Array<{ src: number; dst: number; kind: string; excerpt: string | null }> {
-  return _scanMentionTargets(profile)
-    .filter(m => m.dst !== srcId)
-    .map(m => ({ src: srcId, dst: m.dst, kind: m.kind, excerpt: m.excerpt }));
+// Classify a window against every KIND_PATTERN, returning every kind
+// that matches. Fallback to ["mention"] if nothing keyword-hits so
+// every edge has at least one kind tag.
+function _classifyKinds(window: string): string[] {
+  const out: string[] = [];
+  for (const [k, re] of KIND_PATTERNS) {
+    if (re.test(window)) out.push(k);
+  }
+  return out.length ? out : ["mention"];
+}
+
+// One-shot lookup of every seed with a known name, returning a
+// case-insensitive name → discogs_id map. Used to resolve [a=Display
+// Name] literal-name refs against the seed set.
+async function _buildNameToIdMap(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const r = await getPool().query(
+    `SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+       FROM all_blues_artist_queue q
+       LEFT JOIN discogs_artist_cache c USING (discogs_id)
+      WHERE q.seed_year IS NOT NULL AND COALESCE(c.name, q.name) IS NOT NULL`,
+  );
+  for (const row of r.rows) {
+    const k = String(row.name).toLowerCase().trim();
+    if (k) map.set(k, row.discogs_id);
+  }
+  console.log(`[all-blues] name→id map built: ${map.size} seeds`);
+  return map;
+}
+
+// Musician-role keywords used to promote an extraartist credit into
+// a band edge. Anyone credited with one of these roles on a primary's
+// release is treated as a bandmate (provided they're also a blues
+// seed). Roles outside this list (producer, engineer, photography,
+// liner notes, etc.) are not — they don't imply musical collaboration.
+const MUSICIAN_ROLE_RE = /\b(guitar|piano|harmonica|vocals?|voice|bass|drums|sax|saxophone|fiddle|violin|mandolin|banjo|harp|organ|trumpet|cornet|clarinet|trombone|percussion|harmony vocals?|backing vocals?|accompani(?:ed|ment|st)|kazoo|jug|washboard|tambourine|tuba|ukulele|accordion)\b/i;
+
+// Scans `text` for both numeric and literal-name artist refs, returning
+// one entry per dst with every kind keyword that matches its sentence-
+// bounded context. nameToId resolves [a=Display Name] forms against
+// the harvested seed set; literals that don't match any seed are
+// dropped (we have no way to attribute them).
+function _scanMentions(
+  text: string,
+  nameToId: Map<string, number>,
+): Array<{ dst: number; kinds: string[]; excerpt: string }> {
+  const out: Array<{ dst: number; kinds: string[]; excerpt: string }> = [];
+  const seenDst = new Set<number>();
+  const recordHit = (dst: number, idx: number, matchLen: number) => {
+    if (!Number.isFinite(dst) || dst <= 0 || seenDst.has(dst)) return;
+    seenDst.add(dst);
+    const window = _sentenceWindow(text, idx, matchLen);
+    const kinds = _classifyKinds(window);
+    out.push({ dst, kinds, excerpt: window.slice(0, 220) });
+  };
+  // Numeric forms: [aNNN], [a=NNN], [aNNN|Display], [a=NNN|Display]
+  const NUM_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+  let m: RegExpExecArray | null;
+  while ((m = NUM_RE.exec(text)) !== null) {
+    recordHit(parseInt(m[1], 10), m.index, m[0].length);
+  }
+  // Name forms: [a=Display Name], [a=Display Name (3)]. The negative
+  // lookahead on \d skips numeric values already caught above.
+  const NAME_RE = /\[a=([^\d\]][^\]|]*)(?:\|[^\]]*)?\]/gi;
+  while ((m = NAME_RE.exec(text)) !== null) {
+    const raw = m[1].trim().replace(/\s*\(\d+\)\s*$/, "");
+    const dst = nameToId.get(raw.toLowerCase());
+    if (!dst) continue;
+    recordHit(dst, m.index, m[0].length);
+  }
+  return out;
 }
 
 // ── Phase 1.5: scan blues release/master notes for mentions ───────
@@ -433,11 +513,14 @@ function _extractMentions(srcId: number, profile: string): Array<{ src: number; 
 //   • dst artists = every [aNNNNN] found in data->'notes'
 //   • emit one edge per (src, dst, kind) tuple, gated to blues seeds.
 // No Discogs API calls — pure cache scan.
-async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void> {
-  console.log(`[all-blues] release-notes phase: scanning blues release/master notes (${fromYear}-${toYear})`);
+async function _runReleaseNotes(fromYear: number, toYear: number, nameToId: Map<string, number>): Promise<void> {
+  console.log(`[all-blues] release-notes phase: scanning blues releases (${fromYear}-${toYear})`);
   await getPool().query(
     `UPDATE all_blues_warm_state SET phase='release-notes', last_tick_at=NOW() WHERE id=1`,
   );
+  // Drop the notes-only filter — we now scan every blues release for
+  // both prose mentions AND extraartists musician credits. Releases
+  // with no notes still contribute via the credit pass.
   const r = await getPool().query(
     `SELECT rc.discogs_id, rc.type, rc.data
        FROM release_cache rc
@@ -448,8 +531,7 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
           SELECT 1
             FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
            WHERE g = 'Blues'
-        )
-        AND COALESCE(TRIM(rc.data->>'notes'), '') <> ''`,
+        )`,
     [fromYear, toYear],
   );
   const total = r.rows.length;
@@ -457,18 +539,38 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
   let edgesInserted = 0;
   let edgesSinceLastTick = 0;
   let lastTickAt = Date.now();
-  const TICK_EVERY_MS = 2000; // flush progress to DB at most every 2s
-  // Initial tick — peg last_tick_at so the panel reflects the phase
-  // having started even before the first insert lands.
+  const TICK_EVERY_MS = 2000;
   await getPool().query(
     `UPDATE all_blues_warm_state SET last_tick_at=NOW() WHERE id=1`,
   );
   console.log(`[all-blues] release-notes: ${total} releases to scan`);
+  // Helper: insert one seed-gated edge with release_id appended,
+  // dedupe-merging release_ids on conflict. Returns 1 if a row was
+  // inserted, 0 if it conflicted/was skipped.
+  const insertEdge = async (src: number, dst: number, kind: string, excerpt: string, releaseId: number) => {
+    if (src === dst) return 0;
+    try {
+      const ins = await getPool().query(
+        `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt, release_ids)
+         SELECT $1, $2, $3, $4, ARRAY[$5::int]
+          WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue
+                         WHERE discogs_id=$1 AND seed_year IS NOT NULL)
+            AND EXISTS (SELECT 1 FROM all_blues_artist_queue
+                         WHERE discogs_id=$2 AND seed_year IS NOT NULL)
+         ON CONFLICT (src_id, dst_id, kind) DO UPDATE SET
+           release_ids = ARRAY(
+             SELECT DISTINCT u FROM unnest(
+               all_blues_links.release_ids || EXCLUDED.release_ids
+             ) AS u
+           )`,
+        [src, dst, kind, excerpt, releaseId],
+      );
+      return ins.rowCount ?? 0;
+    } catch { return 0; }
+  };
   for (const row of r.rows) {
     if (_stopRequested) break;
     const data: any = row.data || {};
-    const notes: string = String(data.notes ?? "");
-    if (!notes.trim()) continue;
     const primaries: any[] = Array.isArray(data.artists) ? data.artists : [];
     const srcIds: number[] = [];
     for (const a of primaries) {
@@ -476,42 +578,38 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
       if (Number.isFinite(id) && id > 0) srcIds.push(id);
     }
     if (!srcIds.length) continue;
-    const mentions = _scanMentionTargets(notes);
-    if (!mentions.length) continue;
-    releasesScanned++;
     const releaseId = Number(row.discogs_id);
-    for (const src of srcIds) {
+    let touched = false;
+    // ── (a) prose-notes scan ────────────────────────────────────
+    const notes: string = String(data.notes ?? "");
+    if (notes.trim()) {
+      const mentions = _scanMentions(notes, nameToId);
       for (const mention of mentions) {
-        if (mention.dst === src) continue;
-        try {
-          const ins = await getPool().query(
-            `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt, release_ids)
-             SELECT $1, $2, $3, $4, ARRAY[$5::int]
-              WHERE EXISTS (
-                SELECT 1 FROM all_blues_artist_queue
-                 WHERE discogs_id=$1 AND seed_year IS NOT NULL
-              )
-                AND EXISTS (
-                SELECT 1 FROM all_blues_artist_queue
-                 WHERE discogs_id=$2 AND seed_year IS NOT NULL
-              )
-             ON CONFLICT (src_id, dst_id, kind) DO UPDATE SET
-               release_ids = ARRAY(
-                 SELECT DISTINCT u FROM unnest(
-                   all_blues_links.release_ids || EXCLUDED.release_ids
-                 ) AS u
-               )`,
-            [src, mention.dst, mention.kind, mention.excerpt, releaseId],
-          );
-          if (ins.rowCount) { edgesInserted++; edgesSinceLastTick++; }
-        } catch { /* CHECK violations etc — skip */ }
+        for (const src of srcIds) {
+          for (const kind of mention.kinds) {
+            const n = await insertEdge(src, mention.dst, kind, mention.excerpt, releaseId);
+            if (n) { edgesInserted += n; edgesSinceLastTick += n; touched = true; }
+          }
+        }
       }
     }
-    // Periodic progress flush — pegs last_tick_at + bumps the rolling
-    // links_inserted counter so the admin panel reflects progress
-    // without waiting for the whole phase to finish. Throttled to
-    // every TICK_EVERY_MS so we don't double the DB load just to
-    // refresh a counter.
+    // ── (b) extraartists role scan ──────────────────────────────
+    // Every extraartist credited with a musician role on this release
+    // gets a band edge from each primary credit. Producer / liner-
+    // notes / photography roles are skipped — only musical contrib.
+    const extras: any[] = Array.isArray(data.extraartists) ? data.extraartists : [];
+    for (const ea of extras) {
+      const eaId = Number(ea?.id);
+      const role = String(ea?.role ?? "");
+      if (!Number.isFinite(eaId) || eaId <= 0) continue;
+      if (!MUSICIAN_ROLE_RE.test(role)) continue;
+      const excerpt = `Credited as: ${role}`.slice(0, 220);
+      for (const src of srcIds) {
+        const n = await insertEdge(src, eaId, "band", excerpt, releaseId);
+        if (n) { edgesInserted += n; edgesSinceLastTick += n; touched = true; }
+      }
+    }
+    if (touched) releasesScanned++;
     if (Date.now() - lastTickAt >= TICK_EVERY_MS) {
       await getPool().query(
         `UPDATE all_blues_warm_state SET last_tick_at=NOW(),
@@ -522,11 +620,10 @@ async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void>
       lastTickAt = Date.now();
     }
   }
-  // Flush any remaining un-ticked edges.
   await getPool().query(
     `UPDATE all_blues_warm_state SET links_inserted = links_inserted + $1,
        last_tick_at=NOW() WHERE id=1`,
     [edgesSinceLastTick],
   );
-  console.log(`[all-blues] release-notes: scanned ${releasesScanned}/${total} releases/masters, inserted ${edgesInserted} edges`);
+  console.log(`[all-blues] release-notes: scanned ${releasesScanned}/${total} releases (prose + credits), inserted ${edgesInserted} edges`);
 }
