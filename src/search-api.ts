@@ -9226,16 +9226,36 @@ app.post("/api/admin/all-blues/wipe", express.json({ limit: "1kb" }), async (req
     return;
   }
   const alsoCache = String(req.query.cache ?? req.body?.cache ?? "") === "1";
+  const ARCHIVE_EXCERPT = "From Blues Archive (manually curated)";
   try {
+    // Wipe the queue fully — manual seeds get re-inserted by the next
+    // collect via ON CONFLICT, so there's no data loss.
     await getPool().query(`DELETE FROM all_blues_artist_queue`);
-    await getPool().query(`DELETE FROM all_blues_links`);
+    // Preserve edges that came from the Blues Archive manual import
+    // (they have the sentinel excerpt). Delete everything else — the
+    // auto-parsed profile / liner-notes edges the worker scraped.
+    const delLinks = await getPool().query(
+      `DELETE FROM all_blues_links
+        WHERE excerpt IS DISTINCT FROM $1`,
+      [ARCHIVE_EXCERPT],
+    );
     if (alsoCache) await getPool().query(`DELETE FROM discogs_artist_cache`);
+    // Reset counters; total links_inserted is replaced by the live
+    // surviving count so the stats panel doesn't show a negative
+    // delta after the next collect adds new edges.
+    const remainingLinks = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`);
     await getPool().query(
       `UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
-         artists_errored=0, links_inserted=0, last_error=NULL,
+         artists_errored=0, links_inserted=$1, last_error=NULL,
          phase='idle' WHERE id=1`,
+      [remainingLinks.rows[0]?.n ?? 0],
     );
-    res.json({ ok: true, wipedCache: alsoCache });
+    res.json({
+      ok: true,
+      wipedCache: alsoCache,
+      deletedLinks: delLinks.rowCount ?? 0,
+      preservedArchiveLinks: remainingLinks.rows[0]?.n ?? 0,
+    });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
