@@ -377,7 +377,6 @@ async function _abOpenEdgePopup(srcId, dstId) {
           <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(a.name)}</div>
           <div style="font-size:0.7rem;color:var(--muted);margin-top:0.1rem">#${a.id}</div>
           <div style="margin-top:0.3rem">
-            <a href="#" onclick="event.preventDefault();_abCloseEdgePopup();_abFocusPick(${a.id}, ${_abEsc(JSON.stringify(a.name))});return false" style="color:#60a5fa;font-size:0.72rem;margin-right:0.4rem">Focus on this artist</a>
             <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa;font-size:0.72rem">Discogs ↗</a>
           </div>
         </div>
