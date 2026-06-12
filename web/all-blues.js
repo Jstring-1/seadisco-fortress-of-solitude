@@ -327,7 +327,17 @@ function _abFocusInputChanged() {
   const sug = document.getElementById("ab-focus-suggestions");
   if (!inp || !sug) return;
   const q = inp.value.trim().toLowerCase();
-  if (!q) { sug.style.display = "none"; sug.innerHTML = ""; return; }
+  if (!q) {
+    sug.style.display = "none";
+    sug.innerHTML = "";
+    // Emptying the input — whether via the browser's native X clear,
+    // Backspace, Ctrl+A+Delete, or any other path — should reset the
+    // focus filter and reload the unfiltered network, same as the
+    // dedicated Clear button. Only fire if there's an active focus to
+    // clear so we don't reload the graph for every empty keystroke.
+    if (_abFocusId != null) _abFocusClear();
+    return;
+  }
   const nodes = _abLastGraph.nodes || [];
   const matches = nodes
     .filter(n => (n.name || "").toLowerCase().includes(q))
