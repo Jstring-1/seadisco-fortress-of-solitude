@@ -61,9 +61,21 @@ function _abRenderKindChips() {
 }
 
 async function initAllBluesView() {
-  // Admin controls only show if window._isAdmin
-  const ctrl = document.getElementById("all-blues-controls");
-  if (ctrl) ctrl.style.display = window._isAdmin ? "" : "none";
+  // Admin controls only show if window._isAdmin. Same race as YouTube
+  // tab: on direct URL nav, _isAdmin can still be undefined here.
+  // Re-sync once the lazy admin probe resolves so the panel pops in
+  // without forcing the user to switch views and back.
+  const _syncCtrl = () => {
+    const ctrl = document.getElementById("all-blues-controls");
+    if (ctrl) ctrl.style.display = window._isAdmin ? "" : "none";
+  };
+  _syncCtrl();
+  if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
+    window._ensureAdminFlag().then(() => {
+      _syncCtrl();
+      if (window._isAdmin) allBluesRefreshStatus().catch(() => {});
+    }).catch(() => {});
+  }
   _abRenderKindChips();
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
