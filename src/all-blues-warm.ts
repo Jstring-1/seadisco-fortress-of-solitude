@@ -121,7 +121,16 @@ export async function startAllBluesRun(opts: {
   );
 
   if (opts.resetQueue) {
+    // Full reset: clear queue + edges. We keep discogs_artist_cache
+    // because the Discogs payloads are still valid — re-parsing them
+    // on the next fetch costs zero API calls. Counters reset too so
+    // the stats panel reflects the fresh run.
     await getPool().query(`DELETE FROM all_blues_artist_queue`);
+    await getPool().query(`DELETE FROM all_blues_links`);
+    await getPool().query(
+      `UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
+         artists_errored=0, links_inserted=0, last_error=NULL WHERE id=1`,
+    );
   }
 
   (async () => {
@@ -149,52 +158,58 @@ export async function startAllBluesRun(opts: {
   return { ok: true };
 }
 
-// ── Phase 1: collect artist IDs from cached releases ──────────────
-// One bulk SQL pass. release_cache.data has Discogs's release JSON,
-// where `artists` + `extraartists` are arrays of {id, name, ...}.
-// We pull every id (>0) where the release's `year` falls in the
-// requested window (defaults 1900-1970). ON CONFLICT keeps the
-// queue idempotent so re-running just adds anything new.
+// ── Phase 1: collect blues seed artists from cached releases ──────
+// One bulk SQL pass. Walks release_cache for releases that:
+//   • have a year in the requested window (default 1900-1970)
+//   • list 'Blues' in their data->'genres' array
+// For each such release, we grab every artist in data->'artists' (the
+// primary credit) and add them as a seed with seed_year = the earliest
+// year of any blues release they appear on. extraartists are NOT seeds
+// — they include sidemen / producers / guest spots that often span
+// genres and would pull jazz/folk contemporaries into the network.
+// They can still appear as edge targets if they're also a primary on
+// some other blues release.
 async function _runCollect(fromYear: number, toYear: number): Promise<void> {
-  console.log(`[all-blues] collect phase: years ${fromYear}-${toYear}`);
+  console.log(`[all-blues] collect phase: years ${fromYear}-${toYear} (Blues genre only)`);
   const sql = `
-    WITH ids AS (
-      SELECT DISTINCT (a->>'id')::int AS aid
+    WITH blues_releases AS (
+      SELECT rc.data, (rc.data->>'year')::int AS yr
         FROM release_cache rc
-        CROSS JOIN LATERAL jsonb_array_elements(
-          COALESCE(rc.data->'artists',      '[]'::jsonb)
-          ||
-          COALESCE(rc.data->'extraartists', '[]'::jsonb)
-        ) AS a
-       WHERE (rc.data->>'year') ~ '^[0-9]+$'
+       WHERE rc.type = 'release'
+         AND (rc.data->>'year') ~ '^[0-9]+$'
          AND (rc.data->>'year')::int BETWEEN $1 AND $2
-         AND (a->>'id') ~ '^[0-9]+$'
+         AND EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
+            WHERE g = 'Blues'
+         )
+    ),
+    artist_refs AS (
+      SELECT (a->>'id')::int AS aid, MIN(yr) AS first_year
+        FROM blues_releases
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(blues_releases.data->'artists', '[]'::jsonb)
+        ) AS a
+       WHERE (a->>'id') ~ '^[0-9]+$'
          AND (a->>'id')::int > 0
+       GROUP BY (a->>'id')::int
     )
-    INSERT INTO all_blues_artist_queue (discogs_id)
-    SELECT aid FROM ids
-    ON CONFLICT (discogs_id) DO NOTHING
+    INSERT INTO all_blues_artist_queue (discogs_id, seed_year)
+    SELECT aid, first_year FROM artist_refs
+    ON CONFLICT (discogs_id) DO UPDATE
+      SET seed_year = LEAST(
+        COALESCE(all_blues_artist_queue.seed_year, EXCLUDED.seed_year),
+        EXCLUDED.seed_year
+      )
   `;
   const result = await getPool().query(sql, [fromYear, toYear]);
   const queued = result.rowCount ?? 0;
-  // Also backfill: any artist referenced by an existing link but not
-  // yet in our cache (so the graph stops showing "Artist NNNNNN" for
-  // nodes parsed out of earlier passes' mentions). Idempotent — only
-  // queues IDs we haven't already processed.
-  const backfill = await getPool().query(`
-    INSERT INTO all_blues_artist_queue (discogs_id)
-    SELECT DISTINCT dst_id FROM all_blues_links
-     WHERE dst_id NOT IN (SELECT discogs_id FROM discogs_artist_cache)
-       AND dst_id NOT IN (SELECT discogs_id FROM all_blues_artist_queue)
-    ON CONFLICT (discogs_id) DO NOTHING
-  `);
-  const backfilled = backfill.rowCount ?? 0;
   await getPool().query(
     `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1,
        phase='fetch', last_tick_at=NOW() WHERE id=1`,
-    [queued + backfilled],
+    [queued],
   );
-  console.log(`[all-blues] collect: ${queued} from release_cache + ${backfilled} mention-backfill artists queued`);
+  console.log(`[all-blues] collect: ${queued} blues seeds queued`);
 }
 
 // ── Phase 2: fetch each pending artist, parse mentions ────────────
@@ -203,9 +218,15 @@ async function _runFetch(client: DiscogsClient): Promise<void> {
   console.log("[all-blues] fetch phase: draining queue");
   while (true) {
     if (_stopRequested) break;
+    // Oldest blues seeds first. seed_year IS NULL means a row left
+    // over from the pre-blues-filter codepath — process those last
+    // (they may not even be blues; the edge gate below will drop
+    // any mentions they emit to non-seeds).
     const next = await getPool().query(
       `SELECT discogs_id FROM all_blues_artist_queue
-        WHERE status='pending' ORDER BY discogs_id LIMIT 1`,
+        WHERE status='pending'
+        ORDER BY seed_year ASC NULLS LAST, discogs_id ASC
+        LIMIT 1`,
     );
     if (!next.rows.length) {
       console.log("[all-blues] fetch: queue drained");
@@ -242,35 +263,24 @@ async function _runFetch(client: DiscogsClient): Promise<void> {
         const edges = _extractMentions(discogsId, profile);
         for (const e of edges) {
           try {
+            // Edge gate: only insert if dst is itself a blues seed
+            // (seed_year IS NOT NULL). This keeps the network inside
+            // the blues universe — mentions to Dizzy Gillespie etc.
+            // are dropped because he isn't a primary artist on any
+            // cached blues release.
             const r = await getPool().query(
               `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
-                 VALUES ($1, $2, $3, $4)
+               SELECT $1, $2, $3, $4
+                WHERE EXISTS (
+                  SELECT 1 FROM all_blues_artist_queue
+                   WHERE discogs_id=$2 AND seed_year IS NOT NULL
+                )
                ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
               [e.src, e.dst, e.kind, e.excerpt],
             );
             if (r.rowCount) inserted++;
           } catch (linkErr) {
             // Skip any rows that violate CHECK (src <> dst) etc.
-          }
-        }
-        // Enqueue every mentioned artist we haven't seen so a future
-        // pass fetches its profile + name. Without this, mentions that
-        // point to artists not in any cached release stay nameless on
-        // the graph ("Artist 274192"). Idempotent — ON CONFLICT skips
-        // ones we already have.
-        const mentionedIds = [...new Set(edges.map(e => e.dst))];
-        if (mentionedIds.length) {
-          const q = await getPool().query(
-            `INSERT INTO all_blues_artist_queue (discogs_id)
-             SELECT UNNEST($1::int[])
-             ON CONFLICT (discogs_id) DO NOTHING`,
-            [mentionedIds],
-          );
-          if (q.rowCount) {
-            await getPool().query(
-              `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1 WHERE id=1`,
-              [q.rowCount],
-            );
           }
         }
       }

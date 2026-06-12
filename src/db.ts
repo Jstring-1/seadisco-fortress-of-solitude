@@ -1283,6 +1283,13 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_status_idx ON all_blues_artist_queue (status)`);
+  // seed_year: earliest year of a Blues-genre release in release_cache
+  // that referenced this artist as a primary. Drives the worker's
+  // oldest-first ordering and acts as a "this is a real blues seed"
+  // flag — mention-follow targets without a seed_year are excluded
+  // from the graph so the network stays inside the blues universe.
+  await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS seed_year INT`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_seed_year_idx ON all_blues_artist_queue (seed_year)`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS all_blues_warm_state (
       id              INT PRIMARY KEY DEFAULT 1,
