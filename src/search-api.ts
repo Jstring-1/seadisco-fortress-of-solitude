@@ -9244,6 +9244,100 @@ app.post("/api/admin/all-blues/wipe", express.json({ limit: "1kb" }), async (req
 // "(unknown)" if we haven't fetched that artist yet). PUBLIC: any
 // signed-in or anonymous visitor can hit this — the page is shareable.
 // Only the worker controls (start/stop/status) stay admin-only.
+// Edge detail: everything we know about the connection between two
+// artists. Returns both endpoints' names + thumbnails, every edge
+// kind between them (in both directions), the prose excerpt that
+// surfaced each, and the cached release/master metadata for every
+// shared release_id. Used by the clickable-edge popup on the All
+// Blues graph. PUBLIC, same as the graph endpoint.
+app.get("/api/all-blues/edge", async (req, res) => {
+  try {
+    const src = parseInt(String(req.query.src ?? ""), 10);
+    const dst = parseInt(String(req.query.dst ?? ""), 10);
+    if (!Number.isFinite(src) || !Number.isFinite(dst) || src <= 0 || dst <= 0) {
+      res.status(400).json({ error: "src and dst required" });
+      return;
+    }
+    // Both directions — the graph is undirected for UI purposes, but
+    // edges in DB are directed (src has the profile/notes referencing
+    // dst). Show all of them.
+    const edgesR = await getPool().query(
+      `SELECT src_id, dst_id, kind, excerpt, release_ids
+         FROM all_blues_links
+        WHERE (src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1)
+        ORDER BY kind`,
+      [src, dst],
+    );
+    const edges = edgesR.rows;
+    // Collect every release_id referenced across all edges
+    const releaseIds = new Set<number>();
+    for (const e of edges) {
+      if (Array.isArray(e.release_ids)) {
+        for (const id of e.release_ids) if (Number.isFinite(id)) releaseIds.add(id);
+      }
+    }
+    const artistsR = await getPool().query(
+      `SELECT discogs_id, name, data FROM discogs_artist_cache
+        WHERE discogs_id = ANY($1::int[])`,
+      [[src, dst]],
+    );
+    const artistMap = new Map<number, any>();
+    for (const a of artistsR.rows) artistMap.set(a.discogs_id, a);
+    const artistCard = (id: number) => {
+      const a = artistMap.get(id);
+      const data = a?.data || {};
+      const thumb = Array.isArray(data.images) && data.images[0]
+        ? (data.images[0].uri150 || data.images[0].uri || null)
+        : null;
+      return {
+        id,
+        name: a?.name || `Artist ${id}`,
+        thumb,
+        discogs_url: `https://www.discogs.com/artist/${id}`,
+        profile_excerpt: typeof data.profile === "string" ? data.profile.slice(0, 240) : null,
+      };
+    };
+    // Release lookup: pull the cached payload for every release_id and
+    // boil it down to the bits the card needs.
+    let releases: any[] = [];
+    if (releaseIds.size) {
+      const ids = [...releaseIds];
+      const relR = await getPool().query(
+        `SELECT discogs_id, type, data FROM release_cache
+          WHERE discogs_id = ANY($1::int[])
+          ORDER BY (data->>'year') NULLS LAST`,
+        [ids],
+      );
+      releases = relR.rows.map(r => {
+        const d = r.data || {};
+        const thumb = Array.isArray(d.images) && d.images[0]
+          ? (d.images[0].uri150 || d.images[0].uri || null)
+          : null;
+        const primaries = Array.isArray(d.artists)
+          ? d.artists.map((a: any) => a?.name).filter(Boolean).join(", ")
+          : "";
+        return {
+          id: r.discogs_id,
+          type: r.type,
+          title: d.title || `Release ${r.discogs_id}`,
+          year:  d.year || null,
+          thumb,
+          primary_artists: primaries,
+        };
+      });
+    }
+    res.json({
+      src: artistCard(src),
+      dst: artistCard(dst),
+      edges: edges.map(e => ({
+        src_id: e.src_id, dst_id: e.dst_id, kind: e.kind,
+        excerpt: e.excerpt, release_ids: e.release_ids || [],
+      })),
+      releases,
+    });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 app.get("/api/all-blues/graph", async (req, res) => {
   try {
     const kinds = String(req.query.kinds ?? "").trim();
