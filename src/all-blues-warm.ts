@@ -136,6 +136,7 @@ export async function startAllBluesRun(opts: {
   (async () => {
     try {
       await _runCollect(fromYear, toYear);
+      if (!_stopRequested) await _runReleaseNotes(fromYear, toYear);
       if (!_stopRequested) await _runFetch(client);
       console.log("[all-blues] worker exited cleanly");
       await setAppSetting(ACTIVE_KEY, null);
@@ -332,28 +333,108 @@ const KIND_PATTERNS: Array<[string, RegExp]> = [
   ["alias",  /\b(alias|aka|a\.k\.a\.|pseudonym|also known|recorded as)\b/i],
 ];
 
-function _extractMentions(srcId: number, profile: string): Array<{ src: number; dst: number; kind: string; excerpt: string | null }> {
-  // [aNNNNN] and [a=NNNNN] and [a123|Display Name]
+// Generic mention scanner — returns { dst, kind, excerpt } for every
+// [aNNNNN] in the text. Caller picks a src and turns these into edges.
+function _scanMentionTargets(text: string): Array<{ dst: number; kind: string; excerpt: string }> {
   const re = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
-  const out: Array<{ src: number; dst: number; kind: string; excerpt: string | null }> = [];
-  const seenPair = new Set<string>();
+  const out: Array<{ dst: number; kind: string; excerpt: string }> = [];
+  const seenDst = new Set<number>();
   let m: RegExpExecArray | null;
-  while ((m = re.exec(profile)) !== null) {
+  while ((m = re.exec(text)) !== null) {
     const dst = parseInt(m[1], 10);
-    if (!Number.isFinite(dst) || dst <= 0 || dst === srcId) continue;
+    if (!Number.isFinite(dst) || dst <= 0) continue;
+    if (seenDst.has(dst)) continue;
+    seenDst.add(dst);
     const start = Math.max(0, m.index - 80);
-    const end   = Math.min(profile.length, m.index + m[0].length + 80);
-    const window = profile.slice(start, end);
+    const end   = Math.min(text.length, m.index + m[0].length + 80);
+    const window = text.slice(start, end);
     let kind = "mention";
     for (const [k, re2] of KIND_PATTERNS) {
       if (re2.test(window)) { kind = k; break; }
     }
-    const key = `${dst}::${kind}`;
-    if (seenPair.has(key)) continue;
-    seenPair.add(key);
-    // Excerpt: trim whitespace, single-line, max 200 chars
     const excerpt = window.replace(/\s+/g, " ").trim().slice(0, 200);
-    out.push({ src: srcId, dst, kind, excerpt });
+    out.push({ dst, kind, excerpt });
   }
   return out;
+}
+
+function _extractMentions(srcId: number, profile: string): Array<{ src: number; dst: number; kind: string; excerpt: string | null }> {
+  return _scanMentionTargets(profile)
+    .filter(m => m.dst !== srcId)
+    .map(m => ({ src: srcId, dst: m.dst, kind: m.kind, excerpt: m.excerpt }));
+}
+
+// ── Phase 1.5: scan blues release/master notes for mentions ───────
+// Discogs release & master records carry `notes` text with the same
+// BBCode-ish [aNNNNN] artist refs as the artist profile prose. Liner
+// notes are gold for collaboration: "with [a123] on harmonica" etc.
+// For each cached blues release/master in the year window:
+//   • src artists = data->'artists' (the release's primary credits)
+//   • dst artists = every [aNNNNN] found in data->'notes'
+//   • emit one edge per (src, dst, kind) tuple, gated to blues seeds.
+// No Discogs API calls — pure cache scan.
+async function _runReleaseNotes(fromYear: number, toYear: number): Promise<void> {
+  console.log(`[all-blues] release-notes phase: scanning blues release/master notes (${fromYear}-${toYear})`);
+  await getPool().query(
+    `UPDATE all_blues_warm_state SET phase='release-notes', last_tick_at=NOW() WHERE id=1`,
+  );
+  const r = await getPool().query(
+    `SELECT rc.discogs_id, rc.type, rc.data
+       FROM release_cache rc
+      WHERE rc.type IN ('release', 'master')
+        AND (rc.data->>'year') ~ '^[0-9]+$'
+        AND (rc.data->>'year')::int BETWEEN $1 AND $2
+        AND EXISTS (
+          SELECT 1
+            FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
+           WHERE g = 'Blues'
+        )
+        AND COALESCE(TRIM(rc.data->>'notes'), '') <> ''`,
+    [fromYear, toYear],
+  );
+  let releasesScanned = 0;
+  let edgesInserted = 0;
+  for (const row of r.rows) {
+    if (_stopRequested) break;
+    const data: any = row.data || {};
+    const notes: string = String(data.notes ?? "");
+    if (!notes.trim()) continue;
+    const primaries: any[] = Array.isArray(data.artists) ? data.artists : [];
+    const srcIds: number[] = [];
+    for (const a of primaries) {
+      const id = Number(a?.id);
+      if (Number.isFinite(id) && id > 0) srcIds.push(id);
+    }
+    if (!srcIds.length) continue;
+    const mentions = _scanMentionTargets(notes);
+    if (!mentions.length) continue;
+    releasesScanned++;
+    for (const src of srcIds) {
+      for (const mention of mentions) {
+        if (mention.dst === src) continue;
+        try {
+          const ins = await getPool().query(
+            `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
+             SELECT $1, $2, $3, $4
+              WHERE EXISTS (
+                SELECT 1 FROM all_blues_artist_queue
+                 WHERE discogs_id=$1 AND seed_year IS NOT NULL
+              )
+                AND EXISTS (
+                SELECT 1 FROM all_blues_artist_queue
+                 WHERE discogs_id=$2 AND seed_year IS NOT NULL
+              )
+             ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
+            [src, mention.dst, mention.kind, mention.excerpt],
+          );
+          if (ins.rowCount) edgesInserted++;
+        } catch { /* CHECK violations etc — skip */ }
+      }
+    }
+  }
+  await getPool().query(
+    `UPDATE all_blues_warm_state SET links_inserted = links_inserted + $1, last_tick_at=NOW() WHERE id=1`,
+    [edgesInserted],
+  );
+  console.log(`[all-blues] release-notes: scanned ${releasesScanned} releases/masters, inserted ${edgesInserted} edges`);
 }
