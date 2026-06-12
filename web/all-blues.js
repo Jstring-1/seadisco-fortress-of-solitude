@@ -360,9 +360,20 @@ async function allBluesReload() {
   // Click handlers. Edges → detail popup; nodes → focus that artist.
   _abCy.on("tap", "edge", (evt) => {
     const e = evt.target;
-    const src = parseInt(e.data("source"), 10);
-    const dst = parseInt(e.data("target"), 10);
-    if (Number.isFinite(src) && Number.isFinite(dst)) _abOpenEdgePopup(src, dst);
+    // Read source/target via the node-level API rather than data()
+    // — data("source") returns the raw stored value (string) but
+    // edge.source().id() always returns the actual connected node's
+    // id, which is the safer truth in case data attrs got mangled
+    // during a re-render.
+    const srcStr = e.source?.()?.id?.() ?? e.data("source");
+    const dstStr = e.target?.()?.id?.() ?? e.data("target");
+    const src = parseInt(srcStr, 10);
+    const dst = parseInt(dstStr, 10);
+    if (Number.isFinite(src) && Number.isFinite(dst) && src > 0 && dst > 0 && src !== dst) {
+      _abOpenEdgePopup(src, dst);
+    } else {
+      console.warn("[constellations] edge tap: invalid endpoints", { srcStr, dstStr });
+    }
   });
   _abCy.on("tap", "node", (evt) => {
     const n = evt.target;
@@ -633,6 +644,16 @@ function _abCloseEdgePopup() {
 window._abCloseEdgePopup = _abCloseEdgePopup;
 
 async function _abOpenEdgePopup(srcId, dstId) {
+  // Sanity-check inputs before showing the popup. Without this we
+  // surfaced an HTTP 400 every time a tap landed on stale/invalid
+  // edge data (transient during graph re-renders, intersection
+  // mis-hits, etc).
+  const src = Number(srcId);
+  const dst = Number(dstId);
+  if (!Number.isFinite(src) || !Number.isFinite(dst) || src <= 0 || dst <= 0 || src === dst) {
+    console.warn("[constellations] edge popup: invalid src/dst", srcId, dstId);
+    return;
+  }
   const el = _abEnsureEdgePopup();
   const bd = document.getElementById("ab-edge-popup-bd");
   if (bd) bd.style.display = "block";
@@ -640,8 +661,14 @@ async function _abOpenEdgePopup(srcId, dstId) {
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
   let data;
   try {
-    const r = await fetch(`/api/all-blues/edge?src=${srcId}&dst=${dstId}`);
-    if (!r.ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load edge details (HTTP ${r.status})</div>`; return; }
+    const url = `/api/all-blues/edge?src=${src}&dst=${dst}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      console.warn("[constellations] edge popup failed", { url, status: r.status, body });
+      el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load edge details (HTTP ${r.status})${body ? `<div style="margin-top:0.4rem;font-size:0.72rem;color:var(--muted);font-family:monospace;word-break:break-all">${_abEsc(body.slice(0, 240))}</div>` : ""}</div>`;
+      return;
+    }
     data = await r.json();
   } catch (err) {
     el.innerHTML = `<div style="padding:1rem;color:#c66">Failed: ${_abEsc(err.message)}</div>`; return;
