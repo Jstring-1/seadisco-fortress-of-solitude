@@ -1295,6 +1295,12 @@ export async function initDb() {
   // from the graph so the network stays inside the blues universe.
   await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS seed_year INT`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_seed_year_idx ON all_blues_artist_queue (seed_year)`);
+  // name: harvested at collect time from release_cache.data.artists[]
+  // so the graph has labels the moment the worker finishes collect,
+  // without waiting for the rate-limited Discogs profile fetch phase.
+  // Overwritten by the actual fetched profile name on conflict — until
+  // then this is what the public network view shows.
+  await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS name TEXT`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS all_blues_warm_state (
       id              INT PRIMARY KEY DEFAULT 1,
