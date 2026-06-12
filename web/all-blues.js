@@ -292,10 +292,14 @@ async function allBluesReload() {
       // .ab-faded. Tap the empty canvas to clear.
       { selector: ".ab-faded", style: {
         "opacity": 0.12, "text-opacity": 0,
+        // Faded elements render behind highlighted ones so clicks
+        // near an intersection don't fall through to a dimmed edge.
+        "z-index": 1,
       }},
       { selector: "node.ab-highlighted", style: {
         "border-color": "#fbbf24", "border-width": 2.5,
         "background-color": "#3b4456",
+        "z-index": 20,
       }},
       { selector: "node.ab-source", style: {
         "background-color": "#fbbf24",
@@ -303,9 +307,14 @@ async function allBluesReload() {
         "width": 32, "height": 32,
         "color": "#fbbf24", "font-weight": "bold", "font-size": 12,
         "text-outline-width": 3, "text-outline-color": "#000",
+        "z-index": 30,
       }},
       { selector: "edge.ab-highlighted", style: {
         "width": 4.5, "opacity": 1,
+        // Bump highlighted edges above the faded ones so a click on
+        // an intersection hits the bold (focused) line, not the dim
+        // one underneath. Cytoscape's hit-test order follows z-index.
+        "z-index": 15,
       }},
     ],
     layout: allPositioned
@@ -695,10 +704,10 @@ async function _abOpenEdgePopup(srcId, dstId) {
 }
 
 function _abOpenReleaseFromPopup(event, id, type) {
-  // openModal signature: (event, id, type, discogsUrl, opts)
-  // The release/album modal is the SPA's main popup — calling it
-  // doesn't close ours, so do that explicitly so the user can see it.
-  _abCloseEdgePopup();
+  // Leave the edge popup open behind the album modal so the user can
+  // dismiss the release view and continue reading the connection
+  // details. The SPA's modal-overlay layers above our popup, so the
+  // active modal wins visually without us having to tear ours down.
   if (typeof window.openModal === "function") {
     window.openModal(event, id, type || "release");
   } else {
@@ -932,7 +941,8 @@ async function _abOpenArtistPopup(artistId) {
 window._abOpenArtistPopup = _abOpenArtistPopup;
 
 function _abOpenReleaseFromArtistPopup(event, id, type) {
-  _abCloseArtistPopup();
+  // Same as _abOpenReleaseFromPopup — keep the artist popup open
+  // behind the album modal so the user returns to it on close.
   if (typeof window.openModal === "function") {
     window.openModal(event, id, type || "release");
   } else {
