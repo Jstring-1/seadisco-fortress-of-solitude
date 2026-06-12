@@ -9366,6 +9366,28 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const nodeIds = new Set<number>();
     for (const e of edges) { nodeIds.add(e.src_id); nodeIds.add(e.dst_id); }
     // Filter by degree
+    // Name lookup: prefer the canonical name from discogs_artist_cache
+    // (only populated once the Discogs fetch phase has run for that
+    // artist), fall back to the harvested release_cache name stored on
+    // the queue row at collect time. The queue name lets the graph have
+    // human labels the instant collect finishes — without it the network
+    // would show "Artist NNNNN" for hours while fetch grinds at 1.1s/req.
+    const resolveNames = async (ids: number[]): Promise<Map<number, string>> => {
+      const map = new Map<number, string>();
+      if (!ids.length) return map;
+      const r = await getPool().query(
+        `SELECT q.discogs_id,
+                COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])`,
+        [ids],
+      );
+      for (const row of r.rows) {
+        if (row.name) map.set(row.discogs_id, row.name);
+      }
+      return map;
+    };
     if (minDegree > 1) {
       const deg = new Map<number, number>();
       for (const e of edges) {
@@ -9376,27 +9398,13 @@ app.get("/api/all-blues/graph", async (req, res) => {
       for (const [id, d] of deg) if (d >= minDegree) kept.add(id);
       const filteredEdges = edges.filter(e => kept.has(e.src_id) && kept.has(e.dst_id));
       const ids = Array.from(kept);
-      const namesR = ids.length
-        ? await getPool().query(
-            `SELECT discogs_id, name FROM discogs_artist_cache WHERE discogs_id = ANY($1::int[])`,
-            [ids],
-          )
-        : { rows: [] as any[] };
-      const nameMap = new Map<number, string>();
-      for (const r of namesR.rows) nameMap.set(r.discogs_id, r.name);
+      const nameMap = await resolveNames(ids);
       const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
       res.json({ nodes, edges: filteredEdges });
       return;
     }
     const ids = Array.from(nodeIds);
-    const namesR = ids.length
-      ? await getPool().query(
-          `SELECT discogs_id, name FROM discogs_artist_cache WHERE discogs_id = ANY($1::int[])`,
-          [ids],
-        )
-      : { rows: [] as any[] };
-    const nameMap = new Map<number, string>();
-    for (const r of namesR.rows) nameMap.set(r.discogs_id, r.name);
+    const nameMap = await resolveNames(ids);
     const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
     res.json({ nodes, edges });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }

@@ -186,7 +186,13 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
          )
     ),
     artist_refs AS (
-      SELECT (a->>'id')::int AS aid, MIN(yr) AS first_year
+      SELECT (a->>'id')::int AS aid,
+             MIN(yr) AS first_year,
+             -- earliest non-empty name we see for this artist across
+             -- their cached blues releases. Gives us a label to show
+             -- on the graph immediately, before the Discogs API fetch
+             -- phase has had a chance to write the canonical name.
+             (array_agg(a->>'name' ORDER BY yr) FILTER (WHERE COALESCE(a->>'name','') <> ''))[1] AS name
         FROM blues_releases
         CROSS JOIN LATERAL jsonb_array_elements(
           COALESCE(blues_releases.data->'artists', '[]'::jsonb)
@@ -195,13 +201,14 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
          AND (a->>'id')::int > 0
        GROUP BY (a->>'id')::int
     )
-    INSERT INTO all_blues_artist_queue (discogs_id, seed_year)
-    SELECT aid, first_year FROM artist_refs
+    INSERT INTO all_blues_artist_queue (discogs_id, seed_year, name)
+    SELECT aid, first_year, name FROM artist_refs
     ON CONFLICT (discogs_id) DO UPDATE
       SET seed_year = LEAST(
-        COALESCE(all_blues_artist_queue.seed_year, EXCLUDED.seed_year),
-        EXCLUDED.seed_year
-      )
+            COALESCE(all_blues_artist_queue.seed_year, EXCLUDED.seed_year),
+            EXCLUDED.seed_year
+          ),
+          name = COALESCE(all_blues_artist_queue.name, EXCLUDED.name)
   `;
   const result = await getPool().query(sql, [fromYear, toYear]);
   const queued = result.rowCount ?? 0;
