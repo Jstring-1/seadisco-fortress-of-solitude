@@ -9589,24 +9589,16 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const allowed = new Set(["family","spouse","mentor","band","alias","mention"]);
     const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
     const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
-    // Belt-and-suspenders: even though the worker now only inserts
-    // edges where dst is a blues seed, also gate at query time so old
-    // data created before the genre filter doesn't pollute the graph.
-    // A row counts as "blues seed" only if it has seed_year populated.
-    //
-    // DISTINCT ON (canonical pair) collapses doubles into single edges:
-    // edges are stored directed (A→B AND B→A can both exist) and each
-    // kind is its own row, so the graph would render up to 12 parallel
-    // lines between the same pair. We canonicalize the endpoints with
-    // LEAST/GREATEST and keep just the highest-priority kind per pair.
-    // The detail popup queries the raw table by (src,dst) so it still
-    // shows every kind when the edge is clicked.
+    // Canonicalize direction (LEAST/GREATEST) then aggregate every
+    // kind on that pair into a single array. The frontend renders the
+    // edge as a banded gradient — one color stripe per kind — so a
+    // pair with [family, band] shows orange + green on the same line
+    // without needing two overlapping edges. The detail popup still
+    // queries the raw table so click gives every kind individually.
     let edgeSql = `
-      SELECT DISTINCT ON (LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id))
-             LEAST(l.src_id, l.dst_id)    AS src_id,
+      SELECT LEAST(l.src_id, l.dst_id)    AS src_id,
              GREATEST(l.src_id, l.dst_id) AS dst_id,
-             l.kind,
-             l.release_ids
+             array_agg(DISTINCT l.kind)   AS kinds
         FROM all_blues_links l
        WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
                       WHERE q.discogs_id = l.src_id AND q.seed_year IS NOT NULL)
@@ -9619,16 +9611,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
       edgeSql += ` AND l.kind = ANY($${params.length}::text[])`;
     }
     edgeSql += `
-      ORDER BY LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id),
-        CASE l.kind
-          WHEN 'spouse'  THEN 1
-          WHEN 'family'  THEN 2
-          WHEN 'mentor'  THEN 3
-          WHEN 'band'    THEN 4
-          WHEN 'alias'   THEN 5
-          WHEN 'mention' THEN 6
-          ELSE 7
-        END
+      GROUP BY LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id)
     `;
     const edgesR = await getPool().query(edgeSql, params);
     const edges = edgesR.rows;
@@ -9657,6 +9640,18 @@ app.get("/api/all-blues/graph", async (req, res) => {
       }
       return map;
     };
+    // Sort each edge's kinds by priority (spouse > family > mentor >
+    // band > alias > mention) so the gradient bands always appear in
+    // the same order regardless of insert order.
+    const KIND_PRIORITY: Record<string, number> = {
+      spouse: 1, family: 2, mentor: 3, band: 4, alias: 5, mention: 6,
+    };
+    for (const e of edges) {
+      if (Array.isArray(e.kinds)) {
+        e.kinds.sort((a: string, b: string) =>
+          (KIND_PRIORITY[a] ?? 99) - (KIND_PRIORITY[b] ?? 99));
+      }
+    }
     if (minDegree > 1) {
       const deg = new Map<number, number>();
       for (const e of edges) {
