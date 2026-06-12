@@ -6,12 +6,13 @@
 // archive.js's Connections subtab.
 
 const _AB_KINDS = [
-  { key: "spouse",  color: "#ec4899", label: "Spouse" },
-  { key: "family",  color: "#f97316", label: "Family" },
-  { key: "mentor",  color: "#a855f7", label: "Mentor" },
-  { key: "band",    color: "#4ade80", label: "Band" },
-  { key: "alias",   color: "#22d3ee", label: "Alias" },
-  { key: "mention", color: "#f5d442", label: "Mention" },
+  { key: "spouse",   color: "#ec4899", label: "Spouse" },
+  { key: "family",   color: "#f97316", label: "Family" },
+  { key: "mentor",   color: "#a855f7", label: "Mentor" },
+  { key: "band",     color: "#4ade80", label: "Band" },
+  { key: "alias",    color: "#22d3ee", label: "Alias" },
+  { key: "traveled", color: "#fb7185", label: "Traveled" },
+  { key: "mention",  color: "#f5d442", label: "Mention" },
 ];
 const _AB_KIND_KEY  = "sd_all_blues_kinds";
 const _AB_FOCUS_KEY = "sd_all_blues_focus";

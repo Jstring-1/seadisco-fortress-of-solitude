@@ -212,12 +212,57 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
   `;
   const result = await getPool().query(sql, [fromYear, toYear]);
   const queued = result.rowCount ?? 0;
+
+  // ── Manual seed import from Blues Archive ──────────────────────
+  // Every blues_artists row with a discogs_id becomes a seed too, so
+  // manually curated artists who don't happen to appear on a cached
+  // Blues release in the year window still show up on the network.
+  // seed_year uses first_recording_year (or 1900 as a sortable
+  // sentinel) so the queue ordering still walks oldest first.
+  const manualSeeds = await getPool().query(`
+    INSERT INTO all_blues_artist_queue (discogs_id, seed_year, name)
+    SELECT discogs_id,
+           COALESCE(first_recording_year, 1900),
+           name
+      FROM blues_artists
+     WHERE discogs_id IS NOT NULL
+    ON CONFLICT (discogs_id) DO UPDATE
+      SET name      = COALESCE(all_blues_artist_queue.name, EXCLUDED.name),
+          seed_year = LEAST(
+            COALESCE(all_blues_artist_queue.seed_year, EXCLUDED.seed_year),
+            EXCLUDED.seed_year
+          )
+  `);
+
+  // ── Manual edge import from blues_artist_links ─────────────────
+  // Join on discogs_id (both endpoints must be Discogs-linked). Kind
+  // names mostly match the Constellations schema; pseudonym→alias
+  // because the two are semantically the same thing. excerpt gets a
+  // sentinel so the user can tell at-a-glance these came from the
+  // archive vs. an auto-parsed mention.
+  const manualLinks = await getPool().query(`
+    INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
+    SELECT lo.discogs_id,
+           hi.discogs_id,
+           CASE link.kind
+             WHEN 'pseudonym' THEN 'alias'
+             ELSE link.kind
+           END,
+           'From Blues Archive (manually curated)'
+      FROM blues_artist_links link
+      JOIN blues_artists lo ON lo.id = link.lo_id AND lo.discogs_id IS NOT NULL
+      JOIN blues_artists hi ON hi.id = link.hi_id AND hi.discogs_id IS NOT NULL
+     WHERE lo.discogs_id <> hi.discogs_id
+    ON CONFLICT (src_id, dst_id, kind) DO NOTHING
+  `);
+
   await getPool().query(
     `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1,
+       links_inserted = links_inserted + $2,
        phase='fetch', last_tick_at=NOW() WHERE id=1`,
-    [queued],
+    [queued + (manualSeeds.rowCount ?? 0), manualLinks.rowCount ?? 0],
   );
-  console.log(`[all-blues] collect: ${queued} blues seeds queued`);
+  console.log(`[all-blues] collect: ${queued} from release_cache + ${manualSeeds.rowCount ?? 0} manual seeds + ${manualLinks.rowCount ?? 0} manual edges`);
 }
 
 // ── Phase 2: fetch each pending artist, parse mentions ────────────

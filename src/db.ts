@@ -1321,6 +1321,32 @@ export async function initDb() {
   await getPool().query(
     `INSERT INTO all_blues_warm_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`,
   );
+  // Migration: extend the all_blues_links kind CHECK to include
+  // 'traveled' so we can import the matching kind from the manually
+  // curated blues_artist_links table. Same idempotent pattern as the
+  // blues_artist_links CHECK widening above — find every CHECK on
+  // all_blues_links that references "kind", drop it, then re-add the
+  // permissive one. Safe to re-run on every boot.
+  await getPool().query(`
+    DO $$
+    DECLARE r record;
+    BEGIN
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'all_blues_links'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE all_blues_links DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+      ALTER TABLE all_blues_links ADD CONSTRAINT all_blues_links_kind_check
+        CHECK (kind IN ('family','spouse','mentor','band','alias','mention','traveled'));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'all_blues_links kind CHECK migration skipped: %', SQLERRM;
+    END $$;
+  `);
 
   // ── Scrape ban list ──────────────────────────────────────────────
   // When the curator deletes an artist (or a single lyric) they can
