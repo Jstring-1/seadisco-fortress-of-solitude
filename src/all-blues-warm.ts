@@ -121,23 +121,24 @@ export async function startAllBluesRun(opts: {
   );
 
   if (opts.resetQueue) {
-    // Soft reset: clear queue + auto-scraped edges, but PRESERVE the
-    // edges that were imported from the Blues Archive (those carry
-    // the sentinel excerpt). Manual seeds in the queue get re-added
-    // immediately during the upcoming collect via ON CONFLICT, and
-    // discogs_artist_cache stays intact (Discogs payloads are still
-    // valid; re-parsing them costs zero API calls).
-    await getPool().query(`DELETE FROM all_blues_artist_queue`);
+    // Restart-from-beginning semantics (NOT a wipe):
+    //   • Every queue row gets flipped back to status='pending' so the
+    //     fetch phase will re-process every seed from the top.
+    //   • Edges stay PUT — new ones land via ON CONFLICT DO NOTHING /
+    //     DO UPDATE, existing ones survive. The graph keeps building.
+    //   • discogs_artist_cache stays intact (re-parses for free).
+    //   • Counters reset so the stats panel reflects this run.
+    // For a true wipe, use the Delete buttons in the admin panel.
     await getPool().query(
-      `DELETE FROM all_blues_links
-        WHERE excerpt IS DISTINCT FROM $1`,
-      ["From Blues Archive (manually curated)"],
+      `UPDATE all_blues_artist_queue
+          SET status='pending', fetched_at=NULL, error=NULL`,
     );
-    const remaining = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`);
+    const queueSize = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_artist_queue`);
+    const linksNow  = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`);
     await getPool().query(
-      `UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
-         artists_errored=0, links_inserted=$1, last_error=NULL WHERE id=1`,
-      [remaining.rows[0]?.n ?? 0],
+      `UPDATE all_blues_warm_state SET artists_queued=$1, artists_fetched=0,
+         artists_errored=0, links_inserted=$2, last_error=NULL WHERE id=1`,
+      [queueSize.rows[0]?.n ?? 0, linksNow.rows[0]?.n ?? 0],
     );
   }
 
