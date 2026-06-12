@@ -9586,7 +9586,7 @@ app.get("/api/all-blues/edge", async (req, res) => {
 app.get("/api/all-blues/graph", async (req, res) => {
   try {
     const kinds = String(req.query.kinds ?? "").trim();
-    const allowed = new Set(["family","spouse","mentor","band","alias","mention"]);
+    const allowed = new Set(["family","spouse","mentor","band","alias","mention","traveled"]);
     const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
     const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
     // Canonicalize direction (LEAST/GREATEST) then aggregate every
@@ -9644,7 +9644,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
     // band > alias > mention) so the gradient bands always appear in
     // the same order regardless of insert order.
     const KIND_PRIORITY: Record<string, number> = {
-      spouse: 1, family: 2, mentor: 3, band: 4, alias: 5, mention: 6,
+      spouse: 1, family: 2, mentor: 3, band: 4, alias: 5, traveled: 6, mention: 7,
     };
     for (const e of edges) {
       if (Array.isArray(e.kinds)) {
