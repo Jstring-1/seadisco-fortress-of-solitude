@@ -9226,11 +9226,22 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const allowed = new Set(["family","spouse","mentor","band","alias","mention"]);
     const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
     const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
-    let edgeSql = `SELECT src_id, dst_id, kind FROM all_blues_links`;
+    // Belt-and-suspenders: even though the worker now only inserts
+    // edges where dst is a blues seed, also gate at query time so old
+    // data created before the genre filter doesn't pollute the graph.
+    // A row counts as "blues seed" only if it has seed_year populated.
+    let edgeSql = `
+      SELECT l.src_id, l.dst_id, l.kind
+        FROM all_blues_links l
+       WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
+                      WHERE q.discogs_id = l.src_id AND q.seed_year IS NOT NULL)
+         AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
+                      WHERE q.discogs_id = l.dst_id AND q.seed_year IS NOT NULL)
+    `;
     const params: any[] = [];
     if (kindList && kindList.length) {
       params.push(kindList);
-      edgeSql += ` WHERE kind = ANY($${params.length}::text[])`;
+      edgeSql += ` AND l.kind = ANY($${params.length}::text[])`;
     }
     const edgesR = await getPool().query(edgeSql, params);
     const edges = edgesR.rows;
