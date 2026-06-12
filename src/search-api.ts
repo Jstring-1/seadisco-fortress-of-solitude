@@ -9276,9 +9276,19 @@ app.get("/api/all-blues/edge", async (req, res) => {
         for (const id of e.release_ids) if (Number.isFinite(id)) releaseIds.add(id);
       }
     }
+    // Same fallback as the graph endpoint — prefer the canonical name
+    // from discogs_artist_cache (populated by the rate-limited fetch
+    // phase), fall back to the queue.name harvested from release_cache
+    // at collect time. The cache row also carries the data JSON which
+    // gives us a thumbnail; queue rows don't (no thumbnail until
+    // fetch runs).
     const artistsR = await getPool().query(
-      `SELECT discogs_id, name, data FROM discogs_artist_cache
-        WHERE discogs_id = ANY($1::int[])`,
+      `SELECT q.discogs_id,
+              COALESCE(c.name, q.name) AS name,
+              c.data AS data
+         FROM all_blues_artist_queue q
+         LEFT JOIN discogs_artist_cache c USING (discogs_id)
+        WHERE q.discogs_id = ANY($1::int[])`,
       [[src, dst]],
     );
     const artistMap = new Map<number, any>();
