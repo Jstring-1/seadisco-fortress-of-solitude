@@ -268,6 +268,26 @@ async function allBluesReload() {
         "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
         "text-margin-y": 5,
       }},
+      // Highlight system: tap a node → it + its edges + 1-hop
+      // neighbors get .ab-highlighted; everything else gets
+      // .ab-faded. Tap the empty canvas to clear.
+      { selector: ".ab-faded", style: {
+        "opacity": 0.12, "text-opacity": 0,
+      }},
+      { selector: "node.ab-highlighted", style: {
+        "border-color": "#fbbf24", "border-width": 2.5,
+        "background-color": "#3b4456",
+      }},
+      { selector: "node.ab-source", style: {
+        "background-color": "#fbbf24",
+        "border-color": "#000", "border-width": 3,
+        "width": 32, "height": 32,
+        "color": "#fbbf24", "font-weight": "bold", "font-size": 12,
+        "text-outline-width": 3, "text-outline-color": "#000",
+      }},
+      { selector: "edge.ab-highlighted", style: {
+        "width": 4.5, "opacity": 1,
+      }},
     ],
     layout: window.cytoscapeFcose
       ? {
@@ -323,15 +343,24 @@ async function allBluesReload() {
     const n = evt.target;
     const id = parseInt(n.data("id"), 10);
     if (!Number.isFinite(id)) return;
-    // Small action menu near the click — both "open profile" and
-    // "focus in network" are useful but mean different things, so we
-    // ask rather than guess. evt.renderedPosition is the canvas-local
-    // position; convert to viewport coords for absolute positioning.
+    // Two things at once: highlight the node's web so the user can
+    // actually see its connections in a dense graph, AND open the
+    // action menu so they can choose between profile / focus / search.
+    _abHighlightNode(n);
     const cyEl = document.getElementById("all-blues-graph");
     const rect = cyEl?.getBoundingClientRect();
     const x = (rect?.left ?? 0) + (evt.renderedPosition?.x ?? 0);
     const y = (rect?.top  ?? 0) + (evt.renderedPosition?.y ?? 0);
     _abShowNodeActions(id, n.data("label") || `Artist ${id}`, x, y);
+  });
+  // Tap the background (anywhere other than a node or edge) to clear
+  // the highlight and any open menu. evt.target === cy means the tap
+  // hit the canvas itself.
+  _abCy.on("tap", (evt) => {
+    if (evt.target === _abCy) {
+      _abClearHighlight();
+      _abCloseNodeMenu();
+    }
   });
 }
 window.allBluesReload = allBluesReload;
@@ -603,6 +632,33 @@ function _abOpenReleaseFromPopup(event, id, type) {
   }
 }
 window._abOpenReleaseFromPopup = _abOpenReleaseFromPopup;
+
+// ── Highlight / fade ──────────────────────────────────────────────
+// When the user taps a node, dim everything in the graph and brighten
+// just that node + its connected edges + 1-hop neighbors. Lets the
+// user see the artist's web at a glance even when the surrounding
+// graph is dense. Tap the empty canvas to clear.
+
+function _abHighlightNode(node) {
+  if (!_abCy) return;
+  const incident = node.connectedEdges();
+  const neighbors = incident.connectedNodes();
+  const focus = node.union(incident).union(neighbors);
+  // Reset first so re-tapping a different node doesn't accumulate classes.
+  _abCy.elements().removeClass("ab-highlighted ab-source ab-faded");
+  // Fade everything not in the focus set.
+  _abCy.elements().difference(focus).addClass("ab-faded");
+  // Highlight the focused subset; mark the originating node as
+  // "source" so it stays the visual anchor (amber dot).
+  focus.addClass("ab-highlighted");
+  node.addClass("ab-source");
+}
+
+function _abClearHighlight() {
+  if (!_abCy) return;
+  _abCy.elements().removeClass("ab-highlighted ab-source ab-faded");
+}
+window._abClearHighlight = _abClearHighlight;
 
 // ── Node action menu ──────────────────────────────────────────────
 // Small two-button floater that pops up at the click point when a
