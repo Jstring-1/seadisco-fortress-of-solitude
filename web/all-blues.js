@@ -302,6 +302,13 @@ async function allBluesReload() {
         // near an intersection don't fall through to a dimmed edge.
         "z-index": 1,
       }},
+      // Make faded EDGES un-tappable so a click on a bold focused
+      // line never accidentally opens a connection popup for a dim
+      // edge that happens to cross under it. Nodes stay tappable so
+      // the user can pivot focus to a neighbor in one click.
+      { selector: "edge.ab-faded", style: {
+        "events": "no",
+      }},
       { selector: "node.ab-highlighted", style: {
         "border-color": "#fbbf24", "border-width": 2.5,
         "background-color": "#3b4456",
