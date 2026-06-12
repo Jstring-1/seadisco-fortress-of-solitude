@@ -177,12 +177,24 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
   `;
   const result = await getPool().query(sql, [fromYear, toYear]);
   const queued = result.rowCount ?? 0;
+  // Also backfill: any artist referenced by an existing link but not
+  // yet in our cache (so the graph stops showing "Artist NNNNNN" for
+  // nodes parsed out of earlier passes' mentions). Idempotent — only
+  // queues IDs we haven't already processed.
+  const backfill = await getPool().query(`
+    INSERT INTO all_blues_artist_queue (discogs_id)
+    SELECT DISTINCT dst_id FROM all_blues_links
+     WHERE dst_id NOT IN (SELECT discogs_id FROM discogs_artist_cache)
+       AND dst_id NOT IN (SELECT discogs_id FROM all_blues_artist_queue)
+    ON CONFLICT (discogs_id) DO NOTHING
+  `);
+  const backfilled = backfill.rowCount ?? 0;
   await getPool().query(
     `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1,
        phase='fetch', last_tick_at=NOW() WHERE id=1`,
-    [queued],
+    [queued + backfilled],
   );
-  console.log(`[all-blues] collect: ${queued} new artists added to queue`);
+  console.log(`[all-blues] collect: ${queued} from release_cache + ${backfilled} mention-backfill artists queued`);
 }
 
 // ── Phase 2: fetch each pending artist, parse mentions ────────────
@@ -239,6 +251,26 @@ async function _runFetch(client: DiscogsClient): Promise<void> {
             if (r.rowCount) inserted++;
           } catch (linkErr) {
             // Skip any rows that violate CHECK (src <> dst) etc.
+          }
+        }
+        // Enqueue every mentioned artist we haven't seen so a future
+        // pass fetches its profile + name. Without this, mentions that
+        // point to artists not in any cached release stay nameless on
+        // the graph ("Artist 274192"). Idempotent — ON CONFLICT skips
+        // ones we already have.
+        const mentionedIds = [...new Set(edges.map(e => e.dst))];
+        if (mentionedIds.length) {
+          const q = await getPool().query(
+            `INSERT INTO all_blues_artist_queue (discogs_id)
+             SELECT UNNEST($1::int[])
+             ON CONFLICT (discogs_id) DO NOTHING`,
+            [mentionedIds],
+          );
+          if (q.rowCount) {
+            await getPool().query(
+              `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1 WHERE id=1`,
+              [q.rowCount],
+            );
           }
         }
       }
