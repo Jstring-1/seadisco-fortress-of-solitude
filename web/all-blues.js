@@ -370,15 +370,18 @@ async function _abOpenEdgePopup(srcId, dstId) {
     const thumb = a.thumb
       ? `<img src="${_abEsc(a.thumb)}" alt="" style="width:56px;height:56px;border-radius:6px;object-fit:cover;background:#1f2937">`
       : `<div style="width:56px;height:56px;border-radius:6px;background:#1f2937;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--muted)">no img</div>`;
+    // HTML-escape the JSON-stringified name so apostrophes etc. survive
+    // the attribute boundary (same pattern as everywhere else we embed
+    // a JS-string literal into an onclick).
+    const nameArg = _abEsc(JSON.stringify(a.name));
     return `
       <div style="display:flex;gap:0.55rem;align-items:flex-start;padding:0.5rem;background:rgba(255,255,255,0.04);border-radius:6px;flex:1;min-width:0">
         ${thumb}
         <div style="min-width:0;flex:1">
-          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(a.name)}</div>
+          <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
+             style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;color:inherit;text-decoration:none;cursor:pointer"
+             title="Search SeaDisco, Wikipedia, YouTube, Discogs, etc.">${_abEsc(a.name)}</a>
           <div style="font-size:0.7rem;color:var(--muted);margin-top:0.1rem">#${a.id}</div>
-          <div style="margin-top:0.3rem">
-            <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa;font-size:0.72rem">Discogs ↗</a>
-          </div>
         </div>
       </div>`;
   };
