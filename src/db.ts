@@ -713,6 +713,16 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+  // GIN indexes for the Constellations artist popup + collect SQL.
+  // Without these, looking up every release credited to a given
+  // discogs_id was a full table scan that expanded each row's
+  // artists JSONB array. With the gin indexes we can use jsonb
+  // containment (@>) and key-exists (?) which both leverage the
+  // index for sub-millisecond lookups. Safe to add — idempotent
+  // and only affects query plans, not data.
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_artists_gin ON release_cache USING gin ((data->'artists'))`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_extra_gin ON release_cache USING gin ((data->'extraartists'))`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_genres_gin ON release_cache USING gin ((data->'genres'))`);
 
   // ── MusicBrainz cache ──────────────────────────────────────────────
   // Mirrors the release_cache shape, but keyed by (entity_type, key).
