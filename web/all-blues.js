@@ -213,6 +213,58 @@ async function allBluesReload() {
     }
     return { colors: stopColors.join(" "), positions: stopPositions.join(" ") };
   };
+
+  // ── Visual derivations: degree, era color, cluster, label rank ──
+  // Degree per node from the edges in this view.
+  const degMap = new Map();
+  for (const e of focusedEdges) {
+    degMap.set(e.src_id, (degMap.get(e.src_id) || 0) + 1);
+    degMap.set(e.dst_id, (degMap.get(e.dst_id) || 0) + 1);
+  }
+  const maxDeg = Math.max(1, ...focusedNodes.map(n => degMap.get(n.id) || 0));
+  // Connected components — BFS over the edge graph; each component
+  // gets the next cluster id. 8 distinct hues cycle through them so
+  // visually adjacent clusters stay distinguishable.
+  const CLUSTER_HUES = ["#60a5fa","#a78bfa","#f472b6","#34d399","#fbbf24","#fb923c","#22d3ee","#94a3b8"];
+  const adj = new Map();
+  for (const n of focusedNodes) adj.set(n.id, []);
+  for (const e of focusedEdges) {
+    if (adj.has(e.src_id) && adj.has(e.dst_id)) {
+      adj.get(e.src_id).push(e.dst_id);
+      adj.get(e.dst_id).push(e.src_id);
+    }
+  }
+  const clusterMap = new Map();
+  let nextCluster = 0;
+  for (const n of focusedNodes) {
+    if (clusterMap.has(n.id)) continue;
+    const cid = nextCluster++;
+    const queue = [n.id];
+    clusterMap.set(n.id, cid);
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const nb of (adj.get(cur) || [])) {
+        if (!clusterMap.has(nb)) { clusterMap.set(nb, cid); queue.push(nb); }
+      }
+    }
+  }
+  // Era color: gradient from blue (1900) → orange (1970+). Unknown
+  // seed_year falls back to a muted slate.
+  const eraColor = (yr) => {
+    if (!Number.isFinite(yr)) return "#1f2937";
+    const t = Math.max(0, Math.min(1, (yr - 1900) / 80));
+    const hue = 210 - t * 180; // 210 (blue) → 30 (orange)
+    return `hsl(${hue.toFixed(0)}, 50%, 32%)`;
+  };
+  // Adaptive labels: at low zoom only the top-N most-connected nodes
+  // keep their label visible. Threshold picks the top 8% of nodes
+  // (minimum 20), so a small graph still shows most labels and a big
+  // graph only shows hubs when pulled out.
+  const sortedByDeg = [...focusedNodes].sort((a, b) =>
+    (degMap.get(b.id) || 0) - (degMap.get(a.id) || 0));
+  const labelTopN = Math.max(20, Math.ceil(focusedNodes.length * 0.08));
+  const labelAlwaysVisible = new Set(sortedByDeg.slice(0, labelTopN).map(n => n.id));
+
   // Position cache: if EVERY visible node has a cached (x,y), use a
   // preset layout — instant render. Otherwise fall back to fcose so
   // new/unpositioned nodes still get a real layout pass. Admin's
@@ -223,8 +275,20 @@ async function allBluesReload() {
   _abForceFreshLayout = false;
   const elements = [
     ...focusedNodes.map(n => {
+      const deg = degMap.get(n.id) || 0;
+      const cid = clusterMap.get(n.id) || 0;
       const el = {
-        data: { id: String(n.id), label: n.name, focused: n.id === _abFocusId ? 1 : 0 },
+        data: {
+          id: String(n.id),
+          label: n.name,
+          focused: n.id === _abFocusId ? 1 : 0,
+          degree: deg,
+          // Sizing math kept here so the stylesheet's mapData range
+          // gets a stable max-degree cap regardless of graph size.
+          eraColor: eraColor(n.seed_year),
+          clusterColor: CLUSTER_HUES[cid % CLUSTER_HUES.length],
+          alwaysLabel: labelAlwaysVisible.has(n.id) ? 1 : 0,
+        },
       };
       if (Number.isFinite(n.x) && Number.isFinite(n.y)) {
         el.position = { x: n.x, y: n.y };
@@ -254,21 +318,25 @@ async function allBluesReload() {
     elements,
     style: [
       { selector: "node", style: {
-        "background-color": "#1f2937",
-        "border-color": "#94a3b8", "border-width": 1,
+        // Fill color now comes from the era gradient (blue→orange by
+        // seed_year). Cluster id drives the border color so each
+        // connected sub-graph has a subtle visual tint.
+        "background-color": "data(eraColor)",
+        "border-color": "data(clusterColor)", "border-width": 1.5,
         "label": "data(label)", "color": "#e2e8f0",
         "font-size": 10,
         // Label sits below the node with a thick dark outline AND a
-        // semi-transparent dark pill behind it. The combination keeps
-        // text readable over yellow focused nodes, over crossing
-        // amber/pink/cyan edges, and against the dim background.
+        // semi-transparent dark pill behind it.
         "text-valign": "bottom", "text-halign": "center",
         "text-margin-y": 5,
         "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
         "text-background-color": "#000", "text-background-opacity": 0.55,
         "text-background-padding": 2, "text-background-shape": "round-rectangle",
         "text-wrap": "ellipsis", "text-max-width": 110,
-        "width": 22, "height": 22,
+        // Sizing by degree: 1 connection → 18px, lots of connections
+        // → 52px. Hub artists visually dominate, leaf nodes recede.
+        "width":  `mapData(degree, 0, ${maxDeg}, 18, 52)`,
+        "height": `mapData(degree, 0, ${maxDeg}, 18, 52)`,
       }},
       { selector: "edge", style: {
         // Banded linear gradient — one segment per kind on the pair.
@@ -386,9 +454,11 @@ async function allBluesReload() {
     const n = evt.target;
     const id = parseInt(n.data("id"), 10);
     if (!Number.isFinite(id)) return;
-    // Two things at once: highlight the node's web so the user can
-    // actually see its connections in a dense graph, AND open the
-    // action menu so they can choose between profile / focus / search.
+    // Three things at once: pulse to lock the eye on the tapped node,
+    // highlight its web so the user can actually see its connections,
+    // and open the action menu so they can choose profile / focus /
+    // search as a follow-up.
+    _abPulseNode(n);
     _abHighlightNode(n);
     const cyEl = document.getElementById("all-blues-graph");
     const rect = cyEl?.getBoundingClientRect();
@@ -405,6 +475,20 @@ async function allBluesReload() {
       _abCloseNodeMenu();
     }
   });
+  // Adaptive labels: at low zoom only the top-degree nodes keep their
+  // label visible. Threshold + label set are precomputed above per
+  // render; the handler just toggles a class on the cy root that the
+  // stylesheet keys off.
+  const _syncLabelVisibility = () => {
+    const lowZoom = _abCy.zoom() < 0.55;
+    _abCy.nodes().forEach(n => {
+      if (n.data("alwaysLabel") === 1) return;
+      n.style("text-opacity", lowZoom ? 0 : 1);
+      n.style("text-background-opacity", lowZoom ? 0 : 0.55);
+    });
+  };
+  _abCy.on("zoom", _syncLabelVisibility);
+  _syncLabelVisibility();
 }
 window.allBluesReload = allBluesReload;
 window._abToggleKind = _abToggleKind;
@@ -793,6 +877,32 @@ function _abClearHighlight() {
   _abCy.elements().removeClass("ab-highlighted ab-source ab-faded");
 }
 window._abClearHighlight = _abClearHighlight;
+
+// Brief size pulse on the tapped node so the eye locks on. Reads the
+// node's current width (varies by degree mapData), pulses ~50% larger
+// for 180ms, then settles back. Cytoscape's animate() handles the
+// interpolation; we re-assert the original size on complete so the
+// stylesheet's mapData still drives the steady state.
+function _abPulseNode(node) {
+  if (!node || !node.animate) return;
+  const baseW = node.width();
+  const baseH = node.height();
+  try {
+    node.animate(
+      { style: { "width": baseW * 1.55, "height": baseH * 1.55 } },
+      { duration: 180, easing: "ease-out-quad",
+        complete: () => {
+          try {
+            node.animate(
+              { style: { "width": baseW, "height": baseH } },
+              { duration: 240, easing: "ease-in-quad" },
+            );
+          } catch {}
+        },
+      },
+    );
+  } catch {}
+}
 
 // ── Node action menu ──────────────────────────────────────────────
 // Small two-button floater that pops up at the click point when a

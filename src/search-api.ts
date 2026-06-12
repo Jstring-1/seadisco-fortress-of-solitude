@@ -9709,12 +9709,13 @@ app.get("/api/all-blues/graph", async (req, res) => {
     // name on the queue row. Position columns come straight from the
     // queue and are NULL until an admin has saved a fcose run.
     const resolveNodeData = async (ids: number[]) => {
-      const map = new Map<number, { name: string; pos_x: number | null; pos_y: number | null }>();
+      const map = new Map<number, { name: string; pos_x: number | null; pos_y: number | null; seed_year: number | null }>();
       if (!ids.length) return map;
       const r = await getPool().query(
         `SELECT q.discogs_id,
                 COALESCE(c.name, q.name) AS name,
-                q.pos_x, q.pos_y
+                q.pos_x, q.pos_y,
+                q.seed_year
            FROM all_blues_artist_queue q
            LEFT JOIN discogs_artist_cache c USING (discogs_id)
           WHERE q.discogs_id = ANY($1::int[])`,
@@ -9724,6 +9725,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
         map.set(row.discogs_id, {
           name: row.name || `Artist ${row.discogs_id}`,
           pos_x: row.pos_x, pos_y: row.pos_y,
+          seed_year: row.seed_year,
         });
       }
       return map;
@@ -9753,7 +9755,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
       const dataMap = await resolveNodeData(ids);
       const nodes = ids.map(id => {
         const d = dataMap.get(id);
-        return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null };
+        return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
       });
       res.json({ nodes, edges: filteredEdges });
       return;
@@ -9762,7 +9764,7 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const dataMap = await resolveNodeData(ids);
     const nodes = ids.map(id => {
       const d = dataMap.get(id);
-      return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null };
+      return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
     });
     res.json({ nodes, edges });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
