@@ -619,7 +619,7 @@ function _abEnsureEdgePopup() {
   el.style.cssText = `
     position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);
     background:#0b1220;border:1px solid var(--border, #333);border-radius:8px;
-    padding:0.9rem 1rem;z-index:9999;max-width:min(720px, 95vw);max-height:85vh;
+    padding:0.9rem 1rem;z-index:120;max-width:min(720px, 95vw);max-height:85vh;
     overflow:hidden auto;box-shadow:0 8px 32px rgba(0,0,0,0.6);
     color:var(--text, #e2e8f0);font-size:0.84rem;display:none`;
   document.body.appendChild(el);
@@ -628,7 +628,7 @@ function _abEnsureEdgePopup() {
   if (!bd) {
     bd = document.createElement("div");
     bd.id = "ab-edge-popup-bd";
-    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:none`;
+    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
     bd.onclick = _abCloseEdgePopup;
     document.body.appendChild(bd);
   }
@@ -795,7 +795,7 @@ function _abEnsureNodeMenu() {
   el = document.createElement("div");
   el.id = "ab-node-menu";
   el.style.cssText = `
-    position:fixed;z-index:9997;display:none;
+    position:fixed;z-index:110;display:none;
     background:#0b1220;border:1px solid var(--border, #333);border-radius:6px;
     box-shadow:0 6px 20px rgba(0,0,0,0.5);
     padding:0.25rem;font-size:0.82rem;min-width:180px`;
@@ -873,7 +873,7 @@ function _abEnsureArtistPopup() {
   el.style.cssText = `
     position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);
     background:#0b1220;border:1px solid var(--border, #333);border-radius:8px;
-    padding:0.9rem 1rem;z-index:9999;max-width:min(760px, 95vw);max-height:88vh;
+    padding:0.9rem 1rem;z-index:120;max-width:min(760px, 95vw);max-height:88vh;
     overflow:hidden auto;box-shadow:0 8px 32px rgba(0,0,0,0.6);
     color:var(--text, #e2e8f0);font-size:0.84rem;display:none`;
   document.body.appendChild(el);
@@ -881,7 +881,7 @@ function _abEnsureArtistPopup() {
   if (!bd) {
     bd = document.createElement("div");
     bd.id = "ab-artist-popup-bd";
-    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:none`;
+    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
     bd.onclick = _abCloseArtistPopup;
     document.body.appendChild(bd);
   }
