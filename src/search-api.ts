@@ -9351,12 +9351,65 @@ app.get("/api/all-blues/edge", async (req, res) => {
         };
       });
     }
+    // Hydrate [aNNNNN] artist refs inside excerpts. Discogs profile
+    // and liner-notes prose is full of BBCode-style refs like
+    // "associated with [a307403]" — unresolved, the user sees ids
+    // instead of names in the popup. Collect every referenced id
+    // across all edges' excerpts, look them up in one round trip
+    // (cache → queue fallback, same as everywhere else), then
+    // substitute. We also strip [b]/[i]/[u] formatting tags so the
+    // excerpt reads naturally, and rewrite [r…]/[m…]/[l…] refs to
+    // a short label so they don't look like random tokens.
+    const REF_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    const referencedIds = new Set<number>();
+    for (const e of edges) {
+      if (typeof e.excerpt !== "string") continue;
+      const m = e.excerpt.matchAll(REF_RE);
+      for (const hit of m) {
+        const id = parseInt(hit[1], 10);
+        if (Number.isFinite(id) && id > 0) referencedIds.add(id);
+      }
+    }
+    let excerptNameMap = new Map<number, string>();
+    if (referencedIds.size) {
+      const idsArr = Array.from(referencedIds);
+      const nameQ = await getPool().query(
+        `SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])
+            AND COALESCE(c.name, q.name) IS NOT NULL`,
+        [idsArr],
+      );
+      for (const row of nameQ.rows) excerptNameMap.set(row.discogs_id, row.name);
+    }
+    const resolveExcerpt = (raw: string | null | undefined): string | null => {
+      if (typeof raw !== "string" || !raw) return raw ?? null;
+      let s = raw;
+      // Artist refs → name (or "Artist N" if we don't know it)
+      s = s.replace(REF_RE, (_m, idStr) => {
+        const id = parseInt(idStr, 10);
+        return excerptNameMap.get(id) || `Artist ${id}`;
+      });
+      // Release / master / label refs → short label
+      s = s.replace(/\[r(\d+)\]/gi,    (_m, id) => `(release ${id})`);
+      s = s.replace(/\[m(\d+)\]/gi,    (_m, id) => `(master ${id})`);
+      s = s.replace(/\[l(?:=)?(\d+)(?:\|[^\]]*)?\]/gi, (_m, id) => `(label ${id})`);
+      // Drop formatting tags entirely — the prose reads better
+      // without [b]…[/b] / [i]…[/i] / [u]…[/u] / [url=…]…[/url]
+      s = s.replace(/\[\/?[biu]\]/gi, "");
+      s = s.replace(/\[url=[^\]]*\]/gi, "");
+      s = s.replace(/\[\/url\]/gi, "");
+      // Collapse the whitespace the substitutions can leave behind.
+      return s.replace(/\s+/g, " ").trim();
+    };
     res.json({
       src: artistCard(src),
       dst: artistCard(dst),
       edges: edges.map(e => ({
         src_id: e.src_id, dst_id: e.dst_id, kind: e.kind,
-        excerpt: e.excerpt, release_ids: e.release_ids || [],
+        excerpt: resolveExcerpt(e.excerpt),
+        release_ids: e.release_ids || [],
       })),
       releases,
     });
