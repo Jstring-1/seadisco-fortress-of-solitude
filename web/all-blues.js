@@ -470,7 +470,7 @@ async function _abOpenEdgePopup(srcId, dstId) {
           <div style="min-width:0;flex:1">
             <div style="font-size:0.78rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(r.title)}</div>
             <div style="font-size:0.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-              ${r.year ? `${_abEsc(r.year)} · ` : ""}${_abEsc(r.primary_artists || "")}${r.type === "master" ? ' · <span style="color:#f5d442">master</span>' : ""}
+              ${r.year ? `${_abEsc(r.year)} · ` : ""}${r.primary_artists ? _abEsc(r.primary_artists) : `<span style="color:#777;font-style:italic">no credit in cache</span>`}${r.type === "master" ? ' · <span style="color:#f5d442">master</span>' : ""}
             </div>
           </div>
         </div>`;

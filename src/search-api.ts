@@ -9323,9 +9323,24 @@ app.get("/api/all-blues/edge", async (req, res) => {
         const thumb = Array.isArray(d.images) && d.images[0]
           ? (d.images[0].uri150 || d.images[0].uri || null)
           : null;
-        const primaries = Array.isArray(d.artists)
+        // Artist credit: walk every Discogs-supplied form so an alias
+        // release (where the artist is the pseudonym name) always
+        // surfaces — that's the whole point of an alias edge: which
+        // name was this release credited under? Order:
+        //   1. data.artists[].name — the structured primary credit
+        //   2. data.artists_sort — a string version Discogs returns
+        //      even when the artists array is sparse
+        //   3. extraartists fallback — sometimes the credit moves here
+        //      for compilations / VA tag
+        let primaries = Array.isArray(d.artists)
           ? d.artists.map((a: any) => a?.name).filter(Boolean).join(", ")
           : "";
+        if (!primaries && typeof d.artists_sort === "string" && d.artists_sort.trim()) {
+          primaries = d.artists_sort.trim();
+        }
+        if (!primaries && Array.isArray(d.extraartists)) {
+          primaries = d.extraartists.map((a: any) => a?.name).filter(Boolean).slice(0, 3).join(", ");
+        }
         return {
           id: r.discogs_id,
           type: r.type,
