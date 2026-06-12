@@ -9244,6 +9244,173 @@ app.post("/api/admin/all-blues/wipe", express.json({ limit: "1kb" }), async (req
 // "(unknown)" if we haven't fetched that artist yet). PUBLIC: any
 // signed-in or anonymous visitor can hit this — the page is shareable.
 // Only the worker controls (start/stop/status) stay admin-only.
+// Artist detail: name, bio, thumbnail, list of cached releases this
+// artist appears on as a primary credit, and every connection
+// (edge) to other blues seeds. Used by the clickable-node popup on
+// the Constellations graph. PUBLIC.
+app.get("/api/all-blues/artist", async (req, res) => {
+  try {
+    const id = parseInt(String(req.query.id ?? ""), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ error: "id required" });
+      return;
+    }
+    const aR = await getPool().query(
+      `SELECT q.discogs_id,
+              COALESCE(c.name, q.name) AS name,
+              q.seed_year,
+              c.data AS data,
+              c.profile AS cached_profile
+         FROM all_blues_artist_queue q
+         LEFT JOIN discogs_artist_cache c USING (discogs_id)
+        WHERE q.discogs_id = $1`,
+      [id],
+    );
+    if (!aR.rows.length) {
+      res.status(404).json({ error: "artist not found in the constellations queue" });
+      return;
+    }
+    const row = aR.rows[0];
+    const data: any = row.data || {};
+    const thumb = Array.isArray(data.images) && data.images[0]
+      ? (data.images[0].uri150 || data.images[0].uri || null)
+      : null;
+    const profileRaw = row.cached_profile || data.profile || "";
+    // Resolve [aNNNNN] refs inside the bio so the reader gets names
+    // not codes (same routine as the edge endpoint's excerpts).
+    const REF_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    const referenced = new Set<number>();
+    if (typeof profileRaw === "string") {
+      for (const m of profileRaw.matchAll(REF_RE)) {
+        const ridv = parseInt(m[1], 10);
+        if (Number.isFinite(ridv) && ridv > 0) referenced.add(ridv);
+      }
+    }
+    let bioNameMap = new Map<number, string>();
+    if (referenced.size) {
+      const ids = Array.from(referenced);
+      const r = await getPool().query(
+        `SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])
+            AND COALESCE(c.name, q.name) IS NOT NULL`,
+        [ids],
+      );
+      for (const rr of r.rows) bioNameMap.set(rr.discogs_id, rr.name);
+    }
+    const resolveBio = (s: string): string => {
+      if (!s) return "";
+      let out = s.replace(REF_RE, (_m, idStr) => {
+        const rid = parseInt(idStr, 10);
+        return bioNameMap.get(rid) || `Artist ${rid}`;
+      });
+      out = out.replace(/\[r(\d+)\]/gi, (_m, rid) => `(release ${rid})`);
+      out = out.replace(/\[m(\d+)\]/gi, (_m, mid) => `(master ${mid})`);
+      out = out.replace(/\[l(?:=)?(\d+)(?:\|[^\]]*)?\]/gi, (_m, lid) => `(label ${lid})`);
+      out = out.replace(/\[\/?[biu]\]/gi, "");
+      out = out.replace(/\[url=[^\]]*\]/gi, "");
+      out = out.replace(/\[\/url\]/gi, "");
+      return out.trim();
+    };
+    // Releases where this artist is in data.artists[]. We can't index
+    // jsonb arrays cheaply, so we do a full scan but constrained to
+    // blues-genre rows so the work stays manageable.
+    const relR = await getPool().query(
+      `SELECT rc.discogs_id, rc.type, rc.data
+         FROM release_cache rc
+        WHERE rc.type IN ('release', 'master')
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_array_elements(COALESCE(rc.data->'artists', '[]'::jsonb)) AS a
+             WHERE (a->>'id') ~ '^[0-9]+$' AND (a->>'id')::int = $1
+          )
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
+             WHERE g = 'Blues'
+          )
+        ORDER BY (rc.data->>'year') NULLS LAST
+        LIMIT 60`,
+      [id],
+    );
+    const releases = relR.rows.map(r => {
+      const d = r.data || {};
+      const t = Array.isArray(d.images) && d.images[0]
+        ? (d.images[0].uri150 || d.images[0].uri || null)
+        : null;
+      let credit = Array.isArray(d.artists)
+        ? d.artists.map((a: any) => a?.name).filter(Boolean).join(", ")
+        : "";
+      if (!credit && typeof d.artists_sort === "string") credit = d.artists_sort.trim();
+      return {
+        id: r.discogs_id, type: r.type,
+        title: d.title || `Release ${r.discogs_id}`,
+        year: d.year || null,
+        thumb: t,
+        primary_artists: credit,
+      };
+    });
+    // Connections from all_blues_links. Show the partner name + every
+    // kind we have on the pair. Canonicalize direction so we don't
+    // surface a duplicate "Bessie Smith ← Robert Johnson" alongside
+    // "Bessie Smith → Robert Johnson".
+    const cR = await getPool().query(
+      `SELECT CASE WHEN l.src_id = $1 THEN l.dst_id ELSE l.src_id END AS partner_id,
+              l.kind,
+              COUNT(DISTINCT CASE WHEN array_length(l.release_ids,1) IS NULL THEN NULL
+                                  ELSE l.release_ids END) AS dummy
+         FROM all_blues_links l
+        WHERE (l.src_id = $1 OR l.dst_id = $1)
+        GROUP BY partner_id, l.kind`,
+      [id],
+    );
+    const partnerIds = Array.from(new Set(cR.rows.map(r => r.partner_id)));
+    let partnerNames = new Map<number, string>();
+    if (partnerIds.length) {
+      const r = await getPool().query(
+        `SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])`,
+        [partnerIds],
+      );
+      for (const rr of r.rows) partnerNames.set(rr.discogs_id, rr.name);
+    }
+    // Group kinds by partner so the UI can render one row per
+    // connection with all its kind chips.
+    const byPartner = new Map<number, { partner_id: number; partner_name: string; kinds: string[] }>();
+    for (const row of cR.rows) {
+      const pid: number = row.partner_id;
+      const k: string = row.kind;
+      const existing = byPartner.get(pid);
+      if (existing) {
+        if (!existing.kinds.includes(k)) existing.kinds.push(k);
+      } else {
+        byPartner.set(pid, {
+          partner_id: pid,
+          partner_name: partnerNames.get(pid) || `Artist ${pid}`,
+          kinds: [k],
+        });
+      }
+    }
+    const connections = Array.from(byPartner.values())
+      .sort((a, b) => a.partner_name.localeCompare(b.partner_name));
+    res.json({
+      artist: {
+        id,
+        name: row.name || `Artist ${id}`,
+        seed_year: row.seed_year,
+        thumb,
+        discogs_url: `https://www.discogs.com/artist/${id}`,
+        profile: resolveBio(typeof profileRaw === "string" ? profileRaw : ""),
+      },
+      releases,
+      connections,
+    });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Edge detail: everything we know about the connection between two
 // artists. Returns both endpoints' names + thumbnails, every edge
 // kind between them (in both directions), the prose excerpt that
