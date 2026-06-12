@@ -9346,26 +9346,21 @@ app.get("/api/all-blues/artist", async (req, res) => {
       out = out.replace(/\[\/url\]/gi, "");
       return out.trim();
     };
-    // Releases where this artist is in data.artists[]. We can't index
-    // jsonb arrays cheaply, so we do a full scan but constrained to
-    // blues-genre rows so the work stays manageable.
+    // Releases where this artist is a primary credit. The previous
+    // query did a full scan with jsonb_array_elements; this rewrite
+    // uses GIN-indexed jsonb containment (@>) on data->'artists' and
+    // key-exists (?) on data->'genres' for sub-millisecond lookups
+    // even on a fat release_cache.
+    const artistFilter = JSON.stringify([{ id }]);
     const relR = await getPool().query(
       `SELECT rc.discogs_id, rc.type, rc.data
          FROM release_cache rc
         WHERE rc.type IN ('release', 'master')
-          AND EXISTS (
-            SELECT 1
-              FROM jsonb_array_elements(COALESCE(rc.data->'artists', '[]'::jsonb)) AS a
-             WHERE (a->>'id') ~ '^[0-9]+$' AND (a->>'id')::int = $1
-          )
-          AND EXISTS (
-            SELECT 1
-              FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
-             WHERE g = 'Blues'
-          )
+          AND rc.data->'artists' @> $1::jsonb
+          AND rc.data->'genres' ? 'Blues'
         ORDER BY (rc.data->>'year') NULLS LAST
         LIMIT 60`,
-      [id],
+      [artistFilter],
     );
     const releases = relR.rows.map(r => {
       const d = r.data || {};
