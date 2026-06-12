@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260611.888b803" />
+  <link rel="stylesheet" href="/style.css?v=260611.f831a10" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260611.888b803"></script>
+<script defer src="/shared.js?v=260611.f831a10"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1106,15 +1106,17 @@ e.g.  miles davis | coltrane
       <button type="button" class="archive-btn" onclick="allBluesReload()">Reload graph</button>
       <span id="ab-graph-counts" style="color:var(--muted)"></span>
     </div>
-    <div id="all-blues-focus-bar" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem">
-      <span style="color:var(--muted)">Focus:</span>
+    <div id="all-blues-focus-bar" style="display:flex;flex-wrap:nowrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem;position:relative">
+      <span style="color:var(--muted);flex-shrink:0">Focus:</span>
       <input id="ab-focus-input" type="text" placeholder="Type an artist name…" autocomplete="off"
-        style="padding:0.2rem 0.45rem;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:4px;color:inherit;width:18em"
+        style="padding:0.2rem 0.45rem;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:4px;color:inherit;flex:1;min-width:0"
         oninput="_abFocusInputChanged()" onkeydown="if(event.key==='Enter'){_abFocusSubmit();}else if(event.key==='Escape'){_abFocusClear();}">
-      <button type="button" class="archive-btn" onclick="_abFocusSubmit()">Focus</button>
-      <button type="button" class="archive-btn" onclick="_abFocusClear()">Clear</button>
-      <span id="ab-focus-active" style="color:var(--muted)"></span>
-      <div id="ab-focus-suggestions" style="flex-basis:100%;display:none;max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0;background:rgba(0,0,0,0.25)"></div>
+      <button type="button" class="archive-btn" onclick="_abFocusSubmit()" style="flex-shrink:0">Focus</button>
+      <button type="button" class="archive-btn" onclick="_abFocusClear()" style="flex-shrink:0">Clear</button>
+      <span id="ab-focus-active" style="color:var(--muted);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14em"></span>
+      <!-- Suggestions popover: positioned absolutely beneath the input
+           so it doesn't push the buttons to a new line. -->
+      <div id="ab-focus-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:0.2rem;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0;background:#0b1220;z-index:10"></div>
     </div>
   </div>
   <!-- Graph escapes the content-narrow column above and stretches
@@ -1886,13 +1888,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260611.888b803"></script>
-<script defer src="/search.js?v=260611.888b803"></script>
-<script defer src="/collection.js?v=260611.888b803"></script>
+<script defer src="/utils.js?v=260611.f831a10"></script>
+<script defer src="/search.js?v=260611.f831a10"></script>
+<script defer src="/collection.js?v=260611.f831a10"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260611.888b803"></script>
-<script defer src="/app.js?v=260611.888b803"></script>
+<script defer src="/modal.js?v=260611.f831a10"></script>
+<script defer src="/app.js?v=260611.f831a10"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1903,13 +1905,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260611.888b803"></script>
-<script defer src="/queue.js?v=260611.888b803"></script>
+<script defer src="/loc.js?v=260611.f831a10"></script>
+<script defer src="/queue.js?v=260611.f831a10"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260611.888b803";
+  window._SD_LAZY_VERSION = "260611.f831a10";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1939,8 +1941,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260611.888b803"></script>
-<script defer src="/offline.js?v=260611.888b803"></script>
+<script defer src="/idb.js?v=260611.f831a10"></script>
+<script defer src="/offline.js?v=260611.f831a10"></script>
 
 </body>
 </html>
