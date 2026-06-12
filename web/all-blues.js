@@ -262,7 +262,7 @@ async function allBluesReload() {
   _abCy.on("tap", "node", (evt) => {
     const n = evt.target;
     const id = parseInt(n.data("id"), 10);
-    if (Number.isFinite(id)) _abFocusPick(id, n.data("label"));
+    if (Number.isFinite(id)) _abOpenArtistPopup(id);
   });
 }
 window.allBluesReload = allBluesReload;
@@ -503,3 +503,135 @@ function _abOpenReleaseFromPopup(event, id, type) {
   }
 }
 window._abOpenReleaseFromPopup = _abOpenReleaseFromPopup;
+
+// ── Artist profile popup ──────────────────────────────────────────
+// Tapping a graph node opens this: artist's name + thumb + bio,
+// every release we've cached where they're a primary credit, and
+// every connection (with all kinds collapsed per partner). Each
+// connection row is clickable — it calls _abOpenEdgePopup so the
+// user can dive into the detail for that specific pair.
+
+function _abEnsureArtistPopup() {
+  let el = document.getElementById("ab-artist-popup");
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = "ab-artist-popup";
+  el.style.cssText = `
+    position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);
+    background:#0b1220;border:1px solid var(--border, #333);border-radius:8px;
+    padding:0.9rem 1rem;z-index:9999;max-width:min(760px, 95vw);max-height:88vh;
+    overflow:hidden auto;box-shadow:0 8px 32px rgba(0,0,0,0.6);
+    color:var(--text, #e2e8f0);font-size:0.84rem;display:none`;
+  document.body.appendChild(el);
+  let bd = document.getElementById("ab-artist-popup-bd");
+  if (!bd) {
+    bd = document.createElement("div");
+    bd.id = "ab-artist-popup-bd";
+    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:none`;
+    bd.onclick = _abCloseArtistPopup;
+    document.body.appendChild(bd);
+  }
+  return el;
+}
+
+function _abCloseArtistPopup() {
+  const el = document.getElementById("ab-artist-popup");
+  const bd = document.getElementById("ab-artist-popup-bd");
+  if (el) el.style.display = "none";
+  if (bd) bd.style.display = "none";
+}
+window._abCloseArtistPopup = _abCloseArtistPopup;
+
+async function _abOpenArtistPopup(artistId) {
+  const el = _abEnsureArtistPopup();
+  const bd = document.getElementById("ab-artist-popup-bd");
+  if (bd) bd.style.display = "block";
+  el.style.display = "block";
+  el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
+  let data;
+  try {
+    const r = await fetch(`/api/all-blues/artist?id=${artistId}`);
+    if (!r.ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load artist (HTTP ${r.status})</div>`; return; }
+    data = await r.json();
+  } catch (err) {
+    el.innerHTML = `<div style="padding:1rem;color:#c66">Failed: ${_abEsc(err.message)}</div>`; return;
+  }
+  const kindColor = Object.fromEntries(_AB_KINDS.map(k => [k.key, k.color]));
+  const a = data.artist;
+  const thumb = a.thumb
+    ? `<img src="${_abEsc(a.thumb)}" alt="" style="width:90px;height:90px;border-radius:8px;object-fit:cover;background:#1f2937;flex-shrink:0">`
+    : `<div style="width:90px;height:90px;border-radius:8px;background:#1f2937;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--muted);flex-shrink:0">no img</div>`;
+  const nameArg = _abEsc(JSON.stringify(a.name));
+  const bio = a.profile
+    ? `<div style="font-size:0.8rem;color:var(--muted);line-height:1.45;margin-bottom:0.8rem;white-space:pre-wrap">${_abEsc(a.profile)}</div>`
+    : "";
+  const connectionRows = data.connections.length
+    ? data.connections.map(c => {
+        const chips = c.kinds.map(k => {
+          const color = kindColor[k] || "#888";
+          return `<span style="background:${color};color:#000;padding:0.08rem 0.4rem;border-radius:999px;font-size:0.66rem;font-weight:600;text-transform:uppercase;margin-right:0.25rem">${_abEsc(k)}</span>`;
+        }).join("");
+        return `
+          <div onclick="event.stopPropagation();_abCloseArtistPopup();_abOpenEdgePopup(${a.id}, ${c.partner_id})"
+               style="padding:0.35rem 0.5rem;background:rgba(255,255,255,0.04);border-radius:5px;cursor:pointer;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.5rem"
+               onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+            <span style="font-size:0.82rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(c.partner_name)}</span>
+            <span style="flex-shrink:0">${chips}</span>
+          </div>`;
+      }).join("")
+    : `<div style="color:var(--muted);font-size:0.78rem;padding:0.3rem 0">No tracked connections yet.</div>`;
+  const releaseCards = data.releases.length
+    ? data.releases.map(r => {
+        const t = r.thumb
+          ? `<img src="${_abEsc(r.thumb)}" alt="" style="width:42px;height:42px;border-radius:4px;object-fit:cover;background:#1f2937">`
+          : `<div style="width:42px;height:42px;border-radius:4px;background:#1f2937"></div>`;
+        return `
+          <div onclick="event.stopPropagation();_abOpenReleaseFromArtistPopup(event, ${r.id}, '${_abEsc(r.type)}')"
+               style="display:flex;gap:0.5rem;align-items:center;padding:0.3rem 0.4rem;background:rgba(255,255,255,0.04);border-radius:5px;cursor:pointer;margin-bottom:0.25rem"
+               onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+            ${t}
+            <div style="min-width:0;flex:1">
+              <div style="font-size:0.78rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(r.title)}</div>
+              <div style="font-size:0.66rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                ${r.year ? `${_abEsc(r.year)} · ` : ""}${r.primary_artists ? _abEsc(r.primary_artists) : `<span style="font-style:italic">no credit</span>`}${r.type === "master" ? ' · <span style="color:#f5d442">master</span>' : ""}
+              </div>
+            </div>
+          </div>`;
+      }).join("")
+    : `<div style="color:var(--muted);font-size:0.78rem;padding:0.3rem 0">No cached releases for this artist.</div>`;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.7rem">
+      <div style="font-weight:600;font-size:1rem;flex:1">Artist</div>
+      <button onclick="_abCloseArtistPopup()" style="background:transparent;border:1px solid var(--border, #333);color:inherit;padding:0.15rem 0.55rem;border-radius:4px;cursor:pointer;font-size:0.85rem">×</button>
+    </div>
+    <div style="display:flex;gap:0.75rem;align-items:flex-start;margin-bottom:0.8rem">
+      ${thumb}
+      <div style="min-width:0;flex:1">
+        <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
+           style="font-weight:700;font-size:1.05rem;color:inherit;text-decoration:none;cursor:pointer"
+           title="Search SeaDisco, Wikipedia, YouTube, Discogs, etc.">${_abEsc(a.name)}</a>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.2rem">
+          #${a.id}${a.seed_year ? ` · first cached: ${_abEsc(a.seed_year)}` : ""}
+        </div>
+        <div style="margin-top:0.4rem;font-size:0.72rem">
+          <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa">Discogs ↗</a>
+        </div>
+      </div>
+    </div>
+    ${bio}
+    <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.5rem 0 0.25rem">Connections (${data.connections.length})</div>
+    ${connectionRows}
+    <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.7rem 0 0.25rem">Releases (${data.releases.length})</div>
+    ${releaseCards}`;
+}
+window._abOpenArtistPopup = _abOpenArtistPopup;
+
+function _abOpenReleaseFromArtistPopup(event, id, type) {
+  _abCloseArtistPopup();
+  if (typeof window.openModal === "function") {
+    window.openModal(event, id, type || "release");
+  } else {
+    window.open(`https://www.discogs.com/${type === "master" ? "master" : "release"}/${id}`, "_blank");
+  }
+}
+window._abOpenReleaseFromArtistPopup = _abOpenReleaseFromArtistPopup;
