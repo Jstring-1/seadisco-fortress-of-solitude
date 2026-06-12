@@ -61,21 +61,7 @@ function _abRenderKindChips() {
 }
 
 async function initAllBluesView() {
-  // Admin controls only show if window._isAdmin. Same race as YouTube
-  // tab: on direct URL nav, _isAdmin can still be undefined here.
-  // Re-sync once the lazy admin probe resolves so the panel pops in
-  // without forcing the user to switch views and back.
-  const _syncCtrl = () => {
-    const ctrl = document.getElementById("all-blues-controls");
-    if (ctrl) ctrl.style.display = window._isAdmin ? "" : "none";
-  };
-  _syncCtrl();
-  if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
-    window._ensureAdminFlag().then(() => {
-      _syncCtrl();
-      if (window._isAdmin) allBluesRefreshStatus().catch(() => {});
-    }).catch(() => {});
-  }
+  // Public view — worker controls + stats live in /admin → All Blues.
   _abRenderKindChips();
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
@@ -92,80 +78,13 @@ async function initAllBluesView() {
   if (inp && _abFocusName) inp.value = _abFocusName;
   if (_abFirstLoad) {
     _abFirstLoad = false;
-    if (window._isAdmin) await allBluesRefreshStatus();
     await allBluesReload();
-  } else {
-    if (window._isAdmin) allBluesRefreshStatus().catch(() => {});
   }
 }
 window.initAllBluesView = initAllBluesView;
 
-// ── Admin worker controls ─────────────────────────────────────────
-
-async function allBluesRefreshStatus() {
-  try {
-    const r = await fetch("/api/admin/all-blues/status");
-    if (!r.ok) return;
-    const s = await r.json();
-    const startBtn = document.getElementById("ab-start");
-    const stopBtn  = document.getElementById("ab-stop");
-    if (startBtn) startBtn.style.display = s.running ? "none" : "";
-    if (stopBtn)  stopBtn.style.display  = s.running ? "" : "none";
-    const out = document.getElementById("ab-status");
-    if (out) {
-      const lines = [];
-      lines.push(`running: ${s.running ? "yes" : "no"}`);
-      if (s.state?.phase)    lines.push(`phase: ${s.state.phase}`);
-      lines.push(`queue: pending=${s.queue?.pending ?? 0}  done=${s.queue?.done ?? 0}  error=${s.queue?.error ?? 0}`);
-      lines.push(`cached artists: ${s.cached_artists}`);
-      const kinds = s.links_by_kind || {};
-      const total = Object.values(kinds).reduce((a, b) => a + b, 0);
-      lines.push(`links: total=${total}  ` + Object.entries(kinds).map(([k, v]) => `${k}=${v}`).join("  "));
-      if (s.state?.last_error) lines.push(`last error: ${s.state.last_error}`);
-      out.textContent = lines.join("\n");
-    }
-  } catch (err) {
-    console.error("[all-blues] status fetch failed:", err);
-  }
-}
-window.allBluesRefreshStatus = allBluesRefreshStatus;
-
-async function allBluesStart() {
-  const from = parseInt(document.getElementById("ab-from-year")?.value || "1900", 10);
-  const to   = parseInt(document.getElementById("ab-to-year")?.value   || "1970", 10);
-  const reset = !!document.getElementById("ab-reset-queue")?.checked;
-  try {
-    const r = await fetch("/api/admin/all-blues/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromYear: from, toYear: to, resetQueue: reset }),
-    });
-    const j = await r.json();
-    if (!r.ok) { showToast(j.error || "could not start", "error"); return; }
-    showToast("All Blues worker started", "success");
-    setTimeout(allBluesRefreshStatus, 800);
-  } catch (err) { showToast("Start failed: " + err.message, "error"); }
-}
-window.allBluesStart = allBluesStart;
-
-async function allBluesStop() {
-  try {
-    await fetch("/api/admin/all-blues/stop", { method: "POST" });
-    showToast("Stop requested", "info");
-    setTimeout(allBluesRefreshStatus, 800);
-  } catch (err) { showToast("Stop failed: " + err.message, "error"); }
-}
-window.allBluesStop = allBluesStop;
-
-async function allBluesForceClear() {
-  if (!confirm("Force-clear the in-memory running flag? Only use if the worker is wedged.")) return;
-  try {
-    await fetch("/api/admin/all-blues/force-clear", { method: "POST" });
-    showToast("Force-cleared", "info");
-    setTimeout(allBluesRefreshStatus, 400);
-  } catch (err) { showToast("Force-clear failed: " + err.message, "error"); }
-}
-window.allBluesForceClear = allBluesForceClear;
+// Admin worker controls (Start/Stop/Status) moved to the admin
+// dashboard (/admin → All Blues tab). This file is read-only public.
 
 // ── Graph rendering ───────────────────────────────────────────────
 
@@ -227,7 +146,7 @@ async function allBluesReload() {
   if (counts) counts.textContent = `· ${data.nodes.length} artists, ${data.edges.length} links ${focusBanner}`;
   _abRenderFocusActive();
   if (!focusedNodes.length) {
-    el.innerHTML = `<div style="padding:1rem;color:var(--muted)">No data yet. ${window._isAdmin ? "Click Start above to begin warming." : ""}</div>`;
+    el.innerHTML = `<div style="padding:1rem;color:var(--muted)">No data yet.${window._isAdmin ? ` <a href="/admin#all-blues" style="color:inherit;text-decoration:underline">Run the worker</a> to populate the graph.` : ""}</div>`;
     return;
   }
   const ok = await _abEnsureCytoscape();
