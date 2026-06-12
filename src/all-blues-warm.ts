@@ -511,7 +511,11 @@ function _scanMentions(
     seenDst.add(dst);
     const window = _sentenceWindow(text, idx, matchLen);
     const kinds = _classifyKinds(window);
-    out.push({ dst, kinds, excerpt: window.slice(0, 220) });
+    // Cap the stored excerpt at 600 chars — long enough to carry the
+    // full surrounding sentence(s) the _sentenceWindow grabbed, but
+    // still bounded so a pathological notes blob doesn't bloat the
+    // links table. The popup renders the excerpt as-is.
+    out.push({ dst, kinds, excerpt: window.slice(0, 600) });
   };
   // Numeric forms: [aNNN], [a=NNN], [aNNN|Display], [a=NNN|Display]
   const NUM_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
@@ -630,7 +634,7 @@ async function _runReleaseNotes(fromYear: number, toYear: number, nameToId: Map<
       const role = String(ea?.role ?? "");
       if (!Number.isFinite(eaId) || eaId <= 0) continue;
       if (!MUSICIAN_ROLE_RE.test(role)) continue;
-      const excerpt = `Credited as: ${role}`.slice(0, 220);
+      const excerpt = `Credited as: ${role}`.slice(0, 600);
       for (const src of srcIds) {
         const n = await insertEdge(src, eaId, "band", excerpt, releaseId);
         if (n) { edgesInserted += n; edgesSinceLastTick += n; touched = true; }
