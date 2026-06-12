@@ -9296,12 +9296,23 @@ app.get("/api/all-blues/artist", async (req, res) => {
       ? (data.images[0].uri150 || data.images[0].uri || null)
       : null;
     const profileRaw = row.cached_profile || data.profile || "";
-    // Resolve [aNNNNN] refs inside the bio so the reader gets names
-    // not codes (same routine as the edge endpoint's excerpts).
-    const REF_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    // Resolve [a] artist refs inside the bio. Discogs uses several
+    // forms; we accept all of them:
+    //   [aNNN]             — bare numeric id
+    //   [a=NNN]            — equals + numeric id
+    //   [aNNN|Display]     — id with display override
+    //   [a=NNN|Display]    — equals form with display override
+    //   [a=Display Name]   — equals + literal name (no Discogs id linked)
+    //   [a=Name (N)]       — equals + name + Discogs disambiguator suffix
+    //
+    // For the numeric forms we look the id up in cache→queue. For the
+    // name-only forms we use the literal name as-is, stripping any
+    // trailing "(N)" disambiguator since it's noise to the reader.
+    const NUM_RE  = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    const NAME_RE = /\[a=([^\d\]][^\]|]*)(?:\|[^\]]*)?\]/gi;
     const referenced = new Set<number>();
     if (typeof profileRaw === "string") {
-      for (const m of profileRaw.matchAll(REF_RE)) {
+      for (const m of profileRaw.matchAll(NUM_RE)) {
         const ridv = parseInt(m[1], 10);
         if (Number.isFinite(ridv) && ridv > 0) referenced.add(ridv);
       }
@@ -9319,12 +9330,14 @@ app.get("/api/all-blues/artist", async (req, res) => {
       );
       for (const rr of r.rows) bioNameMap.set(rr.discogs_id, rr.name);
     }
+    const stripDisambig = (n: string) => n.replace(/\s*\(\d+\)\s*$/, "").trim();
     const resolveBio = (s: string): string => {
       if (!s) return "";
-      let out = s.replace(REF_RE, (_m, idStr) => {
+      let out = s.replace(NUM_RE, (_m, idStr) => {
         const rid = parseInt(idStr, 10);
         return bioNameMap.get(rid) || `Artist ${rid}`;
       });
+      out = out.replace(NAME_RE, (_m, nm) => stripDisambig(nm));
       out = out.replace(/\[r(\d+)\]/gi, (_m, rid) => `(release ${rid})`);
       out = out.replace(/\[m(\d+)\]/gi, (_m, mid) => `(master ${mid})`);
       out = out.replace(/\[l(?:=)?(\d+)(?:\|[^\]]*)?\]/gi, (_m, lid) => `(label ${lid})`);
@@ -9547,12 +9560,15 @@ app.get("/api/all-blues/edge", async (req, res) => {
     // substitute. We also strip [b]/[i]/[u] formatting tags so the
     // excerpt reads naturally, and rewrite [r…]/[m…]/[l…] refs to
     // a short label so they don't look like random tokens.
-    const REF_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    // Two ref forms (see the artist endpoint above for the full set):
+    //   NUM_RE   — numeric ids ([a123], [a=123], [a123|Display])
+    //   NAME_RE  — literal name only ([a=Display], [a=Name (3)])
+    const NUM_RE  = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+    const NAME_RE = /\[a=([^\d\]][^\]|]*)(?:\|[^\]]*)?\]/gi;
     const referencedIds = new Set<number>();
     for (const e of edges) {
       if (typeof e.excerpt !== "string") continue;
-      const m = e.excerpt.matchAll(REF_RE);
-      for (const hit of m) {
+      for (const hit of e.excerpt.matchAll(NUM_RE)) {
         const id = parseInt(hit[1], 10);
         if (Number.isFinite(id) && id > 0) referencedIds.add(id);
       }
@@ -9570,14 +9586,17 @@ app.get("/api/all-blues/edge", async (req, res) => {
       );
       for (const row of nameQ.rows) excerptNameMap.set(row.discogs_id, row.name);
     }
+    const stripDisambig = (n: string) => n.replace(/\s*\(\d+\)\s*$/, "").trim();
     const resolveExcerpt = (raw: string | null | undefined): string | null => {
       if (typeof raw !== "string" || !raw) return raw ?? null;
       let s = raw;
-      // Artist refs → name (or "Artist N" if we don't know it)
-      s = s.replace(REF_RE, (_m, idStr) => {
+      // Numeric artist refs → looked-up name (or "Artist N" fallback)
+      s = s.replace(NUM_RE, (_m, idStr) => {
         const id = parseInt(idStr, 10);
         return excerptNameMap.get(id) || `Artist ${id}`;
       });
+      // Literal-name artist refs → the name itself, sans " (N)" suffix
+      s = s.replace(NAME_RE, (_m, nm) => stripDisambig(nm));
       // Release / master / label refs → short label
       s = s.replace(/\[r(\d+)\]/gi,    (_m, id) => `(release ${id})`);
       s = s.replace(/\[m(\d+)\]/gi,    (_m, id) => `(master ${id})`);
