@@ -196,6 +196,18 @@ async function allBluesReload() {
       : { name: "cose", animate: false, nodeRepulsion: 60000, idealEdgeLength: 220 },
     wheelSensitivity: 0.2,
   });
+  // Click handlers. Edges → detail popup; nodes → focus that artist.
+  _abCy.on("tap", "edge", (evt) => {
+    const e = evt.target;
+    const src = parseInt(e.data("source"), 10);
+    const dst = parseInt(e.data("target"), 10);
+    if (Number.isFinite(src) && Number.isFinite(dst)) _abOpenEdgePopup(src, dst);
+  });
+  _abCy.on("tap", "node", (evt) => {
+    const n = evt.target;
+    const id = parseInt(n.data("id"), 10);
+    if (Number.isFinite(id)) _abFocusPick(id, n.data("label"));
+  });
 }
 window.allBluesReload = allBluesReload;
 window._abToggleKind = _abToggleKind;
@@ -301,3 +313,135 @@ function _abRenderFocusActive() {
   if (_abFocusId == null) { el.textContent = ""; return; }
   el.textContent = `· ${_abFocusName || ("Artist " + _abFocusId)}`;
 }
+
+// ── Edge detail popup ─────────────────────────────────────────────
+// Clicking a network edge opens this floating panel: both artists as
+// mini-cards at top, every edge kind between them with its excerpt,
+// and every shared release/master as a clickable mini-card.
+
+function _abEnsureEdgePopup() {
+  let el = document.getElementById("ab-edge-popup");
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = "ab-edge-popup";
+  el.style.cssText = `
+    position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%);
+    background:#0b1220;border:1px solid var(--border, #333);border-radius:8px;
+    padding:0.9rem 1rem;z-index:9999;max-width:min(720px, 95vw);max-height:85vh;
+    overflow:hidden auto;box-shadow:0 8px 32px rgba(0,0,0,0.6);
+    color:var(--text, #e2e8f0);font-size:0.84rem;display:none`;
+  document.body.appendChild(el);
+  // Backdrop for outside-click close
+  let bd = document.getElementById("ab-edge-popup-bd");
+  if (!bd) {
+    bd = document.createElement("div");
+    bd.id = "ab-edge-popup-bd";
+    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:none`;
+    bd.onclick = _abCloseEdgePopup;
+    document.body.appendChild(bd);
+  }
+  return el;
+}
+
+function _abCloseEdgePopup() {
+  const el = document.getElementById("ab-edge-popup");
+  const bd = document.getElementById("ab-edge-popup-bd");
+  if (el) el.style.display = "none";
+  if (bd) bd.style.display = "none";
+}
+window._abCloseEdgePopup = _abCloseEdgePopup;
+
+async function _abOpenEdgePopup(srcId, dstId) {
+  const el = _abEnsureEdgePopup();
+  const bd = document.getElementById("ab-edge-popup-bd");
+  if (bd) bd.style.display = "block";
+  el.style.display = "block";
+  el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
+  let data;
+  try {
+    const r = await fetch(`/api/all-blues/edge?src=${srcId}&dst=${dstId}`);
+    if (!r.ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load edge details (HTTP ${r.status})</div>`; return; }
+    data = await r.json();
+  } catch (err) {
+    el.innerHTML = `<div style="padding:1rem;color:#c66">Failed: ${_abEsc(err.message)}</div>`; return;
+  }
+  const kindColor = Object.fromEntries(_AB_KINDS.map(k => [k.key, k.color]));
+  const artistCard = (a) => {
+    const thumb = a.thumb
+      ? `<img src="${_abEsc(a.thumb)}" alt="" style="width:56px;height:56px;border-radius:6px;object-fit:cover;background:#1f2937">`
+      : `<div style="width:56px;height:56px;border-radius:6px;background:#1f2937;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--muted)">no img</div>`;
+    return `
+      <div style="display:flex;gap:0.55rem;align-items:flex-start;padding:0.5rem;background:rgba(255,255,255,0.04);border-radius:6px;flex:1;min-width:0">
+        ${thumb}
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(a.name)}</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:0.1rem">#${a.id}</div>
+          <div style="margin-top:0.3rem">
+            <a href="#" onclick="event.preventDefault();_abCloseEdgePopup();_abFocusPick(${a.id}, ${_abEsc(JSON.stringify(a.name))});return false" style="color:#60a5fa;font-size:0.72rem;margin-right:0.4rem">Focus on this artist</a>
+            <a href="${_abEsc(a.discogs_url)}" target="_blank" rel="noopener" style="color:#60a5fa;font-size:0.72rem">Discogs ↗</a>
+          </div>
+        </div>
+      </div>`;
+  };
+  const edgeKindRows = data.edges.length
+    ? data.edges.map(e => {
+      const color = kindColor[e.kind] || "#888";
+      const direction = e.src_id === data.src.id
+        ? `<span style="color:var(--muted)">${_abEsc(data.src.name)} →</span> ${_abEsc(data.dst.name)}`
+        : `<span style="color:var(--muted)">${_abEsc(data.dst.name)} →</span> ${_abEsc(data.src.name)}`;
+      return `
+        <div style="padding:0.4rem 0.5rem;border-left:3px solid ${color};margin-bottom:0.35rem;background:rgba(255,255,255,0.03);border-radius:4px">
+          <div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.15rem">
+            <span style="background:${color};color:#000;padding:0.08rem 0.4rem;border-radius:999px;font-size:0.68rem;font-weight:600;text-transform:uppercase">${_abEsc(e.kind)}</span>
+            <span style="font-size:0.72rem">${direction}</span>
+          </div>
+          ${e.excerpt ? `<div style="font-size:0.74rem;color:var(--muted);font-style:italic">"…${_abEsc(e.excerpt)}…"</div>` : ""}
+        </div>`;
+    }).join("")
+    : `<div style="color:var(--muted);font-size:0.8rem">No edge metadata.</div>`;
+  const releaseCards = data.releases.length
+    ? data.releases.map(r => {
+      const thumb = r.thumb
+        ? `<img src="${_abEsc(r.thumb)}" alt="" style="width:48px;height:48px;border-radius:4px;object-fit:cover;background:#1f2937">`
+        : `<div style="width:48px;height:48px;border-radius:4px;background:#1f2937"></div>`;
+      const onclick = `onclick="event.stopPropagation();_abOpenReleaseFromPopup(event, ${r.id}, '${_abEsc(r.type)}')"`;
+      return `
+        <div ${onclick} style="display:flex;gap:0.5rem;align-items:center;padding:0.35rem 0.45rem;background:rgba(255,255,255,0.04);border-radius:5px;cursor:pointer;margin-bottom:0.3rem"
+             onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+          ${thumb}
+          <div style="min-width:0;flex:1">
+            <div style="font-size:0.78rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(r.title)}</div>
+            <div style="font-size:0.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              ${r.year ? `${_abEsc(r.year)} · ` : ""}${_abEsc(r.primary_artists || "")}${r.type === "master" ? ' · <span style="color:#f5d442">master</span>' : ""}
+            </div>
+          </div>
+        </div>`;
+    }).join("")
+    : `<div style="color:var(--muted);font-size:0.78rem;padding:0.4rem 0">No shared releases tracked yet. Mention was from artist profile prose, not liner notes.</div>`;
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.7rem">
+      <div style="font-weight:600;font-size:1rem;flex:1">Connection details</div>
+      <button onclick="_abCloseEdgePopup()" style="background:transparent;border:1px solid var(--border, #333);color:inherit;padding:0.15rem 0.55rem;border-radius:4px;cursor:pointer;font-size:0.85rem">×</button>
+    </div>
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.8rem">
+      ${artistCard(data.src)}
+      ${artistCard(data.dst)}
+    </div>
+    <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.25rem">Edges</div>
+    ${edgeKindRows}
+    <div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:0.7rem 0 0.25rem">Shared releases (${data.releases.length})</div>
+    ${releaseCards}`;
+}
+
+function _abOpenReleaseFromPopup(event, id, type) {
+  // openModal signature: (event, id, type, discogsUrl, opts)
+  // The release/album modal is the SPA's main popup — calling it
+  // doesn't close ours, so do that explicitly so the user can see it.
+  _abCloseEdgePopup();
+  if (typeof window.openModal === "function") {
+    window.openModal(event, id, type || "release");
+  } else {
+    window.open(`https://www.discogs.com/${type === "master" ? "master" : "release"}/${id}`, "_blank");
+  }
+}
+window._abOpenReleaseFromPopup = _abOpenReleaseFromPopup;
