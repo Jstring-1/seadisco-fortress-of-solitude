@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260611.2059" />
+  <link rel="stylesheet" href="/style.css?v=20260611.2107" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260611.2059"></script>
-<script defer src="/shared.js?v=20260611.2059"></script>
+<script defer src="/utils.js?v=20260611.2107"></script>
+<script defer src="/shared.js?v=20260611.2107"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -56,6 +56,7 @@
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
+        <button class="admin-tab" onclick="switchAdminTab('all-blues')">All Blues</button>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -141,6 +142,30 @@
           <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Pick a genre + optional style + year range, hit Start. One run at a time.</span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
+      <!-- All Blues background worker: walks release_cache for the
+           configured year window, collects every Discogs artist ID,
+           fetches each artist's profile, and parses [aNNNNN] mentions
+           into all_blues_links with a kind inferred from surrounding
+           prose. The public network view (/?v=all-blues) renders the
+           result; this panel is where the worker actually runs. -->
+      <div class="admin-tab-panel admin-grp-all-blues" id="panel-all-blues" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">All Blues worker</h2>
+          <button class="admin-refresh-btn" id="ab-refresh-btn" onclick="_adminClickRefresh(this, loadAllBluesAdmin)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="ab-refresh-status" class="admin-refresh-status"></span>
+          <a href="/?v=all-blues" style="font-size:0.74rem;color:var(--muted);margin-left:auto">Open public network view ↗</a>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center;font-size:0.82rem;margin-bottom:0.5rem">
+          <label style="display:inline-flex;gap:0.3rem;align-items:center">From <input id="ab-from-year" type="number" value="1900" min="1900" max="2100" style="width:6em"></label>
+          <label style="display:inline-flex;gap:0.3rem;align-items:center">To <input id="ab-to-year" type="number" value="1970" min="1900" max="2100" style="width:6em"></label>
+          <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="ab-reset-queue" type="checkbox"> reset queue</label>
+          <button id="ab-start" type="button" class="admin-btn" onclick="adminAllBluesStart()">Start</button>
+          <button id="ab-stop" type="button" class="admin-btn" onclick="adminAllBluesStop()" style="display:none">Stop</button>
+          <button type="button" class="admin-btn" onclick="adminAllBluesForceClear()" title="Clear stuck in-memory running flag">Force-clear</button>
+        </div>
+        <div id="ab-status" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
 
       <!-- Style suggestions per Discogs genre. The genre dropdown
@@ -334,8 +359,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260611.2059"></script>
-<script defer src="/blues-admin.js?v=20260611.2059"></script>
+<script defer src="/modal.js?v=20260611.2107"></script>
+<script defer src="/blues-admin.js?v=20260611.2107"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -417,6 +442,10 @@ const _adminGroups = {
   'cache': {
     panels: ['panel-cache-warm'],
     load: () => { loadCacheWarm(); },
+  },
+  'all-blues': {
+    panels: ['panel-all-blues'],
+    load: () => { loadAllBluesAdmin(); },
   },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
@@ -1282,6 +1311,93 @@ window.cacheWarmStop = cacheWarmStop;
 // Legacy stub — kept so any session that cached the old admin.html
 // can call this safely. No-op; the new path is loadCacheWarm().
 async function loadGenreCacheWarm() { return loadCacheWarm(); }
+
+// ── All Blues worker (admin panel) ────────────────────────────────
+// Same pattern as cache-warm: Start posts the year window + reset
+// flag, Stop signals the running worker, status polls counters.
+// Stats panel shows queue (pending/done/error), cached artist count,
+// and links-by-kind so the admin can watch progress.
+async function loadAllBluesAdmin() {
+  const el = document.getElementById("ab-status");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/all-blues/status");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const s = await r.json();
+    const startBtn = document.getElementById("ab-start");
+    const stopBtn  = document.getElementById("ab-stop");
+    if (startBtn) startBtn.style.display = s.running ? "none" : "";
+    if (stopBtn)  stopBtn.style.display  = s.running ? "" : "none";
+    const fmt = n => Number(n || 0).toLocaleString();
+    const esc = v => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const queue = s.queue || {};
+    const kinds = s.links_by_kind || {};
+    const totalLinks = Object.values(kinds).reduce((a, b) => a + b, 0);
+    const phase = esc(s.state?.phase || "idle");
+    const fromY = s.state?.from_year || s.active?.fromYear || 1900;
+    const toY   = s.state?.to_year   || s.active?.toYear   || 1970;
+    const started = s.state?.started_at ? new Date(s.state.started_at).toLocaleString() : "—";
+    const tick    = s.state?.last_tick_at ? new Date(s.state.last_tick_at).toLocaleString() : "—";
+    const kindRows = Object.entries(kinds).sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `<tr><td style="padding:0.15rem 0.6rem">${esc(k)}</td><td style="padding:0.15rem 0.6rem;text-align:right">${fmt(n)}</td></tr>`).join("");
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.7rem;margin-bottom:0.7rem">
+        <div><div style="font-size:1.1rem;font-weight:600">${s.running ? "Running" : "Idle"}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Worker</div></div>
+        <div><div style="font-size:1.1rem;font-weight:600">${phase}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Phase</div></div>
+        <div><div style="font-size:1.1rem;font-weight:600">${fromY}–${toY}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Year window</div></div>
+        <div><div style="font-size:1.1rem;font-weight:600">${fmt(s.cached_artists)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Cached artists</div></div>
+        <div><div style="font-size:1.1rem;font-weight:600">${fmt(totalLinks)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Total links</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.7rem;margin-bottom:0.7rem">
+        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.pending)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue pending</div></div>
+        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.done)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue done</div></div>
+        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.error)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue errors</div></div>
+        <div><div style="font-size:1rem;font-weight:600">${fmt(s.state?.artists_fetched)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Lifetime fetched</div></div>
+      </div>
+      ${kindRows ? `<div style="margin-bottom:0.6rem"><div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Links by kind</div><table style="font-size:0.8rem;border-collapse:collapse"><tbody>${kindRows}</tbody></table></div>` : ""}
+      <div style="font-size:0.74rem;color:var(--muted)">Started: ${esc(started)} · Last tick: ${esc(tick)}</div>
+      ${s.state?.last_error ? `<div style="font-size:0.74rem;color:#e88;margin-top:0.3rem">Last error: ${esc(s.state.last_error)}</div>` : ""}`;
+  } catch (e) {
+    el.innerHTML = `<span style="color:#e88">Failed: ${(e && e.message) || e}</span>`;
+  }
+}
+window.loadAllBluesAdmin = loadAllBluesAdmin;
+
+async function adminAllBluesStart() {
+  const from = Number(document.getElementById("ab-from-year")?.value || 1900);
+  const to   = Number(document.getElementById("ab-to-year")?.value   || 1970);
+  const reset = !!document.getElementById("ab-reset-queue")?.checked;
+  try {
+    const r = await apiFetch("/api/admin/all-blues/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromYear: from, toYear: to, resetQueue: reset }),
+    });
+    if (r.status === 409) { alert((await r.json().catch(() => ({}))).error || "Another run is in progress."); return; }
+    if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
+    loadAllBluesAdmin();
+  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
+}
+window.adminAllBluesStart = adminAllBluesStart;
+
+async function adminAllBluesStop() {
+  try {
+    const r = await apiFetch("/api/admin/all-blues/stop", { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadAllBluesAdmin();
+  } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
+}
+window.adminAllBluesStop = adminAllBluesStop;
+
+async function adminAllBluesForceClear() {
+  if (!confirm("Force-clear the in-memory 'running' lock for All Blues? Use only when a worker crashed silently and Start refuses to fire.")) return;
+  try {
+    const r = await apiFetch("/api/admin/all-blues/force-clear", { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadAllBluesAdmin();
+  } catch (e) { alert("Force-clear failed: " + ((e && e.message) || e)); }
+}
+window.adminAllBluesForceClear = adminAllBluesForceClear;
 
 // ── API Request Log ───────────────────────────────────────────────────
 let _apiLogSeq = 0;
