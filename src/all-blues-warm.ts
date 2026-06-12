@@ -199,21 +199,48 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
             WHERE g = 'Blues'
          )
     ),
-    artist_refs AS (
+    primary_refs AS (
+      -- Every artist listed in data.artists (the release's primary
+      -- credits) — singers, bandleaders, the named-up-front folks.
       SELECT (a->>'id')::int AS aid,
-             MIN(yr) AS first_year,
-             -- earliest non-empty name we see for this artist across
-             -- their cached blues releases. Gives us a label to show
-             -- on the graph immediately, before the Discogs API fetch
-             -- phase has had a chance to write the canonical name.
-             (array_agg(a->>'name' ORDER BY yr) FILTER (WHERE COALESCE(a->>'name','') <> ''))[1] AS name
-        FROM blues_releases
+             br.yr,
+             a->>'name' AS name
+        FROM blues_releases br
         CROSS JOIN LATERAL jsonb_array_elements(
-          COALESCE(blues_releases.data->'artists', '[]'::jsonb)
+          COALESCE(br.data->'artists', '[]'::jsonb)
         ) AS a
        WHERE (a->>'id') ~ '^[0-9]+$'
          AND (a->>'id')::int > 0
-       GROUP BY (a->>'id')::int
+    ),
+    sideman_refs AS (
+      -- Every extraartist credited with a musical-performance role.
+      -- Catches session players, sidemen, accompanists who only show
+      -- up in extraartists, never as primaries. The role filter
+      -- excludes producer / engineer / liner-notes / photography /
+      -- design — those aren't musical collaboration.
+      SELECT (a->>'id')::int AS aid,
+             br.yr,
+             a->>'name' AS name
+        FROM blues_releases br
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(br.data->'extraartists', '[]'::jsonb)
+        ) AS a
+       WHERE (a->>'id') ~ '^[0-9]+$'
+         AND (a->>'id')::int > 0
+         AND (a->>'role') ~* '\\b(guitar|piano|harmonica|vocals?|voice|bass|drums|sax|saxophone|fiddle|violin|mandolin|banjo|harp|organ|trumpet|cornet|clarinet|trombone|percussion|harmony vocals?|backing vocals?|accompani(?:ed|ment|st)|kazoo|jug|washboard|tambourine|tuba|ukulele|accordion)\\b'
+    ),
+    artist_refs AS (
+      SELECT aid,
+             MIN(yr) AS first_year,
+             -- earliest non-empty name we see for this artist across
+             -- the union of primary + sideman appearances.
+             (array_agg(name ORDER BY yr) FILTER (WHERE COALESCE(name,'') <> ''))[1] AS name
+        FROM (
+          SELECT aid, yr, name FROM primary_refs
+          UNION ALL
+          SELECT aid, yr, name FROM sideman_refs
+        ) AS combined
+       GROUP BY aid
     )
     INSERT INTO all_blues_artist_queue (discogs_id, seed_year, name)
     SELECT aid, first_year, name FROM artist_refs
