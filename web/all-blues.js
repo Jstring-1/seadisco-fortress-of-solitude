@@ -76,6 +76,12 @@ function _abRenderKindChips() {
 
 async function initAllBluesView() {
   // Public view — worker controls + stats live in /admin → All Blues.
+  // Re-sync the admin-only layout buttons once the lazy admin probe
+  // resolves, so the buttons pop in on direct URL nav without
+  // requiring a reload.
+  if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
+    window._ensureAdminFlag().then(() => _abSyncSaveLayoutButton?.()).catch(() => {});
+  }
   _abRenderKindChips();
   // Hydrate the year-range inputs from localStorage so a refresh
   // preserves the user's last filter.
@@ -498,7 +504,14 @@ function _abSyncSaveLayoutButton() {
   const save = document.getElementById("ab-save-layout");
   const recomp = document.getElementById("ab-recompute-layout");
   if (!save || !recomp) return;
-  if (!window._isAdmin) {
+  // Belt-and-suspenders gate: real admin flag AND respect the
+  // "view as user" toggle so a curator browsing in user-mode sees
+  // the same UI as a public visitor. localStorage key matches the
+  // admin dashboard's "View as user" button.
+  let viewAsUser = false;
+  try { viewAsUser = localStorage.getItem("sd-admin-as-user") === "1"; } catch {}
+  const isAdmin = !!window._isAdmin && !viewAsUser;
+  if (!isAdmin) {
     save.style.display = "none";
     recomp.style.display = "none";
     return;
