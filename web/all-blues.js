@@ -686,10 +686,14 @@ async function _abOpenEdgePopup(srcId, dstId) {
       <div style="display:flex;gap:0.55rem;align-items:flex-start;padding:0.5rem;background:rgba(255,255,255,0.04);border-radius:6px;flex:1;min-width:0">
         ${thumb}
         <div style="min-width:0;flex:1">
-          <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
+          <a href="#" onclick="event.preventDefault();event.stopPropagation();_abOpenArtistProfile(${a.id}, ${nameArg});return false"
              style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;color:inherit;text-decoration:none;cursor:pointer"
-             title="Search SeaDisco, Wikipedia, YouTube, Discogs, etc.">${_abEsc(a.name)}</a>
+             title="Open profile — Blues Archive if available, otherwise the Constellations summary">${_abEsc(a.name)}</a>
           <div style="font-size:0.7rem;color:var(--muted);margin-top:0.1rem">#${a.id}</div>
+          <div style="margin-top:0.25rem">
+            <a href="#" onclick="event.preventDefault();event.stopPropagation();if(typeof openLookupPopup==='function')openLookupPopup(event,'artist',${nameArg});return false"
+               style="color:#60a5fa;font-size:0.7rem;text-decoration:none">Search… ↗</a>
+          </div>
         </div>
       </div>`;
   };
@@ -832,7 +836,7 @@ function _abShowNodeActionsImpl(artistId, artistName, x, y) {
   el.innerHTML = `
     <div style="padding:0.35rem 0.55rem 0.4rem;border-bottom:1px solid rgba(255,255,255,0.08);font-weight:600;font-size:0.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_abEsc(artistName)}">${_abEsc(artistName)}</div>
     <button type="button"
-            onclick="_abCloseNodeMenu();_abOpenArtistPopup(${artistId})"
+            onclick="_abCloseNodeMenu();_abOpenArtistProfile(${artistId}, ${nameArg})"
             style="display:block;width:100%;text-align:left;padding:0.4rem 0.55rem;background:transparent;border:0;color:inherit;cursor:pointer;font-size:0.82rem"
             onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">
       <span style="margin-right:0.4rem">👤</span>Open profile
@@ -857,6 +861,48 @@ function _abShowNodeActionsImpl(artistId, artistName, x, y) {
   el.style.left = `${left}px`;
   el.style.top  = `${top}px`;
 }
+
+// Open the right profile for a Discogs artist id. Admin gets routed
+// to the Blues Archive popup when the artist is in the archive (more
+// curated info: bio, photo, lyrics, tunings, releases). Public
+// visitors and unarchived artists fall back to the Constellations
+// artist popup with the cached Discogs profile + cached releases +
+// connections list. Lazy-loads /blues-archive.js when needed.
+async function _abOpenArtistProfile(discogsId, artistName) {
+  if (window._isAdmin) {
+    try {
+      const r = await fetch("/api/blues-archive/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistIds: [discogsId],
+          artistNames: artistName ? [artistName] : [],
+        }),
+      });
+      if (r.ok) {
+        const result = await r.json();
+        const hit = result.artistsById?.[String(discogsId)]
+          || (artistName && result.artists?.[String(artistName).toLowerCase().trim()]);
+        if (hit?.id) {
+          // BA opener lives in blues-archive.js — lazy-load if it's
+          // not in the page yet (admin lands here from any view).
+          if (typeof window._baOpenArtistFromBadge !== "function" && typeof window._sdLoadModule === "function") {
+            try { await window._sdLoadModule("/blues-archive.js"); } catch {}
+          }
+          if (typeof window._baOpenArtistFromBadge === "function") {
+            window._baOpenArtistFromBadge(hit.id);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[constellations] BA lookup failed, falling back to local popup", err);
+    }
+  }
+  // Fallback for everyone: the Constellations artist popup.
+  _abOpenArtistPopup(discogsId);
+}
+window._abOpenArtistProfile = _abOpenArtistProfile;
 
 // ── Artist profile popup ──────────────────────────────────────────
 // Tapping a graph node opens this: artist's name + thumb + bio,
