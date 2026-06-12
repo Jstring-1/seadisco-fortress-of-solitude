@@ -265,14 +265,27 @@ async function allBluesReload() {
   const labelTopN = Math.max(20, Math.ceil(focusedNodes.length * 0.08));
   const labelAlwaysVisible = new Set(sortedByDeg.slice(0, labelTopN).map(n => n.id));
 
-  // Position cache: if EVERY visible node has a cached (x,y), use a
-  // preset layout — instant render. Otherwise fall back to fcose so
-  // new/unpositioned nodes still get a real layout pass. Admin's
-  // "Recompute layout" sets _abForceFreshLayout to bypass the cache
-  // for one render.
-  const allPositioned = !_abForceFreshLayout
-    && focusedNodes.every(n => Number.isFinite(n.x) && Number.isFinite(n.y));
+  // Position cache (lenient): if ANY node has a cached (x,y), use a
+  // preset layout — instant render. Nodes without positions get
+  // scattered near the cached cluster's bounding box so they don't
+  // all pile up at (0,0). Admin's "Recompute layout" sets
+  // _abForceFreshLayout to bypass the cache for one full fcose pass.
+  const positionedNodes = focusedNodes.filter(n => Number.isFinite(n.x) && Number.isFinite(n.y));
+  const useCachedPositions = !_abForceFreshLayout && positionedNodes.length > 0;
   _abForceFreshLayout = false;
+  // Bounding box of the cached positions; new nodes get random spots
+  // inside it so the graph stays coherent after a partial worker run.
+  let scatterMinX = -500, scatterMaxX = 500, scatterMinY = -500, scatterMaxY = 500;
+  if (useCachedPositions && positionedNodes.length) {
+    scatterMinX = Math.min(...positionedNodes.map(n => n.x));
+    scatterMaxX = Math.max(...positionedNodes.map(n => n.x));
+    scatterMinY = Math.min(...positionedNodes.map(n => n.y));
+    scatterMaxY = Math.max(...positionedNodes.map(n => n.y));
+  }
+  const randXY = () => ({
+    x: scatterMinX + Math.random() * (scatterMaxX - scatterMinX),
+    y: scatterMinY + Math.random() * (scatterMaxY - scatterMinY),
+  });
   const elements = [
     ...focusedNodes.map(n => {
       const deg = degMap.get(n.id) || 0;
@@ -292,6 +305,11 @@ async function allBluesReload() {
       };
       if (Number.isFinite(n.x) && Number.isFinite(n.y)) {
         el.position = { x: n.x, y: n.y };
+      } else if (useCachedPositions) {
+        // Cache mode: unpositioned new node gets a random spot inside
+        // the cached cluster bounds so it doesn't pile up at (0,0).
+        // User can hit Recompute layout to fold it in properly.
+        el.position = randXY();
       }
       return el;
     }),
@@ -310,7 +328,19 @@ async function allBluesReload() {
       };
     }),
   ];
-  _abLastLayoutWasCached = allPositioned;
+  _abLastLayoutWasCached = useCachedPositions;
+  // Surface what's happening in the toolbar so the user can tell
+  // whether the slow path (fcose) is running and how much of the
+  // graph is cached.
+  if (counts) {
+    const pct = focusedNodes.length
+      ? Math.round((positionedNodes.length / focusedNodes.length) * 100)
+      : 0;
+    const layoutNote = useCachedPositions
+      ? ` · cached layout (${pct}% positioned${pct < 100 ? ", new nodes scattered" : ""})`
+      : ` · fresh fcose layout (slow first render)`;
+    counts.textContent += layoutNote;
+  }
 
   if (_abCy) { try { _abCy.destroy(); } catch {} _abCy = null; }
   _abCy = window.cytoscape({
@@ -398,7 +428,7 @@ async function allBluesReload() {
         "z-index": 15,
       }},
     ],
-    layout: allPositioned
+    layout: useCachedPositions
       ? { name: "preset", animate: false, fit: true, padding: 40 }
       : (window.cytoscapeFcose
         ? {
