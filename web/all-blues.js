@@ -176,8 +176,13 @@ async function allBluesReload() {
         "background-color": "#1f2937",
         "border-color": "#94a3b8", "border-width": 1,
         "label": "data(label)", "color": "#e2e8f0",
-        "font-size": 10, "text-valign": "center", "text-halign": "center",
-        "text-wrap": "ellipsis", "text-max-width": 90,
+        "font-size": 10,
+        // Label sits below the node with a thick dark outline so the
+        // text reads against any edge color or background tint.
+        "text-valign": "bottom", "text-halign": "center",
+        "text-margin-y": 4,
+        "text-outline-width": 2, "text-outline-color": "#000", "text-outline-opacity": 0.85,
+        "text-wrap": "ellipsis", "text-max-width": 110,
         "width": 22, "height": 22,
       }},
       { selector: "edge", style: {
@@ -186,9 +191,15 @@ async function allBluesReload() {
       }},
       { selector: "node:selected", style: { "border-color": "#fbbf24", "border-width": 3 }},
       { selector: "node[focused = 1]", style: {
+        // Solid amber dot, larger; label still sits below in white-on-
+        // black-outline so the text is always readable. The previous
+        // version put yellow text on the yellow dot — invisible.
         "background-color": "#fbbf24",
-        "border-color": "#fbbf24", "border-width": 3,
-        "width": 30, "height": 30, "color": "#000", "font-weight": "bold",
+        "border-color": "#000", "border-width": 2,
+        "width": 32, "height": 32,
+        "color": "#fbbf24", "font-weight": "bold", "font-size": 12,
+        "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
+        "text-margin-y": 5,
       }},
     ],
     layout: window.cytoscapeFcose
