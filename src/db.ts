@@ -1311,6 +1311,14 @@ export async function initDb() {
   // Overwritten by the actual fetched profile name on conflict — until
   // then this is what the public network view shows.
   await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS name TEXT`);
+  // Cached graph positions: admin runs fcose once in the browser,
+  // posts the resulting x/y per node back, and everyone gets a
+  // "preset" layout next load = instant. New seeds added by later
+  // worker runs get NULL positions and trigger an fcose re-fit only
+  // on demand (admin button); public viewers always use whatever's
+  // cached, falling back to (0,0) for unpositioned nodes.
+  await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_x DOUBLE PRECISION`);
+  await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_y DOUBLE PRECISION`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS all_blues_warm_state (
       id              INT PRIMARY KEY DEFAULT 1,

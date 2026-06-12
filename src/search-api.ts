@@ -9215,6 +9215,41 @@ app.post("/api/admin/all-blues/force-clear", async (req, res) => {
   catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// Save fcose positions. Admin-only. Body shape:
+//   { "positions": { "123": { "x": 12.5, "y": -34.7 }, ... } }
+// One bulk UPDATE keyed by UNNEST over parallel arrays so even tens
+// of thousands of seeds land in a single round trip.
+app.post("/api/admin/all-blues/positions", express.json({ limit: "8mb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const positions = req.body?.positions;
+  if (!positions || typeof positions !== "object") {
+    res.status(400).json({ error: "positions object required" });
+    return;
+  }
+  try {
+    const ids: number[] = [];
+    const xs:  number[] = [];
+    const ys:  number[] = [];
+    for (const [k, v] of Object.entries(positions)) {
+      const id = parseInt(k, 10);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      const x = Number((v as any)?.x);
+      const y = Number((v as any)?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      ids.push(id); xs.push(x); ys.push(y);
+    }
+    if (!ids.length) { res.json({ ok: true, updated: 0 }); return; }
+    const r = await getPool().query(
+      `UPDATE all_blues_artist_queue q
+          SET pos_x = u.x, pos_y = u.y
+         FROM unnest($1::int[], $2::float8[], $3::float8[]) AS u(id, x, y)
+        WHERE q.discogs_id = u.id`,
+      [ids, xs, ys],
+    );
+    res.json({ ok: true, updated: r.rowCount ?? 0 });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Wipe queue + edges + counters. Optionally also wipe the Discogs
 // artist-profile cache (?cache=1). Refuses while the worker is
 // running — admin must Stop first so we don't yank tables out from
@@ -9666,25 +9701,27 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const nodeIds = new Set<number>();
     for (const e of edges) { nodeIds.add(e.src_id); nodeIds.add(e.dst_id); }
     // Filter by degree
-    // Name lookup: prefer the canonical name from discogs_artist_cache
-    // (only populated once the Discogs fetch phase has run for that
-    // artist), fall back to the harvested release_cache name stored on
-    // the queue row at collect time. The queue name lets the graph have
-    // human labels the instant collect finishes — without it the network
-    // would show "Artist NNNNN" for hours while fetch grinds at 1.1s/req.
-    const resolveNames = async (ids: number[]): Promise<Map<number, string>> => {
-      const map = new Map<number, string>();
+    // Name + position lookup combined: prefer the canonical name from
+    // discogs_artist_cache, fall back to the harvested release_cache
+    // name on the queue row. Position columns come straight from the
+    // queue and are NULL until an admin has saved a fcose run.
+    const resolveNodeData = async (ids: number[]) => {
+      const map = new Map<number, { name: string; pos_x: number | null; pos_y: number | null }>();
       if (!ids.length) return map;
       const r = await getPool().query(
         `SELECT q.discogs_id,
-                COALESCE(c.name, q.name) AS name
+                COALESCE(c.name, q.name) AS name,
+                q.pos_x, q.pos_y
            FROM all_blues_artist_queue q
            LEFT JOIN discogs_artist_cache c USING (discogs_id)
           WHERE q.discogs_id = ANY($1::int[])`,
         [ids],
       );
       for (const row of r.rows) {
-        if (row.name) map.set(row.discogs_id, row.name);
+        map.set(row.discogs_id, {
+          name: row.name || `Artist ${row.discogs_id}`,
+          pos_x: row.pos_x, pos_y: row.pos_y,
+        });
       }
       return map;
     };
@@ -9710,14 +9747,20 @@ app.get("/api/all-blues/graph", async (req, res) => {
       for (const [id, d] of deg) if (d >= minDegree) kept.add(id);
       const filteredEdges = edges.filter(e => kept.has(e.src_id) && kept.has(e.dst_id));
       const ids = Array.from(kept);
-      const nameMap = await resolveNames(ids);
-      const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
+      const dataMap = await resolveNodeData(ids);
+      const nodes = ids.map(id => {
+        const d = dataMap.get(id);
+        return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null };
+      });
       res.json({ nodes, edges: filteredEdges });
       return;
     }
     const ids = Array.from(nodeIds);
-    const nameMap = await resolveNames(ids);
-    const nodes = ids.map(id => ({ id, name: nameMap.get(id) || `Artist ${id}` }));
+    const dataMap = await resolveNodeData(ids);
+    const nodes = ids.map(id => {
+      const d = dataMap.get(id);
+      return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null };
+    });
     res.json({ nodes, edges });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
