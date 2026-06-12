@@ -16,6 +16,7 @@ const _AB_KINDS = [
 ];
 const _AB_KIND_KEY  = "sd_all_blues_kinds";
 const _AB_FOCUS_KEY = "sd_all_blues_focus";
+const _AB_YEARS_KEY = "sd_all_blues_years";
 let _abCy = null;
 let _abFirstLoad = true;
 let _abLastGraph = { nodes: [], edges: [] }; // most recent graph payload, used for focus search
@@ -74,6 +75,18 @@ function _abRenderKindChips() {
 async function initAllBluesView() {
   // Public view — worker controls + stats live in /admin → All Blues.
   _abRenderKindChips();
+  // Hydrate the year-range inputs from localStorage so a refresh
+  // preserves the user's last filter.
+  try {
+    const raw = localStorage.getItem(_AB_YEARS_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      const fromI = document.getElementById("ab-from-year-filter");
+      const toI   = document.getElementById("ab-to-year-filter");
+      if (fromI && Number.isFinite(obj.from)) fromI.value = obj.from;
+      if (toI   && Number.isFinite(obj.to))   toI.value   = obj.to;
+    }
+  } catch {}
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
     const raw = localStorage.getItem(_AB_FOCUS_KEY);
@@ -126,7 +139,14 @@ async function allBluesReload() {
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
   const enabled = [..._abGetEnabledKinds()];
   const minDeg = parseInt(document.getElementById("ab-min-degree")?.value || "1", 10) || 1;
-  const qs = new URLSearchParams({ kinds: enabled.join(","), minDegree: String(minDeg) });
+  const fromY = parseInt(document.getElementById("ab-from-year-filter")?.value || "1900", 10) || 1900;
+  const toY   = parseInt(document.getElementById("ab-to-year-filter")?.value   || "2100", 10) || 2100;
+  const qs = new URLSearchParams({
+    kinds: enabled.join(","),
+    minDegree: String(minDeg),
+    fromYear: String(fromY),
+    toYear:   String(toY),
+  });
   let data;
   try {
     const r = await fetch(`/api/all-blues/graph?${qs}`);
@@ -421,6 +441,27 @@ function _abFocusClear() {
   allBluesReload();
 }
 window._abFocusClear = _abFocusClear;
+
+// Year-range filter change handler: clamps to a valid range, persists
+// to localStorage, then reloads the graph. Hooked from the From/To
+// input onchange so any edit (keyboard, scroll-wheel, spinner) fires.
+function _abYearInputChanged() {
+  const fromI = document.getElementById("ab-from-year-filter");
+  const toI   = document.getElementById("ab-to-year-filter");
+  if (!fromI || !toI) return;
+  let from = parseInt(fromI.value, 10);
+  let to   = parseInt(toI.value, 10);
+  if (!Number.isFinite(from)) from = 1900;
+  if (!Number.isFinite(to))   to   = 2100;
+  // Swap if reversed so the user doesn't get an empty graph just for
+  // typing the larger number first.
+  if (from > to) { [from, to] = [to, from]; }
+  fromI.value = from;
+  toI.value   = to;
+  try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from, to })); } catch {}
+  allBluesReload();
+}
+window._abYearInputChanged = _abYearInputChanged;
 
 function _abRenderFocusActive() {
   const el = document.getElementById("ab-focus-active");
