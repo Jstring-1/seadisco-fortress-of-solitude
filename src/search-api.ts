@@ -9655,6 +9655,34 @@ app.get("/api/all-blues/edge", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// In-memory cache of /api/all-blues/graph responses keyed by the
+// query filter params. With a populated network the DB query + JSON
+// serialization is the bulk of the response time; near-duplicate
+// requests (multiple users navigating the page, repeat reloads from
+// the admin watching the worker) used to all hit Postgres. TTL is 5
+// minutes; clearGraphCache() flushes everything on demand (the worker
+// calls it after each run so new data shows up immediately).
+type _GraphCacheEntry = { data: any; expires: number };
+const _graphCache = new Map<string, _GraphCacheEntry>();
+const _GRAPH_CACHE_TTL_MS = 5 * 60 * 1000;
+const _GRAPH_CACHE_MAX = 50;
+function _graphCacheKey(params: { kinds: string; minDegree: number; fromYear: number; toYear: number }): string {
+  return `${params.kinds}|${params.minDegree}|${params.fromYear}|${params.toYear}`;
+}
+function _graphCacheClear(): void {
+  _graphCache.clear();
+}
+function _graphCachePut(key: string, data: any): void {
+  _graphCache.set(key, { data, expires: Date.now() + _GRAPH_CACHE_TTL_MS });
+  // Simple LRU eviction — drop oldest entries until under the cap.
+  while (_graphCache.size > _GRAPH_CACHE_MAX) {
+    const oldest = _graphCache.keys().next().value;
+    if (oldest == null) break;
+    _graphCache.delete(oldest);
+  }
+}
+(globalThis as any)._sdGraphCacheClear = _graphCacheClear;
+
 app.get("/api/all-blues/graph", async (req, res) => {
   try {
     const kinds = String(req.query.kinds ?? "").trim();
@@ -9670,6 +9698,20 @@ app.get("/api/all-blues/graph", async (req, res) => {
     const toYearRaw   = parseInt(String(req.query.toYear   ?? ""), 10);
     const fromYear = Number.isFinite(fromYearRaw) ? fromYearRaw : 1900;
     const toYear   = Number.isFinite(toYearRaw)   ? toYearRaw   : 2100;
+    // ── Cache lookup ───────────────────────────────────────────
+    // Same query params → same response. Sub-millisecond hit on a
+    // populated network. Worker calls _sdGraphCacheClear on each run
+    // completion so the cache stays fresh as edges land.
+    const cacheKey = _graphCacheKey({
+      kinds: kindList ? kindList.slice().sort().join(",") : "",
+      minDegree, fromYear, toYear,
+    });
+    const hit = _graphCache.get(cacheKey);
+    if (hit && hit.expires > Date.now()) {
+      res.setHeader("X-Constellations-Cache", "HIT");
+      res.json(hit.data);
+      return;
+    }
     // Canonicalize direction (LEAST/GREATEST) then aggregate every
     // kind on that pair into a single array. The frontend renders the
     // edge as a banded gradient — one color stripe per kind — so a
@@ -9757,7 +9799,10 @@ app.get("/api/all-blues/graph", async (req, res) => {
         const d = dataMap.get(id);
         return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
       });
-      res.json({ nodes, edges: filteredEdges });
+      const payload = { nodes, edges: filteredEdges };
+      _graphCachePut(cacheKey, payload);
+      res.setHeader("X-Constellations-Cache", "MISS");
+      res.json(payload);
       return;
     }
     const ids = Array.from(nodeIds);
@@ -9766,7 +9811,10 @@ app.get("/api/all-blues/graph", async (req, res) => {
       const d = dataMap.get(id);
       return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
     });
-    res.json({ nodes, edges });
+    const payload = { nodes, edges };
+    _graphCachePut(cacheKey, payload);
+    res.setHeader("X-Constellations-Cache", "MISS");
+    res.json(payload);
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 

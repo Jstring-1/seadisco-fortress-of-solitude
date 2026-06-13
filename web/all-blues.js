@@ -601,6 +601,38 @@ async function allBluesReload() {
   };
   _abCy.on("zoom", _syncLabelVisibility);
   _syncLabelVisibility();
+  // Chronological bias — nudges each node's x position toward where
+  // its seed_year falls on the canvas's horizontal axis. Always on,
+  // applied AFTER the layout settles so the force-directed clustering
+  // stays mostly intact (blended 50/50 with the chronological target).
+  // Runs after every layout pass (preset, fcose, refinement).
+  const applyChrono = () => {
+    if (!_abCy) return;
+    const yearVals = focusedNodes
+      .map(n => Number(n.seed_year))
+      .filter(v => Number.isFinite(v));
+    if (yearVals.length < 2) return;
+    const minYr = Math.min(...yearVals);
+    const maxYr = Math.max(...yearVals);
+    if (minYr === maxYr) return;
+    const bb = _abCy.elements().boundingBox();
+    const span = bb.x2 - bb.x1;
+    if (!Number.isFinite(span) || span < 1) return;
+    const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
+    _abCy.nodes().forEach(n => {
+      const id = parseInt(n.data("id"), 10);
+      const yr = yearById.get(id);
+      if (!Number.isFinite(yr)) return;
+      const targetX = bb.x1 + ((yr - minYr) / (maxYr - minYr)) * span;
+      const cur = n.position();
+      // 50/50 blend keeps force-directed clusters mostly intact while
+      // still imposing a clear left-to-right chronology. Older artists
+      // end up to the left, newer to the right.
+      n.position({ x: 0.5 * cur.x + 0.5 * targetX, y: cur.y });
+    });
+    _abCy.fit(undefined, 40);
+  };
+  applyChrono();
 }
 window.allBluesReload = allBluesReload;
 window._abToggleKind = _abToggleKind;
