@@ -93,20 +93,24 @@ async function initAllBluesView() {
     window._ensureAdminFlag().then(() => _abSyncSaveLayoutButton?.()).catch(() => {});
   }
   _abRenderKindChips();
-  // Hydrate the year-range inputs from localStorage so a refresh
-  // preserves the user's last filter.
+  // Hydrate the (hidden) year-range inputs from localStorage so a
+  // refresh preserves the user's last window. Old saves with custom
+  // widths (from earlier "any range" version) get snapped to the
+  // locked 11-year width by _abSyncWindowSlider below.
   try {
     const raw = localStorage.getItem(_AB_YEARS_KEY);
-    if (raw) {
+    const fromI = document.getElementById("ab-from-year-filter");
+    const toI   = document.getElementById("ab-to-year-filter");
+    if (raw && fromI && toI) {
       const obj = JSON.parse(raw);
-      const fromI = document.getElementById("ab-from-year-filter");
-      const toI   = document.getElementById("ab-to-year-filter");
-      if (fromI && Number.isFinite(obj.from)) fromI.value = obj.from;
-      if (toI   && Number.isFinite(obj.to))   toI.value   = obj.to;
+      if (Number.isFinite(obj.from)) fromI.value = obj.from;
+      if (Number.isFinite(obj.to))   toI.value   = obj.to;
     }
   } catch {}
-  // Sync the window slider thumb + label to the (possibly restored)
-  // year inputs so the toolbar reflects state right from first paint.
+  // Sync the window slider thumb + label and normalize the inputs to
+  // the locked 11-year width so the toolbar reflects state right from
+  // first paint. If nothing was stored, the HTML defaults (1930/1940)
+  // win — first-time visitors land on the 1930s era.
   _abSyncWindowSlider();
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
@@ -799,17 +803,24 @@ function _abRecomputeLayoutClick() {
 }
 window._abRecomputeLayoutClick = _abRecomputeLayoutClick;
 
+// Window is locked to 11 years (slider value = start, to = start + 10).
+// Default 1930–1940. The year inputs are hidden in the DOM; the slider
+// is the only user control. _abYearInputChanged stays exposed for the
+// localStorage restore path so existing state migrates cleanly.
+const _AB_WINDOW_SPAN = 10; // years between from and to → 11 distinct years
+const _AB_DEFAULT_START = 1930;
+
 function _abYearInputChanged() {
+  // Inputs are hidden; this only fires now from the restore-from-
+  // localStorage path. Normalize whatever's in them to the locked
+  // 11-year width starting at the stored "from".
   const fromI = document.getElementById("ab-from-year-filter");
   const toI   = document.getElementById("ab-to-year-filter");
   if (!fromI || !toI) return;
   let from = parseInt(fromI.value, 10);
-  let to   = parseInt(toI.value, 10);
-  if (!Number.isFinite(from)) from = 1900;
-  if (!Number.isFinite(to))   to   = 2100;
-  // Swap if reversed so the user doesn't get an empty graph just for
-  // typing the larger number first.
-  if (from > to) { [from, to] = [to, from]; }
+  if (!Number.isFinite(from)) from = _AB_DEFAULT_START;
+  from = Math.max(1900, Math.min(2010, from));
+  const to = from + _AB_WINDOW_SPAN;
   fromI.value = from;
   toI.value   = to;
   try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from, to })); } catch {}
@@ -818,10 +829,8 @@ function _abYearInputChanged() {
 }
 window._abYearInputChanged = _abYearInputChanged;
 
-// 10-year window slider — value = start year, end is value+9. The
-// number inputs above still allow arbitrary widths (1943-1952,
-// 1922-1925, etc.); this is just a fast way to slide a fixed-width
-// window across the network.
+// Slider thumb position = start year. Window end = start + 10, giving
+// an inclusive 11-year span (e.g. start=1930 → "1930–1940").
 function _abWindowSliderInput() {
   const slider = document.getElementById("ab-window-slider");
   const label  = document.getElementById("ab-window-label");
@@ -830,7 +839,7 @@ function _abWindowSliderInput() {
   if (!slider || !fromI || !toI) return;
   const start = parseInt(slider.value, 10);
   if (!Number.isFinite(start)) return;
-  const end = start + 9;
+  const end = start + _AB_WINDOW_SPAN;
   fromI.value = start;
   toI.value   = end;
   if (label) label.textContent = `${start}–${end}`;
@@ -839,12 +848,9 @@ function _abWindowSliderInput() {
 }
 window._abWindowSliderInput = _abWindowSliderInput;
 
-// Sync the slider position + label to whatever the From/To inputs
-// currently say. Called whenever the year inputs change so the
-// slider tracks the user's typed range. If the range isn't 10 years
-// wide the label shows the wider range with a "·" marker; the slider
-// thumb still parks at the start year so it's a reasonable jumping-
-// off point for the next drag.
+// Push the current From/To input state back onto the slider thumb +
+// label. Called on init so the toolbar reflects whatever's in the
+// hidden inputs (localStorage or HTML default).
 function _abSyncWindowSlider() {
   const slider = document.getElementById("ab-window-slider");
   const label  = document.getElementById("ab-window-label");
@@ -852,13 +858,14 @@ function _abSyncWindowSlider() {
   const toI    = document.getElementById("ab-to-year-filter");
   if (!slider || !fromI || !toI) return;
   const from = parseInt(fromI.value, 10);
-  const to   = parseInt(toI.value, 10);
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return;
-  slider.value = Math.max(Number(slider.min), Math.min(Number(slider.max), from));
-  if (label) {
-    const span = to - from;
-    label.textContent = span === 9 ? `${from}–${to}` : `${from}–${to} (${span + 1}y)`;
-  }
+  if (!Number.isFinite(from)) return;
+  const clamped = Math.max(Number(slider.min), Math.min(Number(slider.max), from));
+  slider.value = clamped;
+  // Always snap to the locked window width so label and inputs agree
+  // even if the stored 'to' got nudged by an older custom-range run.
+  const to = clamped + _AB_WINDOW_SPAN;
+  toI.value = to;
+  if (label) label.textContent = `${clamped}–${to}`;
 }
 
 function _abRenderFocusActive() {
