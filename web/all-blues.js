@@ -5,15 +5,23 @@
 // blues'). Reuses the Cytoscape lazy-loader pattern from blues-
 // archive.js's Connections subtab.
 
+// Four user-facing buckets that fold together the seven raw worker
+// kinds. The backend storage stays the same; this mapping translates
+// in both directions: when sending the kinds filter to the API we
+// expand each enabled bucket into the underlying raw kinds, and when
+// rendering edges we collapse the raw kinds back into bucket colors.
 const _AB_KINDS = [
-  { key: "spouse",   color: "#ec4899", label: "Spouse" },
-  { key: "family",   color: "#f97316", label: "Family" },
-  { key: "mentor",   color: "#a855f7", label: "Mentor" },
-  { key: "band",     color: "#4ade80", label: "Band" },
-  { key: "alias",    color: "#22d3ee", label: "Alias" },
-  { key: "traveled", color: "#fb7185", label: "Traveled" },
-  { key: "mention",  color: "#f5d442", label: "Mention" },
+  { key: "played_with", color: "#4ade80", label: "Played with", raw: ["band"] },
+  { key: "pseudonyms",  color: "#22d3ee", label: "Pseudonyms",   raw: ["alias"] },
+  { key: "family",      color: "#f97316", label: "Family",       raw: ["family", "spouse", "mentor"] },
+  { key: "mentions",    color: "#f5d442", label: "Mentions",     raw: ["mention", "traveled"] },
 ];
+// Reverse lookup: raw worker kind → bucket key.
+const _AB_KIND_TO_BUCKET = (() => {
+  const m = {};
+  for (const k of _AB_KINDS) for (const r of k.raw) m[r] = k.key;
+  return m;
+})();
 const _AB_KIND_KEY  = "sd_all_blues_kinds";
 const _AB_FOCUS_KEY = "sd_all_blues_focus";
 const _AB_YEARS_KEY = "sd_all_blues_years";
@@ -97,6 +105,9 @@ async function initAllBluesView() {
       if (toI   && Number.isFinite(obj.to))   toI.value   = obj.to;
     }
   } catch {}
+  // Sync the window slider thumb + label to the (possibly restored)
+  // year inputs so the toolbar reflects state right from first paint.
+  _abSyncWindowSlider();
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
     const raw = localStorage.getItem(_AB_FOCUS_KEY);
@@ -147,12 +158,19 @@ async function allBluesReload() {
   const el = document.getElementById("all-blues-graph");
   if (!el) return;
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
-  const enabled = [..._abGetEnabledKinds()];
+  const enabledBuckets = [..._abGetEnabledKinds()];
+  // Expand each enabled bucket to the underlying raw kinds the
+  // backend stores. e.g. "family" → "family,spouse,mentor".
+  const rawKinds = [];
+  for (const bucket of enabledBuckets) {
+    const def = _AB_KINDS.find(k => k.key === bucket);
+    if (def) rawKinds.push(...def.raw);
+  }
   const minDeg = parseInt(document.getElementById("ab-min-degree")?.value || "1", 10) || 1;
   const fromY = parseInt(document.getElementById("ab-from-year-filter")?.value || "1900", 10) || 1900;
   const toY   = parseInt(document.getElementById("ab-to-year-filter")?.value   || "2100", 10) || 2100;
   const qs = new URLSearchParams({
-    kinds: enabled.join(","),
+    kinds: rawKinds.join(","),
     minDegree: String(minDeg),
     fromYear: String(fromY),
     toYear:   String(toY),
@@ -204,15 +222,31 @@ async function allBluesReload() {
   if (!ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Cytoscape failed to load</div>`; return; }
   el.innerHTML = "";
 
-  const kindColor = Object.fromEntries(_AB_KINDS.map(k => [k.key, k.color]));
+  const bucketColor = Object.fromEntries(_AB_KINDS.map(k => [k.key, k.color]));
+  // Translate the raw worker kinds on an edge into the user-facing
+  // buckets, deduped + ordered by the bucket priority. e.g. an edge
+  // with kinds ["band", "family", "spouse"] becomes buckets
+  // ["played_with", "family"] (spouse folds into family).
+  const bucketKinds = (rawList) => {
+    const list = Array.isArray(rawList) && rawList.length ? rawList : ["mention"];
+    const seen = new Set();
+    const out = [];
+    for (const raw of list) {
+      const b = _AB_KIND_TO_BUCKET[raw] || "mentions";
+      if (!seen.has(b)) { seen.add(b); out.push(b); }
+    }
+    // Order by the chip order so the gradient is stable across renders.
+    const priority = Object.fromEntries(_AB_KINDS.map((k, i) => [k.key, i]));
+    out.sort((a, b) => (priority[a] ?? 99) - (priority[b] ?? 99));
+    return out;
+  };
   // Build a multi-band gradient per edge so pairs with multiple
-  // kinds (family + band, etc.) show every color along the line
-  // with hard stops between segments.
-  const buildEdgeGradient = (kinds) => {
-    const list = Array.isArray(kinds) && kinds.length ? kinds : ["mention"];
-    const colors = list.map(k => kindColor[k] || "#888");
+  // bucket kinds show every color along the line with hard stops.
+  const buildEdgeGradient = (rawKinds) => {
+    const buckets = bucketKinds(rawKinds);
+    const colors = buckets.map(b => bucketColor[b] || "#888");
     if (colors.length === 1) {
-      return { colors: `${colors[0]} ${colors[0]}`, positions: "0% 100%" };
+      return { buckets, colors: `${colors[0]} ${colors[0]}`, positions: "0% 100%" };
     }
     const n = colors.length;
     const stopColors = [];
@@ -223,7 +257,7 @@ async function allBluesReload() {
       stopColors.push(colors[i], colors[i]);
       stopPositions.push(start.toFixed(2) + "%", end.toFixed(2) + "%");
     }
-    return { colors: stopColors.join(" "), positions: stopPositions.join(" ") };
+    return { buckets, colors: stopColors.join(" "), positions: stopPositions.join(" ") };
   };
 
   // ── Visual derivations: degree, era color, cluster, label rank ──
@@ -377,10 +411,11 @@ async function allBluesReload() {
         "text-background-color": "#000", "text-background-opacity": 0.55,
         "text-background-padding": 2, "text-background-shape": "round-rectangle",
         "text-wrap": "ellipsis", "text-max-width": 110,
-        // Sizing by degree: 1 connection → 18px, lots of connections
-        // → 52px. Hub artists visually dominate, leaf nodes recede.
-        "width":  `mapData(degree, 0, ${maxDeg}, 18, 52)`,
-        "height": `mapData(degree, 0, ${maxDeg}, 18, 52)`,
+        // Sizing by degree: bigger spread so hubs visually dominate.
+        // 1 connection → 14px, max-degree → 80px. The eye finds the
+        // cores first, periphery recedes.
+        "width":  `mapData(degree, 0, ${maxDeg}, 14, 80)`,
+        "height": `mapData(degree, 0, ${maxDeg}, 14, 80)`,
       }},
       { selector: "edge", style: {
         // Banded linear gradient — one segment per kind on the pair.
@@ -741,9 +776,53 @@ function _abYearInputChanged() {
   fromI.value = from;
   toI.value   = to;
   try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from, to })); } catch {}
+  _abSyncWindowSlider();
   allBluesReload();
 }
 window._abYearInputChanged = _abYearInputChanged;
+
+// 10-year window slider — value = start year, end is value+9. The
+// number inputs above still allow arbitrary widths (1943-1952,
+// 1922-1925, etc.); this is just a fast way to slide a fixed-width
+// window across the network.
+function _abWindowSliderInput() {
+  const slider = document.getElementById("ab-window-slider");
+  const label  = document.getElementById("ab-window-label");
+  const fromI  = document.getElementById("ab-from-year-filter");
+  const toI    = document.getElementById("ab-to-year-filter");
+  if (!slider || !fromI || !toI) return;
+  const start = parseInt(slider.value, 10);
+  if (!Number.isFinite(start)) return;
+  const end = start + 9;
+  fromI.value = start;
+  toI.value   = end;
+  if (label) label.textContent = `${start}–${end}`;
+  try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from: start, to: end })); } catch {}
+  allBluesReload();
+}
+window._abWindowSliderInput = _abWindowSliderInput;
+
+// Sync the slider position + label to whatever the From/To inputs
+// currently say. Called whenever the year inputs change so the
+// slider tracks the user's typed range. If the range isn't 10 years
+// wide the label shows the wider range with a "·" marker; the slider
+// thumb still parks at the start year so it's a reasonable jumping-
+// off point for the next drag.
+function _abSyncWindowSlider() {
+  const slider = document.getElementById("ab-window-slider");
+  const label  = document.getElementById("ab-window-label");
+  const fromI  = document.getElementById("ab-from-year-filter");
+  const toI    = document.getElementById("ab-to-year-filter");
+  if (!slider || !fromI || !toI) return;
+  const from = parseInt(fromI.value, 10);
+  const to   = parseInt(toI.value, 10);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+  slider.value = Math.max(Number(slider.min), Math.min(Number(slider.max), from));
+  if (label) {
+    const span = to - from;
+    label.textContent = span === 9 ? `${from}–${to}` : `${from}–${to} (${span + 1}y)`;
+  }
+}
 
 function _abRenderFocusActive() {
   const el = document.getElementById("ab-focus-active");
