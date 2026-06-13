@@ -9174,6 +9174,25 @@ app.get("/api/admin/all-blues/status", async (req, res) => {
     );
     const linksByKind: Record<string, number> = {};
     for (const r of linksR.rows) linksByKind[r.kind] = r.n;
+    // Seeds with zero edges (no row in all_blues_links where they're
+    // src or dst). After a worker run this measures the long tail of
+    // artists nobody ever mentioned and who never co-credited on a
+    // release — useful to know how much of the queue resulted in
+    // dead-end nodes.
+    const isolatedR = await getPool().query(`
+      SELECT COUNT(*)::int AS n
+        FROM all_blues_artist_queue q
+       WHERE q.seed_year IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM all_blues_links l
+            WHERE l.src_id = q.discogs_id OR l.dst_id = q.discogs_id
+         )
+    `);
+    const totalSeedsR = await getPool().query(`
+      SELECT COUNT(*)::int AS n
+        FROM all_blues_artist_queue
+       WHERE seed_year IS NOT NULL
+    `);
     res.json({
       running: isAllBluesRunning(),
       active: getAllBluesActiveParams(),
@@ -9181,6 +9200,8 @@ app.get("/api/admin/all-blues/status", async (req, res) => {
       queue,
       cached_artists: cacheR.rows[0]?.n ?? 0,
       links_by_kind: linksByKind,
+      isolated_seeds: isolatedR.rows[0]?.n ?? 0,
+      total_seeds:    totalSeedsR.rows[0]?.n ?? 0,
     });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
