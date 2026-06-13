@@ -22,6 +22,17 @@ const _AB_KIND_TO_BUCKET = (() => {
   for (const k of _AB_KINDS) for (const r of k.raw) m[r] = k.key;
   return m;
 })();
+// Resolve a raw worker kind (band, alias, family, spouse, mentor,
+// mention, traveled) to the user-facing bucket {label, color} so the
+// connection pills in the edge / artist popups match the filter chips
+// at the top of the graph.
+function _abBucketFor(rawKind) {
+  const bucketKey = _AB_KIND_TO_BUCKET[rawKind];
+  const def = _AB_KINDS.find(k => k.key === bucketKey);
+  return def
+    ? { label: def.label, color: def.color }
+    : { label: String(rawKind || "").replace(/_/g, " "), color: "#888" };
+}
 const _AB_KIND_KEY  = "sd_all_blues_kinds";
 const _AB_FOCUS_KEY = "sd_all_blues_focus";
 const _AB_YEARS_KEY = "sd_all_blues_years";
@@ -1179,14 +1190,18 @@ async function _abOpenEdgePopup(srcId, dstId) {
   };
   const edgeKindRows = data.edges.length
     ? data.edges.map(e => {
-      const color = kindColor[e.kind] || "#888";
+      // Use bucket label + color so the per-edge row matches the
+      // chips in the toolbar (e.g. "Pseudonyms" cyan, not "ALIAS"
+      // grey). Raw kind still drives src/dst direction text below.
+      const b = _abBucketFor(e.kind);
+      const color = b.color;
       const direction = e.src_id === data.src.id
         ? `<span style="color:var(--muted)">${_abEsc(data.src.name)} →</span> ${_abEsc(data.dst.name)}`
         : `<span style="color:var(--muted)">${_abEsc(data.dst.name)} →</span> ${_abEsc(data.src.name)}`;
       return `
         <div style="padding:0.4rem 0.5rem;border-left:3px solid ${color};margin-bottom:0.35rem;background:rgba(255,255,255,0.03);border-radius:4px">
           <div style="display:flex;align-items:baseline;gap:0.4rem;margin-bottom:0.15rem">
-            <span style="background:${color};color:#000;padding:0.08rem 0.4rem;border-radius:999px;font-size:0.68rem;font-weight:600;text-transform:uppercase">${_abEsc(e.kind)}</span>
+            <span style="background:${color};color:#000;padding:0.08rem 0.5rem;border-radius:999px;font-size:0.68rem;font-weight:600">${_abEsc(b.label)}</span>
             <span style="font-size:0.72rem">${direction}</span>
           </div>
           ${e.excerpt ? `<div style="font-size:0.74rem;color:var(--muted);font-style:italic">"…${_abEsc(e.excerpt)}…"</div>` : ""}
@@ -1405,9 +1420,16 @@ async function _abOpenArtistPopup(artistId) {
     : "";
   const connectionRows = data.connections.length
     ? data.connections.map(c => {
+        // Bucket the raw worker kinds (band/alias/family/spouse/...)
+        // into the same 4 user-facing chips shown in the toolbar so
+        // a connection pill says "Pseudonyms" + cyan, not raw "ALIAS"
+        // + grey fallback.
+        const seen = new Set();
         const chips = c.kinds.map(k => {
-          const color = kindColor[k] || "#888";
-          return `<span style="background:${color};color:#000;padding:0.08rem 0.4rem;border-radius:999px;font-size:0.66rem;font-weight:600;text-transform:uppercase;margin-right:0.25rem">${_abEsc(k)}</span>`;
+          const b = _abBucketFor(k);
+          if (seen.has(b.label)) return "";
+          seen.add(b.label);
+          return `<span style="background:${b.color};color:#000;padding:0.08rem 0.5rem;border-radius:999px;font-size:0.66rem;font-weight:600;margin-right:0.25rem">${_abEsc(b.label)}</span>`;
         }).join("");
         return `
           <div onclick="event.stopPropagation();_abOpenEdgePopup(${a.id}, ${c.partner_id})"
