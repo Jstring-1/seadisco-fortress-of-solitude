@@ -9745,13 +9745,21 @@ app.get("/api/all-blues/graph", async (req, res) => {
     // Endpoint-must-be-in-year-range filter is folded into the
     // existing seed_year gate. NULL seed_year is excluded the same
     // way (legacy non-blues rows or never-collected seeds).
+    // Discogs placeholder entities that aren't real artists:
+    //   194    = Various Artists (compilation credit)
+    //   118760 = Unknown Artist
+    // Both end up as the highest-degree "hubs" in the network because
+    // they appear on every comp/credit, but they say nothing meaningful
+    // about real-artist relationships. Exclude on both endpoints.
     const params: any[] = [fromYear, toYear];
     let edgeSql = `
       SELECT LEAST(l.src_id, l.dst_id)    AS src_id,
              GREATEST(l.src_id, l.dst_id) AS dst_id,
              array_agg(DISTINCT l.kind)   AS kinds
         FROM all_blues_links l
-       WHERE EXISTS (SELECT 1 FROM all_blues_artist_queue q
+       WHERE l.src_id NOT IN (194, 118760)
+         AND l.dst_id NOT IN (194, 118760)
+         AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
                       WHERE q.discogs_id = l.src_id
                         AND q.seed_year BETWEEN $1 AND $2)
          AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
