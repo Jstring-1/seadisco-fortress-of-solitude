@@ -318,6 +318,13 @@ async function allBluesReload() {
   // _abForceFreshLayout to bypass the cache for one full fcose pass.
   const positionedNodes = focusedNodes.filter(n => Number.isFinite(n.x) && Number.isFinite(n.y));
   const useCachedPositions = !_abForceFreshLayout && positionedNodes.length > 0;
+  // Refinement mode: user clicked "Recompute" AND there are existing
+  // positions to start from. fcose can run much cheaper here — we
+  // skip randomize, use draft quality, fewer iterations. It's a
+  // re-fit on top of the saved layout, not a fresh discovery. Without
+  // this, a Recompute on 2000+ nodes locks the main thread for tens
+  // of seconds and trips the browser's "page unresponsive" dialog.
+  const isRefinement = _abForceFreshLayout && positionedNodes.length > 0;
   _abForceFreshLayout = false;
   // Bounding box of the cached positions; new nodes get random spots
   // inside it so the graph stays coherent after a partial worker run.
@@ -386,7 +393,9 @@ async function allBluesReload() {
       : 0;
     const layoutNote = useCachedPositions
       ? ` · cached layout (${pct}% positioned${pct < 100 ? ", new nodes scattered" : ""})`
-      : ` · fresh fcose layout (slow first render)`;
+      : isRefinement
+        ? ` · fcose refinement (${pct}% prior positions, refit ~5s)`
+        : ` · fresh fcose layout (slow first render)`;
     counts.textContent += layoutNote;
   }
 
@@ -480,29 +489,57 @@ async function allBluesReload() {
     layout: useCachedPositions
       ? { name: "preset", animate: false, fit: true, padding: 40 }
       : (window.cytoscapeFcose
-        ? {
-            name: "fcose",
-            quality: "proof",
-            animate: false,
-            nodeDimensionsIncludeLabels: true,
-            nodeRepulsion: () => 90000,
-            idealEdgeLength: () => 280,
-            edgeElasticity: () => 0.25,
-            nodeSeparation: 180,
-            gravity: 0.08,
-            gravityRange: 5,
-            numIter: 6000,
-            tile: true, packComponents: true,
-            tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
-            randomize: true,
-          }
+        ? (isRefinement
+          // REFINEMENT pass — existing positions are the starting point.
+          // Draft quality + ~1/4 the iterations + randomize:false keeps
+          // the recompute under a few seconds on 2000+ nodes instead of
+          // locking the tab. Same force constants so the steady-state
+          // looks consistent with a full proof run.
+          ? {
+              name: "fcose",
+              quality: "draft",
+              animate: false,
+              nodeDimensionsIncludeLabels: true,
+              nodeRepulsion: () => 90000,
+              idealEdgeLength: () => 280,
+              edgeElasticity: () => 0.25,
+              nodeSeparation: 180,
+              gravity: 0.08,
+              gravityRange: 5,
+              numIter: 1500,
+              tile: true, packComponents: true,
+              tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
+              randomize: false,
+              incremental: true,
+            }
+          // COLD pass — no existing layout to refine. Full strength,
+          // randomize on. This is the slow path; only fires when the
+          // graph has zero saved positions OR the admin clicked
+          // Recompute on a never-saved layout.
+          : {
+              name: "fcose",
+              quality: "proof",
+              animate: false,
+              nodeDimensionsIncludeLabels: true,
+              nodeRepulsion: () => 90000,
+              idealEdgeLength: () => 280,
+              edgeElasticity: () => 0.25,
+              nodeSeparation: 180,
+              gravity: 0.08,
+              gravityRange: 5,
+              numIter: 6000,
+              tile: true, packComponents: true,
+              tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
+              randomize: true,
+            })
         : {
             name: "cose",
             animate: false,
             nodeDimensionsIncludeLabels: true,
             nodeRepulsion: 200000, idealEdgeLength: 320,
             gravity: 0.08,
-            numIter: 4000,
+            numIter: isRefinement ? 1500 : 4000,
+            randomize: !isRefinement,
           }),
     wheelSensitivity: 0.2,
     minZoom: 0.05,
