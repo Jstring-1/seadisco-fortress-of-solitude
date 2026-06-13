@@ -509,13 +509,14 @@ async function allBluesReload() {
               randomize: false,
               incremental: true,
             }
-          // COLD pass — no existing layout to refine. Full strength,
-          // randomize on. This is the slow path; only fires when the
-          // graph has zero saved positions OR the admin clicked
-          // Recompute on a never-saved layout.
+          // COLD pass — no existing layout to refine. Dialed-down
+          // strength so a Recompute on 5000+ nodes finishes in
+          // seconds, not minutes. quality:"default" + ~2500 iters is
+          // plenty given that applyChrono() reshapes the result into
+          // a horizontal-chronological band anyway.
           : {
               name: "fcose",
-              quality: "proof",
+              quality: "default",
               animate: false,
               nodeDimensionsIncludeLabels: true,
               nodeRepulsion: () => 90000,
@@ -524,7 +525,7 @@ async function allBluesReload() {
               nodeSeparation: 180,
               gravity: 0.08,
               gravityRange: 5,
-              numIter: 6000,
+              numIter: 2500,
               tile: true, packComponents: true,
               tilingPaddingVertical: 60, tilingPaddingHorizontal: 60,
               randomize: true,
