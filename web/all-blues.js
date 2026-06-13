@@ -30,6 +30,7 @@ let _abFirstLoad = true;
 let _abLastLayoutWasCached = false; // true if the latest render used preset positions
 let _abUnpositionedCount = 0; // how many nodes this render came in without saved positions
 let _abTotalNodeCount = 0;    // total nodes this render — for the Save button hint
+let _abLastFetchedAt = null;  // timestamp of last successful graph fetch
 let _abForceFreshLayout = false;    // admin "Recompute layout" override — strip positions for one render
 let _abLastGraph = { nodes: [], edges: [] }; // most recent graph payload, used for focus search
 let _abFocusId = null;                       // current focused artist id (null = whole graph)
@@ -68,7 +69,8 @@ function _abToggleKind(kind) {
   if (set.has(kind)) set.delete(kind); else set.add(kind);
   _abSetEnabledKinds(set);
   _abRenderKindChips();
-  allBluesReload();
+  // Visibility filter, not re-fetch — kinds chip toggle is instant.
+  if (_abCy) _abApplyFilters(); else allBluesReload();
 }
 
 function _abRenderKindChips() {
@@ -162,30 +164,15 @@ async function allBluesReload() {
   const el = document.getElementById("all-blues-graph");
   if (!el) return;
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
-  const enabledBuckets = [..._abGetEnabledKinds()];
-  // Expand each enabled bucket to the underlying raw kinds the
-  // backend stores. e.g. "family" → "family,spouse,mentor".
-  const rawKinds = [];
-  for (const bucket of enabledBuckets) {
-    const def = _AB_KINDS.find(k => k.key === bucket);
-    if (def) rawKinds.push(...def.raw);
-  }
-  const minDeg = parseInt(document.getElementById("ab-min-degree")?.value || "1", 10) || 1;
-  const fromY = parseInt(document.getElementById("ab-from-year-filter")?.value || "1900", 10) || 1900;
-  const toY   = parseInt(document.getElementById("ab-to-year-filter")?.value   || "2100", 10) || 2100;
-  const qs = new URLSearchParams({
-    kinds: rawKinds.join(","),
-    minDegree: String(minDeg),
-    fromYear: String(fromY),
-    toYear:   String(toY),
-  });
   let data;
   let fetchedAt;
   try {
-    // Add a cache-bust param so any intermediate caching layer
-    // (CDN, browser BFCache, service worker) can't serve a stale
-    // graph response after the worker has added new edges.
-    const r = await fetch(`/api/all-blues/graph?${qs}&_=${Date.now()}`, {
+    // Always fetch the FULL graph — no kind / year / degree params.
+    // The server response-cache returns the same hit for everyone, so
+    // this is one hot DB query shared across users. Filtering (slider,
+    // kind chips, min degree) happens client-side via visibility on
+    // the laid-out cytoscape, so the slider never re-fetches.
+    const r = await fetch(`/api/all-blues/graph?_=${Date.now()}`, {
       cache: "no-store",
     });
     if (!r.ok) { el.innerHTML = `<div style="padding:1rem;color:#c66">Failed to load graph</div>`; return; }
@@ -195,27 +182,17 @@ async function allBluesReload() {
     el.innerHTML = `<div style="padding:1rem;color:#c66">Failed: ${_abEsc(err.message)}</div>`; return;
   }
   _abLastGraph = data;
-  // If focused id doesn't exist in current dataset (filtered out by
-  // kinds / minDegree), clear it silently so the graph still renders.
-  let focusedNodes = data.nodes;
-  let focusedEdges = data.edges;
-  let focusBanner = "";
-  if (_abFocusId != null) {
-    const hasNode = data.nodes.some(n => n.id === _abFocusId);
-    if (hasNode) {
-      const reach = _abBfsReachable(data.nodes, data.edges, _abFocusId);
-      focusedNodes = data.nodes.filter(n => reach.has(n.id));
-      focusedEdges = data.edges.filter(e => reach.has(e.src_id) && reach.has(e.dst_id));
-      const display = focusedNodes.find(n => n.id === _abFocusId)?.name || _abFocusName || `Artist ${_abFocusId}`;
-      focusBanner = `· focused on ${display} (${focusedNodes.length} reachable)`;
-    } else {
-      focusBanner = `· focused artist not in current filter`;
-    }
-  }
+  _abLastFetchedAt = fetchedAt;
+  // Render the FULL graph. Every node, every edge. Filtering (slider,
+  // kind chips, min degree, focus) happens after layout via
+  // _abApplyFilters() which only flips visibility on the laid-out
+  // cytoscape — no re-fetch, no re-layout when those change.
+  const focusedNodes = data.nodes;
+  const focusedEdges = data.edges;
   const counts = document.getElementById("ab-graph-counts");
   if (counts) {
     const stamp = fetchedAt ? fetchedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-    counts.textContent = `· ${data.nodes.length} artists, ${data.edges.length} links ${focusBanner}${stamp ? ` · fetched ${stamp}` : ""}`;
+    counts.textContent = `· ${data.nodes.length} artists, ${data.edges.length} links${stamp ? ` · fetched ${stamp}` : ""}`;
   }
   _abRenderFocusActive();
   if (!focusedNodes.length) {
@@ -358,6 +335,7 @@ async function allBluesReload() {
           eraColor: eraColor(n.seed_year),
           clusterColor: CLUSTER_HUES[cid % CLUSTER_HUES.length],
           alwaysLabel: labelAlwaysVisible.has(n.id) ? 1 : 0,
+          seedYear: Number.isFinite(n.seed_year) ? n.seed_year : null,
         },
       };
       if (Number.isFinite(n.x) && Number.isFinite(n.y)) {
@@ -378,6 +356,10 @@ async function allBluesReload() {
           id: `e${i}`,
           source: String(e.src_id),
           target: String(e.dst_id),
+          // rawKinds carries the underlying worker kinds for
+          // client-side kind-chip filtering. The bucket lookup
+          // happens once at filter time, not per render.
+          rawKinds: kinds.join(","),
           kinds: kinds.join(","),
           gradientColors: grad.colors,
           gradientPositions: grad.positions,
@@ -404,7 +386,7 @@ async function allBluesReload() {
   }
 
   if (_abCy) { try { _abCy.destroy(); } catch {} _abCy = null; }
-  _abCy = window.cytoscape({
+  _abCy = window._abCy = window.cytoscape({
     container: el,
     elements,
     style: [
@@ -601,11 +583,13 @@ async function allBluesReload() {
   };
   _abCy.on("zoom", _syncLabelVisibility);
   _syncLabelVisibility();
-  // Chronological bias — nudges each node's x position toward where
-  // its seed_year falls on the canvas's horizontal axis. Always on,
-  // applied AFTER the layout settles so the force-directed clustering
-  // stays mostly intact (blended 50/50 with the chronological target).
-  // Runs after every layout pass (preset, fcose, refinement).
+  // Chronological bias — dominant right-to-left ordering on x,
+  // compressed y so the network forms a horizontal rectangle (much
+  // wider than tall). Always on, applied AFTER the layout settles.
+  // 85% chronological + 15% original x preserves enough of the
+  // force-directed cluster structure to make spatial sense.
+  // Direction is REVERSED: newer artists (high seed_year) land on
+  // the LEFT, older artists land on the RIGHT.
   const applyChrono = () => {
     if (!_abCy) return;
     const yearVals = focusedNodes
@@ -616,26 +600,156 @@ async function allBluesReload() {
     const maxYr = Math.max(...yearVals);
     if (minYr === maxYr) return;
     const bb = _abCy.elements().boundingBox();
-    const span = bb.x2 - bb.x1;
-    if (!Number.isFinite(span) || span < 1) return;
+    const xSpan = bb.x2 - bb.x1;
+    if (!Number.isFinite(xSpan) || xSpan < 1) return;
+    // Target aspect: the canvas is much wider than it is tall, so
+    // stretch x to fill the viewport width and compress y to about
+    // 1/3 of x. Use canvas-render bounds rather than the post-fcose
+    // bounding box so the final picture matches the container.
+    const cyEl = document.getElementById("all-blues-graph");
+    const rect = cyEl?.getBoundingClientRect();
+    const targetXSpan = (rect?.width || xSpan) * 0.92;
+    const targetYSpan = targetXSpan * 0.30;
+    // Recenter on the original midpoint so we don't drift.
+    const midY = (bb.y1 + bb.y2) / 2;
+    const xCenter = (bb.x1 + bb.x2) / 2;
+    const xL = xCenter - targetXSpan / 2;
+    const xR = xCenter + targetXSpan / 2;
+    const yT = midY - targetYSpan / 2;
+    const yB = midY + targetYSpan / 2;
+    const oldYSpan = bb.y2 - bb.y1 || 1;
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
     _abCy.nodes().forEach(n => {
       const id = parseInt(n.data("id"), 10);
       const yr = yearById.get(id);
       if (!Number.isFinite(yr)) return;
-      const targetX = bb.x1 + ((yr - minYr) / (maxYr - minYr)) * span;
+      const t = (yr - minYr) / (maxYr - minYr);
+      // REVERSED: high t (newer) → small x (left); low t (older) → big x (right).
+      const targetX = xR - t * (xR - xL);
       const cur = n.position();
-      // 50/50 blend keeps force-directed clusters mostly intact while
-      // still imposing a clear left-to-right chronology. Older artists
-      // end up to the left, newer to the right.
-      n.position({ x: 0.5 * cur.x + 0.5 * targetX, y: cur.y });
+      // 85% weight on chronological target → strong R-L ordering.
+      // Compress y into the rectangle band.
+      const newY = yT + ((cur.y - bb.y1) / oldYSpan) * (yB - yT);
+      n.position({
+        x: 0.15 * cur.x + 0.85 * targetX,
+        y: newY,
+      });
     });
     _abCy.fit(undefined, 40);
   };
   applyChrono();
+  // Apply the toolbar's current filter state (slider, kinds, min
+  // degree) via visibility — no re-layout, no re-fetch.
+  _abApplyFilters();
 }
 window.allBluesReload = allBluesReload;
 window._abToggleKind = _abToggleKind;
+
+// ── Visibility-only filter pass ────────────────────────────────────
+// Reads the toolbar state (year window, kind buckets, min degree,
+// focus) and applies CLASSES to the rendered cytoscape instance.
+// No re-layout. No re-fetch. Used by the slider, the kind chips, and
+// the min degree input — every filter touch is instant.
+function _abApplyFilters() {
+  if (!_abCy) return;
+  const fromI = document.getElementById("ab-from-year-filter");
+  const toI   = document.getElementById("ab-to-year-filter");
+  const fromY = parseInt(fromI?.value || "1900", 10) || 1900;
+  const toY   = parseInt(toI?.value   || "2100", 10) || 2100;
+  const enabledBuckets = _abGetEnabledKinds();
+  const enabledRaw = new Set();
+  for (const b of enabledBuckets) {
+    const def = _AB_KINDS.find(k => k.key === b);
+    if (def) for (const r of def.raw) enabledRaw.add(r);
+  }
+  const minDeg = parseInt(document.getElementById("ab-min-degree")?.value || "1", 10) || 1;
+  // Pass 1: nodes survive the year window
+  const yearOK = (n) => {
+    const yr = n.data("seedYear");
+    if (!Number.isFinite(yr)) return true; // unknown year stays visible
+    return yr >= fromY && yr <= toY;
+  };
+  // Pass 2: edges survive when at least one of their raw kinds is on
+  // AND both endpoints survive the year window.
+  const kindOK = (e) => {
+    const list = (e.data("rawKinds") || "").split(",").filter(Boolean);
+    if (!list.length) return enabledRaw.has("mention");
+    return list.some(k => enabledRaw.has(k));
+  };
+  // Apply year + kind first, then min-degree on the surviving subgraph.
+  const visibleNodes = new Set();
+  _abCy.nodes().forEach(n => { if (yearOK(n)) visibleNodes.add(n.id()); });
+  const liveEdges = [];
+  _abCy.edges().forEach(e => {
+    const src = e.source().id();
+    const dst = e.target().id();
+    const live = visibleNodes.has(src) && visibleNodes.has(dst) && kindOK(e);
+    if (live) liveEdges.push(e);
+  });
+  // Min-degree pass — count live edges per surviving node.
+  let finalNodes = visibleNodes;
+  if (minDeg > 1) {
+    const deg = new Map();
+    for (const e of liveEdges) {
+      const s = e.source().id(), d = e.target().id();
+      deg.set(s, (deg.get(s) || 0) + 1);
+      deg.set(d, (deg.get(d) || 0) + 1);
+    }
+    finalNodes = new Set();
+    for (const id of visibleNodes) {
+      if ((deg.get(id) || 0) >= minDeg) finalNodes.add(id);
+    }
+  }
+  // Focus / BFS — narrow to the reachable component.
+  if (_abFocusId != null && finalNodes.has(String(_abFocusId))) {
+    const adj = new Map();
+    for (const id of finalNodes) adj.set(id, []);
+    for (const e of liveEdges) {
+      const s = e.source().id(), d = e.target().id();
+      if (adj.has(s) && adj.has(d)) {
+        adj.get(s).push(d);
+        adj.get(d).push(s);
+      }
+    }
+    const reach = new Set([String(_abFocusId)]);
+    const queue = [String(_abFocusId)];
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const nb of (adj.get(cur) || [])) {
+        if (!reach.has(nb)) { reach.add(nb); queue.push(nb); }
+      }
+    }
+    finalNodes = new Set([...finalNodes].filter(id => reach.has(id)));
+  }
+  // Stamp visibility via inline cytoscape style — display:none for
+  // hidden, default for visible. Cytoscape culls display:none from
+  // hit-testing and rendering, so this stays fast even with 8000
+  // nodes when most are hidden.
+  let visN = 0, visE = 0;
+  _abCy.nodes().forEach(n => {
+    const on = finalNodes.has(n.id());
+    n.style("display", on ? "element" : "none");
+    if (on) visN++;
+  });
+  _abCy.edges().forEach(e => {
+    const on = finalNodes.has(e.source().id())
+            && finalNodes.has(e.target().id())
+            && kindOK(e);
+    e.style("display", on ? "element" : "none");
+    if (on) visE++;
+  });
+  // Update the counts label with what's visible vs total.
+  const counts = document.getElementById("ab-graph-counts");
+  if (counts && _abLastGraph) {
+    const stamp = _abLastFetchedAt
+      ? _abLastFetchedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      : "";
+    const total = _abLastGraph.nodes?.length ?? 0;
+    const totalE = _abLastGraph.edges?.length ?? 0;
+    counts.textContent = `· ${visN.toLocaleString()} of ${total.toLocaleString()} artists, ${visE.toLocaleString()} of ${totalE.toLocaleString()} links${stamp ? ` · fetched ${stamp}` : ""}`;
+  }
+}
+window._abApplyFilters = _abApplyFilters;
 
 // ── Focus / search ────────────────────────────────────────────────
 
@@ -704,7 +818,7 @@ function _abFocusPick(id, name) {
   if (inp) inp.value = name || "";
   const sug = document.getElementById("ab-focus-suggestions");
   if (sug) { sug.style.display = "none"; sug.innerHTML = ""; }
-  allBluesReload();
+  if (_abCy) _abApplyFilters(); else allBluesReload();
 }
 window._abFocusPick = _abFocusPick;
 
@@ -738,7 +852,7 @@ function _abFocusClear() {
   if (inp) inp.value = "";
   const sug = document.getElementById("ab-focus-suggestions");
   if (sug) { sug.style.display = "none"; sug.innerHTML = ""; }
-  allBluesReload();
+  if (_abCy) _abApplyFilters(); else allBluesReload();
 }
 window._abFocusClear = _abFocusClear;
 
@@ -857,7 +971,7 @@ function _abYearInputChanged() {
   toI.value   = to;
   try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from, to })); } catch {}
   _abSyncWindowSlider();
-  allBluesReload();
+  if (_abCy) _abApplyFilters(); else allBluesReload();
 }
 window._abYearInputChanged = _abYearInputChanged;
 
@@ -876,7 +990,10 @@ function _abWindowSliderInput() {
   toI.value   = end;
   if (label) label.textContent = `${start}–${end}`;
   try { localStorage.setItem(_AB_YEARS_KEY, JSON.stringify({ from: start, to: end })); } catch {}
-  allBluesReload();
+  // The slider must NEVER re-fetch or re-layout — it only dictates
+  // which slice of the already-rendered network is visible. Cytoscape
+  // visibility toggle is fast even on 8000+ nodes.
+  if (_abCy) _abApplyFilters(); else allBluesReload();
 }
 window._abWindowSliderInput = _abWindowSliderInput;
 
