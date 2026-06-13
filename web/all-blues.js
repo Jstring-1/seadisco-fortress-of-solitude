@@ -802,7 +802,12 @@ async function _abOpenEdgePopup(srcId, dstId) {
   }
   const el = _abEnsureEdgePopup();
   const bd = document.getElementById("ab-edge-popup-bd");
-  if (bd) bd.style.display = "block";
+  // Move popup + backdrop to the END of <body> so it stacks on top
+  // of any other popups already open. Both popup elements share the
+  // same z-index, so document order is what decides which one wins.
+  // appendChild on an existing child MOVES it to the end.
+  if (bd) { document.body.appendChild(bd); bd.style.display = "block"; }
+  document.body.appendChild(el);
   el.style.display = "block";
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
   let data;
@@ -1038,7 +1043,10 @@ window._abCloseArtistPopup = _abCloseArtistPopup;
 async function _abOpenArtistPopup(artistId) {
   const el = _abEnsureArtistPopup();
   const bd = document.getElementById("ab-artist-popup-bd");
-  if (bd) bd.style.display = "block";
+  // Same trick as the edge popup — move both to the end of <body>
+  // so this popup ends up on top of any earlier-opened ones.
+  if (bd) { document.body.appendChild(bd); bd.style.display = "block"; }
+  document.body.appendChild(el);
   el.style.display = "block";
   el.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
   let data;
@@ -1065,7 +1073,7 @@ async function _abOpenArtistPopup(artistId) {
           return `<span style="background:${color};color:#000;padding:0.08rem 0.4rem;border-radius:999px;font-size:0.66rem;font-weight:600;text-transform:uppercase;margin-right:0.25rem">${_abEsc(k)}</span>`;
         }).join("");
         return `
-          <div onclick="event.stopPropagation();_abCloseArtistPopup();_abOpenEdgePopup(${a.id}, ${c.partner_id})"
+          <div onclick="event.stopPropagation();_abOpenEdgePopup(${a.id}, ${c.partner_id})"
                style="padding:0.35rem 0.5rem;background:rgba(255,255,255,0.04);border-radius:5px;cursor:pointer;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.5rem"
                onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
             <span style="font-size:0.82rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_abEsc(c.partner_name)}</span>
