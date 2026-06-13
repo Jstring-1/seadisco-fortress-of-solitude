@@ -167,6 +167,28 @@ export async function startAllBluesRun(opts: {
           console.log("[all-blues] cleared graph response cache");
         }
       } catch (e) { /* non-fatal */ }
+      // Pre-warm: kick a localhost GET against the public graph
+      // endpoint so the cache rehydrates from the post-worker DB
+      // state. The first real user visit after this lands on a hot
+      // cache entry instead of paying the few-seconds query cost.
+      // Filter params are intentionally absent — the cache key is the
+      // empty/default tuple, which matches what the frontend now
+      // requests (one full-graph fetch with all filtering client-side).
+      try {
+        const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+        const url = `http://127.0.0.1:${port}/api/all-blues/graph?_warm=${Date.now()}`;
+        const r = await fetch(url, { method: "GET" });
+        if (r.ok) {
+          const j = await r.json().catch(() => null) as any;
+          const n = j?.nodes?.length ?? "?";
+          const e = j?.edges?.length ?? "?";
+          console.log(`[all-blues] pre-warmed graph cache (${n} nodes, ${e} edges)`);
+        } else {
+          console.warn(`[all-blues] pre-warm got HTTP ${r.status}`);
+        }
+      } catch (e: any) {
+        console.warn("[all-blues] pre-warm failed (next visitor will rebuild):", e?.message ?? e);
+      }
     } catch (err: any) {
       console.error("[all-blues] worker crashed:", err?.stack || err);
       try {
