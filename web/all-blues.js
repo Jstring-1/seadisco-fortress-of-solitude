@@ -602,41 +602,64 @@ async function allBluesReload() {
     const bb = _abCy.elements().boundingBox();
     const xSpan = bb.x2 - bb.x1;
     if (!Number.isFinite(xSpan) || xSpan < 1) return;
-    // Target aspect: a wide rectangle, but with enough Y room that
-    // same-year artists can spread vertically into their cluster
-    // structure instead of stacking on top of each other. Earlier
-    // values (Y = 30% of X, weight 85%) over-compressed and labels
-    // overlapped badly with thick blues eras like 1925-1945.
+    // Wide rectangle. Y span generous so we have room to redistribute.
     const cyEl = document.getElementById("all-blues-graph");
     const rect = cyEl?.getBoundingClientRect();
-    const targetXSpan = (rect?.width || xSpan) * 0.95;
-    const targetYSpan = targetXSpan * 0.55;
-    // Recenter on the original midpoint so we don't drift.
+    const targetXSpan = (rect?.width || xSpan) * 0.96;
+    const targetYSpan = targetXSpan * 0.70;
     const midY = (bb.y1 + bb.y2) / 2;
     const xCenter = (bb.x1 + bb.x2) / 2;
     const xL = xCenter - targetXSpan / 2;
     const xR = xCenter + targetXSpan / 2;
     const yT = midY - targetYSpan / 2;
     const yB = midY + targetYSpan / 2;
-    const oldYSpan = bb.y2 - bb.y1 || 1;
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
+    const idToNode = new Map();
+    const curYById = new Map();
     _abCy.nodes().forEach(n => {
       const id = parseInt(n.data("id"), 10);
-      const yr = yearById.get(id);
+      idToNode.set(id, n);
+      curYById.set(id, n.position().y);
+    });
+    // ── Bin by chronological X, then redistribute Y per bin ──────
+    // Bin width chosen so nodes that visually overlap horizontally
+    // share a bin. Within each bin we sort by current Y (preserves
+    // the fcose cluster ordering) then space them evenly across the
+    // available vertical range. Guarantees vertical separation even
+    // in dense eras like the 1930s-40s where hundreds of seeds share
+    // a handful of integer years.
+    const X_BIN_PX = 90;
+    const xBins = new Map();
+    focusedNodes.forEach(n => {
+      const yr = yearById.get(n.id);
       if (!Number.isFinite(yr)) return;
       const t = (yr - minYr) / (maxYr - minYr);
-      // Left-to-right: low t (older) → small x (left); high t (newer)
-      // → big x (right). Standard reading order.
       const targetX = xL + t * (xR - xL);
+      const binKey = Math.round(targetX / X_BIN_PX);
+      if (!xBins.has(binKey)) xBins.set(binKey, []);
+      xBins.get(binKey).push({ id: n.id, targetX });
+    });
+    const targetByNode = new Map();
+    xBins.forEach((arr) => {
+      arr.sort((a, b) => (curYById.get(a.id) || 0) - (curYById.get(b.id) || 0));
+      const count = arr.length;
+      arr.forEach((item, i) => {
+        const ty = count > 1 ? yT + (i / (count - 1)) * (yB - yT) : (yT + yB) / 2;
+        targetByNode.set(item.id, { x: item.targetX, y: ty });
+      });
+    });
+    // ── Apply blended positions ──────────────────────────────────
+    // 50/50 on X (chronological pull dominant, but original spread
+    // contributes), 65/35 on Y in favor of the redistribution target
+    // so the explicit anti-overlap spacing actually lands.
+    _abCy.nodes().forEach(n => {
+      const id = parseInt(n.data("id"), 10);
+      const target = targetByNode.get(id);
+      if (!target) return;
       const cur = n.position();
-      // 60% weight on chronological target — strong enough to read
-      // as a timeline left-to-right, gentle enough that fcose's
-      // cluster spread still pulls same-year artists apart along x
-      // instead of dead-stacking them.
-      const newY = yT + ((cur.y - bb.y1) / oldYSpan) * (yB - yT);
       n.position({
-        x: 0.40 * cur.x + 0.60 * targetX,
-        y: newY,
+        x: 0.50 * cur.x + 0.50 * target.x,
+        y: 0.35 * cur.y + 0.65 * target.y,
       });
     });
     _abCy.fit(undefined, 40);
