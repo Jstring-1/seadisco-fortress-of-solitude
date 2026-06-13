@@ -155,6 +155,18 @@ export async function startAllBluesRun(opts: {
       if (!_stopRequested) await _runFetch(client, nameToId);
       console.log("[all-blues] worker exited cleanly");
       await setAppSetting(ACTIVE_KEY, null);
+      // Bust the graph-endpoint response cache so the next public
+      // fetch sees the new edges. search-api.ts attaches the clear
+      // function on globalThis; missing means search-api hasn't loaded
+      // yet (only happens during boot) — we silently no-op since
+      // there's no cache to clear.
+      try {
+        const clearFn = (globalThis as any)._sdGraphCacheClear;
+        if (typeof clearFn === "function") {
+          clearFn();
+          console.log("[all-blues] cleared graph response cache");
+        }
+      } catch (e) { /* non-fatal */ }
     } catch (err: any) {
       console.error("[all-blues] worker crashed:", err?.stack || err);
       try {
