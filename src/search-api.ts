@@ -9274,6 +9274,98 @@ app.post("/api/admin/all-blues/positions", express.json({ limit: "8mb" }), async
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// Bucket → raw kinds map for the admin connection-pill editor.
+// Mirrors _AB_KINDS in web/all-blues.js so the four user-facing chips
+// (Played with / Pseudonyms / Family / Mentions) translate to the
+// underlying worker kinds the DB actually stores.
+const _AB_BUCKET_RAW: Record<string, string[]> = {
+  played_with: ["band"],
+  pseudonyms:  ["alias"],
+  family:      ["family", "spouse", "mentor"],
+  mentions:    ["mention", "traveled"],
+};
+
+// Delete every raw kind in a bucket for a given artist pair. Both
+// directions (src→dst and dst→src) are wiped since all_blues_links
+// stores directional rows but the UI treats the pair as a single edge.
+app.post("/api/admin/all-blues/link/delete", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const srcId = parseInt(String(req.body?.src_id ?? ""), 10);
+  const dstId = parseInt(String(req.body?.dst_id ?? ""), 10);
+  const bucket = String(req.body?.bucket ?? "");
+  const raws = _AB_BUCKET_RAW[bucket];
+  if (!Number.isFinite(srcId) || !Number.isFinite(dstId) || srcId <= 0 || dstId <= 0 || srcId === dstId || !raws) {
+    res.status(400).json({ error: "src_id, dst_id, valid bucket required" });
+    return;
+  }
+  try {
+    const r = await getPool().query(
+      `DELETE FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])`,
+      [srcId, dstId, raws],
+    );
+    _graphCacheClear();
+    res.json({ ok: true, deleted: r.rowCount ?? 0 });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Change the bucket on a pair's connection: delete every raw kind in
+// the old bucket, insert the canonical raw kind of the new bucket
+// (= first raw in the bucket's list). Direction follows the existing
+// row if present, otherwise src_id → dst_id from the request.
+app.post("/api/admin/all-blues/link/change-bucket", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const srcId = parseInt(String(req.body?.src_id ?? ""), 10);
+  const dstId = parseInt(String(req.body?.dst_id ?? ""), 10);
+  const fromBucket = String(req.body?.from_bucket ?? "");
+  const toBucket = String(req.body?.to_bucket ?? "");
+  const fromRaws = _AB_BUCKET_RAW[fromBucket];
+  const toRaws = _AB_BUCKET_RAW[toBucket];
+  if (!Number.isFinite(srcId) || !Number.isFinite(dstId) || srcId <= 0 || dstId <= 0 || srcId === dstId || !fromRaws || !toRaws) {
+    res.status(400).json({ error: "src_id, dst_id, valid from_bucket + to_bucket required" });
+    return;
+  }
+  if (fromBucket === toBucket) { res.json({ ok: true, changed: 0 }); return; }
+  const newKind = toRaws[0];
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Capture an excerpt from any of the old rows so the new row keeps
+    // the original source context (e.g. liner-note quote).
+    const exR = await client.query(
+      `SELECT excerpt FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])
+          AND excerpt IS NOT NULL
+        LIMIT 1`,
+      [srcId, dstId, fromRaws],
+    );
+    const carriedExcerpt = exR.rows[0]?.excerpt ?? null;
+    const delR = await client.query(
+      `DELETE FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])`,
+      [srcId, dstId, fromRaws],
+    );
+    await client.query(
+      `INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (src_id, dst_id, kind) DO NOTHING`,
+      [srcId, dstId, newKind, carriedExcerpt],
+    );
+    await client.query("COMMIT");
+    _graphCacheClear();
+    res.json({ ok: true, deleted: delR.rowCount ?? 0, new_kind: newKind });
+  } catch (err: any) {
+    await client.query("ROLLBACK").catch(() => {});
+    res.status(500).json({ error: err?.message ?? String(err) });
+  } finally {
+    client.release();
+  }
+});
+
 // Wipe queue + edges + counters. Optionally also wipe the Discogs
 // artist-profile cache (?cache=1). Refuses while the worker is
 // running — admin must Stop first so we don't yank tables out from

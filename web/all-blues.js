@@ -1429,18 +1429,38 @@ async function _abOpenArtistPopup(artistId) {
   const bio = a.profile
     ? `<div style="font-size:0.8rem;color:var(--muted);line-height:1.45;margin-bottom:0.8rem;white-space:pre-wrap">${_abEsc(a.profile)}</div>`
     : "";
+  const isAdmin = !!window._isAdmin;
   const connectionRows = data.connections.length
     ? data.connections.map(c => {
         // Bucket the raw worker kinds (band/alias/family/spouse/...)
         // into the same 4 user-facing chips shown in the toolbar so
         // a connection pill says "Pseudonyms" + cyan, not raw "ALIAS"
         // + grey fallback.
-        const seen = new Set();
-        const chips = c.kinds.map(k => {
-          const b = _abBucketFor(k);
-          if (seen.has(b.label)) return "";
-          seen.add(b.label);
-          return `<span style="background:${b.color};color:#000;padding:0.08rem 0.5rem;border-radius:999px;font-size:0.66rem;font-weight:600;margin-right:0.25rem">${_abEsc(b.label)}</span>`;
+        const seenKeys = new Set();
+        const buckets = [];
+        for (const k of c.kinds) {
+          const bucketKey = _AB_KIND_TO_BUCKET[k];
+          if (!bucketKey || seenKeys.has(bucketKey)) continue;
+          seenKeys.add(bucketKey);
+          const def = _AB_KINDS.find(d => d.key === bucketKey);
+          if (def) buckets.push(def);
+        }
+        const chips = buckets.map(b => {
+          // Admin gets two tiny inline controls on each pill: ✕ to
+          // delete the connection-type permanently, ↺ to switch the
+          // pair to a different bucket. Stops propagation so the row
+          // click (open edge popup) doesn't also fire.
+          const adminCtrls = isAdmin
+            ? `<button type="button"
+                       onclick="event.stopPropagation();_abDeleteConnectionBucket(${a.id}, ${c.partner_id}, '${b.key}')"
+                       title="Delete this connection type permanently"
+                       style="border:none;background:rgba(0,0,0,0.25);color:#000;width:14px;height:14px;border-radius:50%;font-size:0.6rem;line-height:1;cursor:pointer;padding:0;margin-left:0.2rem;display:inline-flex;align-items:center;justify-content:center">✕</button>
+               <button type="button"
+                       onclick="event.stopPropagation();_abChangeConnectionBucket(event, ${a.id}, ${c.partner_id}, '${b.key}')"
+                       title="Change connection type"
+                       style="border:none;background:rgba(0,0,0,0.25);color:#000;width:14px;height:14px;border-radius:50%;font-size:0.6rem;line-height:1;cursor:pointer;padding:0;margin-left:0.15rem;display:inline-flex;align-items:center;justify-content:center">↺</button>`
+            : "";
+          return `<span style="background:${b.color};color:#000;padding:0.08rem 0.5rem;border-radius:999px;font-size:0.66rem;font-weight:600;margin-right:0.25rem;display:inline-flex;align-items:center;gap:0.05rem">${_abEsc(b.label)}${adminCtrls}</span>`;
         }).join("");
         return `
           <div onclick="event.stopPropagation();_abOpenEdgePopup(${a.id}, ${c.partner_id})"
@@ -1504,3 +1524,95 @@ function _abOpenReleaseFromArtistPopup(event, id, type) {
   }
 }
 window._abOpenReleaseFromArtistPopup = _abOpenReleaseFromArtistPopup;
+
+// ── Admin-only: edit connection pills in the artist popup ─────────
+// Each rendered pill carries (srcId, dstId, bucketKey). ✕ → delete
+// every raw kind in that bucket for the pair. ↺ → open a tiny floating
+// chooser of the OTHER three buckets; click one to convert.
+
+async function _abDeleteConnectionBucket(srcId, dstId, bucket) {
+  if (!window._isAdmin) return;
+  const def = _AB_KINDS.find(k => k.key === bucket);
+  const label = def?.label || bucket;
+  if (!confirm(`Delete "${label}" connection permanently?\n\nThis removes the relationship from the database — won't come back unless re-collected.`)) return;
+  try {
+    const fetcher = window.apiFetch || fetch;
+    const r = await fetcher("/api/admin/all-blues/link/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ src_id: srcId, dst_id: dstId, bucket }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    window.showToast?.(`Deleted "${label}" connection`, "success");
+    // Re-render the popup so the pill disappears immediately.
+    _abOpenArtistPopup(srcId);
+  } catch (err) {
+    window.showToast?.(`Delete failed: ${err.message}`, "error");
+  }
+}
+window._abDeleteConnectionBucket = _abDeleteConnectionBucket;
+
+function _abChangeConnectionBucket(evt, srcId, dstId, fromBucket) {
+  if (!window._isAdmin) return;
+  // Close any prior chooser.
+  document.getElementById("ab-bucket-chooser")?.remove();
+  const btn = evt?.currentTarget;
+  const rect = btn?.getBoundingClientRect();
+  const menu = document.createElement("div");
+  menu.id = "ab-bucket-chooser";
+  menu.style.cssText = `
+    position:fixed;z-index:200;background:#0b1220;border:1px solid #444;
+    border-radius:6px;padding:0.35rem;box-shadow:0 6px 24px rgba(0,0,0,0.6);
+    display:flex;flex-direction:column;gap:0.2rem;font-size:0.72rem`;
+  // Anchor near the clicked button.
+  const x = rect ? rect.left : (evt?.clientX || 100);
+  const y = rect ? rect.bottom + 4 : (evt?.clientY || 100);
+  menu.style.left = `${Math.min(x, window.innerWidth - 180)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - 180)}px`;
+  const header = document.createElement("div");
+  header.style.cssText = "padding:0.15rem 0.35rem;color:var(--muted);font-size:0.66rem;text-transform:uppercase;letter-spacing:0.05em";
+  header.textContent = "Change to…";
+  menu.appendChild(header);
+  for (const def of _AB_KINDS) {
+    if (def.key === fromBucket) continue;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = def.label;
+    b.style.cssText = `background:${def.color};color:#000;border:none;padding:0.25rem 0.6rem;border-radius:999px;cursor:pointer;font-weight:600;text-align:left`;
+    b.onclick = (e) => {
+      e.stopPropagation();
+      menu.remove();
+      _abCommitChangeBucket(srcId, dstId, fromBucket, def.key);
+    };
+    menu.appendChild(b);
+  }
+  document.body.appendChild(menu);
+  // Click-anywhere-else dismisses. Defer one tick so the originating
+  // click doesn't immediately close it.
+  setTimeout(() => {
+    const dismiss = (e) => {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("click", dismiss, true); }
+    };
+    document.addEventListener("click", dismiss, true);
+  }, 0);
+}
+window._abChangeConnectionBucket = _abChangeConnectionBucket;
+
+async function _abCommitChangeBucket(srcId, dstId, fromBucket, toBucket) {
+  const fromDef = _AB_KINDS.find(k => k.key === fromBucket);
+  const toDef   = _AB_KINDS.find(k => k.key === toBucket);
+  try {
+    const fetcher = window.apiFetch || fetch;
+    const r = await fetcher("/api/admin/all-blues/link/change-bucket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ src_id: srcId, dst_id: dstId, from_bucket: fromBucket, to_bucket: toBucket }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    window.showToast?.(`Changed ${fromDef?.label || fromBucket} → ${toDef?.label || toBucket}`, "success");
+    _abOpenArtistPopup(srcId);
+  } catch (err) {
+    window.showToast?.(`Change failed: ${err.message}`, "error");
+  }
+}
+window._abCommitChangeBucket = _abCommitChangeBucket;
