@@ -679,9 +679,18 @@ function _baRenderArtistDetail(a) {
   const photo = a.photo_url
     ? `<img src="${escHtml(a.photo_url)}" alt="" style="width:140px;height:140px;object-fit:cover;border-radius:4px;flex:0 0 auto" loading="lazy" />`
     : "";
+  // Combine DOB/DOD with the place strings so each life-event line
+  // carries both pieces of context: "Born: 1903-03-22, Memphis, TN".
+  // Falls back gracefully when either part is missing.
+  const bornLine = (a.birth_date || a.birth_place)
+    ? `Born: ${[escHtml(a.birth_date || ""), escHtml(a.birth_place || "")].filter(Boolean).join(", ")}`
+    : "";
+  const diedLine = (a.death_date || a.death_place)
+    ? `Died: ${[escHtml(a.death_date || ""), escHtml(a.death_place || "")].filter(Boolean).join(", ")}`
+    : "";
   const meta = [
-    a.birth_place ? `Born: ${escHtml(a.birth_place)}` : "",
-    a.death_place ? `Died: ${escHtml(a.death_place)}` : "",
+    bornLine,
+    diedLine,
     a.hometown_region ? `From: ${escHtml(a.hometown_region)}` : "",
     a.first_recording_year ? `First recording: ${a.first_recording_year}` : "",
   ].filter(Boolean).join(" · ");
@@ -886,19 +895,24 @@ function _baRenderArtistDetail(a) {
     : `<p style="color:var(--muted);font-style:italic;margin:0.4rem 0">No tunings recorded for this artist.</p>`;
   const tuningsCount = tuningsArr.length;
   const tuningsLabel = `Tunings${tuningsCount ? ` (${tuningsCount})` : ""}${gridTunings.length ? ` · grid: ${gridTunings.length}${gridUnmatchedCount ? `, ${gridUnmatchedCount} unmatched` : ""}` : ""}`;
+  // Header style — match the album/release modal pattern: a sticky
+  // top close strip (popup-close-zone) instead of an inline × button,
+  // and the action buttons render smaller so the title + dates strip
+  // doesn't overflow with five fat curator buttons.
+  const smallBtn = "font-size:0.72rem;padding:0.2rem 0.5rem;line-height:1.1";
+  const smallBtnDanger = `${smallBtn};color:#e88;border-color:rgba(232,136,136,0.4)`;
   detail.innerHTML = `
+    <div class="popup-close-zone" onclick="_baBackToList()" title="Click to close" style="margin:-1.2rem -1.4rem 0.4rem"></div>
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
-      <button class="archive-btn" onclick="_baBackToList()" title="Close">×</button>
       <h2 style="margin:0;font-size:1.1rem">${(typeof entityLookupLinkHtml === "function" && a.name)
         ? entityLookupLinkHtml("artist", a.name, { entityId: a.discogs_id, title: `Lookup options for "${a.name}"` })
         : escHtml(a.name || "")}</h2>
-      <span style="color:var(--muted);font-size:0.82rem">${escHtml(dates)}</span>
-      <span style="margin-left:auto;display:inline-flex;gap:0.4rem;flex-wrap:wrap">
-        <button class="archive-btn archive-btn-suggest" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: name / dates / identifiers / pseudonyms / bands / notes / photo + enrichment buttons for Wiki, MusicBrainz, Discogs, YouTube).">✎ Edit artist</button>
-        <button class="archive-btn" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics from…</button>
-        <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
-        <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete artist + lyrics</button>
-        <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete + don't re-add</button>
+      <span style="margin-left:auto;display:inline-flex;gap:0.3rem;flex-wrap:wrap">
+        <button class="archive-btn archive-btn-suggest" style="${smallBtn}" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: name / dates / identifiers / pseudonyms / bands / notes / photo + enrichment buttons for Wiki, MusicBrainz, Discogs, YouTube).">✎ Edit</button>
+        <button class="archive-btn" style="${smallBtn}" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics…</button>
+        <button class="archive-btn" style="${smallBtn}" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge…</button>
+        <button class="archive-btn" style="${smallBtnDanger}" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate.">Delete</button>
+        <button class="archive-btn" style="${smallBtnDanger}" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later.">Delete + ban</button>
       </span>
     </div>
     ${profileHeader}
