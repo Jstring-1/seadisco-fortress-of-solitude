@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260612.c2bbd97" />
+  <link rel="stylesheet" href="/style.css?v=260612.7f18af8" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260612.c2bbd97"></script>
-<script defer src="/shared.js?v=260612.c2bbd97"></script>
+<script defer src="/utils.js?v=260612.7f18af8"></script>
+<script defer src="/shared.js?v=260612.7f18af8"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -363,8 +363,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260612.c2bbd97"></script>
-<script defer src="/blues-admin.js?v=260612.c2bbd97"></script>
+<script defer src="/modal.js?v=260612.7f18af8"></script>
+<script defer src="/blues-admin.js?v=260612.7f18af8"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1359,6 +1359,11 @@ async function loadAllBluesAdmin() {
         <div><div style="font-size:1rem;font-weight:600">${fmt(s.state?.artists_fetched)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Lifetime fetched</div></div>
       </div>
       ${kindRows ? `<div style="margin-bottom:0.6rem"><div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Links by kind</div><table style="font-size:0.8rem;border-collapse:collapse"><tbody>${kindRows}</tbody></table></div>` : ""}
+      ${Number.isFinite(s.isolated_seeds) ? (() => {
+        const iso = s.isolated_seeds, tot = s.total_seeds || 0;
+        const pct = tot ? Math.round((iso / tot) * 100) : 0;
+        return `<div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.4rem">Isolated seeds: <strong style="color:${iso > 0 ? "#e8a55a" : "var(--muted)"}">${fmt(iso)}</strong> of ${fmt(tot)} (${pct}%) — blues seeds with no edges either direction.</div>`;
+      })() : ""}
       <div style="font-size:0.74rem;color:var(--muted)">Started: ${esc(started)} · Last tick: ${esc(tick)}</div>
       ${s.state?.last_error ? `<div style="font-size:0.74rem;color:#e88;margin-top:0.3rem">Last error: ${esc(s.state.last_error)}</div>` : ""}`;
   } catch (e) {
