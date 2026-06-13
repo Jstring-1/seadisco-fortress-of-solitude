@@ -444,7 +444,11 @@ async function allBluesReload() {
         "line-fill": "linear-gradient",
         "line-gradient-stop-colors": "data(gradientColors)",
         "line-gradient-stop-positions": "data(gradientPositions)",
-        "width": 2.8, "opacity": 0.95,
+        // Default edges sit at half-brightness so nodes + labels are
+        // the eye's primary target. Tap a node to bring its web up to
+        // full brightness (.ab-highlighted) and push the rest down
+        // further (.ab-faded).
+        "width": 2.8, "opacity": 0.45,
         "curve-style": "bezier",
       }},
       { selector: "node:selected", style: { "border-color": "#fbbf24", "border-width": 3 }},
