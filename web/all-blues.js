@@ -405,7 +405,7 @@ async function allBluesReload() {
         "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
         "text-background-color": "#000", "text-background-opacity": 0.55,
         "text-background-padding": 2, "text-background-shape": "round-rectangle",
-        "text-wrap": "ellipsis", "text-max-width": 110,
+        "text-wrap": "ellipsis", "text-max-width": 75,
         // Sizing by degree: bigger spread so hubs visually dominate.
         // 1 connection → 14px, max-degree → 80px. The eye finds the
         // cores first, periphery recedes.
@@ -621,14 +621,14 @@ async function allBluesReload() {
       idToNode.set(id, n);
       curYById.set(id, n.position().y);
     });
-    // ── Bin by chronological X, then redistribute Y per bin ──────
-    // Bin width chosen so nodes that visually overlap horizontally
-    // share a bin. Within each bin we sort by current Y (preserves
-    // the fcose cluster ordering) then space them evenly across the
-    // available vertical range. Guarantees vertical separation even
-    // in dense eras like the 1930s-40s where hundreds of seeds share
-    // a handful of integer years.
-    const X_BIN_PX = 90;
+    // ── Bin by chronological X, then redistribute X+Y per bin ────
+    // Wider bins (200px ≈ ~2.5 label widths) so each "year column"
+    // is actually a strip with room for several labels horizontally.
+    // Within each strip, we redistribute Y evenly AND stagger X
+    // across three lanes — gives same-year artists their own slot
+    // instead of stacking labels on top of each other.
+    const X_BIN_PX = 200;
+    const X_LANES = 3;
     const xBins = new Map();
     focusedNodes.forEach(n => {
       const yr = yearById.get(n.id);
@@ -645,7 +645,11 @@ async function allBluesReload() {
       const count = arr.length;
       arr.forEach((item, i) => {
         const ty = count > 1 ? yT + (i / (count - 1)) * (yB - yT) : (yT + yB) / 2;
-        targetByNode.set(item.id, { x: item.targetX, y: ty });
+        // Stagger across 3 lanes inside the bin: lane 0 (left), 1
+        // (center), 2 (right), cycling through as we walk down Y.
+        const lane = i % X_LANES;
+        const laneOffset = ((lane - (X_LANES - 1) / 2) / (X_LANES - 1)) * (X_BIN_PX * 0.7);
+        targetByNode.set(item.id, { x: item.targetX + laneOffset, y: ty });
       });
     });
     // ── Apply blended positions ──────────────────────────────────
