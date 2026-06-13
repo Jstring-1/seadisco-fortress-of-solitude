@@ -43,6 +43,8 @@ let _abUnpositionedCount = 0; // how many nodes this render came in without save
 let _abTotalNodeCount = 0;    // total nodes this render — for the Save button hint
 let _abLastFetchedAt = null;  // timestamp of last successful graph fetch
 let _abForceFreshLayout = false;    // admin "Recompute layout" override — strip positions for one render
+let _abFitToken = 0;                 // bump from reload so applyFilters re-centers + caps zoom
+let _abLastFitToken = -1;            // last token applyFilters acted on
 let _abLastGraph = { nodes: [], edges: [] }; // most recent graph payload, used for focus search
 let _abFocusId = null;                       // current focused artist id (null = whole graph)
 let _abFocusName = "";                       // display name for the focused artist
@@ -596,20 +598,13 @@ async function allBluesReload() {
   // label visible. Threshold + label set are precomputed above per
   // render; the handler just toggles a class on the cy root that the
   // stylesheet keys off.
+  // Every label visible at every zoom — user explicitly asked to see
+  // all names. Overlap is solved by spreading nodes out farther in
+  // applyChrono() and starting the user at a readable zoom instead.
   const _syncLabelVisibility = () => {
-    const lowZoom = _abCy.zoom() < 1.1;
     _abCy.nodes().forEach(n => {
-      // Top hubs always labeled. Tapped/highlighted nodes also keep
-      // their labels so the focused web stays readable regardless of
-      // zoom level.
-      if (n.data("alwaysLabel") === 1) return;
-      if (n.hasClass("ab-highlighted") || n.hasClass("ab-source")) {
-        n.style("text-opacity", 1);
-        n.style("text-background-opacity", 0.55);
-        return;
-      }
-      n.style("text-opacity", lowZoom ? 0 : 1);
-      n.style("text-background-opacity", lowZoom ? 0 : 0.55);
+      n.style("text-opacity", 1);
+      n.style("text-background-opacity", 0.55);
     });
   };
   _abCy.on("zoom", _syncLabelVisibility);
@@ -631,76 +626,79 @@ async function allBluesReload() {
     const minYr = Math.min(...yearVals);
     const maxYr = Math.max(...yearVals);
     if (minYr === maxYr) return;
-    const bb = _abCy.elements().boundingBox();
-    const xSpan = bb.x2 - bb.x1;
-    if (!Number.isFinite(xSpan) || xSpan < 1) return;
-    // Wide rectangle. Y span generous so we have room to redistribute.
-    const cyEl = document.getElementById("all-blues-graph");
-    const rect = cyEl?.getBoundingClientRect();
-    const targetXSpan = (rect?.width || xSpan) * 0.96;
-    const targetYSpan = targetXSpan * 0.70;
-    const midY = (bb.y1 + bb.y2) / 2;
-    const xCenter = (bb.x1 + bb.x2) / 2;
-    const xL = xCenter - targetXSpan / 2;
-    const xR = xCenter + targetXSpan / 2;
-    const yT = midY - targetYSpan / 2;
-    const yB = midY + targetYSpan / 2;
+    // ── Massive spread so every label has room to breathe ─────────
+    // User wants every name readable at native zoom. To make that work
+    // without overlap we abandon "fit to canvas" sizing — instead we
+    // budget a real label footprint per node and let the layout grow
+    // as big as the data needs. User pans/zooms the giant canvas.
+    const NODE_X_PX = 160; // ~2 label widths of horizontal slot per node
+    const NODE_Y_PX = 55;  // line-height + padding per row
+    const X_LANES = 4;     // four nodes side-by-side per year bin
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
-    const idToNode = new Map();
     const curYById = new Map();
     _abCy.nodes().forEach(n => {
       const id = parseInt(n.data("id"), 10);
-      idToNode.set(id, n);
       curYById.set(id, n.position().y);
     });
-    // ── Bin by chronological X, then redistribute X+Y per bin ────
-    // Wider bins (200px ≈ ~2.5 label widths) so each "year column"
-    // is actually a strip with room for several labels horizontally.
-    // Within each strip, we redistribute Y evenly AND stagger X
-    // across three lanes — gives same-year artists their own slot
-    // instead of stacking labels on top of each other.
-    const X_BIN_PX = 200;
-    const X_LANES = 3;
-    const xBins = new Map();
+    // Group by integer seed_year so we get one column per year.
+    const yearBins = new Map();
     focusedNodes.forEach(n => {
       const yr = yearById.get(n.id);
       if (!Number.isFinite(yr)) return;
-      const t = (yr - minYr) / (maxYr - minYr);
-      const targetX = xL + t * (xR - xL);
-      const binKey = Math.round(targetX / X_BIN_PX);
-      if (!xBins.has(binKey)) xBins.set(binKey, []);
-      xBins.get(binKey).push({ id: n.id, targetX });
+      const k = Math.round(yr);
+      if (!yearBins.has(k)) yearBins.set(k, []);
+      yearBins.get(k).push(n.id);
     });
+    // Size the canvas off the BUSIEST year so even the densest column
+    // has room. Height = (rows in tallest column) * NODE_Y_PX.
+    const maxColCount = Math.max(1, ...[...yearBins.values()].map(a => a.length));
+    const rowsPerLane = Math.ceil(maxColCount / X_LANES);
+    const targetYSpan = Math.max(800, rowsPerLane * NODE_Y_PX);
+    const yearSpan = (maxYr - minYr) + 1;
+    const targetXSpan = Math.max(2000, yearSpan * NODE_X_PX * X_LANES);
+    const xL = -targetXSpan / 2;
+    const xR =  targetXSpan / 2;
+    const yT = -targetYSpan / 2;
+    const yB =  targetYSpan / 2;
     const targetByNode = new Map();
-    xBins.forEach((arr) => {
-      arr.sort((a, b) => (curYById.get(a.id) || 0) - (curYById.get(b.id) || 0));
-      const count = arr.length;
-      arr.forEach((item, i) => {
-        const ty = count > 1 ? yT + (i / (count - 1)) * (yB - yT) : (yT + yB) / 2;
-        // Stagger across 3 lanes inside the bin: lane 0 (left), 1
-        // (center), 2 (right), cycling through as we walk down Y.
+    // Sort years ascending so the year-keyed bins lay out left → right.
+    const sortedYears = [...yearBins.keys()].sort((a, b) => a - b);
+    sortedYears.forEach(yr => {
+      const ids = yearBins.get(yr);
+      // Stable sort within a year by current Y so the fcose-derived
+      // cluster structure carries through visually (people who clustered
+      // near each other in y stay near each other in the column).
+      ids.sort((a, b) => (curYById.get(a) || 0) - (curYById.get(b) || 0));
+      const t = yearSpan > 1 ? (yr - minYr) / (yearSpan - 1) : 0.5;
+      const colCenterX = xL + t * (xR - xL);
+      ids.forEach((id, i) => {
         const lane = i % X_LANES;
-        const laneOffset = ((lane - (X_LANES - 1) / 2) / (X_LANES - 1)) * (X_BIN_PX * 0.7);
-        targetByNode.set(item.id, { x: item.targetX + laneOffset, y: ty });
+        const row  = Math.floor(i / X_LANES);
+        // Each lane is a fixed offset from the column center.
+        const laneOffset = (lane - (X_LANES - 1) / 2) * NODE_X_PX;
+        const rows = Math.max(1, Math.ceil(ids.length / X_LANES));
+        const ty = rows > 1
+          ? yT + (row / (rows - 1)) * (yB - yT)
+          : (yT + yB) / 2;
+        targetByNode.set(id, { x: colCenterX + laneOffset, y: ty });
       });
     });
-    // ── Apply blended positions ──────────────────────────────────
-    // 50/50 on X (chronological pull dominant, but original spread
-    // contributes), 65/35 on Y in favor of the redistribution target
-    // so the explicit anti-overlap spacing actually lands.
+    // Apply targets directly — no blending with fcose. We want strict
+    // grid spacing so labels never collide. Edges still curve organically
+    // because their geometry is computed from node positions at render.
     _abCy.nodes().forEach(n => {
       const id = parseInt(n.data("id"), 10);
       const target = targetByNode.get(id);
       if (!target) return;
-      const cur = n.position();
-      n.position({
-        x: 0.50 * cur.x + 0.50 * target.x,
-        y: 0.35 * cur.y + 0.65 * target.y,
-      });
+      n.position(target);
     });
-    _abCy.fit(undefined, 40);
+    // Don't fit() here — _abApplyFilters fits to the *visible* subset
+    // and caps zoom so labels stay at native size.
   };
   applyChrono();
+  // Bump the fit token so _abApplyFilters re-centers + caps zoom on
+  // this fresh layout (subsequent slider/chip touches keep pan/zoom).
+  _abFitToken++;
   // Apply the toolbar's current filter state (slider, kinds, min
   // degree) via visibility — no re-layout, no re-fetch.
   _abApplyFilters();
@@ -819,6 +817,19 @@ function _abApplyFilters() {
     const total = _abLastGraph.nodes?.length ?? 0;
     const totalE = _abLastGraph.edges?.length ?? 0;
     counts.textContent = `· ${visN.toLocaleString()} of ${total.toLocaleString()} artists, ${visE.toLocaleString()} of ${totalE.toLocaleString()} links${stamp ? ` · fetched ${stamp}` : ""}`;
+  }
+  // Fit camera to *visible* nodes, then cap zoom so labels stay at
+  // native size. The grid layout is enormous (every label gets its own
+  // slot) so a default cytoscape fit() zooms way out — labels become
+  // pixel dust. Cap at 1.0 and let the user pan.
+  if (_abLastFitToken !== _abFitToken) {
+    const vis = _abCy.nodes(":visible");
+    if (vis.length) {
+      _abCy.fit(vis, 60);
+      if (_abCy.zoom() > 1.0) _abCy.zoom(1.0);
+      _abCy.center(vis);
+    }
+    _abLastFitToken = _abFitToken;
   }
 }
 window._abApplyFilters = _abApplyFilters;
