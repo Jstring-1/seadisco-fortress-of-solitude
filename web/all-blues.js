@@ -602,14 +602,15 @@ async function allBluesReload() {
     const bb = _abCy.elements().boundingBox();
     const xSpan = bb.x2 - bb.x1;
     if (!Number.isFinite(xSpan) || xSpan < 1) return;
-    // Target aspect: the canvas is much wider than it is tall, so
-    // stretch x to fill the viewport width and compress y to about
-    // 1/3 of x. Use canvas-render bounds rather than the post-fcose
-    // bounding box so the final picture matches the container.
+    // Target aspect: a wide rectangle, but with enough Y room that
+    // same-year artists can spread vertically into their cluster
+    // structure instead of stacking on top of each other. Earlier
+    // values (Y = 30% of X, weight 85%) over-compressed and labels
+    // overlapped badly with thick blues eras like 1925-1945.
     const cyEl = document.getElementById("all-blues-graph");
     const rect = cyEl?.getBoundingClientRect();
-    const targetXSpan = (rect?.width || xSpan) * 0.92;
-    const targetYSpan = targetXSpan * 0.30;
+    const targetXSpan = (rect?.width || xSpan) * 0.95;
+    const targetYSpan = targetXSpan * 0.55;
     // Recenter on the original midpoint so we don't drift.
     const midY = (bb.y1 + bb.y2) / 2;
     const xCenter = (bb.x1 + bb.x2) / 2;
@@ -628,11 +629,13 @@ async function allBluesReload() {
       // → big x (right). Standard reading order.
       const targetX = xL + t * (xR - xL);
       const cur = n.position();
-      // 85% weight on chronological target → strong R-L ordering.
-      // Compress y into the rectangle band.
+      // 60% weight on chronological target — strong enough to read
+      // as a timeline left-to-right, gentle enough that fcose's
+      // cluster spread still pulls same-year artists apart along x
+      // instead of dead-stacking them.
       const newY = yT + ((cur.y - bb.y1) / oldYSpan) * (yB - yT);
       n.position({
-        x: 0.15 * cur.x + 0.85 * targetX,
+        x: 0.40 * cur.x + 0.60 * targetX,
         y: newY,
       });
     });
