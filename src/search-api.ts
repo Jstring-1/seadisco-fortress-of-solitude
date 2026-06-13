@@ -9267,6 +9267,9 @@ app.post("/api/admin/all-blues/positions", express.json({ limit: "8mb" }), async
         WHERE q.discogs_id = u.id`,
       [ids, xs, ys],
     );
+    // Bust the in-memory response cache so other visitors get the
+    // freshly-saved positions immediately instead of waiting for TTL.
+    _graphCacheClear();
     res.json({ ok: true, updated: r.rowCount ?? 0 });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
