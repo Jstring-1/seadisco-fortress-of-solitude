@@ -411,6 +411,11 @@ async function allBluesReload() {
         // cores first, periphery recedes.
         "width":  `mapData(degree, 0, ${maxDeg}, 14, 80)`,
         "height": `mapData(degree, 0, ${maxDeg}, 14, 80)`,
+        // Layer by connection count: well-connected hubs render above
+        // sparsely-connected nodes so labels of important artists win
+        // overlap fights. Scale 2..14 nests cleanly under the class
+        // overrides (faded=1, highlighted=20, source=30).
+        "z-index": `mapData(degree, 0, ${maxDeg}, 2, 14)`,
       }},
       { selector: "edge", style: {
         // Banded linear gradient — one segment per kind on the pair.
