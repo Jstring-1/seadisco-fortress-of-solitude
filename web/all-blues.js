@@ -583,13 +583,13 @@ async function allBluesReload() {
   };
   _abCy.on("zoom", _syncLabelVisibility);
   _syncLabelVisibility();
-  // Chronological bias — dominant right-to-left ordering on x,
+  // Chronological bias — dominant left-to-right ordering on x,
   // compressed y so the network forms a horizontal rectangle (much
   // wider than tall). Always on, applied AFTER the layout settles.
   // 85% chronological + 15% original x preserves enough of the
   // force-directed cluster structure to make spatial sense.
-  // Direction is REVERSED: newer artists (high seed_year) land on
-  // the LEFT, older artists land on the RIGHT.
+  // Direction: older artists (low seed_year) land on the LEFT,
+  // newer artists (high seed_year) land on the RIGHT.
   const applyChrono = () => {
     if (!_abCy) return;
     const yearVals = focusedNodes
@@ -624,8 +624,9 @@ async function allBluesReload() {
       const yr = yearById.get(id);
       if (!Number.isFinite(yr)) return;
       const t = (yr - minYr) / (maxYr - minYr);
-      // REVERSED: high t (newer) → small x (left); low t (older) → big x (right).
-      const targetX = xR - t * (xR - xL);
+      // Left-to-right: low t (older) → small x (left); high t (newer)
+      // → big x (right). Standard reading order.
+      const targetX = xL + t * (xR - xL);
       const cur = n.position();
       // 85% weight on chronological target → strong R-L ordering.
       // Compress y into the rectangle band.
