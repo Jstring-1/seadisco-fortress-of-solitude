@@ -729,18 +729,27 @@ function _abApplyFilters() {
     const live = visibleNodes.has(src) && visibleNodes.has(dst) && kindOK(e);
     if (live) liveEdges.push(e);
   });
-  // Min-degree pass — count live edges per surviving node.
+  // Min-degree pass — iterative prune. A single pass leaves orphans:
+  // a node with 2 leaf neighbors survives the first check, but once
+  // those leaves get kicked out the node is stranded with 0 visible
+  // edges. Loop until no more nodes drop, so the visible subgraph
+  // genuinely has min-degree ≥ minDeg.
   let finalNodes = visibleNodes;
   if (minDeg > 1) {
-    const deg = new Map();
-    for (const e of liveEdges) {
-      const s = e.source().id(), d = e.target().id();
-      deg.set(s, (deg.get(s) || 0) + 1);
-      deg.set(d, (deg.get(d) || 0) + 1);
-    }
-    finalNodes = new Set();
-    for (const id of visibleNodes) {
-      if ((deg.get(id) || 0) >= minDeg) finalNodes.add(id);
+    finalNodes = new Set(visibleNodes);
+    while (true) {
+      const deg = new Map();
+      for (const e of liveEdges) {
+        const s = e.source().id(), d = e.target().id();
+        if (!finalNodes.has(s) || !finalNodes.has(d)) continue;
+        deg.set(s, (deg.get(s) || 0) + 1);
+        deg.set(d, (deg.get(d) || 0) + 1);
+      }
+      const before = finalNodes.size;
+      for (const id of [...finalNodes]) {
+        if ((deg.get(id) || 0) < minDeg) finalNodes.delete(id);
+      }
+      if (finalNodes.size === before) break;
     }
   }
   // Focus / BFS — narrow to the reachable component.
