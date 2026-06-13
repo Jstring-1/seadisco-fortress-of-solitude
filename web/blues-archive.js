@@ -545,6 +545,27 @@ window._baGoToPage = _baGoToPage;
 // popup pattern reads better (the list stays put, close = ×) and lines
 // up with how lyric viewing already works. #blues-archive-detail is no
 // longer touched — left in the DOM for backward compat only.
+// LRU cache of artist payloads. Hit-rate is near 100% when the user
+// walks the pseudonym / band / linked-artist pill chain because
+// _baPreloadLinkedArtists pre-fetches every neighbor in the
+// background after the current artist renders.
+const _baArtistCache = new Map();
+const _BA_CACHE_LIMIT = 50;
+function _baCacheGet(id) {
+  if (!_baArtistCache.has(id)) return null;
+  const v = _baArtistCache.get(id);
+  _baArtistCache.delete(id);
+  _baArtistCache.set(id, v); // bump LRU position
+  return v;
+}
+function _baCachePut(id, data) {
+  _baArtistCache.set(id, data);
+  while (_baArtistCache.size > _BA_CACHE_LIMIT) {
+    const oldest = _baArtistCache.keys().next().value;
+    _baArtistCache.delete(oldest);
+  }
+}
+
 async function _baOpenArtist(id) {
   _baCurrentArtistId = id;
   // Reuse overlay if already there (e.g. opened twice in a row).
@@ -560,17 +581,54 @@ async function _baOpenArtist(id) {
     overlay.onclick = (e) => { if (e.target === overlay) _baBackToList(); };
     document.body.appendChild(overlay);
   }
+  // Cache hit: render instantly, no spinner. Cache miss: spinner +
+  // fetch. Either way, kick off background preloads for linked
+  // artists so the next click is instant too.
+  const cached = _baCacheGet(id);
+  if (cached) {
+    _baRenderArtistDetail(cached);
+    _baPreloadLinkedArtists(cached);
+    return;
+  }
   overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%);color:var(--muted)">Loading…</div>`;
   try {
     const r = await apiFetch(`/api/blues-archive/artists/${id}`);
     if (!r.ok) { overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: HTTP ${r.status}</p></div>`; return; }
     const a = await r.json();
+    _baCachePut(id, a);
     _baRenderArtistDetail(a);
+    _baPreloadLinkedArtists(a);
   } catch (e) {
     overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: ${escHtml(String(e?.message || e))}</p></div>`;
   }
 }
 window._baOpenArtist = _baOpenArtist;
+
+// Background fetch of every linked artist (pseudonyms / bands /
+// spouse / mentor / family / traveled-with) so clicking a pill
+// renders from cache. Chunks of 5 in-flight to avoid stampeding
+// the API on artists with long link lists. Silent on errors —
+// a miss just means the cache won't hit for that one and we fall
+// back to the spinner-fetch path.
+async function _baPreloadLinkedArtists(a) {
+  const links = Array.isArray(a?.links) ? a.links : [];
+  const ids = links
+    .map(l => Number(l?.id))
+    .filter(id => Number.isFinite(id) && id > 0 && !_baArtistCache.has(id));
+  const CHUNK = 5;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    await Promise.allSettled(chunk.map(async (lid) => {
+      try {
+        const r = await apiFetch(`/api/blues-archive/artists/${lid}`);
+        if (r.ok) {
+          const data = await r.json();
+          _baCachePut(lid, data);
+        }
+      } catch { /* network errors silenced — cache miss fallback */ }
+    }));
+  }
+}
 
 function _baSortLyrics(key) {
   _baToggleSort(_baLyricsSort, key);
@@ -765,19 +823,24 @@ function _baRenderArtistDetail(a) {
   const sectionStyle = "margin:1rem 0;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.8rem;background:rgba(255,255,255,0.015)";
   const summaryStyle = "cursor:pointer;font-size:0.92rem;color:var(--accent);font-weight:600;padding:0.2rem 0;list-style:none;user-select:none";
   const onToggle = (k) => `onclick="event.stopPropagation()" ontoggle="window._baSetSectionCollapsed && window._baSetSectionCollapsed('${k}', !this.open)"`;
-  // Bio / Notes — photo + meta + chips + notes paragraph. The header
-  // row (name + dates + action buttons) stays outside the collapse so
-  // the user always knows who they're looking at.
-  const bioBody = `
-    <div style="display:flex;gap:1rem;margin-top:0.6rem;align-items:flex-start;flex-wrap:wrap">
+  // Permanent header strip — photo + dates/place meta + the
+  // pseudonyms / bands / linked-artist pill clusters. Pulled OUT of
+  // the collapsible Bio/Notes section so the pills stay visible
+  // regardless of whether the bio text is expanded. Now the
+  // collapsible Notes panel below matches every other section: just
+  // its own data (the bio prose).
+  const profileHeader = `
+    <div style="display:flex;gap:1rem;margin:0.6rem 0 1rem;align-items:flex-start;flex-wrap:wrap">
       ${photo}
       <div style="flex:1;min-width:240px">
         ${meta ? `<div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem">${meta}</div>` : ""}
         ${linksHtml}
         ${aliasBandsHtml}
-        ${bio || `<p style="color:var(--muted);font-style:italic;margin:0.6rem 0">No notes recorded.</p>`}
       </div>
     </div>`;
+  // Notes collapsible body — just the prose (or a "none recorded"
+  // placeholder so the panel still looks consistent when empty).
+  const notesBody = bio || `<p style="color:var(--muted);font-style:italic;margin:0.4rem 0">No notes recorded.</p>`;
   // Tunings — combines (a) per-lyric tuning chip strip and (b) the
   // static tunings grid from src/data/tunings.csv. The grid rows
   // include a flag for "no matching lyric in our table" so the curator
@@ -838,9 +901,10 @@ function _baRenderArtistDetail(a) {
         <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete + don't re-add</button>
       </span>
     </div>
+    ${profileHeader}
     <details ${isOpen("bio") ? "open" : ""} ${onToggle("bio")} style="${sectionStyle}">
-      <summary style="${summaryStyle}">Bio / Notes</summary>
-      ${bioBody}
+      <summary style="${summaryStyle}">Notes</summary>
+      <div style="margin-top:0.5rem">${notesBody}</div>
     </details>
     <details ${isOpen("tunings") ? "open" : ""} ${onToggle("tunings")} style="${sectionStyle}">
       <summary style="${summaryStyle}">${tuningsLabel}</summary>
