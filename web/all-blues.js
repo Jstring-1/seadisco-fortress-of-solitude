@@ -289,13 +289,13 @@ async function allBluesReload() {
     const hue = 210 - t * 180; // 210 (blue) → 30 (orange)
     return `hsl(${hue.toFixed(0)}, 50%, 32%)`;
   };
-  // Adaptive labels: at low zoom only the top-N most-connected nodes
-  // keep their label visible. Threshold picks the top 8% of nodes
-  // (minimum 20), so a small graph still shows most labels and a big
-  // graph only shows hubs when pulled out.
+  // Adaptive labels: only the top-N most-connected nodes keep their
+  // label visible until the user zooms in. Tight set (top 3% / min 8)
+  // so the default view is readable instead of a label storm. User
+  // zooms in past the threshold OR clicks a node to surface the rest.
   const sortedByDeg = [...focusedNodes].sort((a, b) =>
     (degMap.get(b.id) || 0) - (degMap.get(a.id) || 0));
-  const labelTopN = Math.max(20, Math.ceil(focusedNodes.length * 0.08));
+  const labelTopN = Math.max(8, Math.ceil(focusedNodes.length * 0.03));
   const labelAlwaysVisible = new Set(sortedByDeg.slice(0, labelTopN).map(n => n.id));
 
   // Position cache (lenient): if ANY node has a cached (x,y), use a
@@ -586,14 +586,23 @@ async function allBluesReload() {
   // render; the handler just toggles a class on the cy root that the
   // stylesheet keys off.
   const _syncLabelVisibility = () => {
-    const lowZoom = _abCy.zoom() < 0.55;
+    const lowZoom = _abCy.zoom() < 1.1;
     _abCy.nodes().forEach(n => {
+      // Top hubs always labeled. Tapped/highlighted nodes also keep
+      // their labels so the focused web stays readable regardless of
+      // zoom level.
       if (n.data("alwaysLabel") === 1) return;
+      if (n.hasClass("ab-highlighted") || n.hasClass("ab-source")) {
+        n.style("text-opacity", 1);
+        n.style("text-background-opacity", 0.55);
+        return;
+      }
       n.style("text-opacity", lowZoom ? 0 : 1);
       n.style("text-background-opacity", lowZoom ? 0 : 0.55);
     });
   };
   _abCy.on("zoom", _syncLabelVisibility);
+  window._abSyncLabelVisibility = _syncLabelVisibility;
   _syncLabelVisibility();
   // Chronological bias — dominant left-to-right ordering on x,
   // compressed y so the network forms a horizontal rectangle (much
@@ -1250,11 +1259,15 @@ function _abHighlightNode(node) {
   // "source" so it stays the visual anchor (amber dot).
   focus.addClass("ab-highlighted");
   node.addClass("ab-source");
+  // Force labels on for the focused web so they're readable at any
+  // zoom — sync handles the hub set + zoom threshold + highlight set.
+  window._abSyncLabelVisibility?.();
 }
 
 function _abClearHighlight() {
   if (!_abCy) return;
   _abCy.elements().removeClass("ab-highlighted ab-source ab-faded");
+  window._abSyncLabelVisibility?.();
 }
 window._abClearHighlight = _abClearHighlight;
 
