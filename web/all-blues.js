@@ -187,6 +187,12 @@ async function allBluesReload() {
   // kind chips, min degree, focus) happens after layout via
   // _abApplyFilters() which only flips visibility on the laid-out
   // cytoscape — no re-fetch, no re-layout when those change.
+  // Admin Recompute: nuke every node's saved x/y so the cold fcose
+  // path runs (refinement of an already-good layout is a no-op and
+  // leaves the canvas blank for big graphs).
+  if (_abForceFreshLayout) {
+    for (const n of data.nodes) { n.x = null; n.y = null; }
+  }
   const focusedNodes = data.nodes;
   const focusedEdges = data.edges;
   const counts = document.getElementById("ab-graph-counts");
