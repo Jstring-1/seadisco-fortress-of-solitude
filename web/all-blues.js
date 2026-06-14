@@ -416,7 +416,7 @@ async function allBluesReload() {
         "background-color": "data(eraColor)",
         "border-color": "data(clusterColor)", "border-width": 1.5,
         "label": "data(label)", "color": "#e2e8f0",
-        "font-size": 10,
+        "font-size": 13,
         // Label sits below the node with a thick dark outline AND a
         // semi-transparent dark pill behind it.
         "text-valign": "bottom", "text-halign": "center",
@@ -444,11 +444,11 @@ async function allBluesReload() {
         "line-fill": "linear-gradient",
         "line-gradient-stop-colors": "data(gradientColors)",
         "line-gradient-stop-positions": "data(gradientPositions)",
-        // Default edges sit at half-brightness so nodes + labels are
-        // the eye's primary target. Tap a node to bring its web up to
-        // full brightness (.ab-highlighted) and push the rest down
-        // further (.ab-faded).
-        "width": 2.8, "opacity": 0.45,
+        // Default edges sit at quarter-brightness so nodes + labels
+        // are unambiguously the eye's primary target. Tap a node to
+        // bring its web up to full brightness (.ab-highlighted) and
+        // push the rest down further (.ab-faded).
+        "width": 2.8, "opacity": 0.22,
         "curve-style": "bezier",
       }},
       { selector: "node:selected", style: { "border-color": "#fbbf24", "border-width": 3 }},
@@ -639,7 +639,7 @@ async function allBluesReload() {
     // narrower — same year's artists stack vertically instead of
     // spreading out across 4 sub-columns.
     const NODE_X_PX = 140; // year-column spacing
-    const NODE_Y_PX = 50;  // line-height + padding per row
+    const NODE_Y_PX = 38;  // line-height + padding per row (tighter)
     const X_LANES = 1;     // single column per year — stack vertically
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
     const curYById = new Map();
