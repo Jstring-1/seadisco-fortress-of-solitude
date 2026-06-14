@@ -6208,9 +6208,6 @@ export async function getFeedRandomAlbums(
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
-    // Exclusion filter — used by Load More so already-shown rows
-    // don't repeat in the next page. Encoded as parallel arrays of
-    // (discogs_id, type) so we can NOT (id, type) IN (...) match.
     const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
     const excludeIdsArr  = exclude.map(e => Number(e.id));
     const excludeTypeArr = exclude.map(e => String(e.type));
@@ -6218,34 +6215,66 @@ export async function getFeedRandomAlbums(
     let where = "";
     if (type !== "any") {
       params.push(type);
-      where += `WHERE type = $${params.length} `;
+      where += `WHERE rc.type = $${params.length} `;
     } else {
-      // "any" means "any album", NOT every row in release_cache. The
-      // table also stores master-versions (pressing-list payloads) and
-      // artist (artist profile cache) which are infrastructure caches,
-      // not displayable albums — surfacing them as feed cards produces
-      // empty placeholders like "master-versions 645422 / NO IMAGE".
-      // Restrict to the two real album types.
-      where += `WHERE type IN ('master','release') `;
+      where += `WHERE rc.type IN ('master','release') `;
     }
-    // Hide pre-warmed-but-unviewed rows. The overnight cache-warm job
-    // pulls thousands of suggested albums into release_cache; without
-    // this filter they'd flood the public feed even though no human
-    // has interacted with them. seen_at stamps on first user click,
-    // so the feed only surfaces albums someone actually engaged with.
-    where += "AND seen_at IS NOT NULL ";
+    where += "AND rc.seen_at IS NOT NULL ";
     if (exclude.length) {
       params.push(excludeIdsArr);
       const idIdx = params.length;
       params.push(excludeTypeArr);
       const tyIdx = params.length;
-      where += where ? "AND " : "WHERE ";
-      where += `NOT (discogs_id = ANY($${idIdx}::int[]) AND type = ANY($${tyIdx}::text[])) `;
+      where += `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[])) `;
     }
-    const sql = `SELECT discogs_id AS id, type, data, cached_at
-                   FROM release_cache
-                   ${where}
-                  ORDER BY RANDOM() LIMIT $1`;
+    // ── Weighted-random feed sample ───────────────────────────────
+    // Each candidate gets a composite score from three normalized
+    // signals; the final ORDER BY is an exponential-weighted reservoir
+    // sample (`-LN(R) / score`) so high-score rows surface more often
+    // without being deterministic. Every row remains reachable.
+    //
+    //   yt_score   — Discogs videos[] count / tracklist length, clamped
+    //                to [0,1]. Release-level approximation (Discogs
+    //                videos aren't always 1:1 with tracks but it's the
+    //                most reliable per-album signal we have).
+    //   want_score — log-scaled community.want from the release JSON.
+    //                Masters generally lack this; default 0.
+    //   sale_score — log-scaled num_for_sale from price_cache. Joined
+    //                only for release rows.
+    //
+    // Weights 0.5 / 0.3 / 0.2 + a 0.05 floor so an album with all
+    // zeros still has a tiny chance of surfacing (so we don't trap
+    // unscored rows in obscurity).
+    const sql = `
+      WITH scored AS (
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
+               CASE
+                 WHEN jsonb_typeof(rc.data->'tracklist') = 'array'
+                  AND jsonb_array_length(rc.data->'tracklist') > 0
+                 THEN LEAST(
+                   1.0,
+                   COALESCE(jsonb_array_length(NULLIF(rc.data->'videos','null'::jsonb)), 0)::float
+                     / NULLIF(jsonb_array_length(rc.data->'tracklist'), 0)::float
+                 )
+                 ELSE 0
+               END AS yt_score,
+               LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)) AS want_score,
+               LN(1 + COALESCE(pc.num_for_sale, 0))                                AS sale_score
+          FROM release_cache rc
+          LEFT JOIN price_cache pc
+            ON pc.discogs_release_id = rc.discogs_id
+           AND rc.type = 'release'
+          ${where}
+      )
+      SELECT id, type, data, cached_at
+        FROM scored
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
+         0.5 * COALESCE(yt_score, 0)
+       + 0.3 * (COALESCE(want_score, 0) / 8.0)
+       + 0.2 * (COALESCE(sale_score, 0) / 5.0),
+         0.05
+       )
+       LIMIT $1`;
     const r = await getPool().query(sql, params);
     return r.rows;
   } catch { return []; }
