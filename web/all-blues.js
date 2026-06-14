@@ -731,18 +731,36 @@ function _abApplyFilters() {
     if (def) for (const r of def.raw) enabledRaw.add(r);
   }
   const minDeg = parseInt(document.getElementById("ab-min-degree")?.value || "1", 10) || 1;
-  // Pass 1: nodes survive the year window
-  const yearOK = (n) => {
-    const yr = n.data("seedYear");
-    if (!Number.isFinite(yr)) return true; // unknown year stays visible
-    return yr >= fromY && yr <= toY;
-  };
   // Pass 2: edges survive when at least one of their raw kinds is on
   // AND both endpoints survive the year window.
   const kindOK = (e) => {
     const list = (e.data("rawKinds") || "").split(",").filter(Boolean);
     if (!list.length) return enabledRaw.has("mention");
     return list.some(k => enabledRaw.has(k));
+  };
+  // Focus override: when an artist is focused, force the focus + every
+  // 1-hop neighbor visible regardless of the year window. So focusing
+  // Eric Clapton (1965) while the slider sits at 1930-1940 still shows
+  // his whole immediate web — the user explicitly asked for this artist.
+  const yearBypass = new Set();
+  if (_abFocusId != null) {
+    const fId = String(_abFocusId);
+    yearBypass.add(fId);
+    _abCy.edges().forEach(e => {
+      if (!kindOK(e)) return;
+      const s = e.source().id();
+      const d = e.target().id();
+      if (s === fId) yearBypass.add(d);
+      else if (d === fId) yearBypass.add(s);
+    });
+  }
+  // Pass 1: nodes survive the year window — unless they're in the
+  // focus bypass set, in which case they're force-visible.
+  const yearOK = (n) => {
+    if (yearBypass.has(n.id())) return true;
+    const yr = n.data("seedYear");
+    if (!Number.isFinite(yr)) return true; // unknown year stays visible
+    return yr >= fromY && yr <= toY;
   };
   // Apply year + kind first, then min-degree on the surviving subgraph.
   const visibleNodes = new Set();
@@ -772,6 +790,9 @@ function _abApplyFilters() {
       }
       const before = finalNodes.size;
       for (const id of [...finalNodes]) {
+        // Focus + 1-hop neighbors are protected from the min-degree
+        // prune — user asked for this artist's web, even leaves stay.
+        if (yearBypass.has(id)) continue;
         if ((deg.get(id) || 0) < minDeg) finalNodes.delete(id);
       }
       if (finalNodes.size === before) break;
