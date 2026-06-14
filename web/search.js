@@ -1070,9 +1070,12 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "suggestions" || v === "feed") return v;
+    if (v === "recent" || v === "suggestions" || v === "feed") return v;
   } catch {}
-  return "recent";
+  // Feed is the default landing tab for everyone — anons land here
+  // because they have no Recent history, and signed-in users can
+  // switch to Recent/Suggestions with one click.
+  return "feed";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
 window._sdHomeStripFilter = "";
@@ -1081,34 +1084,23 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  // Recent + Suggestions are the public tabs. Feed is a hidden mode
-  // reachable ONLY via the footer link (?strip=feed) — when active it
-  // shows a "Feed" label + a "← Recent" escape and hides the other
-  // tabs. Any other stray mode gets coerced to Recent.
+  // Feed (default) / Recent / Suggestions are all visible tabs now.
+  // Any stray mode collapses to Feed.
   if (window._sdHomeStripMode !== "recent"
       && window._sdHomeStripMode !== "suggestions"
       && window._sdHomeStripMode !== "feed") {
-    window._sdHomeStripMode = "recent";
+    window._sdHomeStripMode = "feed";
   }
   const tabs = {
+    feed:        document.getElementById("rr-tab-feed"),
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
   };
-  const sep = document.getElementById("rr-tab-sep");
-  const feedTab = document.getElementById("rr-tab-feed");
-  const feedEscape = document.getElementById("rr-tab-feed-escape");
-  const isFeed = window._sdHomeStripMode === "feed";
-  // Recent/Suggestions/separator visible in normal modes; hidden when
-  // feed is active so the strip header reads simply "Feed ← Recent".
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
-    el.style.display = isFeed ? "none" : "";
-    el.classList.toggle("rr-tab-active", !isFeed && k === window._sdHomeStripMode);
-    el.style.color = (!isFeed && k === window._sdHomeStripMode) ? "var(--text)" : "var(--muted)";
+    el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
+    el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
   }
-  if (sep) sep.style.display = isFeed ? "none" : "";
-  if (feedTab) feedTab.style.display = isFeed ? "" : "none";
-  if (feedEscape) feedEscape.style.display = isFeed ? "" : "none";
   // Anons see both tabs but they're greyed out — clicking either
   // prompts sign-in. Recent's local-history fallback still renders
   // a community-picks sample so the strip isn't empty.
@@ -1150,11 +1142,11 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  // Feed is reachable but only via the footer link routing through
-  // here with 'feed'. Suggestions + Recent + Feed are the only valid
-  // values; anything else collapses to Recent.
-  let m = "recent";
-  if (mode === "suggestions") m = "suggestions";
+  // Feed / Recent / Suggestions are the visible tabs; Feed is the
+  // default landing tab. Anything else collapses to Feed.
+  let m = "feed";
+  if (mode === "recent") m = "recent";
+  else if (mode === "suggestions") m = "suggestions";
   else if (mode === "feed") m = "feed";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.

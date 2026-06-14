@@ -720,6 +720,10 @@ function _applySplashVisibility(clerk) {
   if (resultsEl)  resultsEl.style.display = "";
   if (anonSplash) anonSplash.style.display = signedIn ? "none" : "";
   if (stripWrap)  stripWrap.style.display  = "";
+  // Sticky sign-in/sign-up rail on the left middle — replaces the
+  // old splash paragraph for anon visitors. Hidden when signed-in.
+  const sideRail = document.getElementById("anon-side-rail");
+  if (sideRail) sideRail.style.display = signedIn ? "none" : "";
 }
 
 async function applyAuthState(clerk) {
