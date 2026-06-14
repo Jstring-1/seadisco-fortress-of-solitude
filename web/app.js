@@ -748,15 +748,13 @@ async function applyAuthState(clerk) {
   // tabs show as disabled for signed-in users on first paint
   // because Clerk hadn't hydrated yet when the strip first rendered.
   window._sdAuthResolved = true;
-  // Anons stay on Recent — its no-history fallback hits community-
-  // picks / admin-favorites so the strip isn't empty without sign-in.
-  // (Feed / Submitted tabs were removed.) Strip stale ?strip=feed
-  // and ?strip=submitted params from the URL so old bookmarks don't
-  // resurrect dead modes on reload.
+  // Submitted mode is dead — strip stale ?strip=submitted params so
+  // old bookmarks don't resurrect it. Feed IS still valid (reachable
+  // via the footer Feed link → ?strip=feed) so it passes through.
   try {
     const u = new URL(location.href);
     const v = u.searchParams.get("strip");
-    if (v === "feed" || v === "submitted") {
+    if (v === "submitted") {
       u.searchParams.delete("strip");
       history.replaceState(history.state, "", u.toString());
     }

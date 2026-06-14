@@ -1070,7 +1070,7 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "suggestions") return v;
+    if (v === "suggestions" || v === "feed") return v;
   } catch {}
   return "recent";
 }
@@ -1081,21 +1081,34 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  // Feed + Submitted tabs were removed — only Recent + Suggestions
-  // remain. Any stale persisted mode (URL pin, localStorage) gets
-  // coerced to Recent so we never paint with no active tab.
-  if (window._sdHomeStripMode !== "recent" && window._sdHomeStripMode !== "suggestions") {
+  // Recent + Suggestions are the public tabs. Feed is a hidden mode
+  // reachable ONLY via the footer link (?strip=feed) — when active it
+  // shows a "Feed" label + a "← Recent" escape and hides the other
+  // tabs. Any other stray mode gets coerced to Recent.
+  if (window._sdHomeStripMode !== "recent"
+      && window._sdHomeStripMode !== "suggestions"
+      && window._sdHomeStripMode !== "feed") {
     window._sdHomeStripMode = "recent";
   }
   const tabs = {
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
   };
+  const sep = document.getElementById("rr-tab-sep");
+  const feedTab = document.getElementById("rr-tab-feed");
+  const feedEscape = document.getElementById("rr-tab-feed-escape");
+  const isFeed = window._sdHomeStripMode === "feed";
+  // Recent/Suggestions/separator visible in normal modes; hidden when
+  // feed is active so the strip header reads simply "Feed ← Recent".
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
-    el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
-    el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
+    el.style.display = isFeed ? "none" : "";
+    el.classList.toggle("rr-tab-active", !isFeed && k === window._sdHomeStripMode);
+    el.style.color = (!isFeed && k === window._sdHomeStripMode) ? "var(--text)" : "var(--muted)";
   }
+  if (sep) sep.style.display = isFeed ? "none" : "";
+  if (feedTab) feedTab.style.display = isFeed ? "" : "none";
+  if (feedEscape) feedEscape.style.display = isFeed ? "" : "none";
   // Anons see both tabs but they're greyed out — clicking either
   // prompts sign-in. Recent's local-history fallback still renders
   // a community-picks sample so the strip isn't empty.
@@ -1137,8 +1150,12 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  // Feed + Submitted tabs were removed — only Recent + Suggestions.
-  const m = mode === "suggestions" ? "suggestions" : "recent";
+  // Feed is reachable but only via the footer link routing through
+  // here with 'feed'. Suggestions + Recent + Feed are the only valid
+  // values; anything else collapses to Recent.
+  let m = "recent";
+  if (mode === "suggestions") m = "suggestions";
+  else if (mode === "feed") m = "feed";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -2234,11 +2251,12 @@ async function loadRandomRecords(more) {
   if (!grid || !wrap) return;
   const _mySeq = ++_randomLoadSeq;
   const _stillCurrent = () => _mySeq === _randomLoadSeq;
-  // Anons can only land on Recent (its local-history fallback hits
-  // community-picks / admin-favorites so the strip isn't empty).
-  // Coerce stray modes (suggestions from a deep link, etc.) before
-  // the render branches below.
-  if (window._sdAuthResolved && !window._clerk?.user && window._sdHomeStripMode !== "recent") {
+  // Suggestions requires auth; Recent + Feed are public. Anons land
+  // on Recent unless they explicitly arrive via the footer Feed link.
+  if (window._sdAuthResolved
+      && !window._clerk?.user
+      && window._sdHomeStripMode !== "recent"
+      && window._sdHomeStripMode !== "feed") {
     window._sdHomeStripMode = "recent";
     if (typeof _sdSyncHomeStripTabsVisual === "function") _sdSyncHomeStripTabsVisual();
   }
@@ -2256,7 +2274,26 @@ async function loadRandomRecords(more) {
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdHomeStripMode === "suggestions") {
+    if (window._sdHomeStripMode === "feed") {
+      // ── Feed (public catalog sample) ────────────────────────────
+      // Reached only via the footer link. Hits the public random
+      // endpoint and pages forever via Load More (the existing
+      // load-more branch fetches more from the same endpoint).
+      _randomAll = [];
+      try {
+        const r = await fetch("/api/feed/random?limit=48", { cache: "no-store" });
+        if (!_stillCurrent()) return;
+        if (r.ok) {
+          const j = await r.json();
+          if (!_stillCurrent()) return;
+          if (Array.isArray(j?.items) && j.items.length) {
+            _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+          }
+        }
+      } catch { /* leave empty — UI shows empty state below */ }
+      titleText = "Feed";
+      isSuggested = true;
+    } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
       // Signed-in: per-user background-generated feed. If the user
       // has none yet (new account, sync hasn't run), show the empty
@@ -2356,6 +2393,11 @@ async function loadRandomRecords(more) {
     _applyFavoritesSort();
 
     if (!_randomAll.length) {
+      if (window._sdHomeStripMode === "feed") {
+        wrap.style.display = "";
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">Feed empty — the catalog sample is unavailable right now.</div>`;
+        return;
+      }
       if (window._sdHomeStripMode === "suggestions") {
         wrap.style.display = "";
         const isSignedIn = !!window._clerk?.user;
