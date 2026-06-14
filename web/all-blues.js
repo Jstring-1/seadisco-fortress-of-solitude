@@ -108,25 +108,18 @@ async function initAllBluesView() {
     window._ensureAdminFlag().then(() => _abSyncSaveLayoutButton?.()).catch(() => {});
   }
   _abRenderKindChips();
-  // Hydrate the (hidden) year-range inputs from localStorage so a
-  // refresh preserves the user's last window. Old saves with custom
-  // widths (from earlier "any range" version) get snapped to the
-  // locked 11-year width by _abSyncWindowSlider below.
+  // Year window is fully removed from the UI. Force the hidden inputs
+  // wide open (1900/2100) regardless of any legacy localStorage entry
+  // so a stale "?strip=1930-1940" save can't keep the graph clipped
+  // to a single decade. Also purge the persisted key so it can't come
+  // back on the next load.
   try {
-    const raw = localStorage.getItem(_AB_YEARS_KEY);
     const fromI = document.getElementById("ab-from-year-filter");
     const toI   = document.getElementById("ab-to-year-filter");
-    if (raw && fromI && toI) {
-      const obj = JSON.parse(raw);
-      if (Number.isFinite(obj.from)) fromI.value = obj.from;
-      if (Number.isFinite(obj.to))   toI.value   = obj.to;
-    }
+    if (fromI) fromI.value = "1900";
+    if (toI)   toI.value   = "2100";
+    localStorage.removeItem(_AB_YEARS_KEY);
   } catch {}
-  // Sync the window slider thumb + label and normalize the inputs to
-  // the locked 11-year width so the toolbar reflects state right from
-  // first paint. If nothing was stored, the HTML defaults (1930/1940)
-  // win — first-time visitors land on the 1930s era.
-  _abSyncWindowSlider();
   // Restore persisted focus (id only — name resolves once graph loads).
   try {
     const raw = localStorage.getItem(_AB_FOCUS_KEY);
@@ -370,6 +363,13 @@ async function allBluesReload() {
     ...focusedEdges.map((e, i) => {
       const kinds = Array.isArray(e.kinds) ? e.kinds : (e.kind ? [e.kind] : ["mention"]);
       const grad = buildEdgeGradient(kinds);
+      // Fan-out control: each edge gets a unique bezier curvature
+      // derived from its endpoint pair. So when 6 edges leave the
+      // same node, they exit at 6 distinct curves instead of stacking
+      // on top of each other. Hash → integer in [-1, 1] range.
+      const hash = (((e.src_id * 73856093) ^ (e.dst_id * 19349663)) >>> 0);
+      const bend = ((hash % 200) / 100) - 1; // -1..+1
+      const controlDist = Math.round(bend * 90); // px from straight line
       return {
         data: {
           id: `e${i}`,
@@ -382,6 +382,7 @@ async function allBluesReload() {
           kinds: kinds.join(","),
           gradientColors: grad.colors,
           gradientPositions: grad.positions,
+          controlDist,
         },
       };
     }),
@@ -449,7 +450,14 @@ async function allBluesReload() {
         // bring its web up to full brightness (.ab-highlighted) and
         // push the rest down further (.ab-faded).
         "width": 2.8, "opacity": 0.22,
-        "curve-style": "bezier",
+        // unbundled-bezier + per-edge control-point-distance lets each
+        // edge bow by a different amount (data(controlDist) is a hashed
+        // -90..+90px offset). When 6 edges leave the same node they exit
+        // at 6 distinct curves instead of all going dead-straight and
+        // piling on top of each other.
+        "curve-style": "unbundled-bezier",
+        "control-point-distances": "data(controlDist)",
+        "control-point-weights": 0.5,
       }},
       { selector: "node:selected", style: { "border-color": "#fbbf24", "border-width": 3 }},
       { selector: "node[focused = 1]", style: {
