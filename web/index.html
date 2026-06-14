@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260613.7af7fe6" />
+  <link rel="stylesheet" href="/style.css?v=260613.b0ea773" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260613.7af7fe6"></script>
+<script defer src="/shared.js?v=260613.b0ea773"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -512,33 +512,34 @@ e.g.  miles davis | coltrane
   </div>
   <div id="pagination" style="display:none"></div>
 
-  <!-- ── Anonymous-visitor splash ───────────────────────────────────
-       Shown to signed-out users in place of the Recent/Suggestions/
-       Submitted strip. Pitches the OAuth feature set so visitors know
-       what they're signing up for. Hidden for signed-in users via
-       _applySplashVisibility in app.js. -->
-  <div id="anon-splash" class="content-area anon-splash" style="display:none">
-    <p class="anon-splash-lead">
-      <strong>SeaDisco</strong> — music discovery for vinyl collectors. Browse the Feed below, search the catalog, play tracks. <a href="#" onclick="event.preventDefault();openSignUpModal();return false">Sign up</a> to sync your collection, build a personalized feed, and more. <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a>.
-    </p>
+  <!-- Anonymous-visitor splash text removed by request. The sticky
+       left-side sign-in / sign-up rail (#anon-side-rail) replaces it. -->
+  <div id="anon-splash" class="content-area anon-splash" style="display:none"></div>
+
+  <!-- Sticky sign-in / sign-up rail for anonymous visitors. Pinned to
+       the left middle of the viewport. _applyAnonSideRailVisibility
+       (in app.js) shows when signed-out, hides when signed-in. -->
+  <div id="anon-side-rail" style="display:none;position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:340;background:var(--bg-panel, #111);border:1px solid var(--border, #333);border-radius:10px;padding:0.75rem 0.6rem;box-shadow:0 6px 20px rgba(0,0,0,0.45);max-width:170px;font-size:0.78rem;color:var(--text, #ddd)">
+    <div style="font-weight:600;margin-bottom:0.4rem;font-size:0.78rem;letter-spacing:0.02em">Join SeaDisco</div>
+    <div style="color:var(--muted);font-size:0.7rem;line-height:1.35;margin-bottom:0.55rem">Sync your collection, build a personalized feed.</div>
+    <button type="button" onclick="openSignUpModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;margin-bottom:0.35rem;background:var(--accent);color:#000;border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:0.76rem">Sign up</button>
+    <button type="button" onclick="openSignInModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:0.76rem">Sign in</button>
   </div>
 
   <!-- ── Recent history (primary front-page strip) ────────────────── -->
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" class="rr-header">
       <div id="random-records-title-wrap" class="rr-title-wrap">
-        <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
+        <!-- Feed is the default landing tab for everyone (signed-in
+             and anon). Recent + Suggestions follow. -->
+        <span id="rr-tab-feed" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('feed')" title="Random sample from the catalog cache — explore freely">Feed</span>
         <span id="rr-tab-sep" class="rr-tab-sep">/</span>
+        <span id="rr-tab-recent" class="rr-tab" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
+        <span class="rr-tab-sep">/</span>
         <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')" title="Personalized suggestions generated hourly from your library's taste profile">Suggestions</span>
-        <!-- Feed label + escape: visible ONLY when ?strip=feed routed in
-             via the footer link. The label itself isn't clickable (per
-             user request: don't put a Feed link anywhere but the footer);
-             the escape returns to Recent so the user isn't stranded. -->
-        <span id="rr-tab-feed" class="rr-tab rr-tab-active" style="display:none">Feed</span>
-        <span id="rr-tab-feed-escape" class="rr-tab" style="display:none;cursor:pointer;color:var(--muted)" onclick="_sdSwitchHomeStripTab('recent')" title="Return to Recent">← Recent</span>
         <!-- Legacy id kept as a hidden node so older code paths that
              write to it don't blow up; visible state is on the tabs above. -->
-        <span id="random-records-title" style="display:none">Recent</span>
+        <span id="random-records-title" style="display:none">Feed</span>
       </div>
       <div id="random-records-controls" class="rr-controls">
         <input type="search" id="random-records-filter" class="sd-filter-input" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)">
@@ -1912,13 +1913,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260613.7af7fe6"></script>
-<script defer src="/search.js?v=260613.7af7fe6"></script>
-<script defer src="/collection.js?v=260613.7af7fe6"></script>
+<script defer src="/utils.js?v=260613.b0ea773"></script>
+<script defer src="/search.js?v=260613.b0ea773"></script>
+<script defer src="/collection.js?v=260613.b0ea773"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260613.7af7fe6"></script>
-<script defer src="/app.js?v=260613.7af7fe6"></script>
+<script defer src="/modal.js?v=260613.b0ea773"></script>
+<script defer src="/app.js?v=260613.b0ea773"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1929,13 +1930,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260613.7af7fe6"></script>
-<script defer src="/queue.js?v=260613.7af7fe6"></script>
+<script defer src="/loc.js?v=260613.b0ea773"></script>
+<script defer src="/queue.js?v=260613.b0ea773"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260613.7af7fe6";
+  window._SD_LAZY_VERSION = "260613.b0ea773";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1965,8 +1966,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260613.7af7fe6"></script>
-<script defer src="/offline.js?v=260613.7af7fe6"></script>
+<script defer src="/idb.js?v=260613.b0ea773"></script>
+<script defer src="/offline.js?v=260613.b0ea773"></script>
 
 </body>
 </html>
