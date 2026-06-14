@@ -672,20 +672,27 @@ async function allBluesReload() {
     const sortedYears = [...yearBins.keys()].sort((a, b) => a - b);
     sortedYears.forEach(yr => {
       const ids = yearBins.get(yr);
-      // Stable sort within a year by current Y so the fcose-derived
-      // cluster structure carries through visually (people who clustered
-      // near each other in y stay near each other in the column).
-      ids.sort((a, b) => (curYById.get(a) || 0) - (curYById.get(b) || 0));
+      // Hub-in-middle sort: highest-degree artist lands at the vertical
+      // center, next pair flanks above/below, etc. Reads like a
+      // horizontal "spine" across years where the most-connected
+      // people live, with sparser nodes trailing toward top/bottom.
+      ids.sort((a, b) => (degMap.get(b) || 0) - (degMap.get(a) || 0));
+      const N = ids.length;
+      const center = (N - 1) / 2;
+      // Map sort-index i to row order: i=0 → row 0 (center),
+      // i=1 → -1 (above), i=2 → +1 (below), i=3 → -2, i=4 → +2, …
+      const offset = (i) => {
+        const half = Math.floor((i + 1) / 2);
+        return i % 2 === 1 ? -half : half;
+      };
       const t = yearSpan > 1 ? (yr - minYr) / (yearSpan - 1) : 0.5;
       const colCenterX = xL + t * (xR - xL);
       ids.forEach((id, i) => {
         const lane = i % X_LANES;
-        const row  = Math.floor(i / X_LANES);
-        // Each lane is a fixed offset from the column center.
         const laneOffset = (lane - (X_LANES - 1) / 2) * NODE_X_PX;
-        const rows = Math.max(1, Math.ceil(ids.length / X_LANES));
-        const ty = rows > 1
-          ? yT + (row / (rows - 1)) * (yB - yT)
+        const rowAbs = center + offset(i); // 0..N-1
+        const ty = N > 1
+          ? yT + (rowAbs / (N - 1)) * (yB - yT)
           : (yT + yB) / 2;
         targetByNode.set(id, { x: colCenterX + laneOffset, y: ty });
       });
@@ -772,28 +779,38 @@ function _abApplyFilters() {
     const live = visibleNodes.has(src) && visibleNodes.has(dst) && kindOK(e);
     if (live) liveEdges.push(e);
   });
-  // Min-degree pass — iterative prune. A single pass leaves orphans:
-  // a node with 2 leaf neighbors survives the first check, but once
-  // those leaves get kicked out the node is stranded with 0 visible
-  // edges. Loop until no more nodes drop, so the visible subgraph
-  // genuinely has min-degree ≥ minDeg.
+  // Min-degree pass — applies ONLY to Played-with edges. Those are
+  // the noisy ones (every comp credit / sideman link). Other kinds
+  // (Family, Pseudonyms, Mentions) are signal; we never gate on them.
+  // Rule: a node is kept if it has ≥ minDeg Played-with edges OR any
+  // non-Played-with edge. Iterative because pruning a node's Played-
+  // with leaves drops its PW degree and may bring it below threshold.
+  const isPW = (e) => {
+    const list = (e.data("rawKinds") || "").split(",").filter(Boolean);
+    return list.some(k => _AB_KIND_TO_BUCKET[k] === "played_with");
+  };
   let finalNodes = visibleNodes;
   if (minDeg > 1) {
     finalNodes = new Set(visibleNodes);
     while (true) {
-      const deg = new Map();
+      const pwDeg = new Map();   // played-with edges per node
+      const otherDeg = new Map(); // anything else
       for (const e of liveEdges) {
         const s = e.source().id(), d = e.target().id();
         if (!finalNodes.has(s) || !finalNodes.has(d)) continue;
-        deg.set(s, (deg.get(s) || 0) + 1);
-        deg.set(d, (deg.get(d) || 0) + 1);
+        const map = isPW(e) ? pwDeg : otherDeg;
+        map.set(s, (map.get(s) || 0) + 1);
+        map.set(d, (map.get(d) || 0) + 1);
       }
       const before = finalNodes.size;
       for (const id of [...finalNodes]) {
-        // Focus + 1-hop neighbors are protected from the min-degree
-        // prune — user asked for this artist's web, even leaves stay.
+        // Focus + 1-hop neighbors are protected — user asked for
+        // this artist's web, even leaves stay.
         if (yearBypass.has(id)) continue;
-        if ((deg.get(id) || 0) < minDeg) finalNodes.delete(id);
+        const pw = pwDeg.get(id) || 0;
+        const other = otherDeg.get(id) || 0;
+        // Keep if they have ANY non-PW edge OR enough PW edges.
+        if (other === 0 && pw < minDeg) finalNodes.delete(id);
       }
       if (finalNodes.size === before) break;
     }
@@ -1157,7 +1174,7 @@ function _abEnsureEdgePopup() {
   if (!bd) {
     bd = document.createElement("div");
     bd.id = "ab-edge-popup-bd";
-    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
+    bd.style.cssText = `position:fixed;inset:0 0 96px 0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
     bd.onclick = _abCloseEdgePopup;
     document.body.appendChild(bd);
   }
@@ -1416,7 +1433,7 @@ function _abEnsureArtistPopup() {
   if (!bd) {
     bd = document.createElement("div");
     bd.id = "ab-artist-popup-bd";
-    bd.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
+    bd.style.cssText = `position:fixed;inset:0 0 96px 0;background:rgba(0,0,0,0.5);z-index:115;display:none`;
     bd.onclick = _abCloseArtistPopup;
     document.body.appendChild(bd);
   }
