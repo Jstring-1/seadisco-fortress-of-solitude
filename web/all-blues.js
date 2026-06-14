@@ -635,9 +635,12 @@ async function allBluesReload() {
     // without overlap we abandon "fit to canvas" sizing — instead we
     // budget a real label footprint per node and let the layout grow
     // as big as the data needs. User pans/zooms the giant canvas.
-    const NODE_X_PX = 160; // ~2 label widths of horizontal slot per node
-    const NODE_Y_PX = 55;  // line-height + padding per row
-    const X_LANES = 4;     // four nodes side-by-side per year bin
+    // One lane per year column (was 4) so the graph is taller and
+    // narrower — same year's artists stack vertically instead of
+    // spreading out across 4 sub-columns.
+    const NODE_X_PX = 140; // year-column spacing
+    const NODE_Y_PX = 50;  // line-height + padding per row
+    const X_LANES = 1;     // single column per year — stack vertically
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
     const curYById = new Map();
     _abCy.nodes().forEach(n => {
