@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260613.d828539" />
+  <link rel="stylesheet" href="/style.css?v=260613.34c9552" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260613.d828539"></script>
+<script defer src="/shared.js?v=260613.34c9552"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1100,18 +1100,14 @@ e.g.  miles davis | coltrane
     <div id="all-blues-filters" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem">
       <span style="color:var(--muted)">Show:</span>
       <span id="all-blues-kind-chips"></span>
-      <!-- Year window is locked to 11 years (start year + 10), driven
-           by the slider. From/To inputs are kept in the DOM for
-           backend wiring (allBluesReload reads them) but hidden from
-           the user — they're not editable anymore. -->
-      <input id="ab-from-year-filter" type="hidden" value="1930">
-      <input id="ab-to-year-filter"   type="hidden" value="1940">
-      <label style="display:inline-flex;gap:0.4rem;align-items:center" title="Drag to slide an 11-year window across the network. The graph shows every artist whose first cached blues credit lands inside it.">Years
-        <input id="ab-window-slider" type="range" min="1900" max="2010" step="1" value="1930"
-               style="width:14em" oninput="_abWindowSliderInput()" onchange="_abWindowSliderInput()">
-        <span id="ab-window-label" style="font-variant-numeric:tabular-nums;color:var(--accent);min-width:6.5em;font-size:0.82rem;font-weight:600"></span>
-      </label>
-      <label style="display:inline-flex;gap:0.3rem;align-items:center">Min degree
+      <!-- Year window inputs are kept as wide-open hidden defaults so
+           _abApplyFilters has something to read; the slider UI was
+           removed because the graph now shows the entire network. -->
+      <input id="ab-from-year-filter" type="hidden" value="1900">
+      <input id="ab-to-year-filter"   type="hidden" value="2100">
+      <label style="display:inline-flex;gap:0.3rem;align-items:center"
+             title="A Played-with connection is a band/sideman credit. These dominate the network; raising this number trims artists with fewer than N Played-with edges.">
+        Min Played-with
         <input id="ab-min-degree" type="number" value="2" min="1" max="20" style="width:4em" onchange="(window._abApplyFilters && window._abCy) ? window._abApplyFilters() : window.allBluesReload()">
       </label>
       <button type="button" class="archive-btn" onclick="allBluesReload()">Reload graph</button>
@@ -1910,13 +1906,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260613.d828539"></script>
-<script defer src="/search.js?v=260613.d828539"></script>
-<script defer src="/collection.js?v=260613.d828539"></script>
+<script defer src="/utils.js?v=260613.34c9552"></script>
+<script defer src="/search.js?v=260613.34c9552"></script>
+<script defer src="/collection.js?v=260613.34c9552"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260613.d828539"></script>
-<script defer src="/app.js?v=260613.d828539"></script>
+<script defer src="/modal.js?v=260613.34c9552"></script>
+<script defer src="/app.js?v=260613.34c9552"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1927,13 +1923,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260613.d828539"></script>
-<script defer src="/queue.js?v=260613.d828539"></script>
+<script defer src="/loc.js?v=260613.34c9552"></script>
+<script defer src="/queue.js?v=260613.34c9552"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260613.d828539";
+  window._SD_LAZY_VERSION = "260613.34c9552";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1963,8 +1959,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260613.d828539"></script>
-<script defer src="/offline.js?v=260613.d828539"></script>
+<script defer src="/idb.js?v=260613.34c9552"></script>
+<script defer src="/offline.js?v=260613.34c9552"></script>
 
 </body>
 </html>
