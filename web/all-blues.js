@@ -424,7 +424,7 @@ async function allBluesReload() {
         "text-outline-width": 3, "text-outline-color": "#000", "text-outline-opacity": 1,
         "text-background-color": "#000", "text-background-opacity": 0.55,
         "text-background-padding": 2, "text-background-shape": "round-rectangle",
-        "text-wrap": "ellipsis", "text-max-width": 75,
+        "text-wrap": "ellipsis", "text-max-width": 150,
         // Sizing by degree: bigger spread so hubs visually dominate.
         // 1 connection → 14px, max-degree → 80px. The eye finds the
         // cores first, periphery recedes.
@@ -638,7 +638,7 @@ async function allBluesReload() {
     // One lane per year column (was 4) so the graph is taller and
     // narrower — same year's artists stack vertically instead of
     // spreading out across 4 sub-columns.
-    const NODE_X_PX = 140; // year-column spacing
+    const NODE_X_PX = 170; // year-column spacing — fits 150px labels + 20px gap
     const NODE_Y_PX = 38;  // line-height + padding per row (tighter)
     const X_LANES = 1;     // single column per year — stack vertically
     const yearById = new Map(focusedNodes.map(n => [n.id, Number(n.seed_year)]));
