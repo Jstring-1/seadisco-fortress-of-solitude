@@ -1163,7 +1163,8 @@ async function loadCacheWarm() {
             ${running
               ? `<button class="admin-btn" onclick="cacheWarmStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
               : `<button class="admin-btn" onclick="cacheWarmStartFromForm(false)" title="Resume from the persisted cursor for this combo, or start fresh if none. From-year only applies on first run for the combo.">▶ Start</button>
-                 <button class="admin-btn" onclick="cacheWarmStartFromForm(true)" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>`}
+                 <button class="admin-btn" onclick="cacheWarmStartFromForm(true)" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>
+                 <button class="admin-btn" onclick="cacheWarmStartNoYearForForm()" title="Sweep releases in this genre/style that have NO year on Discogs — year-filtered runs (e.g. 1900-1970) skip these. Cursor for the no-year run is independent of the dated cursor.">📅 No-year sweep</button>`}
             <button class="admin-btn" onclick="cacheWarmForceClear()" title="Force-clear the in-memory 'running' lock when the worker is stuck or crashed silently. Doesn't affect cached data. Use if Start refuses to fire.">⚠ Force clear lock</button>
           </div>
         </div>
@@ -1189,15 +1190,15 @@ async function loadCacheWarm() {
           };
           return `<table class="api-log-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
-              <col style="width:18%">
-              <col style="width:18%">
-              <col style="width:9%">
-              <col style="width:9%">
-              <col style="width:9%">
-              <col style="width:9%">
+              <col style="width:15%">
+              <col style="width:15%">
               <col style="width:8%">
-              <col style="width:14%">
-              <col style="width:6%">
+              <col style="width:8%">
+              <col style="width:7%">
+              <col style="width:7%">
+              <col style="width:7%">
+              <col style="width:11%">
+              <col style="width:22%">
             </colgroup>
             <thead><tr>
               ${th("genre_key",     "Genre",       "left")}
@@ -1233,7 +1234,8 @@ async function loadCacheWarm() {
                 <td style="text-align:right;font-variant-numeric:tabular-nums;color:${isAuto ? "var(--muted)" : (r.total_errors ? "#e88" : "var(--muted)")}">${isAuto ? "—" : fmt(r.total_errors)}</td>
                 <td style="text-align:right;color:var(--muted);font-size:0.74rem">${cursor}</td>
                 <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}</td>
-                <td style="text-align:right">
+                <td style="text-align:right;white-space:nowrap">
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues('${safeG}','${safeS}')" title="Start a cache-warm run for this combo with year range 1900–1970" style="margin-right:0.25rem">▶ 1900-1970</button>
                   <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it">↗</button>
                 </td>
               </tr>`;
@@ -1294,6 +1296,49 @@ async function cacheWarmStartFromForm(resetCursor) {
   } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
 }
 window.cacheWarmStartFromForm = cacheWarmStartFromForm;
+// No-year sweep: starts the worker on the selected genre/style with
+// year=0 (worker reads that as "drop the year filter on Discogs
+// search"). Captures releases that have NO year on Discogs — these
+// are skipped by every year-filtered sweep, so the cache misses them
+// entirely until this runs.
+async function cacheWarmStartNoYearForForm() {
+  const genreKey = document.getElementById("cw-form-genre")?.value || "";
+  const styleKey = document.getElementById("cw-form-style")?.value || "";
+  if (!genreKey) { alert("Pick a genre."); return; }
+  const label = styleKey ? `${genreKey} / ${styleKey}` : genreKey;
+  if (!confirm(`Sweep no-year releases for ${label}? This runs until Discogs returns no more pages.`)) return;
+  await _cwStartCombo(genreKey, styleKey, 0, 0, true);
+}
+window.cacheWarmStartNoYearForForm = cacheWarmStartNoYearForForm;
+// Per-row "▶ 1900-1970" — directly fires a year-bounded run on a
+// specific (genre, style) combo without round-tripping through the
+// form. Used by the per-combo stats grid.
+async function cacheWarmRunComboBlues(genreKey, styleKey) {
+  if (!genreKey) return;
+  const label = styleKey ? `${genreKey} / ${styleKey}` : genreKey;
+  if (!confirm(`Start ${label} cache-warm for 1900–1970?`)) return;
+  await _cwStartCombo(genreKey, styleKey, 1900, 1970, false);
+}
+window.cacheWarmRunComboBlues = cacheWarmRunComboBlues;
+async function _cwStartCombo(genreKey, styleKey, fromYear, toYear, resetCursor) {
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-runs/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ genreKey, styleKey, fromYear, toYear, resetCursor: !!resetCursor }),
+    });
+    if (r.status === 409) {
+      const body = await r.json().catch(() => ({}));
+      alert(body.error || "Another run is in progress.");
+      return;
+    }
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    loadCacheWarm();
+  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
+}
 async function cacheWarmForceClear() {
   if (!confirm("Force-clear the in-memory 'running' lock? Use this when a worker crashed silently and Start now refuses to fire. Doesn't affect cached data.")) return;
   try {

@@ -261,13 +261,19 @@ async function _runWorker(
     if (year > endYear) break;
 
     let searchRes: any;
+    // year === 0 is the "no-year sweep" mode — omit the year filter
+    // so Discogs returns releases that have no year set. Year-filtered
+    // sweeps (e.g. 1900-1970) skip these, so this catches the long
+    // tail. Worker still walks pages within this single pseudo-year
+    // then breaks once endYear (also 0) is exceeded.
+    const noYearMode = year === 0;
     try {
-      searchRes = await _withRetry(`search ${genreKey}/${styleKey || "*"} ${year} p${page}`, () =>
+      searchRes = await _withRetry(`search ${genreKey}/${styleKey || "*"} ${noYearMode ? "no-year" : year} p${page}`, () =>
         client.search("", {
           type: "release",
           genre: genreKey,
           style: styleKey || undefined,
-          year: String(year),
+          year: noYearMode ? undefined : String(year),
           page,
           perPage: PER_PAGE,
         }),
