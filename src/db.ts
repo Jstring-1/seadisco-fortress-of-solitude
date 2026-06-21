@@ -6228,23 +6228,25 @@ export async function getFeedRandomAlbums(
       where += `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[])) `;
     }
     // ── Weighted-random feed sample ───────────────────────────────
-    // Each candidate gets a composite score from three normalized
+    // Each candidate gets a composite score from four normalized
     // signals; the final ORDER BY is an exponential-weighted reservoir
     // sample (`-LN(R) / score`) so high-score rows surface more often
     // without being deterministic. Every row remains reachable.
     //
-    //   yt_score   — Discogs videos[] count / tracklist length, clamped
-    //                to [0,1]. Release-level approximation (Discogs
-    //                videos aren't always 1:1 with tracks but it's the
-    //                most reliable per-album signal we have).
-    //   want_score — log-scaled community.want from the release JSON.
-    //                Masters generally lack this; default 0.
-    //   sale_score — log-scaled num_for_sale from price_cache. Joined
-    //                only for release rows.
+    //   yt_score       — Discogs videos[] count / tracklist length,
+    //                    clamped to [0,1].
+    //   want_score     — log-scaled community.want from the release
+    //                    JSON. Masters generally lack this; default 0.
+    //   scarcity_score — log-scaled community.want / GREATEST(have, 1).
+    //                    High when lots of collectors want the record
+    //                    but few own it ("rare and desired").
+    //   sale_score     — log-scaled num_for_sale from price_cache.
+    //                    Joined only for release rows.
     //
-    // Weights 0.5 / 0.3 / 0.2 + a 0.05 floor so an album with all
-    // zeros still has a tiny chance of surfacing (so we don't trap
-    // unscored rows in obscurity).
+    // Quality floor: we DROP candidates whose every observable signal
+    // is zero (no listenable videos, no want, no for-sale). Without
+    // this they all share the 0.05 floor and quietly dilute the feed.
+    // Weights 0.4 yt / 0.25 want / 0.2 scarcity / 0.15 sale.
     const sql = `
       WITH scored AS (
         SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
@@ -6258,7 +6260,14 @@ export async function getFeedRandomAlbums(
                  )
                  ELSE 0
                END AS yt_score,
+               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_raw,
+               COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_raw,
                LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)) AS want_score,
+               LN(1 + COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0)) AS have_score,
+               LN(1 + (
+                 COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)::float
+                 / GREATEST(COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0), 1)
+               )) AS scarcity_score,
                LN(1 + COALESCE(pc.num_for_sale, 0))                                AS sale_score
           FROM release_cache rc
           LEFT JOIN price_cache pc
@@ -6268,10 +6277,12 @@ export async function getFeedRandomAlbums(
       )
       SELECT id, type, data, cached_at
         FROM scored
+       WHERE NOT (yt_score = 0 AND want_score = 0 AND sale_score = 0)
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
-         0.5 * COALESCE(yt_score, 0)
-       + 0.3 * (COALESCE(want_score, 0) / 8.0)
-       + 0.2 * (COALESCE(sale_score, 0) / 5.0),
+         0.40 * COALESCE(yt_score, 0)
+       + 0.25 * (COALESCE(want_score, 0) / 8.0)
+       + 0.20 * (COALESCE(scarcity_score, 0) / 3.0)
+       + 0.15 * (COALESCE(sale_score, 0) / 5.0),
          0.05
        )
        LIMIT $1`;
