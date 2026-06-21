@@ -6209,6 +6209,77 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// Rare-tab sampler. Returns releases that satisfy ALL three:
+//   - have <= 3   (basically nobody owns it)
+//   - want >= 20  (but lots of people want it)
+//   - year falls inside the "first two decades" window of at least
+//     one of the release's genres. Windows are hardcoded below from
+//     conventional genre-origin dates; not surgical but cheap and
+//     stable. Tweak liberally — the table is the source of truth.
+export async function getFeedRareAlbums(
+  limit = 48,
+  excludeIds?: Array<{ id: number; type: string }>,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    const sql = `
+      WITH genre_window(genre, from_year, to_year) AS (
+        VALUES
+          ('Blues',                   1900, 1925),
+          ('Folk, World, & Country',  1900, 1925),
+          ('Jazz',                    1917, 1937),
+          ('Classical',               1900, 1920),
+          ('Stage & Screen',          1900, 1925),
+          ('Latin',                   1930, 1955),
+          ('Rock',                    1955, 1975),
+          ('Pop',                     1950, 1970),
+          ('Reggae',                  1960, 1980),
+          ('Funk / Soul',             1960, 1980),
+          ('Brass & Military',        1900, 1925),
+          ('Electronic',              1970, 1990),
+          ('Hip Hop',                 1979, 1999)
+      ),
+      candidates AS (
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
+               COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year_int
+          FROM release_cache rc
+         WHERE rc.type IN ('master','release')
+           AND rc.seen_at IS NOT NULL
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
+           ${excludeClause}
+      )
+      SELECT c.id, c.type, c.data, c.cached_at
+        FROM candidates c
+       WHERE c.year_int > 0
+         AND EXISTS (
+           SELECT 1
+             FROM jsonb_array_elements_text(c.data->'genres') AS g(name)
+             JOIN genre_window gw ON gw.genre = g.name
+            WHERE c.year_int BETWEEN gw.from_year AND gw.to_year
+         )
+       ORDER BY RANDOM()
+       LIMIT $1`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedRareAlbums]", e?.message ?? e);
+    return [];
+  }
+}
+
 // Per-user taste profile, fetched-or-computed. Returns the cached row
 // when it's <24h old; otherwise re-aggregates from user_collection
 // (top 10 genres + top 20 styles by collection count) and upserts.
