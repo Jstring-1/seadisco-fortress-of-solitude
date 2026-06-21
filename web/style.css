@@ -218,7 +218,14 @@ html { overflow-x: hidden; }
   .mini-player-bar {
     flex-wrap: wrap;
     padding: 0.3rem 0.5rem;
-    gap: 0.15rem 0.4rem;
+    gap: 0.45rem 0.45rem;
+  }
+  /* Close button gets a separator + nudge so it doesn't crash into the
+     queue button when the controls row wraps on small screens. */
+  #mini-hide {
+    margin-left: 0.5rem;
+    border-left: 1px solid rgba(255,255,255,0.15);
+    padding-left: 0.7rem !important;
   }
   .mini-player-info {
     flex: 1 1 100%;
@@ -11927,4 +11934,41 @@ body.gutenberg-reader-open { overflow: hidden; }
 }
 .api-log-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Mobile readability for api-log-table grids ──
+   Blues Archive popups (artist detail, Lyrics list, Releases list,
+   Tunings grid) all use .api-log-table. On phones the multi-column
+   layout squeezes columns until they're unreadable. Tighten cell
+   padding + font and let the popup's row container scroll horizontally
+   instead of forcing every column into a narrow strip. */
+@media (max-width: 600px) {
+  .api-log-table {
+    font-size: 0.74rem;
+  }
+  .api-log-table th,
+  .api-log-table td {
+    padding: 0.22rem 0.3rem;
+  }
+  /* The lyric Snippet column is the lowest-priority text — let it
+     shrink hard and truncate so it doesn't push every other column
+     off-screen. */
+  .api-log-table .ba-lyric-snippet {
+    max-width: 110px;
+    font-size: 0.66rem;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Allow horizontal scrolling for any list-page grid whose columns
+     sum to wider than the viewport. The user can swipe sideways to
+     reach the right-most cells instead of the layout breaking. */
+  #blues-archive-rows,
+  #blues-archive-lyrics-rows,
+  #blues-archive-releases-rows,
+  #ba-artist-overlay {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
