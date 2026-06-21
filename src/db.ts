@@ -6235,20 +6235,16 @@ export async function getFeedRandomAlbums(
     //
     //   yt_score       — Discogs videos[] count / tracklist length,
     //                    clamped to [0,1].
-    //   want_score     — log-scaled community.want from the release
-    //                    JSON. Masters generally lack this; default 0.
     //   scarcity_score — log-scaled community.want / GREATEST(have, 1).
     //                    High when lots of collectors want the record
-    //                    but few own it ("rare and desired").
+    //                    but few own it ("rare and desired"). Replaces
+    //                    raw want_score because raw want is dominated
+    //                    by very popular (and very COMMON) releases.
     //   sale_score     — log-scaled num_for_sale from price_cache.
-    //                    Joined only for release rows.
+    //                    Joined only for release rows. Small weight —
+    //                    Feed isn't a marketplace surface.
     //
-    // Note on the quality floor: an earlier version of this query
-    // dropped every row with yt_score=0 AND want_score=0 AND sale_score=0,
-    // but that culled the entire cache for accounts whose cached rows
-    // were mostly masters. We rely instead on the 0.05 score floor in
-    // ORDER BY.
-    // Weights 0.4 yt / 0.25 want / 0.2 scarcity / 0.15 sale.
+    // Weights 0.35 yt / 0.55 scarcity / 0.10 sale.
     //
     // Perf: scoring the entire release_cache + reservoir-sorting it
     // hits statement_timeout once the cache grows past a few hundred
@@ -6283,7 +6279,6 @@ export async function getFeedRandomAlbums(
                  )
                  ELSE 0
                END AS yt_score,
-               LN(1 + want_int) AS want_score,
                LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
                LN(1 + sale_int) AS sale_score
           FROM raw
@@ -6291,10 +6286,9 @@ export async function getFeedRandomAlbums(
       SELECT id, type, data, cached_at
         FROM scored
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
-         0.40 * yt_score
-       + 0.25 * (want_score / 8.0)
-       + 0.20 * (scarcity_score / 3.0)
-       + 0.15 * (sale_score / 5.0),
+         0.35 * yt_score
+       + 0.55 * (scarcity_score / 3.0)
+       + 0.10 * (sale_score / 5.0),
          0.05
        )
        LIMIT $1`;
