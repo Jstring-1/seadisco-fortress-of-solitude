@@ -522,6 +522,20 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_personal_suggestions_user_idx ON user_personal_suggestions (clerk_user_id, generated_at DESC)`);
 
+  // ── Per-user taste profile (Feed soft bias) ──────────────────────────
+  // Cached top genres + styles per user, derived from their collection.
+  // Used by the Feed sampler to nudge (not filter) toward cards matching
+  // the user's existing taste. Recomputed lazily when computed_at is
+  // older than 24h; collection edits don't force an immediate refresh.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_taste_profile (
+      clerk_user_id TEXT PRIMARY KEY,
+      top_genres    TEXT[] NOT NULL DEFAULT '{}',
+      top_styles    TEXT[] NOT NULL DEFAULT '{}',
+      computed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
   // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -6195,16 +6209,84 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// Per-user taste profile, fetched-or-computed. Returns the cached row
+// when it's <24h old; otherwise re-aggregates from user_collection
+// (top 10 genres + top 20 styles by collection count) and upserts.
+// Anons / users with empty profiles get null — callers should treat
+// that as "no bias."
+export async function getOrComputeUserTasteProfile(
+  clerkUserId: string
+): Promise<{ topGenres: string[]; topStyles: string[] } | null> {
+  if (!clerkUserId) return null;
+  const pool = getPool();
+  try {
+    const existing = await pool.query(
+      `SELECT top_genres, top_styles, computed_at
+         FROM user_taste_profile
+        WHERE clerk_user_id = $1`,
+      [clerkUserId],
+    );
+    const row = existing.rows[0];
+    const fresh = row && (Date.now() - new Date(row.computed_at).getTime()) < 24 * 3600 * 1000;
+    if (fresh) {
+      return { topGenres: row.top_genres || [], topStyles: row.top_styles || [] };
+    }
+    // Recompute from collection. Both queries use jsonb_array_elements_text
+    // over data->'genres' / 'styles' — the same shape used elsewhere
+    // (see getCollectionFacets in db.ts).
+    const g = await pool.query(
+      `SELECT g, COUNT(*)::int AS n
+         FROM user_collection, jsonb_array_elements_text(data->'genres') AS g
+        WHERE clerk_user_id = $1
+        GROUP BY g
+        ORDER BY n DESC
+        LIMIT 10`,
+      [clerkUserId],
+    );
+    const s = await pool.query(
+      `SELECT s, COUNT(*)::int AS n
+         FROM user_collection, jsonb_array_elements_text(data->'styles') AS s
+        WHERE clerk_user_id = $1
+        GROUP BY s
+        ORDER BY n DESC
+        LIMIT 20`,
+      [clerkUserId],
+    );
+    const topGenres = g.rows.map(r => String(r.g)).filter(Boolean);
+    const topStyles = s.rows.map(r => String(r.s)).filter(Boolean);
+    await pool.query(
+      `INSERT INTO user_taste_profile (clerk_user_id, top_genres, top_styles, computed_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (clerk_user_id) DO UPDATE
+         SET top_genres = EXCLUDED.top_genres,
+             top_styles = EXCLUDED.top_styles,
+             computed_at = NOW()`,
+      [clerkUserId, topGenres, topStyles],
+    );
+    return { topGenres, topStyles };
+  } catch (e: any) {
+    console.error("[getOrComputeUserTasteProfile]", e?.message ?? e);
+    return null;
+  }
+}
+
 // Random sample of cached albums for the public Feed strip — anon
 // visitors see this as their home view (signed-in users get it as the
 // "Feed" tab in the Recent/Suggestions/Submitted/Feed strip). All
 // rows already paid for via the release_cache; no upstream Discogs
 // hit. Defaults to masters (richer card data, broader scope) but
 // callers can opt for either via `type`.
+//
+// `tasteProfile` is an optional soft bias: when supplied, cards whose
+// genres or styles overlap the user's top set get a 1.5× score
+// multiplier (so they're more likely — not guaranteed — to surface).
+// Anons or users with empty profiles pass null and the sampler runs
+// unbiased.
 export async function getFeedRandomAlbums(
   limit = 48,
   type: "master" | "release" | "any" = "any",
-  excludeIds?: Array<{ id: number; type: string }>
+  excludeIds?: Array<{ id: number; type: string }>,
+  tasteProfile?: { topGenres: string[]; topStyles: string[] } | null,
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
@@ -6227,6 +6309,16 @@ export async function getFeedRandomAlbums(
       const tyIdx = params.length;
       where += `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[])) `;
     }
+    // Soft taste bias — when the caller passed a profile with at least
+    // one genre or style, push it as text[] params. The scored CTE will
+    // multiply a card's score by 1.5 when its genres/styles overlap.
+    // Empty arrays disable the bias without changing the query plan.
+    const tasteGenres = tasteProfile?.topGenres?.filter(Boolean) ?? [];
+    const tasteStyles = tasteProfile?.topStyles?.filter(Boolean) ?? [];
+    params.push(tasteGenres);
+    const tgIdx = params.length;
+    params.push(tasteStyles);
+    const tsIdx = params.length;
     // ── Weighted-random feed sample ───────────────────────────────
     // Each candidate gets a composite score from four normalized
     // signals; the final ORDER BY is an exponential-weighted reservoir
@@ -6244,7 +6336,9 @@ export async function getFeedRandomAlbums(
     //                    Joined only for release rows. Small weight —
     //                    Feed isn't a marketplace surface.
     //
-    // Weights 0.35 yt / 0.55 scarcity / 0.10 sale.
+    // Weights 0.35 yt / 0.55 scarcity / 0.10 sale, multiplied by a
+    // 1.5× taste bonus when the card's genres/styles overlap the
+    // user's profile (no overlap or empty profile = ×1.0).
     //
     // Perf: scoring the entire release_cache + reservoir-sorting it
     // hits statement_timeout once the cache grows past a few hundred
@@ -6261,7 +6355,9 @@ export async function getFeedRandomAlbums(
                COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_int,
                COALESCE(pc.num_for_sale, 0) AS sale_int,
                rc.data->'tracklist' AS tl,
-               rc.data->'videos'    AS vd
+               rc.data->'videos'    AS vd,
+               rc.data->'genres'    AS gs,
+               rc.data->'styles'    AS sts
           FROM release_cache rc TABLESAMPLE SYSTEM (5)
           LEFT JOIN price_cache pc
             ON pc.discogs_release_id = rc.discogs_id
@@ -6280,15 +6376,26 @@ export async function getFeedRandomAlbums(
                  ELSE 0
                END AS yt_score,
                LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
-               LN(1 + sale_int) AS sale_score
+               LN(1 + sale_int) AS sale_score,
+               CASE
+                 WHEN cardinality($${tgIdx}::text[]) = 0
+                  AND cardinality($${tsIdx}::text[]) = 0
+                 THEN 1.0
+                 WHEN (gs IS NOT NULL  AND gs  ?| $${tgIdx}::text[])
+                   OR (sts IS NOT NULL AND sts ?| $${tsIdx}::text[])
+                 THEN 1.5
+                 ELSE 1.0
+               END AS taste_mult
           FROM raw
       )
       SELECT id, type, data, cached_at
         FROM scored
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
-         0.35 * yt_score
-       + 0.55 * (scarcity_score / 3.0)
-       + 0.10 * (sale_score / 5.0),
+         taste_mult * (
+           0.35 * yt_score
+         + 0.55 * (scarcity_score / 3.0)
+         + 0.10 * (sale_score / 5.0)
+         ),
          0.05
        )
        LIMIT $1`;
