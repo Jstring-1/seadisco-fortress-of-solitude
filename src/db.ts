@@ -6242,6 +6242,12 @@ export async function getFeedRareAlbums(
       const tyIdx = params.length;
       excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
     }
+    // GIN index on (data->'genres') lets Postgres use ?| to narrow
+    // candidates BEFORE we touch community.have / community.want /
+    // year — without it, the planner sequential-scans the whole
+    // release_cache extracting integers per row. The year_int cap is
+    // a coarse pre-filter (1900-1999 spans every per-genre window),
+    // letting the EXISTS check at the end work on a tiny set.
     const sql = `
       WITH genre_window(genre, from_year, to_year) AS (
         VALUES
@@ -6265,19 +6271,25 @@ export async function getFeedRareAlbums(
           FROM release_cache rc
          WHERE rc.type IN ('master','release')
            AND rc.seen_at IS NOT NULL
+           AND rc.data->'genres' ?| ARRAY[
+               'Blues','Folk, World, & Country','Jazz','Classical',
+               'Stage & Screen','Latin','Rock','Pop','Reggae',
+               'Funk / Soul','Brass & Military','Electronic','Hip Hop'
+             ]
+           AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN 1900 AND 1999
            AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
            AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
            ${excludeClause}
+         LIMIT 5000
       )
       SELECT c.id, c.type, c.data, c.cached_at
         FROM candidates c
-       WHERE c.year_int > 0
-         AND EXISTS (
-           SELECT 1
-             FROM jsonb_array_elements_text(c.data->'genres') AS g(name)
-             JOIN genre_window gw ON gw.genre = g.name
-            WHERE c.year_int BETWEEN gw.from_year AND gw.to_year
-         )
+       WHERE EXISTS (
+         SELECT 1
+           FROM jsonb_array_elements_text(c.data->'genres') AS g(name)
+           JOIN genre_window gw ON gw.genre = g.name
+          WHERE c.year_int BETWEEN gw.from_year AND gw.to_year
+       )
        ORDER BY RANDOM()
        LIMIT $1`;
     const r = await getPool().query(sql, params);
