@@ -6246,46 +6246,55 @@ export async function getFeedRandomAlbums(
     // Note on the quality floor: an earlier version of this query
     // dropped every row with yt_score=0 AND want_score=0 AND sale_score=0,
     // but that culled the entire cache for accounts whose cached rows
-    // were mostly masters (no community.want, no num_for_sale, often no
-    // videos[]). We rely instead on the 0.05 score floor in ORDER BY —
-    // dud cards still surface occasionally but are heavily outweighed
-    // by rows with real signal.
+    // were mostly masters. We rely instead on the 0.05 score floor in
+    // ORDER BY.
     // Weights 0.4 yt / 0.25 want / 0.2 scarcity / 0.15 sale.
+    //
+    // Perf: scoring the entire release_cache + reservoir-sorting it
+    // hits statement_timeout once the cache grows past a few hundred
+    // thousand rows. TABLESAMPLE SYSTEM(5) cuts the candidate pool to
+    // ~5% of pages BEFORE the JSON extractions and LNs run, so the
+    // scoring/sort phase only handles a small subset. Each request
+    // re-samples (no `REPEATABLE`), so callers still see fresh cards.
+    // The cost is that any single response only covers a slice of the
+    // cache — Load More re-samples to fill in more.
     const sql = `
-      WITH scored AS (
+      WITH raw AS (
         SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
-               CASE
-                 WHEN jsonb_typeof(rc.data->'tracklist') = 'array'
-                  AND jsonb_array_length(rc.data->'tracklist') > 0
-                 THEN LEAST(
-                   1.0,
-                   COALESCE(jsonb_array_length(NULLIF(rc.data->'videos','null'::jsonb)), 0)::float
-                     / NULLIF(jsonb_array_length(rc.data->'tracklist'), 0)::float
-                 )
-                 ELSE 0
-               END AS yt_score,
-               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_raw,
-               COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_raw,
-               LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)) AS want_score,
-               LN(1 + COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0)) AS have_score,
-               LN(1 + (
-                 COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)::float
-                 / GREATEST(COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0), 1)
-               )) AS scarcity_score,
-               LN(1 + COALESCE(pc.num_for_sale, 0))                                AS sale_score
-          FROM release_cache rc
+               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int,
+               COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_int,
+               COALESCE(pc.num_for_sale, 0) AS sale_int,
+               rc.data->'tracklist' AS tl,
+               rc.data->'videos'    AS vd
+          FROM release_cache rc TABLESAMPLE SYSTEM (5)
           LEFT JOIN price_cache pc
             ON pc.discogs_release_id = rc.discogs_id
            AND rc.type = 'release'
           ${where}
+      ),
+      scored AS (
+        SELECT id, type, data, cached_at,
+               CASE
+                 WHEN jsonb_typeof(tl) = 'array' AND jsonb_array_length(tl) > 0
+                 THEN LEAST(
+                   1.0,
+                   COALESCE(jsonb_array_length(NULLIF(vd,'null'::jsonb)), 0)::float
+                     / NULLIF(jsonb_array_length(tl), 0)::float
+                 )
+                 ELSE 0
+               END AS yt_score,
+               LN(1 + want_int) AS want_score,
+               LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
+               LN(1 + sale_int) AS sale_score
+          FROM raw
       )
       SELECT id, type, data, cached_at
         FROM scored
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
-         0.40 * COALESCE(yt_score, 0)
-       + 0.25 * (COALESCE(want_score, 0) / 8.0)
-       + 0.20 * (COALESCE(scarcity_score, 0) / 3.0)
-       + 0.15 * (COALESCE(sale_score, 0) / 5.0),
+         0.40 * yt_score
+       + 0.25 * (want_score / 8.0)
+       + 0.20 * (scarcity_score / 3.0)
+       + 0.15 * (sale_score / 5.0),
          0.05
        )
        LIMIT $1`;
