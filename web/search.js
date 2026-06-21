@@ -1070,11 +1070,11 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "recent" || v === "suggestions" || v === "feed") return v;
+    if (v === "recent" || v === "suggestions" || v === "feed" || v === "rare") return v;
   } catch {}
   // Feed is the default landing tab for everyone — anons land here
   // because they have no Recent history, and signed-in users can
-  // switch to Recent/Suggestions with one click.
+  // switch to Recent/Suggestions/Rare with one click.
   return "feed";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
@@ -1084,15 +1084,17 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  // Feed (default) / Recent / Suggestions are all visible tabs now.
-  // Any stray mode collapses to Feed.
+  // Feed (default) / Rare / Recent / Suggestions are all visible
+  // tabs now. Any stray mode collapses to Feed.
   if (window._sdHomeStripMode !== "recent"
       && window._sdHomeStripMode !== "suggestions"
-      && window._sdHomeStripMode !== "feed") {
+      && window._sdHomeStripMode !== "feed"
+      && window._sdHomeStripMode !== "rare") {
     window._sdHomeStripMode = "feed";
   }
   const tabs = {
     feed:        document.getElementById("rr-tab-feed"),
+    rare:        document.getElementById("rr-tab-rare"),
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
   };
@@ -1142,12 +1144,13 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  // Feed / Recent / Suggestions are the visible tabs; Feed is the
-  // default landing tab. Anything else collapses to Feed.
+  // Feed / Rare / Recent / Suggestions are the visible tabs; Feed is
+  // the default landing tab. Anything else collapses to Feed.
   let m = "feed";
   if (mode === "recent") m = "recent";
   else if (mode === "suggestions") m = "suggestions";
   else if (mode === "feed") m = "feed";
+  else if (mode === "rare") m = "rare";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -1955,6 +1958,14 @@ const _HOME_STRIP_SORTS = {
     ["title:desc",          "Title Z→A"],
     ["artist:asc",          "Artist A→Z"],
   ],
+  rare: [
+    ["random:0",            "Random"],
+    ["year:asc",            "Year ↑"],
+    ["year:desc",           "Year ↓"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
 };
 
 // Rebuild #favorites-sort options for the active tab. Restores the
@@ -2266,14 +2277,18 @@ async function loadRandomRecords(more) {
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdHomeStripMode === "feed") {
-      // ── Feed (public catalog sample) ────────────────────────────
-      // Reached only via the footer link. Hits the public random
-      // endpoint and pages forever via Load More (the existing
-      // load-more branch fetches more from the same endpoint).
+    if (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare") {
+      // ── Feed / Rare (public catalog sampler) ────────────────────
+      // Same endpoint, different SQL behind it: Feed uses the
+      // weighted-random scarcity sampler; Rare adds early-genre +
+      // high-want + near-zero-have filters.
+      const isRare = window._sdHomeStripMode === "rare";
       _randomAll = [];
       try {
-        const r = await fetch("/api/feed/random?limit=48", { cache: "no-store" });
+        const url = isRare
+          ? "/api/feed/random?limit=48&mode=rare"
+          : "/api/feed/random?limit=48";
+        const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
         if (r.ok) {
           const j = await r.json();
@@ -2283,7 +2298,7 @@ async function loadRandomRecords(more) {
           }
         }
       } catch { /* leave empty — UI shows empty state below */ }
-      titleText = "Feed";
+      titleText = isRare ? "Rare" : "Feed";
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
@@ -2405,10 +2420,10 @@ async function loadRandomRecords(more) {
     }
   }
 
-  // Feed-mode Load More: dead-code after the Feed tab was removed,
-  // but left guarded by the (unreachable) mode check so the rest of
-  // the function is untouched. Will be pruned in a follow-up sweep.
-  if (more && window._sdHomeStripMode === "feed") {
+  // Feed / Rare Load More: refills _randomAll from the catalog
+  // sampler when the user has paged past everything we've fetched so
+  // far. Rare adds &mode=rare so the same endpoint serves it.
+  if (more && (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare")) {
     const filteredSoFar = _sdFilterRandom(_randomAll);
     if (_randomShown >= filteredSoFar.length) {
       try {
@@ -2417,7 +2432,8 @@ async function loadRandomRecords(more) {
           .filter(s => /^(master|release):\d+/.test(s))
           .slice(0, 500)
           .join(",");
-        const url = `/api/feed/random?limit=48${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
+        const modeQs = window._sdHomeStripMode === "rare" ? "&mode=rare" : "";
+        const url = `/api/feed/random?limit=48${modeQs}${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
         const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
         if (r.ok) {
