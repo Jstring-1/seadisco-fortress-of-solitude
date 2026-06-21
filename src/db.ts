@@ -6291,7 +6291,10 @@ export async function getFeedRandomAlbums(
        LIMIT $1`;
     const r = await getPool().query(sql, params);
     return r.rows;
-  } catch { return []; }
+  } catch (e: any) {
+    console.error("[getFeedRandomAlbums]", e?.message ?? e);
+    return [];
+  }
 }
 
 // Batched lookup of track_youtube_overrides for a list of
