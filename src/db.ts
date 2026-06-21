@@ -527,6 +527,12 @@ export async function initDb() {
   // Used by the Feed sampler to nudge (not filter) toward cards matching
   // the user's existing taste. Recomputed lazily when computed_at is
   // older than 24h; collection edits don't force an immediate refresh.
+  //
+  // genre_scores / style_scores are JSONB maps from name → normalized
+  // weight in [0, 1] (sum ≤ 1 per map). Feed uses them as a per-card
+  // multiplier so a card matching your #1 genre gets a bigger boost
+  // than one matching #10. top_genres / top_styles arrays are kept
+  // for backwards compatibility with the flat-bias query path.
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_taste_profile (
       clerk_user_id TEXT PRIMARY KEY,
@@ -535,6 +541,8 @@ export async function initDb() {
       computed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS genre_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
+  await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS style_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
@@ -6285,22 +6293,37 @@ export async function getFeedRareAlbums(
 // (top 10 genres + top 20 styles by collection count) and upserts.
 // Anons / users with empty profiles get null — callers should treat
 // that as "no bias."
+//
+// Each map is normalized so the sum is 1.0 (or 0 when the user has
+// no collection). The Feed sampler reads these weights directly so
+// stronger preferences get a bigger boost than weak ones.
 export async function getOrComputeUserTasteProfile(
   clerkUserId: string
-): Promise<{ topGenres: string[]; topStyles: string[] } | null> {
+): Promise<{
+  topGenres: string[];
+  topStyles: string[];
+  genreScores: Record<string, number>;
+  styleScores: Record<string, number>;
+} | null> {
   if (!clerkUserId) return null;
   const pool = getPool();
   try {
     const existing = await pool.query(
-      `SELECT top_genres, top_styles, computed_at
+      `SELECT top_genres, top_styles, genre_scores, style_scores, computed_at
          FROM user_taste_profile
         WHERE clerk_user_id = $1`,
       [clerkUserId],
     );
     const row = existing.rows[0];
     const fresh = row && (Date.now() - new Date(row.computed_at).getTime()) < 24 * 3600 * 1000;
-    if (fresh) {
-      return { topGenres: row.top_genres || [], topStyles: row.top_styles || [] };
+    const hasScores = row && row.genre_scores && Object.keys(row.genre_scores).length > 0;
+    if (fresh && hasScores) {
+      return {
+        topGenres:   row.top_genres   || [],
+        topStyles:   row.top_styles   || [],
+        genreScores: row.genre_scores || {},
+        styleScores: row.style_scores || {},
+      };
     }
     // Recompute from collection. Both queries use jsonb_array_elements_text
     // over data->'genres' / 'styles' — the same shape used elsewhere
@@ -6323,18 +6346,28 @@ export async function getOrComputeUserTasteProfile(
         LIMIT 20`,
       [clerkUserId],
     );
-    const topGenres = g.rows.map(r => String(r.g)).filter(Boolean);
-    const topStyles = s.rows.map(r => String(r.s)).filter(Boolean);
+    const gRows = g.rows.filter(r => r.g);
+    const sRows = s.rows.filter(r => r.s);
+    const gTotal = gRows.reduce((acc, r) => acc + Number(r.n || 0), 0);
+    const sTotal = sRows.reduce((acc, r) => acc + Number(r.n || 0), 0);
+    const topGenres = gRows.map(r => String(r.g));
+    const topStyles = sRows.map(r => String(r.s));
+    const genreScores: Record<string, number> = {};
+    const styleScores: Record<string, number> = {};
+    if (gTotal > 0) for (const r of gRows) genreScores[String(r.g)] = Number(r.n) / gTotal;
+    if (sTotal > 0) for (const r of sRows) styleScores[String(r.s)] = Number(r.n) / sTotal;
     await pool.query(
-      `INSERT INTO user_taste_profile (clerk_user_id, top_genres, top_styles, computed_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO user_taste_profile (clerk_user_id, top_genres, top_styles, genre_scores, style_scores, computed_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, NOW())
        ON CONFLICT (clerk_user_id) DO UPDATE
-         SET top_genres = EXCLUDED.top_genres,
-             top_styles = EXCLUDED.top_styles,
-             computed_at = NOW()`,
-      [clerkUserId, topGenres, topStyles],
+         SET top_genres   = EXCLUDED.top_genres,
+             top_styles   = EXCLUDED.top_styles,
+             genre_scores = EXCLUDED.genre_scores,
+             style_scores = EXCLUDED.style_scores,
+             computed_at  = NOW()`,
+      [clerkUserId, topGenres, topStyles, JSON.stringify(genreScores), JSON.stringify(styleScores)],
     );
-    return { topGenres, topStyles };
+    return { topGenres, topStyles, genreScores, styleScores };
   } catch (e: any) {
     console.error("[getOrComputeUserTasteProfile]", e?.message ?? e);
     return null;
@@ -6348,16 +6381,22 @@ export async function getOrComputeUserTasteProfile(
 // hit. Defaults to masters (richer card data, broader scope) but
 // callers can opt for either via `type`.
 //
-// `tasteProfile` is an optional soft bias: when supplied, cards whose
-// genres or styles overlap the user's top set get a 1.5× score
-// multiplier (so they're more likely — not guaranteed — to surface).
-// Anons or users with empty profiles pass null and the sampler runs
-// unbiased.
+// `tasteProfile` is an optional soft bias: when supplied with
+// genre/style scores (normalized to sum 1 per map), each card's score
+// is multiplied by `1 + 1.0×(sum of matched genre weights) +
+// 0.5×(sum of matched style weights)` — so a card matching your #1
+// genre gets a bigger boost than one matching your #10. Anons or
+// users with empty profiles pass null and the sampler runs unbiased.
 export async function getFeedRandomAlbums(
   limit = 48,
   type: "master" | "release" | "any" = "any",
   excludeIds?: Array<{ id: number; type: string }>,
-  tasteProfile?: { topGenres: string[]; topStyles: string[] } | null,
+  tasteProfile?: {
+    topGenres: string[];
+    topStyles: string[];
+    genreScores?: Record<string, number>;
+    styleScores?: Record<string, number>;
+  } | null,
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
@@ -6380,16 +6419,18 @@ export async function getFeedRandomAlbums(
       const tyIdx = params.length;
       where += `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[])) `;
     }
-    // Soft taste bias — when the caller passed a profile with at least
-    // one genre or style, push it as text[] params. The scored CTE will
-    // multiply a card's score by 1.5 when its genres/styles overlap.
-    // Empty arrays disable the bias without changing the query plan.
-    const tasteGenres = tasteProfile?.topGenres?.filter(Boolean) ?? [];
-    const tasteStyles = tasteProfile?.topStyles?.filter(Boolean) ?? [];
-    params.push(tasteGenres);
-    const tgIdx = params.length;
-    params.push(tasteStyles);
-    const tsIdx = params.length;
+    // Soft taste bias — when the caller passed a profile with score
+    // maps, push them as JSONB params. The scored CTE multiplies each
+    // card's score by 1 + 1.0×(sum of matched genre weights) +
+    // 0.5×(sum of matched style weights) so stronger preferences get
+    // a bigger boost. Empty objects disable the bias without changing
+    // the query plan.
+    const gScores = tasteProfile?.genreScores ?? {};
+    const sScores = tasteProfile?.styleScores ?? {};
+    params.push(JSON.stringify(gScores));
+    const gjIdx = params.length;
+    params.push(JSON.stringify(sScores));
+    const sjIdx = params.length;
     // ── Weighted-random feed sample ───────────────────────────────
     // Each candidate gets a composite score from four normalized
     // signals; the final ORDER BY is an exponential-weighted reservoir
@@ -6449,13 +6490,24 @@ export async function getFeedRandomAlbums(
                LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
                LN(1 + sale_int) AS sale_score,
                CASE
-                 WHEN cardinality($${tgIdx}::text[]) = 0
-                  AND cardinality($${tsIdx}::text[]) = 0
+                 WHEN $${gjIdx}::jsonb = '{}'::jsonb
+                  AND $${sjIdx}::jsonb = '{}'::jsonb
                  THEN 1.0
-                 WHEN (gs IS NOT NULL  AND gs  ?| $${tgIdx}::text[])
-                   OR (sts IS NOT NULL AND sts ?| $${tsIdx}::text[])
-                 THEN 1.5
                  ELSE 1.0
+                      + 1.0 * COALESCE((
+                          SELECT SUM(($${gjIdx}::jsonb->>gname.value)::float)
+                            FROM jsonb_array_elements_text(
+                              CASE WHEN jsonb_typeof(gs) = 'array' THEN gs ELSE '[]'::jsonb END
+                            ) AS gname(value)
+                           WHERE $${gjIdx}::jsonb ? gname.value
+                        ), 0)
+                      + 0.5 * COALESCE((
+                          SELECT SUM(($${sjIdx}::jsonb->>sname.value)::float)
+                            FROM jsonb_array_elements_text(
+                              CASE WHEN jsonb_typeof(sts) = 'array' THEN sts ELSE '[]'::jsonb END
+                            ) AS sname(value)
+                           WHERE $${sjIdx}::jsonb ? sname.value
+                        ), 0)
                END AS taste_mult
           FROM raw
       )
