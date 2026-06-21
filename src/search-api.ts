@@ -6791,7 +6791,12 @@ app.get("/api/feed/random", async (req, res) => {
     const mode = String(req.query.mode ?? "").trim();
     let rows: any[];
     if (mode === "rare") {
-      rows = await getFeedRareAlbums(limit, excludeIds);
+      // Optional strict genre filter for Rare. When the home-strip
+      // genre dropdown is set, we restrict server-side to that
+      // genre's window only — much faster than the multi-genre
+      // EXISTS path AND eliminates cross-genre noise on the cards.
+      const genreParam = String(req.query.genre ?? "").trim();
+      rows = await getFeedRareAlbums(limit, excludeIds, genreParam || null);
     } else {
       let tasteProfile: { topGenres: string[]; topStyles: string[] } | null = null;
       try {

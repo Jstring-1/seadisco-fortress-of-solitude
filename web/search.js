@@ -2095,7 +2095,15 @@ function _sdHomeStripGenreChanged(sel) {
   _randomShown = 0;
   const grid = document.getElementById("random-records-grid");
   if (grid) grid.innerHTML = "";
-  _sdRenderRandomSlice();
+  // Rare uses server-side strict genre filtering — a genre change has
+  // to round-trip to /api/feed/random?mode=rare&genre=X for a fresh
+  // pool. Other tabs filter client-side on _randomAll, no re-fetch
+  // needed.
+  if (mode === "rare") {
+    loadRandomRecords(false);
+  } else {
+    _sdRenderRandomSlice();
+  }
 }
 window._sdHomeStripGenreChanged = _sdHomeStripGenreChanged;
 
@@ -2281,13 +2289,17 @@ async function loadRandomRecords(more) {
       // ── Feed / Rare (public catalog sampler) ────────────────────
       // Same endpoint, different SQL behind it: Feed uses the
       // weighted-random scarcity sampler; Rare adds early-genre +
-      // high-want + near-zero-have filters.
+      // high-want + near-zero-have filters. When Rare is active and
+      // the user picked a genre, we forward it server-side so the
+      // SQL restricts strictly to that genre's window.
       const isRare = window._sdHomeStripMode === "rare";
+      const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
       _randomAll = [];
       try {
-        const url = isRare
+        let url = isRare
           ? "/api/feed/random?limit=48&mode=rare"
           : "/api/feed/random?limit=48";
+        if (isRare && stripGenre) url += "&genre=" + encodeURIComponent(stripGenre);
         const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
         if (r.ok) {
@@ -2433,7 +2445,11 @@ async function loadRandomRecords(more) {
           .slice(0, 500)
           .join(",");
         const modeQs = window._sdHomeStripMode === "rare" ? "&mode=rare" : "";
-        const url = `/api/feed/random?limit=48${modeQs}${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
+        const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
+        const genreQs = (window._sdHomeStripMode === "rare" && stripGenre)
+          ? "&genre=" + encodeURIComponent(stripGenre)
+          : "";
+        const url = `/api/feed/random?limit=48${modeQs}${genreQs}${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
         const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
         if (r.ok) {

@@ -6222,11 +6222,35 @@ export async function getMostContributedAlbums(
 //   - want >= 20  (but lots of people want it)
 //   - year falls inside the "first two decades" window of at least
 //     one of the release's genres. Windows are hardcoded below from
-//     conventional genre-origin dates; not surgical but cheap and
-//     stable. Tweak liberally — the table is the source of truth.
+//     conventional genre-origin dates.
+//
+// When `genre` is supplied, the query restricts strictly to that
+// genre and applies only its year window — so a "Blues" filter only
+// returns Blues records from 1900-1925, with no other genres mixed
+// in.
+//
+// ORDER BY is a want-weighted reservoir sample, not pure random:
+// `-LN(R) / GREATEST(LN(1+want), 1)`. Higher-want rows tend to
+// surface first while still leaving every match reachable.
+const RARE_GENRE_WINDOWS: Record<string, [number, number]> = {
+  "Blues":                   [1900, 1925],
+  "Folk, World, & Country":  [1900, 1925],
+  "Jazz":                    [1917, 1937],
+  "Classical":               [1900, 1920],
+  "Stage & Screen":          [1900, 1925],
+  "Latin":                   [1930, 1955],
+  "Rock":                    [1955, 1975],
+  "Pop":                     [1950, 1970],
+  "Reggae":                  [1960, 1980],
+  "Funk / Soul":             [1960, 1980],
+  "Brass & Military":        [1900, 1925],
+  "Electronic":              [1970, 1990],
+  "Hip Hop":                 [1979, 1999],
+};
 export async function getFeedRareAlbums(
   limit = 48,
   excludeIds?: Array<{ id: number; type: string }>,
+  genre?: string | null,
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
@@ -6242,12 +6266,38 @@ export async function getFeedRareAlbums(
       const tyIdx = params.length;
       excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
     }
+
+    // Strict-genre path: when the caller picks a specific genre, the
+    // query is much simpler — filter strictly on that genre + its
+    // single year window, no per-row EXISTS over multi-genre joins.
+    const strictWindow = genre ? RARE_GENRE_WINDOWS[genre] : null;
+    if (genre && strictWindow) {
+      params.push(genre);
+      const gIdx = params.length;
+      const sql = `
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+          FROM release_cache rc
+         WHERE rc.type IN ('master','release')
+           AND rc.seen_at IS NOT NULL
+           AND rc.data->'genres' ? $${gIdx}
+           AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN ${strictWindow[0]} AND ${strictWindow[1]}
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
+           ${excludeClause}
+         ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
+           LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)),
+           1
+         )
+         LIMIT $1`;
+      const r = await getPool().query(sql, params);
+      return r.rows;
+    }
+
     // GIN index on (data->'genres') lets Postgres use ?| to narrow
     // candidates BEFORE we touch community.have / community.want /
-    // year — without it, the planner sequential-scans the whole
-    // release_cache extracting integers per row. The year_int cap is
-    // a coarse pre-filter (1900-1999 spans every per-genre window),
-    // letting the EXISTS check at the end work on a tiny set.
+    // year. The year_int cap is a coarse pre-filter (1900-1999 spans
+    // every per-genre window), letting the EXISTS check work on a
+    // tiny set.
     const sql = `
       WITH genre_window(genre, from_year, to_year) AS (
         VALUES
@@ -6267,7 +6317,8 @@ export async function getFeedRareAlbums(
       ),
       candidates AS (
         SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
-               COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year_int
+               COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year_int,
+               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int
           FROM release_cache rc
          WHERE rc.type IN ('master','release')
            AND rc.seen_at IS NOT NULL
@@ -6290,7 +6341,7 @@ export async function getFeedRareAlbums(
            JOIN genre_window gw ON gw.genre = g.name
           WHERE c.year_int BETWEEN gw.from_year AND gw.to_year
        )
-       ORDER BY RANDOM()
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.want_int), 1)
        LIMIT $1`;
     const r = await getPool().query(sql, params);
     return r.rows;
