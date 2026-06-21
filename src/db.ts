@@ -6243,9 +6243,13 @@ export async function getFeedRandomAlbums(
     //   sale_score     — log-scaled num_for_sale from price_cache.
     //                    Joined only for release rows.
     //
-    // Quality floor: we DROP candidates whose every observable signal
-    // is zero (no listenable videos, no want, no for-sale). Without
-    // this they all share the 0.05 floor and quietly dilute the feed.
+    // Note on the quality floor: an earlier version of this query
+    // dropped every row with yt_score=0 AND want_score=0 AND sale_score=0,
+    // but that culled the entire cache for accounts whose cached rows
+    // were mostly masters (no community.want, no num_for_sale, often no
+    // videos[]). We rely instead on the 0.05 score floor in ORDER BY —
+    // dud cards still surface occasionally but are heavily outweighed
+    // by rows with real signal.
     // Weights 0.4 yt / 0.25 want / 0.2 scarcity / 0.15 sale.
     const sql = `
       WITH scored AS (
@@ -6277,7 +6281,6 @@ export async function getFeedRandomAlbums(
       )
       SELECT id, type, data, cached_at
         FROM scored
-       WHERE NOT (yt_score = 0 AND want_score = 0 AND sale_score = 0)
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
          0.40 * COALESCE(yt_score, 0)
        + 0.25 * (COALESCE(want_score, 0) / 8.0)
