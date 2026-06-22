@@ -6217,6 +6217,106 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// Active-tab sampler. Returns vinyl releases ranked by how many
+// times anyone on the site has opened them in the last 90 days.
+// Same exponential-weighted reservoir pattern as Feed so the same
+// top-3 don't dominate every page — higher open counts surface
+// more often but every counted row remains reachable.
+export async function getFeedActiveAlbums(
+  limit = 48,
+  excludeIds?: Array<{ id: number; type: string }>,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    const sql = `
+      WITH counts AS (
+        SELECT urv.discogs_id, urv.entity_type, COUNT(*)::int AS n
+          FROM user_recent_views urv
+         WHERE urv.opened_at >= NOW() - INTERVAL '90 days'
+         GROUP BY urv.discogs_id, urv.entity_type
+      )
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM counts c
+        JOIN release_cache rc
+          ON rc.discogs_id = c.discogs_id
+         AND rc.type       = c.entity_type
+       WHERE rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         ${excludeClause}
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+       LIMIT $1`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedActiveAlbums]", e?.message ?? e);
+    return [];
+  }
+}
+
+// Played-tab sampler. Like Active but driven by user_play_events
+// (source='yt') instead of opens. Rewards vinyl whose YouTube
+// playback gets triggered most often — a different signal from
+// "clicked on" since plenty of cards get opened without anyone
+// actually listening.
+export async function getFeedPlayedAlbums(
+  limit = 48,
+  excludeIds?: Array<{ id: number; type: string }>,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    const sql = `
+      WITH counts AS (
+        SELECT upe.release_id AS discogs_id,
+               COALESCE(upe.release_type, 'release') AS entity_type,
+               COUNT(*)::int AS n
+          FROM user_play_events upe
+         WHERE upe.source = 'yt'
+           AND upe.release_id IS NOT NULL
+           AND upe.created_at >= NOW() - INTERVAL '90 days'
+         GROUP BY upe.release_id, COALESCE(upe.release_type, 'release')
+      )
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM counts c
+        JOIN release_cache rc
+          ON rc.discogs_id = c.discogs_id
+         AND rc.type       = c.entity_type
+       WHERE rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         ${excludeClause}
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+       LIMIT $1`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedPlayedAlbums]", e?.message ?? e);
+    return [];
+  }
+}
+
 // Dig-tab sampler. Returns vinyl releases that NO ONE on the site
 // has opened yet — i.e. zero rows in user_recent_views for the
 // (discogs_id, entity_type) pair. Pure long-tail discovery: by

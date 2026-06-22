@@ -1070,11 +1070,12 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "recent" || v === "suggestions" || v === "feed" || v === "rare" || v === "dig") return v;
+    if (v === "recent" || v === "suggestions" || v === "feed"
+        || v === "rare" || v === "dig" || v === "active" || v === "played") return v;
   } catch {}
   // Feed is the default landing tab for everyone — anons land here
   // because they have no Recent history, and signed-in users can
-  // switch to Recent/Suggestions/Rare/Dig with one click.
+  // switch to any other tab with one click.
   return "feed";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
@@ -1084,17 +1085,17 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  // Recent / Feed / Rare / Dig / Suggestions are all visible tabs.
-  // Feed is the default landing tab. Any stray mode collapses to Feed.
-  if (window._sdHomeStripMode !== "recent"
-      && window._sdHomeStripMode !== "suggestions"
-      && window._sdHomeStripMode !== "feed"
-      && window._sdHomeStripMode !== "rare"
-      && window._sdHomeStripMode !== "dig") {
+  // Recent / Feed / Active / Played / Rare / Dig / Suggestions are
+  // the visible tabs. Feed is the default landing tab. Any stray
+  // mode collapses to Feed.
+  const _KNOWN_MODES = new Set(["recent","suggestions","feed","rare","dig","active","played"]);
+  if (!_KNOWN_MODES.has(window._sdHomeStripMode)) {
     window._sdHomeStripMode = "feed";
   }
   const tabs = {
     feed:        document.getElementById("rr-tab-feed"),
+    active:      document.getElementById("rr-tab-active"),
+    played:      document.getElementById("rr-tab-played"),
     rare:        document.getElementById("rr-tab-rare"),
     dig:         document.getElementById("rr-tab-dig"),
     recent:      document.getElementById("rr-tab-recent"),
@@ -1146,14 +1147,16 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  // Recent / Feed / Rare / Dig / Suggestions are the visible tabs;
-  // Feed is the default landing tab. Anything else collapses to Feed.
+  // Recent / Feed / Active / Played / Rare / Dig / Suggestions are
+  // the visible tabs; Feed is the default. Anything else → Feed.
   let m = "feed";
   if (mode === "recent") m = "recent";
   else if (mode === "suggestions") m = "suggestions";
   else if (mode === "feed") m = "feed";
   else if (mode === "rare") m = "rare";
   else if (mode === "dig") m = "dig";
+  else if (mode === "active") m = "active";
+  else if (mode === "played") m = "played";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -1977,6 +1980,22 @@ const _HOME_STRIP_SORTS = {
     ["title:desc",          "Title Z→A"],
     ["artist:asc",          "Artist A→Z"],
   ],
+  active: [
+    ["random:0",            "Most opened (weighted)"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
+  played: [
+    ["random:0",            "Most played (weighted)"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
 };
 
 // Rebuild #favorites-sort options for the active tab. Restores the
@@ -2296,23 +2315,23 @@ async function loadRandomRecords(more) {
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare" || window._sdHomeStripMode === "dig") {
-      // ── Feed / Rare / Dig (public catalog samplers) ─────────────
+    const _CATALOG_MODES = new Set(["feed","rare","dig","active","played"]);
+    if (_CATALOG_MODES.has(window._sdHomeStripMode)) {
+      // ── Feed / Rare / Dig / Active / Played (catalog samplers) ──
       // Same endpoint, different SQL behind it: Feed uses the
       // weighted-random scarcity sampler; Rare adds early-genre +
       // high-want + near-zero-have filters; Dig surfaces vinyl
-      // nobody on the site has opened yet. When Rare is active and
-      // the user picked a genre, we forward it server-side so the
-      // SQL restricts strictly to that genre's window.
-      const isRare = window._sdHomeStripMode === "rare";
-      const isDig  = window._sdHomeStripMode === "dig";
+      // nobody on the site has opened yet; Active = most-opened
+      // site-wide in 90d; Played = most-played YouTube in 90d.
+      // Rare additionally honors a strict genre filter forwarded
+      // from the strip's genre dropdown.
+      const mode = window._sdHomeStripMode;
       const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
       _randomAll = [];
       try {
         let url = "/api/feed/random?limit=48";
-        if (isRare) url += "&mode=rare";
-        else if (isDig) url += "&mode=dig";
-        if (isRare && stripGenre) url += "&genre=" + encodeURIComponent(stripGenre);
+        if (mode !== "feed") url += "&mode=" + mode;
+        if (mode === "rare" && stripGenre) url += "&genre=" + encodeURIComponent(stripGenre);
         const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
         if (r.ok) {
@@ -2323,7 +2342,11 @@ async function loadRandomRecords(more) {
           }
         }
       } catch { /* leave empty — UI shows empty state below */ }
-      titleText = isRare ? "Rare" : isDig ? "Dig" : "Feed";
+      titleText = mode === "rare"   ? "Rare"
+                : mode === "dig"    ? "Dig"
+                : mode === "active" ? "Active"
+                : mode === "played" ? "Played"
+                : "Feed";
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
@@ -2445,10 +2468,12 @@ async function loadRandomRecords(more) {
     }
   }
 
-  // Feed / Rare / Dig Load More: refills _randomAll from the catalog
+  // Catalog-mode Load More: refills _randomAll from the catalog
   // sampler when the user has paged past everything we've fetched so
-  // far. Mode passes through so the same endpoint serves all three.
-  if (more && (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare" || window._sdHomeStripMode === "dig")) {
+  // far. Mode passes through so the same endpoint serves all
+  // catalog tabs (feed / rare / dig / active / played).
+  const _LOAD_MORE_MODES = new Set(["feed","rare","dig","active","played"]);
+  if (more && _LOAD_MORE_MODES.has(window._sdHomeStripMode)) {
     const filteredSoFar = _sdFilterRandom(_randomAll);
     if (_randomShown >= filteredSoFar.length) {
       try {
@@ -2457,9 +2482,7 @@ async function loadRandomRecords(more) {
           .filter(s => /^(master|release):\d+/.test(s))
           .slice(0, 500)
           .join(",");
-        const modeQs = window._sdHomeStripMode === "rare" ? "&mode=rare"
-                     : window._sdHomeStripMode === "dig"  ? "&mode=dig"
-                     : "";
+        const modeQs = window._sdHomeStripMode === "feed" ? "" : "&mode=" + window._sdHomeStripMode;
         const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
         const genreQs = (window._sdHomeStripMode === "rare" && stripGenre)
           ? "&genre=" + encodeURIComponent(stripGenre)
