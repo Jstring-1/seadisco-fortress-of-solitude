@@ -1588,6 +1588,44 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_checked_at TIMESTAMPTZ`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_first_release_year_idx ON blues_lyrics (first_release_year)`);
 
+  // ── Blues Words lexicon (Stephen Calt-style dictionary) ─────────────
+  // Headword → definition + one or more song-lyric citations. Seeded
+  // by scripts/parse-blueswords.py → scripts/blueswords-*.json, ingested
+  // via /api/admin/blues-words/ingest. Per-headword updated_at lets the
+  // admin edit OCR-noisy entries inline. Citations have a stable
+  // position so the admin UI can preserve ordering across edits.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_words (
+      headword       TEXT PRIMARY KEY,
+      definition     TEXT NOT NULL DEFAULT '',
+      source_volume  TEXT,
+      source_pages   INTEGER[],
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS blues_words_letter_idx ON blues_words (LEFT(LOWER(headword), 1))`,
+  );
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_word_citations (
+      id          SERIAL PRIMARY KEY,
+      headword    TEXT NOT NULL REFERENCES blues_words(headword) ON DELETE CASCADE,
+      position    INTEGER NOT NULL DEFAULT 1,
+      quote       TEXT,
+      artist      TEXT,
+      song_title  TEXT,
+      year        INTEGER,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS blues_word_citations_headword_idx ON blues_word_citations (headword, position)`,
+  );
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS blues_word_citations_artist_idx ON blues_word_citations (LOWER(artist))`,
+  );
+
   // ── Lyric favorites + Setlists (admin curator tools) ─────────────────
   // Per-user favorites: (clerk_user_id, lyric_id) PK so a single user
   // can't double-favorite the same lyric. ON DELETE CASCADE on the
@@ -2599,6 +2637,197 @@ export async function getBluesStats(): Promise<{ total: number; lastSeed: string
     lastSeed: r.rows[0]?.last_seed ?? null,
     lastUpdate: r.rows[0]?.last_update ?? null,
   };
+}
+
+// ── Blues Words lexicon ────────────────────────────────────────────────
+
+export interface BluesWordCitationInput {
+  quote?: string | null;
+  artist?: string | null;
+  song_title?: string | null;
+  year?: number | null;
+  position?: number;
+}
+
+export interface BluesWordEntryInput {
+  headword: string;
+  definition?: string | null;
+  source_volume?: string | null;
+  source_pages?: number[] | null;
+  citations?: BluesWordCitationInput[];
+}
+
+// Upsert a batch of entries; for each headword, REPLACES its citation
+// list with the supplied ones (re-ingesting a volume is the expected
+// path). Returns counts.
+export async function ingestBluesWords(
+  entries: BluesWordEntryInput[],
+): Promise<{ upserted: number; citations: number }> {
+  if (!entries.length) return { upserted: 0, citations: 0 };
+  const pool = getPool();
+  const client = await pool.connect();
+  let upserted = 0;
+  let citations = 0;
+  try {
+    await client.query("BEGIN");
+    for (const e of entries) {
+      const head = String(e.headword || "").trim().toLowerCase();
+      if (!head) continue;
+      await client.query(
+        `INSERT INTO blues_words (headword, definition, source_volume, source_pages, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (headword) DO UPDATE SET
+           definition    = EXCLUDED.definition,
+           source_volume = COALESCE(EXCLUDED.source_volume, blues_words.source_volume),
+           source_pages  = COALESCE(EXCLUDED.source_pages, blues_words.source_pages),
+           updated_at    = NOW()`,
+        [
+          head,
+          String(e.definition ?? ""),
+          e.source_volume ?? null,
+          e.source_pages && e.source_pages.length ? e.source_pages : null,
+        ],
+      );
+      // Replace citations
+      await client.query(`DELETE FROM blues_word_citations WHERE headword = $1`, [head]);
+      const cits = (e.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
+      for (let i = 0; i < cits.length; i++) {
+        const c = cits[i];
+        await client.query(
+          `INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            head,
+            c.position ?? i + 1,
+            c.quote ?? null,
+            c.artist ?? null,
+            c.song_title ?? null,
+            Number.isFinite(c.year as number) ? c.year : null,
+          ],
+        );
+        citations++;
+      }
+      upserted++;
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+  return { upserted, citations };
+}
+
+// Public list/search. q matches headword + definition + citation quote/artist/song_title.
+// letter filters by first letter of headword. Returns entries with citations nested.
+export async function listBluesWords(opts: {
+  q?: string;
+  letter?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ rows: any[]; total: number }> {
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const where: string[] = [];
+  const args: any[] = [];
+  const q = (opts.q ?? "").trim();
+  if (q) {
+    args.push(`%${q.toLowerCase()}%`);
+    const p = `$${args.length}`;
+    where.push(
+      `(LOWER(w.headword) LIKE ${p} OR LOWER(w.definition) LIKE ${p}
+        OR EXISTS (SELECT 1 FROM blues_word_citations c
+                    WHERE c.headword = w.headword
+                      AND (LOWER(c.quote) LIKE ${p}
+                           OR LOWER(c.artist) LIKE ${p}
+                           OR LOWER(c.song_title) LIKE ${p})))`,
+    );
+  }
+  const letter = (opts.letter ?? "").trim().toLowerCase();
+  if (letter && /^[a-z]$/.test(letter)) {
+    args.push(letter);
+    where.push(`LEFT(LOWER(w.headword), 1) = $${args.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const totalR = await getPool().query(
+    `SELECT COUNT(*)::int AS n FROM blues_words w ${whereSql}`,
+    args,
+  );
+  const total = totalR.rows[0]?.n ?? 0;
+  args.push(limit);
+  args.push(offset);
+  const rowsR = await getPool().query(
+    `SELECT w.headword, w.definition, w.source_volume, w.source_pages, w.updated_at,
+            COALESCE(
+              (SELECT json_agg(
+                 json_build_object(
+                   'position', c.position,
+                   'quote',    c.quote,
+                   'artist',   c.artist,
+                   'song',     c.song_title,
+                   'year',     c.year
+                 ) ORDER BY c.position
+               )
+               FROM blues_word_citations c
+               WHERE c.headword = w.headword),
+              '[]'::json
+            ) AS citations
+       FROM blues_words w
+       ${whereSql}
+       ORDER BY w.headword ASC
+       LIMIT $${args.length - 1} OFFSET $${args.length}`,
+    args,
+  );
+  return { rows: rowsR.rows, total };
+}
+
+export async function getBluesWordLetterCounts(): Promise<Record<string, number>> {
+  const r = await getPool().query(
+    `SELECT LEFT(LOWER(headword), 1) AS letter, COUNT(*)::int AS n
+       FROM blues_words
+       GROUP BY 1
+       ORDER BY 1`,
+  );
+  const out: Record<string, number> = {};
+  for (const row of r.rows) out[row.letter] = row.n;
+  return out;
+}
+
+export async function updateBluesWord(
+  headword: string,
+  patch: { definition?: string; source_volume?: string; source_pages?: number[] },
+): Promise<boolean> {
+  const sets: string[] = [];
+  const args: any[] = [];
+  if (patch.definition !== undefined) {
+    args.push(patch.definition);
+    sets.push(`definition = $${args.length}`);
+  }
+  if (patch.source_volume !== undefined) {
+    args.push(patch.source_volume);
+    sets.push(`source_volume = $${args.length}`);
+  }
+  if (patch.source_pages !== undefined) {
+    args.push(patch.source_pages);
+    sets.push(`source_pages = $${args.length}`);
+  }
+  if (!sets.length) return false;
+  args.push(headword.toLowerCase());
+  const r = await getPool().query(
+    `UPDATE blues_words SET ${sets.join(", ")}, updated_at = NOW()
+      WHERE headword = $${args.length}`,
+    args,
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+export async function deleteBluesWord(headword: string): Promise<boolean> {
+  const r = await getPool().query(
+    `DELETE FROM blues_words WHERE headword = $1`,
+    [headword.toLowerCase()],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 // ── Invite-only purge: nuke all per-user data for non-admin clerk_user_ids ──

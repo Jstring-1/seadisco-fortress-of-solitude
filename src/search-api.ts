@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, type BluesWordEntryInput } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
@@ -10501,6 +10501,143 @@ app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
   } catch (err: any) {
     console.error("[blues enrich-yt]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// ── Blues Words (Calt-style lexicon) ─────────────────────────────────
+// Public search/list — used by the Blues Archive Lexicon tab.
+app.get("/api/blues-words", async (req, res) => {
+  try {
+    const q      = String(req.query.q     ?? "").slice(0, 200);
+    const letter = String(req.query.letter ?? "").slice(0, 1);
+    const limit  = parseInt(String(req.query.limit  ?? "100"), 10);
+    const offset = parseInt(String(req.query.offset ?? "0"), 10);
+    const out = await listBluesWords({ q, letter, limit, offset });
+    res.json(out);
+  } catch (err) {
+    console.error("[blues-words list]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get("/api/blues-words/letter-counts", async (_req, res) => {
+  try { res.json(await getBluesWordLetterCounts()); }
+  catch (err) { console.error("[blues-words letters]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// Admin ingest: accepts a parsed JSON array (as produced by
+// scripts/parse-blueswords.py) and upserts each entry. Citations are
+// fully replaced per headword.
+app.post("/api/admin/blues-words/ingest", express.json({ limit: "8mb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const entries = req.body?.entries;
+  if (!Array.isArray(entries)) {
+    res.status(400).json({ error: "body.entries must be an array" });
+    return;
+  }
+  const norm: BluesWordEntryInput[] = entries.map((e: any) => ({
+    headword:      String(e?.headword ?? "").trim().toLowerCase(),
+    definition:    typeof e?.definition === "string" ? e.definition : "",
+    source_volume: typeof e?.source_volume === "string" ? e.source_volume : null,
+    source_pages:  Array.isArray(e?.source_pages)
+      ? e.source_pages.map((n: any) => parseInt(String(n), 10)).filter((n: number) => Number.isFinite(n))
+      : null,
+    citations: Array.isArray(e?.citations) ? e.citations.map((c: any, i: number) => ({
+      position:   Number.isFinite(c?.position) ? c.position : i + 1,
+      quote:      typeof c?.quote === "string" ? c.quote : null,
+      artist:     typeof c?.artist === "string" ? c.artist : null,
+      song_title: typeof c?.song_title === "string" ? c.song_title : (typeof c?.song === "string" ? c.song : null),
+      year:       Number.isFinite(c?.year) ? c.year : (typeof c?.year === "string" ? (parseInt(c.year, 10) || null) : null),
+    })) : [],
+  })).filter((e: BluesWordEntryInput) => e.headword);
+  try {
+    const r = await ingestBluesWords(norm);
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    console.error("[blues-words ingest]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch("/api/admin/blues-words/:headword", express.json({ limit: "200kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const headword = String(req.params.headword || "").trim().toLowerCase();
+  if (!headword) { res.status(400).json({ error: "headword required" }); return; }
+  const patch: any = {};
+  if (typeof req.body?.definition === "string") patch.definition = req.body.definition;
+  if (typeof req.body?.source_volume === "string") patch.source_volume = req.body.source_volume;
+  if (Array.isArray(req.body?.source_pages)) {
+    patch.source_pages = req.body.source_pages.map((n: any) => parseInt(String(n), 10)).filter((n: number) => Number.isFinite(n));
+  }
+  try {
+    const ok = await updateBluesWord(headword, patch);
+    if (!ok) { res.status(404).json({ error: "not found" }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[blues-words patch]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Seed from the bundled src/data/blueswords-*.json files. Idempotent —
+// re-running upserts existing headwords with the same content. Returns
+// counts per file.
+app.post("/api/admin/blues-words/seed-bundled", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const fs   = await import("fs");
+    const path = await import("path");
+    const url  = await import("url");
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const candidates = [
+      path.join(here, "..", "src", "data"),
+      path.join(here, "..", "..", "src", "data"),
+      path.join(process.cwd(), "src", "data"),
+    ];
+    let dir = "";
+    for (const c of candidates) { if (fs.existsSync(c)) { dir = c; break; } }
+    if (!dir) { res.status(500).json({ error: "src/data dir not found" }); return; }
+    const files = fs.readdirSync(dir).filter(f => /^blueswords-.*\.json$/i.test(f));
+    if (!files.length) { res.json({ ok: true, files: [] }); return; }
+    const out: any[] = [];
+    for (const f of files) {
+      const raw = fs.readFileSync(path.join(dir, f), "utf8");
+      let arr: any[] = [];
+      try { arr = JSON.parse(raw); } catch { out.push({ file: f, error: "bad json" }); continue; }
+      const norm: BluesWordEntryInput[] = (Array.isArray(arr) ? arr : []).map((e: any, i: number) => ({
+        headword:      String(e?.headword ?? "").trim().toLowerCase(),
+        definition:    typeof e?.definition === "string" ? e.definition : "",
+        source_volume: typeof e?.source_volume === "string" ? e.source_volume : null,
+        source_pages:  Array.isArray(e?.source_pages) ? e.source_pages.filter((n: any) => Number.isFinite(n)) : null,
+        citations:     Array.isArray(e?.citations) ? e.citations.map((c: any, j: number) => ({
+          position:   Number.isFinite(c?.position) ? c.position : j + 1,
+          quote:      typeof c?.quote === "string" ? c.quote : null,
+          artist:     typeof c?.artist === "string" ? c.artist : null,
+          song_title: typeof c?.song_title === "string" ? c.song_title : (typeof c?.song === "string" ? c.song : null),
+          year:       Number.isFinite(c?.year) ? c.year : null,
+        })) : [],
+      })).filter((e: BluesWordEntryInput) => e.headword);
+      const r = await ingestBluesWords(norm);
+      out.push({ file: f, ...r });
+    }
+    res.json({ ok: true, files: out });
+  } catch (err) {
+    console.error("[blues-words seed-bundled]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete("/api/admin/blues-words/:headword", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const headword = String(req.params.headword || "").trim().toLowerCase();
+  if (!headword) { res.status(400).json({ error: "headword required" }); return; }
+  try {
+    const ok = await deleteBluesWord(headword);
+    if (!ok) { res.status(404).json({ error: "not found" }); return; }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[blues-words delete]", err);
+    res.status(500).json({ error: String(err) });
   }
 });
 
