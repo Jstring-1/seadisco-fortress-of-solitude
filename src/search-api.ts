@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
@@ -6801,32 +6801,62 @@ app.get("/api/feed/random", async (req, res) => {
     // signed-in users.
     const mode = String(req.query.mode ?? "").trim();
     let rows: any[];
+    // Catalog modes (feed/rare/dig/active/played) read from the
+    // pre-computed pool table for sub-second response. The
+    // background refresher (every ~2h) reruns the heavy SQL and
+    // replaces the pool. If the pool is empty (cold boot, first
+    // deploy), we fall back to the direct query and trigger a
+    // refresh in the background so subsequent requests land on a
+    // warm pool.
     if (mode === "rare") {
-      // Optional strict genre filter for Rare. When the home-strip
-      // genre dropdown is set, we restrict server-side to that
-      // genre's window only — much faster than the multi-genre
-      // EXISTS path AND eliminates cross-genre noise on the cards.
       const genreParam = String(req.query.genre ?? "").trim();
-      rows = await getFeedRareAlbums(limit, excludeIds, genreParam || null);
+      if (genreParam) {
+        // Strict-genre Rare bypasses the pool — the pool only holds
+        // the cross-genre default; per-genre would explode the
+        // table. The direct query is already fast (single genre
+        // window).
+        rows = await getFeedRareAlbums(limit, excludeIds, genreParam);
+      } else {
+        rows = await getFeedPoolItems("rare", limit, excludeIds);
+        if (!rows.length) {
+          rows = await getFeedRareAlbums(limit, excludeIds, null);
+          refreshFeedPool("rare").catch(() => {});
+        }
+      }
     } else if (mode === "dig") {
-      // Long-tail surface — vinyl that nobody on the site has opened.
-      // No taste bias, no genre filter; pure crate-digging.
-      rows = await getFeedDigAlbums(limit, excludeIds);
+      rows = await getFeedPoolItems("dig", limit, excludeIds);
+      if (!rows.length) {
+        rows = await getFeedDigAlbums(limit, excludeIds);
+        refreshFeedPool("dig").catch(() => {});
+      }
     } else if (mode === "active") {
-      // Popularity by opens — vinyl most-clicked site-wide in the
-      // last 90 days, weighted-random within that ranking.
-      rows = await getFeedActiveAlbums(limit, excludeIds);
+      rows = await getFeedPoolItems("active", limit, excludeIds);
+      if (!rows.length) {
+        rows = await getFeedActiveAlbums(limit, excludeIds);
+        refreshFeedPool("active").catch(() => {});
+      }
     } else if (mode === "played") {
-      // Popularity by listens — vinyl whose YouTube playback gets
-      // triggered most often. Different signal from opens.
-      rows = await getFeedPlayedAlbums(limit, excludeIds);
+      rows = await getFeedPoolItems("played", limit, excludeIds);
+      if (!rows.length) {
+        rows = await getFeedPlayedAlbums(limit, excludeIds);
+        refreshFeedPool("played").catch(() => {});
+      }
     } else {
-      let tasteProfile: { topGenres: string[]; topStyles: string[] } | null = null;
-      try {
-        const uid = await getClerkUserId(req);
-        if (uid) tasteProfile = await getOrComputeUserTasteProfile(uid);
-      } catch { /* fall through with no bias */ }
-      rows = await getFeedRandomAlbums(limit, type, excludeIds, tasteProfile);
+      // Feed: try the pool first. Signed-in users still get the
+      // taste bias on the cold path (when pool is empty); when the
+      // pool is warm we trade the per-user nudge for sub-second
+      // response. The pool itself was picked with the scarcity
+      // weighting so the bar is already high.
+      rows = await getFeedPoolItems("feed", limit, excludeIds);
+      if (!rows.length) {
+        let tasteProfile: { topGenres: string[]; topStyles: string[] } | null = null;
+        try {
+          const uid = await getClerkUserId(req);
+          if (uid) tasteProfile = await getOrComputeUserTasteProfile(uid);
+        } catch { /* fall through with no bias */ }
+        rows = await getFeedRandomAlbums(limit, type, excludeIds, tasteProfile);
+        refreshFeedPool("feed").catch(() => {});
+      }
     }
     const items = rows.map((row: any) => {
       const d = row.data ?? {};
@@ -14598,5 +14628,20 @@ app.listen(PORT, "0.0.0.0", async () => {
     try { initAllBluesModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] all-blues init failed:", e);
     }
+
+    // Catalog-tab pool refresher: rebuilds each mode's pool of ~500
+    // candidates every 2h. First tick fires 60s after boot so the
+    // initial DB schema is settled. Errors are logged and absorbed
+    // so a single mode failure doesn't take down the cycle.
+    const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000;
+    const FEED_POOL_MODES: Array<"feed"|"rare"|"dig"|"active"|"played"> = ["feed","rare","dig","active","played"];
+    const tick = async () => {
+      for (const mode of FEED_POOL_MODES) {
+        try { await refreshFeedPool(mode); }
+        catch (e) { console.error(`[feed-pool refresh ${mode}]`, e); }
+      }
+    };
+    setTimeout(() => { tick().catch(() => {}); }, 60_000);
+    setInterval(() => { tick().catch(() => {}); }, REFRESH_INTERVAL_MS);
   }
 });
