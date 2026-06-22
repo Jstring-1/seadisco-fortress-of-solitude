@@ -170,6 +170,16 @@
           <button type="button" class="admin-btn" onclick="adminAllBluesWipe(true)" title="Same as Delete scraped data, but also clears cached Discogs artist profiles — every artist will be re-fetched on the next run. Blues Archive edges still preserved.">Delete scraped + cache</button>
         </div>
         <div id="ab-status" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
+        <hr style="margin:0.9rem 0;border-color:var(--border)">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <h3 style="margin:0;font-size:1rem">Blues Words lexicon</h3>
+          <button class="admin-btn" type="button" onclick="lexiconSeedBundled()" title="Seed/refresh from the parsed JSON files committed under src/data/blueswords-*.json (idempotent — re-running upserts existing headwords).">Seed from bundled JSON</button>
+          <label class="admin-btn" style="cursor:pointer" title="Upload a parsed JSON file (output of scripts/parse-blueswords.py) to add a new volume.">
+            Upload JSON…
+            <input id="lexicon-upload-input" type="file" accept=".json,application/json" style="display:none" onchange="lexiconUploadJson(event)">
+          </label>
+          <span id="lexicon-status" style="font-size:0.78rem;color:var(--muted)"></span>
+        </div>
       </div>
 
       <!-- Style suggestions per Discogs genre. The genre dropdown
@@ -1031,6 +1041,14 @@ let _cwPollTimer = null;
 // (biggest cached buckets first). Numeric vs string columns get
 // different comparators inside _cwSortRows.
 let _cwSort = { col: "in_cache", dir: "desc" };
+// When true, the per-combo grid hides rows that have a style_key —
+// only genre-only rows are shown so you can see total cache by genre.
+let _cwGenresOnly = false;
+function _cwToggleGenresOnly() {
+  _cwGenresOnly = !_cwGenresOnly;
+  loadCacheWarm();
+}
+window._cwToggleGenresOnly = _cwToggleGenresOnly;
 const _CW_NUMERIC_COLS = new Set([
   "in_cache", "total_cached", "total_skipped", "total_errors", "current_year",
 ]);
@@ -1176,9 +1194,13 @@ async function loadCacheWarm() {
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
         <strong style="font-size:0.9rem">Per-combo stats</strong>
         <span style="font-size:0.72rem;color:var(--muted)">One row per (genre, style) combo you've ever run.</span>
+        <button class="admin-btn" type="button" onclick="_cwToggleGenresOnly()" style="margin-left:auto" title="Hide rows that have a style set so only top-level genre rows remain.">${_cwGenresOnly ? "Show all (genres + styles)" : "Hide styles (genres only)"}</button>
       </div>
       ${rows.length
         ? (() => {
+          // Genres-only filter: drop rows with a style_key so the grid
+          // is one row per top-level genre.
+          if (_cwGenresOnly) rows = rows.filter(r => !r.style_key);
           // Apply current sort (column + direction) before rendering
           // tbody. _cwSort defaults to in_cache desc; clicking a
           // header toggles direction or sets a new column.
@@ -1310,6 +1332,55 @@ async function cacheWarmStartNoYearForForm() {
   await _cwStartCombo(genreKey, styleKey, 0, 0, true);
 }
 window.cacheWarmStartNoYearForForm = cacheWarmStartNoYearForForm;
+
+// ── Lexicon (Blues Words) admin ─────────────────────────────────────
+async function lexiconSeedBundled() {
+  const status = document.getElementById("lexicon-status");
+  if (status) status.textContent = "Seeding…";
+  try {
+    const r = await fetch("/api/admin/blues-words/seed-bundled", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
+    const files = j.files || [];
+    const total = files.reduce((acc, f) => acc + (f.upserted || 0), 0);
+    const cits  = files.reduce((acc, f) => acc + (f.citations || 0), 0);
+    if (status) status.textContent = `Seeded ${total} entries (${cits} citations) from ${files.length} file${files.length===1?'':'s'}.`;
+  } catch (e) {
+    if (status) status.textContent = `Seed failed: ${e}`;
+  }
+}
+window.lexiconSeedBundled = lexiconSeedBundled;
+
+async function lexiconUploadJson(event) {
+  const status = document.getElementById("lexicon-status");
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (status) status.textContent = `Reading ${file.name}…`;
+  try {
+    const text = await file.text();
+    let entries;
+    try { entries = JSON.parse(text); }
+    catch (e) { if (status) status.textContent = `Bad JSON: ${e}`; return; }
+    if (!Array.isArray(entries)) {
+      if (status) status.textContent = `Expected a JSON array of entries; got ${typeof entries}.`;
+      return;
+    }
+    if (status) status.textContent = `Uploading ${entries.length} entries…`;
+    const r = await fetch("/api/admin/blues-words/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
+    if (status) status.textContent = `Ingested ${j.upserted} entries (${j.citations} citations) from ${file.name}.`;
+  } catch (e) {
+    if (status) status.textContent = `Upload failed: ${e}`;
+  } finally {
+    event.target.value = "";
+  }
+}
+window.lexiconUploadJson = lexiconUploadJson;
 // Per-row "▶ 1900-1970" — directly fires a year-bounded run on a
 // specific (genre, style) combo without round-tripping through the
 // form. Used by the per-combo stats grid.

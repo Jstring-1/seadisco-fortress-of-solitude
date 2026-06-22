@@ -1176,7 +1176,19 @@ e.g.  miles davis | coltrane
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="connections" onclick="_baSwitchSubtab('connections')">Connections</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="lexicon" onclick="_baSwitchSubtab('lexicon')">Lexicon</button>
       </div>
+    </div>
+    <div id="blues-archive-lexicon-panel" style="display:none">
+      <!-- Lexicon: blues-words dictionary (Calt et al). Toolbar = search +
+           A-Z letter filter. Each entry shows headword, definition, and
+           song-lyric citations with clickable artists. -->
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
+        <input id="blues-lexicon-search" type="search" placeholder="Search headword, definition, lyric, artist…" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baLexiconDebouncedSearch()">
+        <span id="blues-lexicon-count" style="font-size:0.78rem;color:var(--muted)"></span>
+      </div>
+      <div id="blues-lexicon-letters" class="ba-letter-strip" style="display:flex;flex-wrap:wrap;gap:0.25rem;margin-bottom:0.6rem"></div>
+      <div id="blues-lexicon-list"></div>
     </div>
     <div id="blues-archive-artists-panel">
       <!-- Artists-tab toolbar: search + Artists-specific bulk actions

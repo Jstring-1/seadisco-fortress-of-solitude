@@ -1603,7 +1603,7 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings" || tab === "connections") ? tab : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings" || tab === "connections" || tab === "lexicon") ? tab : "artists";
   // Toggle button active state. Both classes are kept in sync so any
   // lingering CSS that targets the legacy `is-active` still works; the
   // new loc-tab styling (after the header rearrangement) keys on
@@ -1618,11 +1618,13 @@ function _baSwitchSubtab(tab) {
   const rp = document.getElementById("blues-archive-releases-panel");
   const tp = document.getElementById("blues-archive-tunings-panel");
   const cp = document.getElementById("blues-archive-connections-panel");
+  const xp = document.getElementById("blues-archive-lexicon-panel");
   if (ap) ap.style.display = _baSubtab === "artists"     ? "" : "none";
   if (lp) lp.style.display = _baSubtab === "lyrics"      ? "" : "none";
   if (rp) rp.style.display = _baSubtab === "releases"    ? "" : "none";
   if (tp) tp.style.display = _baSubtab === "tunings"     ? "" : "none";
   if (cp) cp.style.display = _baSubtab === "connections" ? "" : "none";
+  if (xp) xp.style.display = _baSubtab === "lexicon"     ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
@@ -1643,6 +1645,9 @@ function _baSwitchSubtab(tab) {
     _baLoadTuningsGrid();
   } else if (_baSubtab === "connections") {
     _baLoadConnections();
+  } else if (_baSubtab === "lexicon") {
+    _baLexiconEnsureLetters();
+    _baLexiconLoad();
   }
   // Persist after every subtab switch so a quick "Lyrics → Search"
   // round trip pulls the user back to Lyrics on return.
@@ -4122,3 +4127,148 @@ function _baConnSortMatrix(key) {
   _baConnRender();
 }
 window._baConnSortMatrix = _baConnSortMatrix;
+
+// ── Lexicon (blues-words) ───────────────────────────────────────────
+// Blues-words dictionary from Stephen Calt's "Barrelhouse Words"
+// (and successor volumes). Ingested via scripts/parse-blueswords.py;
+// admin can edit/delete entries inline.
+let _baLexiconLetter = "";
+let _baLexiconQuery  = "";
+let _baLexiconSearchTimer = null;
+let _baLexiconLettersLoaded = false;
+
+function _baEscHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+async function _baLexiconEnsureLetters() {
+  if (_baLexiconLettersLoaded) return;
+  try {
+    const r = await fetch("/api/blues-words/letter-counts");
+    const counts = r.ok ? await r.json() : {};
+    const strip = document.getElementById("blues-lexicon-letters");
+    if (!strip) return;
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    let html = `<button type="button" class="ba-letter-btn${_baLexiconLetter === "" ? " active" : ""}" onclick="_baLexiconSetLetter('')" style="padding:0.25rem 0.55rem;font-size:0.82rem">All</button>`;
+    for (const L of letters) {
+      const n = counts[L] || 0;
+      const dim = n === 0 ? "opacity:0.35;" : "";
+      html += `<button type="button" class="ba-letter-btn${_baLexiconLetter === L ? " active" : ""}" onclick="_baLexiconSetLetter('${L}')" title="${n} entr${n===1?'y':'ies'}" style="padding:0.25rem 0.55rem;font-size:0.82rem;${dim}">${L.toUpperCase()}${n ? ` <span style='opacity:0.6'>${n}</span>` : ""}</button>`;
+    }
+    strip.innerHTML = html;
+    _baLexiconLettersLoaded = true;
+  } catch (e) { console.warn("[lexicon letters]", e); }
+}
+window._baLexiconEnsureLetters = _baLexiconEnsureLetters;
+
+function _baLexiconSetLetter(L) {
+  _baLexiconLetter = L || "";
+  document.querySelectorAll("#blues-lexicon-letters .ba-letter-btn").forEach(b => {
+    b.classList.remove("active");
+  });
+  // Re-render strip active state (cheap)
+  _baLexiconLettersLoaded = false;
+  _baLexiconEnsureLetters();
+  _baLexiconLoad();
+}
+window._baLexiconSetLetter = _baLexiconSetLetter;
+
+function _baLexiconDebouncedSearch() {
+  if (_baLexiconSearchTimer) clearTimeout(_baLexiconSearchTimer);
+  _baLexiconSearchTimer = setTimeout(() => {
+    const inp = document.getElementById("blues-lexicon-search");
+    _baLexiconQuery = (inp?.value || "").trim();
+    _baLexiconLoad();
+  }, 250);
+}
+window._baLexiconDebouncedSearch = _baLexiconDebouncedSearch;
+
+async function _baLexiconLoad() {
+  const list = document.getElementById("blues-lexicon-list");
+  const count = document.getElementById("blues-lexicon-count");
+  if (!list) return;
+  list.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
+  try {
+    const params = new URLSearchParams();
+    if (_baLexiconQuery)  params.set("q", _baLexiconQuery);
+    if (_baLexiconLetter) params.set("letter", _baLexiconLetter);
+    params.set("limit", "500");
+    const r = await fetch(`/api/blues-words?${params}`);
+    if (!r.ok) {
+      list.innerHTML = `<div style="padding:1rem;color:#f88">Failed to load (HTTP ${r.status}).</div>`;
+      return;
+    }
+    const { rows, total } = await r.json();
+    if (count) count.textContent = total ? `${total} entr${total === 1 ? "y" : "ies"}` : "";
+    if (!rows.length) {
+      list.innerHTML = `<div style="padding:1rem;color:var(--muted)">No entries match.</div>`;
+      return;
+    }
+    const isAdmin = !!(window._baIsAdmin || window._isAdmin);
+    list.innerHTML = rows.map(e => _baLexiconRowHtml(e, isAdmin)).join("");
+  } catch (e) {
+    console.warn("[lexicon load]", e);
+    list.innerHTML = `<div style="padding:1rem;color:#f88">Load failed.</div>`;
+  }
+}
+window._baLexiconLoad = _baLexiconLoad;
+
+function _baLexiconRowHtml(e, isAdmin) {
+  const cits = Array.isArray(e.citations) ? e.citations : [];
+  const citsHtml = cits.map(c => {
+    const artist = _baEscHtml(c.artist || "");
+    const song   = _baEscHtml(c.song || "");
+    const year   = c.year ? ` <span style="color:var(--muted)">(${c.year})</span>` : "";
+    // Artist click opens BA artist popup if available; otherwise dispatches
+    // the global lookup popup the rest of the app uses.
+    const artistLink = artist
+      ? `<a href="#" onclick="event.preventDefault();(typeof openArtistLookup==='function'?openArtistLookup(${JSON.stringify(c.artist||"")}):0);return false" style="color:var(--accent)">${artist}</a>`
+      : "";
+    const songSpan = song ? ` &mdash; <em>${song}</em>` : "";
+    const quote = c.quote ? `<div class="ba-lex-quote" style="white-space:pre-wrap;color:#cdd;font-style:italic;border-left:2px solid var(--accent);padding:0.3rem 0.6rem;margin:0.3rem 0">${_baEscHtml(c.quote)}</div>` : "";
+    return `${quote}<div class="ba-lex-cit" style="font-size:0.82rem;color:var(--muted)">— ${artistLink}${songSpan}${year}</div>`;
+  }).join("");
+  const adminBtns = isAdmin
+    ? `<span style="float:right;font-size:0.78rem">
+         <button type="button" class="archive-btn" onclick="_baLexiconEdit('${_baEscHtml(e.headword)}')" title="Edit definition">✎</button>
+         <button type="button" class="archive-btn" onclick="_baLexiconDelete('${_baEscHtml(e.headword)}')" title="Delete entry">🗑</button>
+       </span>`
+    : "";
+  const src = e.source_volume
+    ? `<span style="font-size:0.7rem;color:var(--muted);margin-left:0.4rem">vol.${_baEscHtml(e.source_volume)}${Array.isArray(e.source_pages)&&e.source_pages.length?` p.${e.source_pages.join(",")}`:""}</span>`
+    : "";
+  return `
+    <article class="ba-lex-entry" data-head="${_baEscHtml(e.headword)}" style="padding:0.7rem 0.8rem;margin-bottom:0.6rem;background:var(--panel);border:1px solid var(--border);border-radius:6px">
+      <h3 style="margin:0 0 0.3rem;font-size:1.05rem;color:var(--fg)">${adminBtns}${_baEscHtml(e.headword)}${src}</h3>
+      ${e.definition ? `<div class="ba-lex-defn" style="margin:0.3rem 0;color:var(--fg);line-height:1.4">${_baEscHtml(e.definition)}</div>` : ""}
+      ${citsHtml}
+    </article>`;
+}
+
+async function _baLexiconEdit(headword) {
+  const cur = await (await fetch(`/api/blues-words?q=${encodeURIComponent(headword)}&limit=1`)).json().catch(() => ({}));
+  const entry = (cur.rows || []).find(e => e.headword === headword);
+  const next = prompt(`Edit definition for "${headword}":`, entry?.definition ?? "");
+  if (next == null) return;
+  const r = await apiFetch(`/api/admin/blues-words/${encodeURIComponent(headword)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ definition: next }),
+  });
+  if (!r.ok) { showToast?.(`Save failed (HTTP ${r.status})`, "error"); return; }
+  showToast?.("Saved");
+  _baLexiconLoad();
+}
+window._baLexiconEdit = _baLexiconEdit;
+
+async function _baLexiconDelete(headword) {
+  if (!confirm(`Delete "${headword}" from the lexicon? This can't be undone.`)) return;
+  const r = await apiFetch(`/api/admin/blues-words/${encodeURIComponent(headword)}`, { method: "DELETE" });
+  if (!r.ok) { showToast?.(`Delete failed (HTTP ${r.status})`, "error"); return; }
+  showToast?.("Deleted");
+  _baLexiconLettersLoaded = false;
+  _baLexiconEnsureLetters();
+  _baLexiconLoad();
+}
+window._baLexiconDelete = _baLexiconDelete;
