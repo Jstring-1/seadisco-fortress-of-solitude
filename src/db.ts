@@ -7264,6 +7264,7 @@ export async function getUserBehaviorStats(): Promise<Array<{
   searches_total:          number;
   searches_30d:            number;
   last_active:             string | null;
+  signed_up_at:            string | null;
 }>> {
   // Single query with LEFT JOINs on per-user counts. Building the
   // counts as subqueries keeps each row self-contained — no risk of
@@ -7289,9 +7290,9 @@ export async function getUserBehaviorStats(): Promise<Array<{
       UNION SELECT clerk_user_id FROM user_play_events
       UNION SELECT clerk_user_id FROM user_search_events
     ), all_users AS (
-      SELECT clerk_user_id, discogs_username, last_active_at FROM user_tokens
+      SELECT clerk_user_id, discogs_username, last_active_at, created_at FROM user_tokens
       UNION
-      SELECT DISTINCT a.clerk_user_id, NULL::text, NULL::timestamptz
+      SELECT DISTINCT a.clerk_user_id, NULL::text, NULL::timestamptz, NULL::timestamptz
         FROM activity_users a
        WHERE NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.clerk_user_id = a.clerk_user_id)
     )
@@ -7306,7 +7307,8 @@ export async function getUserBehaviorStats(): Promise<Array<{
            COALESCE(pe.n_30d, 0)   AS player_plays_30d,
            COALESCE(se.n_total, 0) AS searches_total,
            COALESCE(se.n_30d, 0)   AS searches_30d,
-           u.last_active_at        AS last_active
+           u.last_active_at        AS last_active,
+           u.created_at            AS signed_up_at
       FROM all_users u
       LEFT JOIN (SELECT clerk_user_id, COUNT(*)::int AS n FROM user_favorites GROUP BY clerk_user_id) f
              ON f.clerk_user_id = u.clerk_user_id
