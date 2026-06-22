@@ -351,6 +351,11 @@ const _CLERK_USERNAME_TTL_MS = 10 * 60 * 1000; // 10 min
 let _clerkUsernameCache: Map<string, string> | null = null;
 let _clerkUsernameCacheAt = 0;
 let _clerkUsernameInflight: Promise<Map<string, string>> | null = null;
+// Populated in lockstep with _clerkUsernameCache: clerk_user_id → ms
+// timestamp of Clerk account creation. Used by the admin behavior
+// table so "Signed up" reflects the actual Clerk signup, not the
+// downstream user_tokens.created_at (which marks Discogs connection).
+let _clerkCreatedAtCache: Map<string, number> = new Map();
 
 async function _refreshClerkUsernameCache(force = false): Promise<Map<string, string>> {
   const now = Date.now();
@@ -362,6 +367,7 @@ async function _refreshClerkUsernameCache(force = false): Promise<Map<string, st
   if (_clerkUsernameInflight) return _clerkUsernameInflight;
   _clerkUsernameInflight = (async () => {
     const out = new Map<string, string>();
+    const createdOut = new Map<string, number>();
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
     if (!clerkSecret) return out;
     try {
@@ -377,6 +383,7 @@ async function _refreshClerkUsernameCache(force = false): Promise<Map<string, st
           first_name: string | null;
           last_name: string | null;
           email_addresses?: Array<{ email_address: string }>;
+          created_at?: number;
         }>;
         if (!clerkUsers.length) break;
         for (const u of clerkUsers) {
@@ -388,12 +395,16 @@ async function _refreshClerkUsernameCache(force = false): Promise<Map<string, st
             || u.email_addresses?.[0]?.email_address?.split("@")[0]
             || "";
           if (display) out.set(u.id, display);
+          if (typeof u.created_at === "number" && Number.isFinite(u.created_at)) {
+            createdOut.set(u.id, u.created_at);
+          }
         }
         if (clerkUsers.length < 100) break;
         offset += 100;
       }
       _clerkUsernameCache = out;
       _clerkUsernameCacheAt = Date.now();
+      _clerkCreatedAtCache = createdOut;
     } catch (e) {
       console.warn("[clerk username cache]", (e as any)?.message ?? e);
     }
@@ -7599,10 +7610,18 @@ app.get("/api/admin/behavior-stats", async (req, res) => {
       getUserBehaviorStats(),
       _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
     ]);
-    const enriched = items.map((u: any) => ({
-      ...u,
-      clerk_username: clerkUsernames.get(u.clerk_user_id) ?? null,
-    }));
+    const enriched = items.map((u: any) => {
+      const clerkCreatedMs = _clerkCreatedAtCache.get(u.clerk_user_id);
+      return {
+        ...u,
+        clerk_username: clerkUsernames.get(u.clerk_user_id) ?? null,
+        // Clerk created_at is the actual signup moment. Falls back
+        // to the Discogs-connect timestamp (user_tokens.created_at)
+        // when the Clerk cache hasn't seen this user yet — e.g. a
+        // brand-new account between Clerk pagination ticks.
+        clerk_created_at: clerkCreatedMs ? new Date(clerkCreatedMs).toISOString() : null,
+      };
+    });
     res.json({ items: enriched });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
