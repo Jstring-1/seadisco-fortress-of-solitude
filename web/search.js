@@ -1070,11 +1070,11 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "recent" || v === "suggestions" || v === "feed" || v === "rare") return v;
+    if (v === "recent" || v === "suggestions" || v === "feed" || v === "rare" || v === "dig") return v;
   } catch {}
   // Feed is the default landing tab for everyone — anons land here
   // because they have no Recent history, and signed-in users can
-  // switch to Recent/Suggestions/Rare with one click.
+  // switch to Recent/Suggestions/Rare/Dig with one click.
   return "feed";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
@@ -1084,17 +1084,19 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  // Feed (default) / Rare / Recent / Suggestions are all visible
-  // tabs now. Any stray mode collapses to Feed.
+  // Recent / Feed / Rare / Dig / Suggestions are all visible tabs.
+  // Feed is the default landing tab. Any stray mode collapses to Feed.
   if (window._sdHomeStripMode !== "recent"
       && window._sdHomeStripMode !== "suggestions"
       && window._sdHomeStripMode !== "feed"
-      && window._sdHomeStripMode !== "rare") {
+      && window._sdHomeStripMode !== "rare"
+      && window._sdHomeStripMode !== "dig") {
     window._sdHomeStripMode = "feed";
   }
   const tabs = {
     feed:        document.getElementById("rr-tab-feed"),
     rare:        document.getElementById("rr-tab-rare"),
+    dig:         document.getElementById("rr-tab-dig"),
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
   };
@@ -1144,13 +1146,14 @@ if (typeof document !== "undefined") {
 }
 
 function _sdSwitchHomeStripTab(mode) {
-  // Feed / Rare / Recent / Suggestions are the visible tabs; Feed is
-  // the default landing tab. Anything else collapses to Feed.
+  // Recent / Feed / Rare / Dig / Suggestions are the visible tabs;
+  // Feed is the default landing tab. Anything else collapses to Feed.
   let m = "feed";
   if (mode === "recent") m = "recent";
   else if (mode === "suggestions") m = "suggestions";
   else if (mode === "feed") m = "feed";
   else if (mode === "rare") m = "rare";
+  else if (mode === "dig") m = "dig";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -1966,6 +1969,14 @@ const _HOME_STRIP_SORTS = {
     ["title:desc",          "Title Z→A"],
     ["artist:asc",          "Artist A→Z"],
   ],
+  dig: [
+    ["random:0",            "Random"],
+    ["year:asc",            "Year ↑"],
+    ["year:desc",           "Year ↓"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
 };
 
 // Rebuild #favorites-sort options for the active tab. Restores the
@@ -2285,20 +2296,22 @@ async function loadRandomRecords(more) {
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare") {
-      // ── Feed / Rare (public catalog sampler) ────────────────────
+    if (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare" || window._sdHomeStripMode === "dig") {
+      // ── Feed / Rare / Dig (public catalog samplers) ─────────────
       // Same endpoint, different SQL behind it: Feed uses the
       // weighted-random scarcity sampler; Rare adds early-genre +
-      // high-want + near-zero-have filters. When Rare is active and
+      // high-want + near-zero-have filters; Dig surfaces vinyl
+      // nobody on the site has opened yet. When Rare is active and
       // the user picked a genre, we forward it server-side so the
       // SQL restricts strictly to that genre's window.
       const isRare = window._sdHomeStripMode === "rare";
+      const isDig  = window._sdHomeStripMode === "dig";
       const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
       _randomAll = [];
       try {
-        let url = isRare
-          ? "/api/feed/random?limit=48&mode=rare"
-          : "/api/feed/random?limit=48";
+        let url = "/api/feed/random?limit=48";
+        if (isRare) url += "&mode=rare";
+        else if (isDig) url += "&mode=dig";
         if (isRare && stripGenre) url += "&genre=" + encodeURIComponent(stripGenre);
         const r = await fetch(url, { cache: "no-store" });
         if (!_stillCurrent()) return;
@@ -2310,7 +2323,7 @@ async function loadRandomRecords(more) {
           }
         }
       } catch { /* leave empty — UI shows empty state below */ }
-      titleText = isRare ? "Rare" : "Feed";
+      titleText = isRare ? "Rare" : isDig ? "Dig" : "Feed";
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
@@ -2432,10 +2445,10 @@ async function loadRandomRecords(more) {
     }
   }
 
-  // Feed / Rare Load More: refills _randomAll from the catalog
+  // Feed / Rare / Dig Load More: refills _randomAll from the catalog
   // sampler when the user has paged past everything we've fetched so
-  // far. Rare adds &mode=rare so the same endpoint serves it.
-  if (more && (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare")) {
+  // far. Mode passes through so the same endpoint serves all three.
+  if (more && (window._sdHomeStripMode === "feed" || window._sdHomeStripMode === "rare" || window._sdHomeStripMode === "dig")) {
     const filteredSoFar = _sdFilterRandom(_randomAll);
     if (_randomShown >= filteredSoFar.length) {
       try {
@@ -2444,7 +2457,9 @@ async function loadRandomRecords(more) {
           .filter(s => /^(master|release):\d+/.test(s))
           .slice(0, 500)
           .join(",");
-        const modeQs = window._sdHomeStripMode === "rare" ? "&mode=rare" : "";
+        const modeQs = window._sdHomeStripMode === "rare" ? "&mode=rare"
+                     : window._sdHomeStripMode === "dig"  ? "&mode=dig"
+                     : "";
         const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
         const genreQs = (window._sdHomeStripMode === "rare" && stripGenre)
           ? "&genre=" + encodeURIComponent(stripGenre)
