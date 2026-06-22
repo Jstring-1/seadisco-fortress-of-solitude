@@ -16,6 +16,11 @@
 
 let _queue = null;          // last fetched [{ position, source, externalId, data }, ...]
 let _queueLoading = false;
+// Promise of an in-flight reorder PATCH. _queueLoad awaits this before
+// issuing GET so a refetch triggered mid-drag (typically by external
+// play → POST → reload) can't read stale pre-reorder positions and
+// clobber the optimistic _queue back to the old order.
+let _reorderInFlightPromise = null;
 let _queueDrawerEl = null;
 let _sortableLoaded = null; // Promise once we begin lazy-loading Sortable.js
 let _drawerSortable = null; // Sortable instance currently bound
@@ -214,6 +219,12 @@ async function _queueLoad(force = false) {
   }
   _queueLoading = true;
   try {
+    // Wait for any in-flight reorder PATCH to land before reading so
+    // the GET sees the new positions and we don't snap _queue back to
+    // pre-drag order.
+    if (_reorderInFlightPromise) {
+      try { await _reorderInFlightPromise; } catch {}
+    }
     const r = await apiFetch("/api/user/play-queue");
     if (!r.ok) { _queue = []; return _queue; }
     const j = await r.json();
@@ -1012,13 +1023,27 @@ function _renderRepeatBtn() {
 // happens to delete/replace every item individually (queueClear is
 // the explicit "I'm done with this playlist" gesture).
 const _LOADED_PLAYLIST_LS_KEY = "sd-loaded-playlist-name";
+const _LOADED_PLAYLIST_ID_LS_KEY = "sd-loaded-playlist-id";
 let _loadedPlaylistName = (() => {
   try { return localStorage.getItem(_LOADED_PLAYLIST_LS_KEY) || null; } catch { return null; }
+})();
+let _loadedPlaylistId = (() => {
+  try {
+    const v = localStorage.getItem(_LOADED_PLAYLIST_ID_LS_KEY);
+    const n = v == null ? NaN : Number(v);
+    return Number.isFinite(n) ? n : null;
+  } catch { return null; }
 })();
 function _persistLoadedPlaylistName(name) {
   try {
     if (name) localStorage.setItem(_LOADED_PLAYLIST_LS_KEY, name);
     else localStorage.removeItem(_LOADED_PLAYLIST_LS_KEY);
+  } catch { /* private mode / quota — best-effort */ }
+}
+function _persistLoadedPlaylistId(id) {
+  try {
+    if (id != null) localStorage.setItem(_LOADED_PLAYLIST_ID_LS_KEY, String(id));
+    else localStorage.removeItem(_LOADED_PLAYLIST_ID_LS_KEY);
   } catch { /* private mode / quota — best-effort */ }
 }
 
@@ -1439,7 +1464,14 @@ async function _bindSortable() {
         // snap the user's drag back. Retry once after a short delay;
         // only revert if BOTH attempts fail. _queue stays optimistically
         // ordered in the meantime so a successful retry needs no repaint.
-        (async () => {
+        //
+        // Tracked in _reorderInFlightPromise so any _queueLoad triggered
+        // mid-flight (e.g. external play's POST→reload) waits and reads
+        // the post-PATCH state instead of clobbering the optimistic order.
+        const orderedSnapshot = orderedItems.map(it => ({
+          source: it.source, externalId: it.externalId, data: it.data || {},
+        }));
+        const p = (async () => {
           const send = () => apiFetch("/api/user/play-queue/reorder", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -1448,7 +1480,23 @@ async function _bindSortable() {
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               const r = await send();
-              if (r.ok) return;                       // success — keep optimistic order
+              if (r.ok) {
+                // If a playlist is currently loaded in the player, mirror
+                // the new order back to that playlist so reloading it
+                // later preserves what the user just arranged.
+                if (_loadedPlaylistId != null && _loadedPlaylistName) {
+                  try {
+                    await apiFetch(`/api/user/playlists/${_loadedPlaylistId}/replace`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: _loadedPlaylistName, items: orderedSnapshot }),
+                    });
+                  } catch (pe) {
+                    console.warn("[queue] playlist reorder auto-save threw:", pe);
+                  }
+                }
+                return;                               // success — keep optimistic order
+              }
               console.warn(`[queue] reorder attempt ${attempt} failed:`, r.status);
             } catch (e) {
               console.warn(`[queue] reorder attempt ${attempt} threw:`, e);
@@ -1460,6 +1508,8 @@ async function _bindSortable() {
           _queue = null;
           _renderQueueDrawer();
         })();
+        _reorderInFlightPromise = p;
+        p.finally(() => { if (_reorderInFlightPromise === p) _reorderInFlightPromise = null; });
         // Re-paint with fresh data-position attrs (1..N) so a follow-up
         // drag reads the correct values.
         _renderQueueDrawer();
@@ -1621,6 +1671,8 @@ async function queueClear() {
   // and clear the localStorage copy so a reload doesn't resurrect it.
   _loadedPlaylistName = null;
   _persistLoadedPlaylistName(null);
+  _loadedPlaylistId = null;
+  _persistLoadedPlaylistId(null);
   // Reset shuffle state — a cleared queue means there's no history
   // worth preserving, and the next add+play should start a fresh deck.
   _shuffleResetState();
@@ -2457,6 +2509,16 @@ async function _trackPlaylistDoAdd(id) {
       return;
     }
     if (typeof showToast === "function") showToast(`Saved to "${playlist?.name ?? "playlist"}"`);
+    // If this playlist is the one currently loaded into the player,
+    // mirror the add into the live queue so playback reflects what
+    // the user just added without forcing a reload.
+    if (_loadedPlaylistId != null && Number(id) === Number(_loadedPlaylistId)) {
+      try {
+        await queueAdd([{ source: item.source, externalId: item.externalId, data: item.data || {} }], { mode: "append" });
+      } catch (qe) {
+        console.warn("[_trackPlaylistDoAdd queueAdd]", qe);
+      }
+    }
     _trackPlaylistClosePicker();
   } catch (e) {
     console.warn("[_trackPlaylistDoAdd]", e);
@@ -2831,6 +2893,8 @@ async function _playlistLoad(id) {
     // so the drawer's playlist-row paints in on the next sync.
     _loadedPlaylistName = playlist.name || null;
     _persistLoadedPlaylistName(_loadedPlaylistName);
+    _loadedPlaylistId = Number.isFinite(Number(id)) ? Number(id) : null;
+    _persistLoadedPlaylistId(_loadedPlaylistId);
     _syncLoadedPlaylistLabel();
     _playlistClosePicker();
     // Surface the queue so the user sees what they just loaded and can
