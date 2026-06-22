@@ -1073,10 +1073,11 @@ function _sdInitialHomeStripMode() {
     if (v === "recent" || v === "suggestions" || v === "feed"
         || v === "rare" || v === "dig" || v === "active" || v === "played") return v;
   } catch {}
-  // Feed is the default landing tab for everyone — anons land here
-  // because they have no Recent history, and signed-in users can
-  // switch to any other tab with one click.
-  return "feed";
+  // Recent is the default landing tab. Signed-in users see their
+  // own history; anons with no local history fall back to the
+  // community-picks / admin-favorites sample (handled by the Recent
+  // load branch) so the strip is never empty.
+  return "recent";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
 window._sdHomeStripFilter = "";
