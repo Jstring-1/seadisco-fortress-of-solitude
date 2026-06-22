@@ -6217,6 +6217,53 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// Dig-tab sampler. Returns vinyl releases that NO ONE on the site
+// has opened yet — i.e. zero rows in user_recent_views for the
+// (discogs_id, entity_type) pair. Pure long-tail discovery: by
+// definition these cards have never surfaced in anyone's Recent.
+// Same TABLESAMPLE strategy as Feed so the anti-join doesn't have
+// to scan the entire release_cache.
+export async function getFeedDigAlbums(
+  limit = 48,
+  excludeIds?: Array<{ id: number; type: string }>,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    const sql = `
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM release_cache rc TABLESAMPLE SYSTEM (10)
+       WHERE rc.type IN ('master','release')
+         AND rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         AND NOT EXISTS (
+           SELECT 1
+             FROM user_recent_views urv
+            WHERE urv.discogs_id  = rc.discogs_id
+              AND urv.entity_type = rc.type
+         )
+         ${excludeClause}
+       ORDER BY RANDOM()
+       LIMIT $1`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedDigAlbums]", e?.message ?? e);
+    return [];
+  }
+}
+
 // Rare-tab sampler. Returns releases that satisfy ALL three:
 //   - have <= 3   (basically nobody owns it)
 //   - want >= 20  (but lots of people want it)

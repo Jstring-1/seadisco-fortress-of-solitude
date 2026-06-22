@@ -530,14 +530,16 @@ e.g.  miles davis | coltrane
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" class="rr-header">
       <div id="random-records-title-wrap" class="rr-title-wrap">
-        <!-- Tab order: Recent / Feed / Rare / Suggestions. Feed
-             stays the default landing tab so anon visitors (no Recent
-             history) still land on something curated. -->
+        <!-- Tab order: Recent / Feed / Rare / Dig / Suggestions.
+             Feed stays the default landing tab so anon visitors (no
+             Recent history) still land on something curated. -->
         <span id="rr-tab-recent" class="rr-tab" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
         <span id="rr-tab-sep" class="rr-tab-sep">/</span>
         <span id="rr-tab-feed" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('feed')" title="Random sample of vinyl from the catalog cache — explore freely">Feed</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-rare" class="rr-tab" onclick="_sdSwitchHomeStripTab('rare')" title="Early-era vinyl with many collectors wanting it and almost no one owning it">Rare</span>
+        <span class="rr-tab-sep">/</span>
+        <span id="rr-tab-dig" class="rr-tab" onclick="_sdSwitchHomeStripTab('dig')" title="Long-tail vinyl that nobody on SeaDisco has opened yet — pure crate digging">Dig</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')" title="Personalized vinyl suggestions generated hourly from your library's taste profile">Suggestions</span>
         <!-- Legacy id kept as a hidden node so older code paths that
