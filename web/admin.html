@@ -2388,7 +2388,7 @@ async function loadAdminBehavior() {
       const m = String(dt.getMinutes()).padStart(2, "0");
       const ampm = h >= 12 ? "p" : "a";
       h = h % 12; if (h === 0) h = 12;
-      return `${M}/${D}/${YY}, ${h}:${m}${ampm}`;
+      return `${M}/${D}/${YY} ${h}:${m}${ampm}`;
     };
     const fmt2 = (recent, total) => {
       const r = recent ?? 0; const t = total ?? 0;
