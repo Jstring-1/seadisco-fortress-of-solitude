@@ -530,12 +530,17 @@ e.g.  miles davis | coltrane
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" class="rr-header">
       <div id="random-records-title-wrap" class="rr-title-wrap">
-        <!-- Tab order: Recent / Feed / Rare / Dig / Suggestions.
-             Feed stays the default landing tab so anon visitors (no
-             Recent history) still land on something curated. -->
+        <!-- Tab order: Recent / Feed / Active / Played / Rare /
+             Dig / Suggestions. Feed stays the default landing tab
+             so anon visitors (no Recent history) still land on
+             something curated. -->
         <span id="rr-tab-recent" class="rr-tab" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
         <span id="rr-tab-sep" class="rr-tab-sep">/</span>
         <span id="rr-tab-feed" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('feed')" title="Random sample of vinyl from the catalog cache — explore freely">Feed</span>
+        <span class="rr-tab-sep">/</span>
+        <span id="rr-tab-active" class="rr-tab" onclick="_sdSwitchHomeStripTab('active')" title="Vinyl most-opened on SeaDisco in the last 90 days">Active</span>
+        <span class="rr-tab-sep">/</span>
+        <span id="rr-tab-played" class="rr-tab" onclick="_sdSwitchHomeStripTab('played')" title="Vinyl with the most YouTube plays on SeaDisco in the last 90 days">Played</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-rare" class="rr-tab" onclick="_sdSwitchHomeStripTab('rare')" title="Early-era vinyl with many collectors wanting it and almost no one owning it">Rare</span>
         <span class="rr-tab-sep">/</span>
