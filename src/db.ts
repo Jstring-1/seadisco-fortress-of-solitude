@@ -544,6 +544,25 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS genre_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
   await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS style_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
 
+  // ── Catalog-tab pool cache (Feed/Rare/Dig/Active/Played) ─────────────
+  // Heavy SQL (TABLESAMPLE+scoring, multi-genre EXISTS, GROUP BY across
+  // all users) takes seconds per request. The pool worker runs each
+  // mode's full query every ~2h and writes the top N (id, type, score)
+  // tuples here; per-request the endpoint just samples this small
+  // table. Score is the weight the per-request sampler reads for the
+  // -LN(R)/score reservoir (raw open count, want count, etc.).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS feed_cache_pool (
+      mode         TEXT        NOT NULL,
+      discogs_id   INTEGER     NOT NULL,
+      entity_type  TEXT        NOT NULL,
+      score        REAL        NOT NULL DEFAULT 1.0,
+      refreshed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (mode, discogs_id, entity_type)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS feed_cache_pool_mode_idx ON feed_cache_pool (mode, refreshed_at DESC)`);
+
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
   // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -6740,6 +6759,117 @@ export async function getFeedRandomAlbums(
   } catch (e: any) {
     console.error("[getFeedRandomAlbums]", e?.message ?? e);
     return [];
+  }
+}
+
+// ── Catalog-tab pool cache ───────────────────────────────────────────
+// The five catalog modes (Feed / Rare / Dig / Active / Played) each
+// have a heavy SQL behind them. We materialize a pool of ~500
+// candidates per mode every couple hours and serve per-request from
+// the pool — fast enough that switching tabs feels instant. Variety
+// per request comes from ORDER BY RANDOM() within the pool; the
+// weighting that picked the candidates already happened at refresh
+// time, so 500 random items from the pool are already biased toward
+// "good cards" by the mode's own definition.
+
+export type FeedPoolMode = "feed" | "rare" | "dig" | "active" | "played";
+
+const _FEED_POOL_TARGET = 500;
+
+// Read the cached pool for `mode` and return up to `limit` cards.
+// excludeIds suppresses cards the client already showed. The JOIN to
+// release_cache hydrates the snapshot the endpoint needs.
+export async function getFeedPoolItems(
+  mode: FeedPoolMode,
+  limit = 48,
+  excludeIds?: Array<{ id: number; type: string }>,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const params: any[] = [mode, cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(exclude.map(e => Number(e.id)));
+      const idIdx = params.length;
+      params.push(exclude.map(e => String(e.type)));
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    const sql = `
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM feed_cache_pool fcp
+        JOIN release_cache rc
+          ON rc.discogs_id = fcp.discogs_id
+         AND rc.type       = fcp.entity_type
+       WHERE fcp.mode = $1
+         AND rc.seen_at IS NOT NULL
+         ${excludeClause}
+       ORDER BY RANDOM()
+       LIMIT $2`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedPoolItems]", e?.message ?? e);
+    return [];
+  }
+}
+
+// Returns the refresh age of each pool. Used by the scheduler so it
+// can decide whether a particular mode is stale.
+export async function getFeedPoolFreshness(): Promise<Record<string, { count: number; refreshedAt: string | null }>> {
+  const out: Record<string, { count: number; refreshedAt: string | null }> = {};
+  try {
+    const r = await getPool().query(
+      `SELECT mode, COUNT(*)::int AS n, MAX(refreshed_at) AS refreshed_at
+         FROM feed_cache_pool GROUP BY mode`,
+    );
+    for (const row of r.rows) {
+      out[row.mode] = { count: Number(row.n) || 0, refreshedAt: row.refreshed_at ?? null };
+    }
+  } catch (e: any) {
+    console.error("[getFeedPoolFreshness]", e?.message ?? e);
+  }
+  return out;
+}
+
+// Run the slow per-mode query at POOL_TARGET size and replace the
+// stored pool for that mode. Called by the scheduler every ~2h and
+// also on-demand from the admin button. Wraps in a transaction so
+// readers never see a half-populated mode.
+export async function refreshFeedPool(mode: FeedPoolMode): Promise<{ inserted: number }> {
+  let rows: Array<{ id: number; type: string }> = [];
+  switch (mode) {
+    case "feed":   rows = await getFeedRandomAlbums(_FEED_POOL_TARGET, "any", []); break;
+    case "rare":   rows = await getFeedRareAlbums(_FEED_POOL_TARGET, [], null);     break;
+    case "dig":    rows = await getFeedDigAlbums(_FEED_POOL_TARGET, []);            break;
+    case "active": rows = await getFeedActiveAlbums(_FEED_POOL_TARGET, []);         break;
+    case "played": rows = await getFeedPlayedAlbums(_FEED_POOL_TARGET, []);         break;
+  }
+  const ids   = rows.map(r => Number(r.id)).filter(Number.isFinite);
+  const types = rows.map(r => String(r.type));
+  if (!ids.length) return { inserted: 0 };
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM feed_cache_pool WHERE mode = $1`, [mode]);
+    await client.query(
+      `INSERT INTO feed_cache_pool (mode, discogs_id, entity_type, score, refreshed_at)
+         SELECT $1, x.id, x.ty, 1.0, NOW()
+           FROM unnest($2::int[], $3::text[]) AS x(id, ty)
+       ON CONFLICT (mode, discogs_id, entity_type) DO UPDATE
+         SET score = EXCLUDED.score, refreshed_at = NOW()`,
+      [mode, ids, types],
+    );
+    await client.query("COMMIT");
+    console.log(`[refreshFeedPool] ${mode}: ${ids.length} rows`);
+    return { inserted: ids.length };
+  } catch (e: any) {
+    await client.query("ROLLBACK");
+    console.error(`[refreshFeedPool] ${mode}:`, e?.message ?? e);
+    return { inserted: 0 };
+  } finally {
+    client.release();
   }
 }
 
