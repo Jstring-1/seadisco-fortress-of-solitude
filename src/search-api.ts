@@ -6936,13 +6936,18 @@ app.get("/api/user/personal-suggestions", async (req, res) => {
     // strip pages through it client-side via Load More.
     const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
     const rows = await getUserPersonalSuggestions(userId, limit);
-    const items = rows.map(row => ({
+    const allItems = rows.map(row => ({
       id: row.discogs_id,
       type: row.entity_type,
       ...(row.data ?? {}),
       _suggestionScore: row.score,
       _suggestionGeneratedAt: row.generated_at,
     }));
+    // Vinyl-only filter to match the Feed / Rare tabs. Suggestions
+    // are pre-generated against masters and releases; the snapshot's
+    // `format` array (built by the generator from data.formats) is
+    // the source of truth here.
+    const items = allItems.filter((it: any) => Array.isArray(it.format) && it.format.includes("Vinyl"));
     res.json({ items, generatedAt: rows[0]?.generated_at ?? null });
   } catch (e: any) {
     console.error("[personal-suggestions GET]", e?.message ?? e);

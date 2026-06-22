@@ -6280,6 +6280,7 @@ export async function getFeedRareAlbums(
          WHERE rc.type IN ('master','release')
            AND rc.seen_at IS NOT NULL
            AND rc.data->'genres' ? $${gIdx}
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN ${strictWindow[0]} AND ${strictWindow[1]}
            AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
            AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
@@ -6327,6 +6328,7 @@ export async function getFeedRareAlbums(
                'Stage & Screen','Latin','Rock','Pop','Reggae',
                'Funk / Soul','Brass & Military','Electronic','Hip Hop'
              ]
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN 1900 AND 1999
            AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
            AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
@@ -6538,6 +6540,7 @@ export async function getFeedRandomAlbums(
             ON pc.discogs_release_id = rc.discogs_id
            AND rc.type = 'release'
           ${where}
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
       ),
       scored AS (
         SELECT id, type, data, cached_at,
