@@ -2375,7 +2375,21 @@ async function loadAdminBehavior() {
       return;
     }
     rows = _adminBehaviorSortRows(rows);
-    const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+    // Compact "3/17/26, 7:20p" formatter — saves a column-worth of
+    // horizontal space vs toLocaleString's "3/17/2026, 7:20:05 PM".
+    const fmtDate = (d) => {
+      if (!d) return "—";
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return "—";
+      const M = dt.getMonth() + 1;
+      const D = dt.getDate();
+      const YY = String(dt.getFullYear()).slice(-2);
+      let h = dt.getHours();
+      const m = String(dt.getMinutes()).padStart(2, "0");
+      const ampm = h >= 12 ? "p" : "a";
+      h = h % 12; if (h === 0) h = 12;
+      return `${M}/${D}/${YY}, ${h}:${m}${ampm}`;
+    };
     const fmt2 = (recent, total) => {
       const r = recent ?? 0; const t = total ?? 0;
       return `<span style="color:#fff">${r}</span><span style="color:var(--muted)"> / ${t}</span>`;
