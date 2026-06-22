@@ -2312,6 +2312,49 @@ async function loadAdminSuggestions() {
 }
 window.loadAdminSuggestions = loadAdminSuggestions;
 
+// Sort state for the user-behavior table. Persisted only in memory.
+// Defaults: signed_up_at desc (newest accounts first) — the question
+// the admin most often asks ("who are my newest users?").
+let _adminBehaviorSort = { col: "signed_up_at", dir: "desc" };
+const _ADMIN_BEHAVIOR_NUMERIC_COLS = new Set([
+  "favorites", "suggestions_pool", "suggestions_favorited",
+  "album_clicks_total", "album_clicks_30d",
+  "player_plays_total", "player_plays_30d",
+  "searches_total",     "searches_30d",
+]);
+const _ADMIN_BEHAVIOR_DATE_COLS = new Set(["last_active", "signed_up_at"]);
+function _adminBehaviorSortRows(rows) {
+  const { col, dir } = _adminBehaviorSort;
+  const mul = dir === "asc" ? 1 : -1;
+  const isNum  = _ADMIN_BEHAVIOR_NUMERIC_COLS.has(col);
+  const isDate = _ADMIN_BEHAVIOR_DATE_COLS.has(col);
+  return rows.slice().sort((a, b) => {
+    const av = a?.[col];
+    const bv = b?.[col];
+    const aMissing = av == null || av === "";
+    const bMissing = bv == null || bv === "";
+    // Always push missing to bottom regardless of direction so empty
+    // cells don't crowd the top when sorting ascending.
+    if (aMissing && !bMissing) return 1;
+    if (!aMissing && bMissing) return -1;
+    if (aMissing && bMissing) return 0;
+    if (isDate) return (new Date(av).getTime() - new Date(bv).getTime()) * mul;
+    if (isNum)  return (Number(av) - Number(bv)) * mul;
+    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * mul;
+  });
+}
+function _adminBehaviorSortBy(col) {
+  if (_adminBehaviorSort.col === col) {
+    _adminBehaviorSort.dir = _adminBehaviorSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _adminBehaviorSort.col = col;
+    // Numeric / date columns default to desc; the username column to asc.
+    _adminBehaviorSort.dir = (_ADMIN_BEHAVIOR_NUMERIC_COLS.has(col) || _ADMIN_BEHAVIOR_DATE_COLS.has(col)) ? "desc" : "asc";
+  }
+  loadAdminBehavior();
+}
+window._adminBehaviorSortBy = _adminBehaviorSortBy;
+
 async function loadAdminBehavior() {
   const el = document.getElementById("behavior-list");
   if (!el) return;
@@ -2320,28 +2363,35 @@ async function loadAdminBehavior() {
     const r = await apiFetch("/api/admin/behavior-stats");
     if (!r.ok) { el.textContent = "Could not load behavior stats."; return; }
     const j = await r.json();
-    const rows = Array.isArray(j?.items) ? j.items : [];
+    let rows = Array.isArray(j?.items) ? j.items : [];
     if (!rows.length) {
       el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No users yet.</div>`;
       return;
     }
+    rows = _adminBehaviorSortRows(rows);
     const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
     const fmt2 = (recent, total) => {
       const r = recent ?? 0; const t = total ?? 0;
       return `<span style="color:#fff">${r}</span><span style="color:var(--muted)"> / ${t}</span>`;
     };
+    const th = (key, label, align = "left", extra = "") => {
+      const isActive = _adminBehaviorSort.col === key;
+      const arrow = isActive ? (_adminBehaviorSort.dir === "asc" ? " ↑" : " ↓") : "";
+      return `<th style="padding:0.3rem 0.5rem;text-align:${align};cursor:pointer;user-select:none${isActive ? ';color:var(--text)' : ''}" onclick="_adminBehaviorSortBy('${key}')" title="Sort by ${label.replace(/<[^>]*>/g, '').trim()}">${label}${arrow}${extra}</th>`;
+    };
     // Two-line column header so the "30d / total" pair reads
     // unambiguously without burning horizontal space.
     const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
       <tr>
-        <th style="padding:0.3rem 0.5rem">User</th>
-        <th style="padding:0.3rem 0.5rem;text-align:right">Favs</th>
-        <th style="padding:0.3rem 0.5rem;text-align:right">Sugg pool</th>
-        <th style="padding:0.3rem 0.5rem;text-align:right">Sugg fav'd</th>
-        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Album clicks<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
-        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Plays<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
-        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Searches<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
-        <th style="padding:0.3rem 0.5rem">Last active</th>
+        ${th("username",              "User",         "left")}
+        ${th("favorites",             "Favs",         "right")}
+        ${th("suggestions_pool",      "Sugg pool",    "right")}
+        ${th("suggestions_favorited", "Sugg fav'd",   "right")}
+        ${th("album_clicks_total",    "Album clicks<br><span style=\"font-size:0.62rem;text-transform:none;letter-spacing:0\">30d / total</span>", "right")}
+        ${th("player_plays_total",    "Plays<br><span style=\"font-size:0.62rem;text-transform:none;letter-spacing:0\">30d / total</span>",       "right")}
+        ${th("searches_total",        "Searches<br><span style=\"font-size:0.62rem;text-transform:none;letter-spacing:0\">30d / total</span>",    "right")}
+        ${th("signed_up_at",          "Signed up",    "left")}
+        ${th("last_active",           "Last active",  "left")}
       </tr></thead>`;
     const body = rows.map(u => {
       // Display priority: Clerk username (fresh handle) → Discogs
@@ -2363,6 +2413,7 @@ async function loadAdminBehavior() {
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.album_clicks_30d, u.album_clicks_total)}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.player_plays_30d, u.player_plays_total)}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.searches_30d, u.searches_total)}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.signed_up_at))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.last_active))}</td>
     </tr>`;
     }).join("");
