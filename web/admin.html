@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260621.2f1de4d" />
+  <link rel="stylesheet" href="/style.css?v=260621.86c1dec" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260621.2f1de4d"></script>
-<script defer src="/shared.js?v=260621.2f1de4d"></script>
+<script defer src="/utils.js?v=260621.86c1dec"></script>
+<script defer src="/shared.js?v=260621.86c1dec"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -363,8 +363,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260621.2f1de4d"></script>
-<script defer src="/blues-admin.js?v=260621.2f1de4d"></script>
+<script defer src="/modal.js?v=260621.86c1dec"></script>
+<script defer src="/blues-admin.js?v=260621.86c1dec"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -2323,14 +2323,20 @@ const _ADMIN_BEHAVIOR_NUMERIC_COLS = new Set([
   "searches_total",     "searches_30d",
 ]);
 const _ADMIN_BEHAVIOR_DATE_COLS = new Set(["last_active", "signed_up_at"]);
+// Read the effective "signed up" timestamp — Clerk's account
+// creation when we have it, else the user_tokens.created_at proxy.
+function _adminBehaviorSignedUp(u) {
+  return u?.clerk_created_at || u?.signed_up_at || null;
+}
 function _adminBehaviorSortRows(rows) {
   const { col, dir } = _adminBehaviorSort;
   const mul = dir === "asc" ? 1 : -1;
   const isNum  = _ADMIN_BEHAVIOR_NUMERIC_COLS.has(col);
   const isDate = _ADMIN_BEHAVIOR_DATE_COLS.has(col);
+  const readCol = (u) => col === "signed_up_at" ? _adminBehaviorSignedUp(u) : u?.[col];
   return rows.slice().sort((a, b) => {
-    const av = a?.[col];
-    const bv = b?.[col];
+    const av = readCol(a);
+    const bv = readCol(b);
     const aMissing = av == null || av === "";
     const bMissing = bv == null || bv === "";
     // Always push missing to bottom regardless of direction so empty
@@ -2413,7 +2419,7 @@ async function loadAdminBehavior() {
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.album_clicks_30d, u.album_clicks_total)}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.player_plays_30d, u.player_plays_total)}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.searches_30d, u.searches_total)}</td>
-      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.signed_up_at))}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem" title="${u.clerk_created_at ? 'Clerk signup' : 'Discogs connected (Clerk timestamp not yet cached)'}">${escHtml(fmtDate(_adminBehaviorSignedUp(u)))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.last_active))}</td>
     </tr>`;
     }).join("");
