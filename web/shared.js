@@ -460,7 +460,12 @@ function _sdRefreshListHeaderActive(header, grid) {
 // alongside title/artist. Idempotent — re-running on the same card
 // updates the spans in place.
 function _sdStampListCells(card) {
-  if (!card || card.dataset?.sdListStamped === "1") return;
+  if (!card) return;
+  // Idempotent: only re-stamp if the previously stamped cells are
+  // missing. A card re-render (innerHTML reset by its owner) wipes the
+  // appended spans while leaving the dataset flag on the element, so a
+  // strict early-return on the flag would leave the row blank forever.
+  if (card.dataset?.sdListStamped === "1" && card.querySelector(":scope > .sd-list-year")) return;
   const bottom = card.querySelector(".card-bottom");
   let year = "", label = "", cat = "", format = "";
   if (bottom) {
