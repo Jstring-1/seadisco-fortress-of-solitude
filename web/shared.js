@@ -400,11 +400,14 @@ function _sdInstallListHeader(grid) {
   const header = document.createElement("div");
   header.className = "sd-list-header";
   header.dataset.forGridId = grid.id || "_anon";
+  // Three sortable columns line up with the CSS grid track in
+  // style.css (--sd-list-cols). Details rolls year + format + label
+  // into one inline line; year/format are still parseable via the
+  // sort helper if you click Details to sort.
   const cols = [
-    { key: "title",  label: "Title",  cls: "sd-lh-title"  },
-    { key: "artist", label: "Artist", cls: "sd-lh-artist" },
-    { key: "year",   label: "Year",   cls: "sd-lh-year"   },
-    { key: "format", label: "Format", cls: "sd-lh-format" },
+    { key: "title",   label: "Title",   cls: "sd-lh-title"   },
+    { key: "artist",  label: "Artist",  cls: "sd-lh-artist"  },
+    { key: "details", label: "Details", cls: "sd-lh-details" },
   ];
   // Spacer for the thumb column on the left.
   header.innerHTML = `<span class="sd-lh-thumb"></span>` + cols.map(c =>
@@ -449,15 +452,21 @@ function _sdReadCardSortValue(card, key) {
   if (key === "title")  return (card.querySelector(".card-title")?.textContent || "").trim();
   if (key === "artist") return (card.querySelector(".card-artist")?.textContent || "").trim();
   if (key === "year") {
-    // Parse 4-digit year from the bottom strip (e.g. "1962 • LP • US").
     const txt = (card.querySelector(".card-bottom")?.textContent || card.textContent || "");
     const m = txt.match(/\b(18|19|20)\d{2}\b/);
     return m ? m[0] : "";
   }
   if (key === "format") {
     const txt = (card.querySelector(".card-bottom")?.textContent || "");
-    // Heuristic: first token that looks like a format/media word.
     const m = txt.match(/\b(LP|EP|7"|10"|12"|45|78|CD|Cassette|Vinyl|Shellac|Single|Album)\b/i);
+    return m ? m[0] : "";
+  }
+  if (key === "details") {
+    // Default sort axis for the rolled-up details column is year —
+    // it's the most useful ordering for record lists. Fall back to
+    // the raw text so missing-year rows still sort deterministically.
+    const txt = (card.querySelector(".card-bottom")?.textContent || card.textContent || "");
+    const m = txt.match(/\b(18|19|20)\d{2}\b/);
     return m ? m[0] : "";
   }
   return "";
@@ -468,7 +477,7 @@ function _sdApplyListSort(grid) {
   const [key, dir] = grid.dataset.listSort.split(":");
   const cards = Array.from(grid.children).filter(el => el.classList?.contains("card") || el.classList?.contains("recent-wrap"));
   const mul = dir === "asc" ? 1 : -1;
-  const numeric = key === "year";
+  const numeric = key === "year" || key === "details";
   cards.sort((a, b) => {
     const av = _sdReadCardSortValue(a, key);
     const bv = _sdReadCardSortValue(b, key);
@@ -1735,7 +1744,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260622.b58b6f1";
+  const SITE_VERSION = "build 260622.843f74c";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
