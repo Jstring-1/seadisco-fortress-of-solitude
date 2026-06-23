@@ -2464,6 +2464,22 @@ async function loadRandomRecords(more) {
         }</div>`;
         return;
       }
+      // Catalog tabs (Rare / Dig / Active / Played): keep the strip
+      // visible so the genre / sort / filter row stays usable — show
+      // an empty-state instead of collapsing the whole section. Hiding
+      // the wrap previously made the dropdown vanish along with the
+      // grid, which the user can't recover from without switching tabs.
+      const _EMPTY_KEEP_MODES = new Set(["rare", "dig", "active", "played"]);
+      if (_EMPTY_KEEP_MODES.has(window._sdHomeStripMode)) {
+        wrap.style.display = "";
+        const stripGenre = (typeof _sdHomeStripGenreCurrent === "function") ? _sdHomeStripGenreCurrent() : "";
+        const modeLabel = window._sdHomeStripMode.charAt(0).toUpperCase() + window._sdHomeStripMode.slice(1);
+        const msg = stripGenre
+          ? `No ${modeLabel} matches for genre "${stripGenre}" yet. Try “All genres” or another tab.`
+          : `No ${modeLabel} matches yet — the catalog sampler returned nothing for this filter.`;
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">${msg}</div>`;
+        return;
+      }
       wrap.style.display = "none";
       return;
     }
