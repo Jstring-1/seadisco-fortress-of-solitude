@@ -1338,7 +1338,7 @@ async function lexiconSeedBundled() {
   const status = document.getElementById("lexicon-status");
   if (status) status.textContent = "Seeding…";
   try {
-    const r = await fetch("/api/admin/blues-words/seed-bundled", { method: "POST" });
+    const r = await apiFetch("/api/admin/blues-words/seed-bundled", { method: "POST" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
     const files = j.files || [];
@@ -1366,7 +1366,7 @@ async function lexiconUploadJson(event) {
       return;
     }
     if (status) status.textContent = `Uploading ${entries.length} entries…`;
-    const r = await fetch("/api/admin/blues-words/ingest", {
+    const r = await apiFetch("/api/admin/blues-words/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entries }),
