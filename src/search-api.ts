@@ -8235,6 +8235,250 @@ app.get("/api/admin/blues/export.csv", async (req, res) => {
   }
 });
 
+// ── Release cache export (admin) ─────────────────────────────────────
+// Streamed export of release_cache rows. Supports filters across
+// genres/styles/year/country/format/has-youtube and three formats
+// (csv | json | ndjson). Streams in 2k-row chunks so a multi-million
+// row dump doesn't OOM the worker.
+function _buildReleaseCacheWhere(q: any): { sql: string; args: any[] } {
+  const where: string[] = [];
+  const args: any[] = [];
+  const type = String(q.type || "").trim().toLowerCase();
+  if (type === "release" || type === "master") {
+    args.push(type);
+    where.push(`rc.type = $${args.length}`);
+  }
+  const genre = String(q.genre || "").trim();
+  if (genre) {
+    args.push(JSON.stringify([genre]));
+    where.push(`rc.data->'genres' @> $${args.length}::jsonb`);
+  }
+  const style = String(q.style || "").trim();
+  if (style) {
+    args.push(JSON.stringify([style]));
+    where.push(`rc.data->'styles' @> $${args.length}::jsonb`);
+  }
+  const yearFrom = parseInt(String(q.year_from ?? ""), 10);
+  if (Number.isFinite(yearFrom)) {
+    args.push(yearFrom);
+    where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 0) >= $${args.length}`);
+  }
+  const yearTo = parseInt(String(q.year_to ?? ""), 10);
+  if (Number.isFinite(yearTo)) {
+    args.push(yearTo);
+    where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= $${args.length}`);
+  }
+  const country = String(q.country || "").trim();
+  if (country) {
+    args.push(`%${country.toLowerCase()}%`);
+    where.push(`LOWER(COALESCE(rc.data->>'country', '')) LIKE $${args.length}`);
+  }
+  const formatContains = String(q.format || "").trim();
+  if (formatContains) {
+    args.push(JSON.stringify([{ name: formatContains }]));
+    where.push(`rc.data->'formats' @> $${args.length}::jsonb`);
+  }
+  if (String(q.has_youtube || "") === "1") {
+    where.push(`rc.data->'videos' IS NOT NULL AND jsonb_array_length(rc.data->'videos') > 0`);
+  }
+  return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
+}
+
+function _releaseCacheOrderBy(q: any): string {
+  const sort = String(q.sort || "cached_at").toLowerCase();
+  const dir  = String(q.order || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+  const map: Record<string, string> = {
+    cached_at:  "rc.cached_at",
+    year:       "COALESCE(NULLIF(rc.data->>'year','')::int, 0)",
+    title:      "LOWER(COALESCE(rc.data->>'title',''))",
+    discogs_id: "rc.discogs_id",
+  };
+  const col = map[sort] || map.cached_at;
+  return ` ORDER BY ${col} ${dir} `;
+}
+
+function _csvEscape(v: any): string {
+  if (v == null) return "";
+  let s: string;
+  if (Array.isArray(v)) {
+    const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+    s = isComplex ? JSON.stringify(v) : v.join(" | ");
+  } else if (typeof v === "object") {
+    s = JSON.stringify(v);
+  } else {
+    s = String(v);
+  }
+  if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+app.get("/api/admin/release-cache/preview", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const { sql, args } = _buildReleaseCacheWhere(req.query);
+    const r = await getPool().query(
+      `SELECT COUNT(*)::bigint AS n FROM release_cache rc ${sql}`,
+      args,
+    );
+    res.json({ count: Number(r.rows[0]?.n ?? 0) });
+  } catch (err: any) {
+    console.error("[release-cache preview]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+app.get("/api/admin/release-cache/export", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const format = String(req.query.format || "csv").toLowerCase();
+  if (!["csv", "json", "ndjson"].includes(format)) {
+    res.status(400).json({ error: "format must be csv | json | ndjson" }); return;
+  }
+  const { sql: whereSql, args } = _buildReleaseCacheWhere(req.query);
+  const orderSql = _releaseCacheOrderBy(req.query);
+  const limit = Math.max(1, Math.min(parseInt(String(req.query.limit ?? "1000000"), 10) || 1000000, 1000000));
+  const date = new Date().toISOString().slice(0, 10);
+  const ext = format === "json" ? "json" : (format === "ndjson" ? "ndjson" : "csv");
+  res.setHeader("Content-Type",
+    format === "csv" ? "text/csv; charset=utf-8"
+    : format === "ndjson" ? "application/x-ndjson; charset=utf-8"
+    : "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-${date}.${ext}"`);
+  const CSV_COLS = [
+    "discogs_id", "type", "title", "artist", "year", "country", "formats",
+    "genres", "styles", "video_count", "want", "have", "cached_at",
+  ];
+  // CSV header + BOM for Excel
+  if (format === "csv") res.write("﻿" + CSV_COLS.join(",") + "\n");
+  if (format === "json") res.write("[\n");
+  const CHUNK = 2000;
+  let written = 0;
+  let firstJson = true;
+  try {
+    for (let offset = 0; offset < limit; offset += CHUNK) {
+      const take = Math.min(CHUNK, limit - offset);
+      const argsWithPaging = args.concat([take, offset]);
+      const r = await getPool().query(
+        `SELECT rc.discogs_id, rc.type, rc.cached_at, rc.data
+           FROM release_cache rc
+           ${whereSql}
+           ${orderSql}
+           LIMIT $${argsWithPaging.length - 1} OFFSET $${argsWithPaging.length}`,
+        argsWithPaging,
+      );
+      if (!r.rows.length) break;
+      for (const row of r.rows) {
+        const d = row.data || {};
+        if (format === "csv") {
+          const flat = [
+            row.discogs_id,
+            row.type,
+            d.title,
+            Array.isArray(d.artists) ? d.artists.map((a: any) => a?.name).filter(Boolean).join(" / ") : null,
+            d.year,
+            d.country,
+            Array.isArray(d.formats) ? d.formats.map((f: any) => f?.name).filter(Boolean).join(" | ") : null,
+            Array.isArray(d.genres) ? d.genres.join(" | ") : null,
+            Array.isArray(d.styles) ? d.styles.join(" | ") : null,
+            Array.isArray(d.videos) ? d.videos.length : 0,
+            d?.community?.want ?? null,
+            d?.community?.have ?? null,
+            row.cached_at?.toISOString?.() ?? row.cached_at,
+          ];
+          res.write(flat.map(_csvEscape).join(",") + "\n");
+        } else if (format === "ndjson") {
+          res.write(JSON.stringify({
+            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+          }) + "\n");
+        } else {
+          if (!firstJson) res.write(",\n");
+          firstJson = false;
+          res.write(JSON.stringify({
+            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+          }));
+        }
+        written++;
+      }
+      if (r.rows.length < take) break;
+    }
+    if (format === "json") res.write("\n]\n");
+    res.end();
+    console.log(`[release-cache export ${format}] ${written} rows`);
+  } catch (err: any) {
+    console.error("[release-cache export]", err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
+    else res.end();
+  }
+});
+
+// ── Artist cache JSON / NDJSON exports (CSV + PDF already exist) ─────
+function _buildBluesArtistsWhere(q: any): { sql: string; args: any[] } {
+  const where: string[] = [];
+  const args: any[] = [];
+  const name = String(q.name || "").trim();
+  if (name) {
+    args.push(`%${name.toLowerCase()}%`);
+    where.push(`LOWER(name) LIKE $${args.length}`);
+  }
+  if (String(q.has_discogs || "") === "1") where.push(`discogs_id IS NOT NULL`);
+  if (String(q.has_wiki   || "") === "1") where.push(`wikipedia_suffix IS NOT NULL AND wikipedia_suffix <> ''`);
+  if (String(q.has_youtube || "") === "1") where.push(`youtube_urls IS NOT NULL AND jsonb_array_length(youtube_urls) > 0`);
+  const town = String(q.hometown || "").trim();
+  if (town) {
+    args.push(`%${town.toLowerCase()}%`);
+    where.push(`LOWER(COALESCE(hometown_region, '')) LIKE $${args.length}`);
+  }
+  const decade = parseInt(String(q.born_decade ?? ""), 10);
+  if (Number.isFinite(decade)) {
+    const start = String(decade);
+    const end   = String(decade + 9);
+    args.push(`^(${start[0]}${start[1]}${start[2]}[${start[3]}-${end[3]}])`);
+    where.push(`SUBSTRING(COALESCE(birth_date,'') FROM '^[0-9]{4}') ~ $${args.length}`);
+  }
+  return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
+}
+
+app.get("/api/admin/blues/export.json", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const { sql, args } = _buildBluesArtistsWhere(req.query);
+    const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0,10)}.json"`);
+    res.send(JSON.stringify(r.rows, null, 2));
+  } catch (err: any) {
+    console.error("[blues export.json]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+app.get("/api/admin/blues/export.ndjson", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const { sql, args } = _buildBluesArtistsWhere(req.query);
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0,10)}.ndjson"`);
+    const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
+    for (const row of r.rows) res.write(JSON.stringify(row) + "\n");
+    res.end();
+  } catch (err: any) {
+    console.error("[blues export.ndjson]", err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
+    else res.end();
+  }
+});
+
+app.get("/api/admin/blues/preview", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const { sql, args } = _buildBluesArtistsWhere(req.query);
+    const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_artists ${sql}`, args);
+    res.json({ count: r.rows[0]?.n ?? 0 });
+  } catch (err: any) {
+    console.error("[blues preview]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // GET /api/admin/lyrics/export.csv — dump every blues_lyrics row.
 // Mirrors the artists CSV: UTF-8 BOM, Excel-friendly quoting, formula-
 // injection guard on cells starting with =/@/+/-. plaintext is the
