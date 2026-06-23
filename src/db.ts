@@ -2659,55 +2659,67 @@ export interface BluesWordEntryInput {
 
 // Upsert a batch of entries; for each headword, REPLACES its citation
 // list with the supplied ones (re-ingesting a volume is the expected
-// path). Returns counts.
+// path). Returns counts. Uses UNNEST batch inserts so a 100+ entry
+// volume lands in 3 queries instead of 500+.
 export async function ingestBluesWords(
   entries: BluesWordEntryInput[],
 ): Promise<{ upserted: number; citations: number }> {
   if (!entries.length) return { upserted: 0, citations: 0 };
+  const norm = entries
+    .map(e => ({
+      ...e,
+      headword: String(e.headword || "").trim().toLowerCase(),
+    }))
+    .filter(e => e.headword);
+  if (!norm.length) return { upserted: 0, citations: 0 };
+  const heads      = norm.map(e => e.headword);
+  const defns      = norm.map(e => String(e.definition ?? ""));
+  const vols       = norm.map(e => e.source_volume ?? null);
+  // Postgres needs a uniform array shape; null entries become empty
+  // arrays (NULL'd by the COALESCE on update path).
+  const pagesArr   = norm.map(e => (e.source_pages && e.source_pages.length ? e.source_pages : []));
+  const citHeads:  string[]         = [];
+  const citPos:    number[]         = [];
+  const citQuotes: (string | null)[] = [];
+  const citArtists:(string | null)[] = [];
+  const citSongs:  (string | null)[] = [];
+  const citYears:  (number | null)[] = [];
+  for (const e of norm) {
+    const list = (e.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
+    list.forEach((c, i) => {
+      citHeads.push(e.headword);
+      citPos.push(c.position ?? i + 1);
+      citQuotes.push(c.quote ?? null);
+      citArtists.push(c.artist ?? null);
+      citSongs.push(c.song_title ?? null);
+      citYears.push(Number.isFinite(c.year as number) ? (c.year as number) : null);
+    });
+  }
   const pool = getPool();
   const client = await pool.connect();
-  let upserted = 0;
-  let citations = 0;
   try {
     await client.query("BEGIN");
-    for (const e of entries) {
-      const head = String(e.headword || "").trim().toLowerCase();
-      if (!head) continue;
+    await client.query(
+      `INSERT INTO blues_words (headword, definition, source_volume, source_pages, updated_at)
+         SELECT h, d, v, CASE WHEN array_length(p, 1) IS NULL THEN NULL ELSE p END, NOW()
+           FROM UNNEST($1::text[], $2::text[], $3::text[], $4::int[][]) AS t(h, d, v, p)
+        ON CONFLICT (headword) DO UPDATE SET
+          definition    = EXCLUDED.definition,
+          source_volume = COALESCE(EXCLUDED.source_volume, blues_words.source_volume),
+          source_pages  = COALESCE(EXCLUDED.source_pages, blues_words.source_pages),
+          updated_at    = NOW()`,
+      [heads, defns, vols, pagesArr],
+    );
+    await client.query(
+      `DELETE FROM blues_word_citations WHERE headword = ANY($1::text[])`,
+      [heads],
+    );
+    if (citHeads.length) {
       await client.query(
-        `INSERT INTO blues_words (headword, definition, source_volume, source_pages, updated_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (headword) DO UPDATE SET
-           definition    = EXCLUDED.definition,
-           source_volume = COALESCE(EXCLUDED.source_volume, blues_words.source_volume),
-           source_pages  = COALESCE(EXCLUDED.source_pages, blues_words.source_pages),
-           updated_at    = NOW()`,
-        [
-          head,
-          String(e.definition ?? ""),
-          e.source_volume ?? null,
-          e.source_pages && e.source_pages.length ? e.source_pages : null,
-        ],
+        `INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
+           SELECT * FROM UNNEST($1::text[], $2::int[], $3::text[], $4::text[], $5::text[], $6::int[])`,
+        [citHeads, citPos, citQuotes, citArtists, citSongs, citYears],
       );
-      // Replace citations
-      await client.query(`DELETE FROM blues_word_citations WHERE headword = $1`, [head]);
-      const cits = (e.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
-      for (let i = 0; i < cits.length; i++) {
-        const c = cits[i];
-        await client.query(
-          `INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            head,
-            c.position ?? i + 1,
-            c.quote ?? null,
-            c.artist ?? null,
-            c.song_title ?? null,
-            Number.isFinite(c.year as number) ? c.year : null,
-          ],
-        );
-        citations++;
-      }
-      upserted++;
     }
     await client.query("COMMIT");
   } catch (e) {
@@ -2716,7 +2728,7 @@ export async function ingestBluesWords(
   } finally {
     client.release();
   }
-  return { upserted, citations };
+  return { upserted: norm.length, citations: citHeads.length };
 }
 
 // Public list/search. q matches headword + definition + citation quote/artist/song_title.
