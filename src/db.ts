@@ -2847,6 +2847,114 @@ export async function updateBluesWord(
   return (r.rowCount ?? 0) > 0;
 }
 
+// Full save from the admin editor: optionally renames the headword,
+// replaces definition/source fields, and replaces the citation list.
+// Returns the (possibly new) headword on success.
+export async function saveBluesWordEntry(
+  originalHeadword: string,
+  patch: {
+    headword: string;
+    definition: string;
+    source_volume?: string | null;
+    source_pages?: number[] | null;
+    citations: BluesWordCitationInput[];
+  },
+): Promise<{ headword: string; renamed: boolean } | null> {
+  const oldHead = String(originalHeadword || "").trim().toLowerCase();
+  const newHead = String(patch.headword || "").trim().toLowerCase();
+  if (!oldHead || !newHead) return null;
+  const renamed = oldHead !== newHead;
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Make sure the old row exists; if not, bail (use ingest for new).
+    const existsR = await client.query(
+      `SELECT 1 FROM blues_words WHERE headword = $1`,
+      [oldHead],
+    );
+    if (!existsR.rowCount) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    if (renamed) {
+      // Block accidental overwrite of a different existing entry.
+      const collideR = await client.query(
+        `SELECT 1 FROM blues_words WHERE headword = $1`,
+        [newHead],
+      );
+      if (collideR.rowCount) {
+        await client.query("ROLLBACK");
+        throw new Error(`Headword "${newHead}" already exists`);
+      }
+      // INSERT new row with patch fields, repoint citations, drop old.
+      await client.query(
+        `INSERT INTO blues_words (headword, definition, source_volume, source_pages, created_at, updated_at)
+         SELECT $1, $2, $3, $4, created_at, NOW()
+           FROM blues_words WHERE headword = $5`,
+        [
+          newHead,
+          patch.definition ?? "",
+          patch.source_volume ?? null,
+          patch.source_pages && patch.source_pages.length ? patch.source_pages : null,
+          oldHead,
+        ],
+      );
+      await client.query(
+        `UPDATE blues_word_citations SET headword = $1 WHERE headword = $2`,
+        [newHead, oldHead],
+      );
+      await client.query(`DELETE FROM blues_words WHERE headword = $1`, [oldHead]);
+    } else {
+      await client.query(
+        `UPDATE blues_words
+            SET definition    = $2,
+                source_volume = $3,
+                source_pages  = $4,
+                updated_at    = NOW()
+          WHERE headword = $1`,
+        [
+          newHead,
+          patch.definition ?? "",
+          patch.source_volume ?? null,
+          patch.source_pages && patch.source_pages.length ? patch.source_pages : null,
+        ],
+      );
+    }
+    // Full replace of citation list
+    await client.query(
+      `DELETE FROM blues_word_citations WHERE headword = $1`,
+      [newHead],
+    );
+    const cits = (patch.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
+    if (cits.length) {
+      const payload = cits.map((c, i) => ({
+        headword:   newHead,
+        position:   c.position ?? i + 1,
+        quote:      c.quote ?? null,
+        artist:     c.artist ?? null,
+        song_title: c.song_title ?? null,
+        year:       Number.isFinite(c.year as number) ? (c.year as number) : null,
+      }));
+      await client.query(
+        `INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
+           SELECT x.headword, x.position, x.quote, x.artist, x.song_title, x.year
+             FROM jsonb_to_recordset($1::jsonb) AS x(
+               headword text, position int, quote text, artist text, song_title text, year int
+             )`,
+        [JSON.stringify(payload)],
+      );
+    }
+    await client.query("COMMIT");
+    return { headword: newHead, renamed };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function deleteBluesWord(headword: string): Promise<boolean> {
   const r = await getPool().query(
     `DELETE FROM blues_words WHERE headword = $1`,
