@@ -9794,6 +9794,7 @@ export async function updateLyricFields(id: number, patch: {
   discogs_release_id?: number | null;
   discogs_master_id?: number | null;
   first_release_year?: number | null;
+  plaintext?: string | null;
 }): Promise<any | null> {
   const sets: string[] = [];
   const params: any[] = [];
@@ -9855,6 +9856,14 @@ export async function updateLyricFields(id: number, patch: {
       // hand-entered vs derived. Resolver respects this — won't
       // overwrite manual entries unless force=1.
       sets.push(`first_release_year = $${params.length}, first_release_source = 'manual', first_release_checked_at = NOW()`);
+    }
+  }
+  if ("plaintext" in patch) {
+    if (patch.plaintext == null) {
+      sets.push(`plaintext = NULL`);
+    } else {
+      params.push(String(patch.plaintext));
+      sets.push(`plaintext = $${params.length}`);
     }
   }
   if (!sets.length) return await getLyricById(id);

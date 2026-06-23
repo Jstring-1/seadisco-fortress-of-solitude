@@ -12086,7 +12086,7 @@ app.get("/api/admin/lyrics/:id", async (req, res) => {
 // "(unspecified)" round-trips. page_title cannot be cleared — an
 // empty title would orphan the row from its source-host UNIQUE
 // constraint — so blank/whitespace titles are rejected with 400.
-app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, res) => {
+app.patch("/api/admin/lyrics/:id", express.json({ limit: "256kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     const id = parseInt(req.params.id, 10);
@@ -12099,6 +12099,7 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
       discogs_release_id?: number | null;
       discogs_master_id?: number | null;
       first_release_year?: number | null;
+      plaintext?: string | null;
     } = {};
     if ("tuning" in (req.body ?? {})) patch.tuning = typeof req.body.tuning === "string" ? req.body.tuning.trim().slice(0, 80) : null;
     if ("artist" in (req.body ?? {})) patch.artist = typeof req.body.artist === "string" ? req.body.artist.trim().slice(0, 200) : null;
@@ -12123,6 +12124,18 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
       const v = req.body.first_release_year;
       const n = Number(v);
       patch.first_release_year = (v === null || v === "" || v === undefined || !Number.isFinite(n)) ? null : Math.max(1850, Math.min(2100, n));
+    }
+    if ("plaintext" in (req.body ?? {})) {
+      // Curator-supplied lyric body. Normalize CRLF → LF and cap at
+      // 200k chars (well above the longest real lyric, low enough to
+      // stop pathological pastes from blowing up the row).
+      const raw = req.body.plaintext;
+      if (raw === null || raw === undefined) {
+        patch.plaintext = null;
+      } else {
+        const s = String(raw).replace(/\r\n?/g, "\n").slice(0, 200_000);
+        patch.plaintext = s === "" ? null : s;
+      }
     }
     const row = await updateLyricFields(id, patch);
     if (!row) { res.status(404).json({ error: "not_found" }); return; }
