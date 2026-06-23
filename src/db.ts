@@ -1662,6 +1662,21 @@ export async function initDb() {
     `CREATE INDEX IF NOT EXISTS blues_word_citations_artist_idx ON blues_word_citations (LOWER(artist))`,
   );
 
+  // One-time wipe: the initial blues_words ingest came from an OCR
+  // pass that produced too much noise to be useful. Schema is kept so
+  // a fresh ingest from cleaner scans can refill the tables later;
+  // app_settings flag keeps this from re-wiping a future re-import.
+  try {
+    const wiped = await getAppSetting("blues_words_wiped_2026_06_23");
+    if (!wiped) {
+      await getPool().query(`TRUNCATE blues_word_citations, blues_words CASCADE`);
+      await setAppSetting("blues_words_wiped_2026_06_23", new Date().toISOString());
+      console.log("[migrate] wiped blues_words + blues_word_citations (one-time, OCR ingest was unreliable)");
+    }
+  } catch (err) {
+    console.warn("[migrate] blues_words wipe failed:", err);
+  }
+
   // ── Lyric favorites + Setlists (admin curator tools) ─────────────────
   // Per-user favorites: (clerk_user_id, lyric_id) PK so a single user
   // can't double-favorite the same lyric. ON DELETE CASCADE on the
@@ -8831,6 +8846,9 @@ const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
   // Sorting DESC puts rows WITH a photo first (find-by-eye),
   // ASC puts MISSING rows first (curation queue).
   has_photo: "CASE WHEN COALESCE(a.photo_url, '') <> '' THEN 1 ELSE 0 END",
+  // Has-wiki: same idea for wikipedia_suffix. ASC surfaces rows still
+  // missing a Wikipedia link so the curator can knock them out.
+  has_wiki:  "CASE WHEN COALESCE(a.wikipedia_suffix, '') <> '' THEN 1 ELSE 0 END",
 };
 
 export async function listBluesArchive(opts: {
@@ -8843,6 +8861,9 @@ export async function listBluesArchive(opts: {
   //   "with_releases_only" → releases but no lyrics
   //   "empty"              → neither
   category?: "with_both" | "with_lyrics_only" | "with_releases_only" | "empty";
+  // When true, restrict to rows whose wikipedia_suffix is NULL or
+  // empty — surfaces artists that still need a Wikipedia link added.
+  noWiki?: boolean;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ rows: Array<any>; total: number }> {
@@ -8881,6 +8902,9 @@ export async function listBluesArchive(opts: {
     else if (opts.category === "with_releases_only") where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
     else if (opts.category === "empty")              where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
   }
+  if (opts.noWiki) {
+    where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
   const offset = Math.max(0, opts.offset ?? 0);
@@ -8906,6 +8930,7 @@ export async function listBluesArchive(opts: {
             a.death_date,
             a.photo_url,
             a.discogs_id,
+            a.wikipedia_suffix,
             COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
             -- lyrics_count: prefer FK count (canonical) but fall back
             -- to the legacy name-match count for any unmigrated rows

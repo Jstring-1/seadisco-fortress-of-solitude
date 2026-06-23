@@ -390,6 +390,11 @@ async function _baLoadList() {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (_baListCategory) params.set("category", _baListCategory);
+  // "No Wikipedia" checkbox — surfaces artists whose wikipedia_suffix
+  // is still NULL / empty so the curator can knock them out quickly.
+  if (document.getElementById("blues-archive-no-wiki")?.checked) {
+    params.set("no_wiki", "1");
+  }
   // Server-side sort — same fix as lyrics. Client-side sort over only
   // the visible 100 rows used to mislead users into thinking the
   // entire DB had been sorted.
@@ -452,6 +457,7 @@ function _baRenderListTable() {
         <col style="width:52px">
         <col>
         <col style="width:110px">
+        <col style="width:60px">
         <col style="width:70px">
         <col style="width:70px">
         <col style="width:80px">
@@ -460,6 +466,7 @@ function _baRenderListTable() {
         ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
         ${_baSortTh("Name",       "name",               S, "_baSortList")}
         ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
+        ${_baSortTh("Wiki",       "has_wiki",           S, "_baSortList", "text-align:center")}
         ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
         ${_baSortTh("Lyrics",     "lyrics_count",       S, "_baSortList", "text-align:right")}
         ${_baSortTh("Releases",   "releases_count",     S, "_baSortList", "text-align:right")}
@@ -509,10 +516,20 @@ function _baRenderListTable() {
           ? `<img src="${escHtml(photo)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;object-fit:cover;border-radius:4px;background:var(--border);display:block" onerror="this.style.visibility='hidden'">`
           : `<span style="width:40px;height:40px;border-radius:4px;background:rgba(255,255,255,0.04);display:inline-block" aria-hidden="true"></span>`;
         const fullName = String(row.name || "");
+        // Wiki indicator: ✓ link if wikipedia_suffix is set, dim dash if
+        // not. Clicking ✓ opens the article in a new tab; clicking the
+        // dash opens the editor on this row so the curator can add a
+        // suffix in one step. stopPropagation so the row-click (which
+        // opens the artist popup) doesn't also fire.
+        const wikiSuffix = (typeof row.wikipedia_suffix === "string") ? row.wikipedia_suffix.trim() : "";
+        const wikiHtml = wikiSuffix
+          ? `<a href="https://en.wikipedia.org/wiki/${encodeURIComponent(wikiSuffix)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Wikipedia: ${escHtml(wikiSuffix)}" style="color:#7bc77b;text-decoration:none">✓</a>`
+          : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="No Wikipedia link — click to edit this artist and add one" style="color:#666;text-decoration:none">—</a>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
           <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${discogsSearchHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
+          <td style="text-align:center;font-size:0.9rem">${wikiHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
           <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
@@ -1077,8 +1094,14 @@ async function _baOpenLyric(id) {
         <datalist id="ba-artist-options">${artistOpts}</datalist>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
           <div>
-            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Artist${artistLink}</label>
-            <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()" autocomplete="off">
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)" title="Type to autocomplete from existing blues_artists rows. On save the server matches your text case-insensitively against blues_artists.name and links the FK. Mismatches save as orphan (no artist_id) until you click '+ Create as new'.">Artist${artistLink}</label>
+            <div style="display:flex;gap:0.3rem;align-items:stretch">
+              <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="Type to search artists…" style="flex:1;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty();_baEditArtistInput()" autocomplete="off">
+              <button type="button" class="archive-btn" onclick="_baEditCreateArtist()" title="Create a new blues_artists row from the typed name and link this lyric to it. Use when no existing artist matches." style="font-size:0.74rem">+ Create as new</button>
+            </div>
+            <div id="ba-edit-artist-status" style="font-size:0.7rem;color:var(--muted);margin-top:0.2rem;min-height:1em">${
+              row.artist_id ? "✓ Linked to existing artist row" : (row.artist ? "Orphan — no FK linked yet. Pick an existing match or click '+ Create as new'." : "")
+            }</div>
           </div>
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Tuning</label>
@@ -1679,7 +1702,7 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings" || tab === "connections" || tab === "lexicon") ? tab : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "tunings" || tab === "connections" || tab === "lexicon" || tab === "export") ? tab : "artists";
   // Toggle button active state. Both classes are kept in sync so any
   // lingering CSS that targets the legacy `is-active` still works; the
   // new loc-tab styling (after the header rearrangement) keys on
@@ -1695,12 +1718,14 @@ function _baSwitchSubtab(tab) {
   const tp = document.getElementById("blues-archive-tunings-panel");
   const cp = document.getElementById("blues-archive-connections-panel");
   const xp = document.getElementById("blues-archive-lexicon-panel");
+  const ep = document.getElementById("blues-archive-export-panel");
   if (ap) ap.style.display = _baSubtab === "artists"     ? "" : "none";
   if (lp) lp.style.display = _baSubtab === "lyrics"      ? "" : "none";
   if (rp) rp.style.display = _baSubtab === "releases"    ? "" : "none";
   if (tp) tp.style.display = _baSubtab === "tunings"     ? "" : "none";
   if (cp) cp.style.display = _baSubtab === "connections" ? "" : "none";
   if (xp) xp.style.display = _baSubtab === "lexicon"     ? "" : "none";
+  if (ep) ep.style.display = _baSubtab === "export"      ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
@@ -1724,6 +1749,8 @@ function _baSwitchSubtab(tab) {
   } else if (_baSubtab === "lexicon") {
     _baLexiconEnsureLetters();
     _baLexiconLoad();
+  } else if (_baSubtab === "export") {
+    _baExportInit();
   }
   // Persist after every subtab switch so a quick "Lyrics → Search"
   // round trip pulls the user back to Lyrics on return.
@@ -1919,8 +1946,15 @@ async function _baToggleLyricFavorite(lyricId) {
   // Optimistic flip — repaint star immediately, undo on error.
   if (wasFav) _baFavoriteIds.delete(id); else _baFavoriteIds.add(id);
   document.querySelectorAll(`[data-ba-fav-id="${id}"]`).forEach(el => {
-    el.textContent = _baFavoriteIds.has(id) ? "★" : "☆";
-    el.title = _baFavoriteIds.has(id) ? "Favorited — click to un-favorite" : "Click to favorite";
+    const isFav = _baFavoriteIds.has(id);
+    el.textContent = isFav ? "★" : "☆";
+    el.title = isFav ? "Favorited — click to un-favorite" : "Click to favorite";
+    // Inline-style swap so the row-stars (yellow / grey) and the
+    // viewer overlay's bigger star both repaint without a re-render.
+    // Overlay button keeps its own yellow when favorited (overlay
+    // stamps colour: #ffd166 in markup); only the row-star anchors
+    // need the grey-when-empty treatment.
+    if (el.tagName === "A") el.style.color = isFav ? "#ffd166" : "var(--muted)";
   });
   try {
     const r = wasFav
@@ -1935,7 +1969,9 @@ async function _baToggleLyricFavorite(lyricId) {
     // Revert the optimistic flip on failure.
     if (wasFav) _baFavoriteIds.add(id); else _baFavoriteIds.delete(id);
     document.querySelectorAll(`[data-ba-fav-id="${id}"]`).forEach(el => {
-      el.textContent = _baFavoriteIds.has(id) ? "★" : "☆";
+      const isFav = _baFavoriteIds.has(id);
+      el.textContent = isFav ? "★" : "☆";
+      if (el.tagName === "A") el.style.color = isFav ? "#ffd166" : "var(--muted)";
     });
     if (typeof showToast === "function") showToast("Favorite update failed", "error");
   }
@@ -2386,7 +2422,11 @@ function _baLyricFavStar(l) {
   const fav = _baFavoriteIds.has(id);
   const glyph = fav ? "★" : "☆";
   const tip = fav ? "Favorited — click to un-favorite" : "Click to favorite";
-  return `<a href="#" data-ba-fav-id="${id}" onclick="event.preventDefault();event.stopPropagation();_baToggleLyricFavorite(${id})" title="${tip}" style="color:#ffd166;text-decoration:none;margin-right:0.25rem;font-size:0.95em">${glyph}</a>`;
+  // Filled = saturated yellow, empty = muted grey so the column reads
+  // as "favorited / not" at a glance. The data-ba-fav-id hook lets
+  // _baToggleLyricFavorite re-stamp the colour without re-rendering.
+  const colour = fav ? "#ffd166" : "var(--muted)";
+  return `<a href="#" data-ba-fav-id="${id}" onclick="event.preventDefault();event.stopPropagation();_baToggleLyricFavorite(${id})" title="${tip}" style="color:${colour};text-decoration:none;margin-right:0.25rem;font-size:0.95em">${glyph}</a>`;
 }
 
 // Small inline badge shown after the lyric title to indicate whether
@@ -3336,6 +3376,99 @@ async function _baExportTuningsCsv() {
   }
 }
 window._baExportTuningsCsv = _baExportTuningsCsv;
+
+// ── Unified Export sub-tab ───────────────────────────────────────────
+// Source → supported format list. Each entry maps to a pair {endpoint,
+// fname} via _baExportRun. Filter inputs live on the panel — only the
+// keys present in `filters` get appended as query params, so endpoints
+// that don't yet recognise a key just ignore it.
+const _BA_EXPORT_FORMATS = {
+  artists:  ["csv", "pdf"],
+  lyrics:   ["csv", "pdf", "doc"],
+  releases: ["csv"],
+  tunings:  ["csv"],
+};
+function _baExportInit() {
+  const src = document.getElementById("ba-export-source");
+  if (!src) return;
+  _baExportOnSourceChange();
+}
+window._baExportInit = _baExportInit;
+
+function _baExportOnSourceChange() {
+  const src = document.getElementById("ba-export-source")?.value || "lyrics";
+  const fmtSel = document.getElementById("ba-export-format");
+  if (fmtSel) {
+    const formats = _BA_EXPORT_FORMATS[src] || ["csv"];
+    fmtSel.innerHTML = formats.map(f => `<option value="${f}">${f.toUpperCase()}</option>`).join("");
+  }
+  // Source-specific filter containers — show the matching strip, hide
+  // the others. Containers that don't exist (e.g. releases / tunings)
+  // simply have no filter UI.
+  document.getElementById("ba-export-filters-lyrics").style.display  = src === "lyrics"  ? "flex" : "none";
+  document.getElementById("ba-export-filters-artists").style.display = src === "artists" ? "flex" : "none";
+}
+window._baExportOnSourceChange = _baExportOnSourceChange;
+
+async function _baExportRun() {
+  const src = document.getElementById("ba-export-source")?.value || "lyrics";
+  const fmt = document.getElementById("ba-export-format")?.value || "csv";
+  const btn = document.getElementById("ba-export-go");
+  const statusEl = document.getElementById("ba-export-status");
+  // Map (source, format) to an endpoint URL + suggested filename. The
+  // endpoints already exist for lyrics CSV/PDF/DOC and artists CSV/PDF;
+  // releases + tunings ship CSV only. Filter inputs are appended as
+  // query params; endpoints that don't recognise them just ignore.
+  const today = new Date().toISOString().slice(0, 10);
+  let endpoint, fname;
+  const qs = new URLSearchParams();
+  if (src === "lyrics") {
+    const q       = document.getElementById("ba-export-lyrics-q")?.value.trim()       || "";
+    const tuning  = document.getElementById("ba-export-lyrics-tuning")?.value.trim()  || "";
+    const favOnly = document.getElementById("ba-export-lyrics-favorites")?.checked    || false;
+    if (q)       qs.set("q", q);
+    if (tuning)  qs.set("tuning", tuning);
+    if (favOnly) qs.set("favorites", "1");
+    endpoint = `/api/admin/lyrics/export.${fmt}`;
+    fname    = `seadisco-lyrics-${today}.${fmt}`;
+  } else if (src === "artists") {
+    const q = document.getElementById("ba-export-artists-q")?.value.trim() || "";
+    if (q) qs.set("q", q);
+    if (fmt === "csv") { endpoint = `/api/admin/blues/export.csv`; fname = `seadisco-blues-${today}.csv`; }
+    else               { endpoint = `/api/admin/blues/export.pdf`; fname = `seadisco-artists-${today}.pdf`; }
+  } else if (src === "releases") {
+    endpoint = `/api/blues-archive/releases/export.${fmt}`;
+    fname    = `seadisco-releases-${today}.${fmt}`;
+  } else if (src === "tunings") {
+    endpoint = `/api/blues-archive/tunings/export.${fmt}`;
+    fname    = `seadisco-tunings-${today}.${fmt}`;
+  } else {
+    if (statusEl) statusEl.textContent = `Unsupported source: ${src}`;
+    return;
+  }
+  const url = qs.toString() ? `${endpoint}?${qs.toString()}` : endpoint;
+  if (btn) { btn.disabled = true; btn.textContent = "Building…"; }
+  if (statusEl) statusEl.textContent = "Requesting…";
+  try {
+    const r = await apiFetch(url);
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const blob = await r.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    if (statusEl) statusEl.textContent = `Downloaded ${fname} (${(blob.size / 1024 / 1024).toFixed(2)} MB).`;
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Export failed: ${e?.message || e}`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Download"; }
+  }
+}
+window._baExportRun = _baExportRun;
 
 // Single dispatcher for every admin-only action that's powered by
 // /blues-admin.js. Each kind maps to a function name; we lazy-load
