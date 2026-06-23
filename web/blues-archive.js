@@ -4246,21 +4246,176 @@ function _baLexiconRowHtml(e, isAdmin) {
     </article>`;
 }
 
+// Open a full-form editor for a single headword. Supports renaming
+// the headword, editing the definition, and add/edit/delete of each
+// citation (quote, artist, song, year). Saves via PUT.
+let _baLexiconEditCurrent = null;
+let _baLexiconEditEl = null;
+
 async function _baLexiconEdit(headword) {
-  const cur = await (await fetch(`/api/blues-words?q=${encodeURIComponent(headword)}&limit=1`)).json().catch(() => ({}));
-  const entry = (cur.rows || []).find(e => e.headword === headword);
-  const next = prompt(`Edit definition for "${headword}":`, entry?.definition ?? "");
-  if (next == null) return;
-  const r = await apiFetch(`/api/admin/blues-words/${encodeURIComponent(headword)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ definition: next }),
-  });
-  if (!r.ok) { showToast?.(`Save failed (HTTP ${r.status})`, "error"); return; }
-  showToast?.("Saved");
-  _baLexiconLoad();
+  // Re-fetch the entry so we always edit against fresh state.
+  const cur = await (await fetch(`/api/blues-words?q=${encodeURIComponent(headword)}&limit=10`)).json().catch(() => ({}));
+  let entry = (cur.rows || []).find(e => e.headword === headword) || { headword, definition: "", citations: [] };
+  // Defensive clone so unsaved edits don't leak into the list cache.
+  _baLexiconEditCurrent = JSON.parse(JSON.stringify(entry));
+  if (!Array.isArray(_baLexiconEditCurrent.citations)) _baLexiconEditCurrent.citations = [];
+  _baLexiconOpenModal();
 }
 window._baLexiconEdit = _baLexiconEdit;
+
+function _baLexiconOpenModal() {
+  if (!_baLexiconEditEl) {
+    _baLexiconEditEl = document.createElement("div");
+    _baLexiconEditEl.id = "ba-lex-modal";
+    _baLexiconEditEl.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem";
+    _baLexiconEditEl.addEventListener("click", e => {
+      if (e.target === _baLexiconEditEl) _baLexiconCloseModal();
+    });
+    document.body.appendChild(_baLexiconEditEl);
+  }
+  _baLexiconRenderModal();
+  _baLexiconEditEl.style.display = "flex";
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("ba-lex-modal");
+}
+
+function _baLexiconCloseModal() {
+  if (_baLexiconEditEl) _baLexiconEditEl.style.display = "none";
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("ba-lex-modal");
+  _baLexiconEditCurrent = null;
+}
+window._baLexiconCloseModal = _baLexiconCloseModal;
+
+function _baLexiconRenderModal() {
+  const e = _baLexiconEditCurrent;
+  if (!_baLexiconEditEl || !e) return;
+  const citsHtml = (e.citations || []).map((c, i) => `
+    <div class="ba-lex-cit-row" data-cit-idx="${i}" style="border:1px solid var(--border);border-radius:4px;padding:0.55rem 0.6rem;margin-bottom:0.55rem;background:rgba(255,255,255,0.02)">
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.35rem">
+        <strong style="font-size:0.78rem;color:var(--muted)">Citation #${i+1}</strong>
+        <button type="button" onclick="_baLexiconCitMove(${i},-1)" title="Move up" style="margin-left:auto;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:3px;font-size:0.75rem;padding:0.1rem 0.35rem;cursor:pointer">↑</button>
+        <button type="button" onclick="_baLexiconCitMove(${i},1)" title="Move down" style="background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:3px;font-size:0.75rem;padding:0.1rem 0.35rem;cursor:pointer">↓</button>
+        <button type="button" onclick="_baLexiconCitRemove(${i})" title="Remove this citation" style="background:transparent;color:#e88;border:1px solid var(--border);border-radius:3px;font-size:0.75rem;padding:0.1rem 0.4rem;cursor:pointer">✕</button>
+      </div>
+      <label style="font-size:0.72rem;color:var(--muted);display:block;margin-bottom:0.3rem">Lyric / quote
+        <textarea oninput="_baLexiconCitSet(${i},'quote',this.value)" rows="3" style="width:100%;padding:0.4rem;font-size:0.85rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">${_baEscHtml(c.quote||"")}</textarea>
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 6em;gap:0.4rem">
+        <label style="font-size:0.72rem;color:var(--muted)">Who used it (artist)
+          <input type="text" value="${_baEscHtml(c.artist||"")}" oninput="_baLexiconCitSet(${i},'artist',this.value)" style="width:100%;padding:0.4rem;font-size:0.85rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+        </label>
+        <label style="font-size:0.72rem;color:var(--muted)">Song title
+          <input type="text" value="${_baEscHtml(c.song||c.song_title||"")}" oninput="_baLexiconCitSet(${i},'song',this.value)" style="width:100%;padding:0.4rem;font-size:0.85rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+        </label>
+        <label style="font-size:0.72rem;color:var(--muted)">Year
+          <input type="number" value="${c.year ?? ""}" oninput="_baLexiconCitSet(${i},'year',this.value)" style="width:100%;padding:0.4rem;font-size:0.85rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+        </label>
+      </div>
+    </div>`).join("");
+  _baLexiconEditEl.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+      <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:0.6rem">
+        <h3 style="margin:0;font-size:1rem">Edit lexicon entry</h3>
+        <span style="font-size:0.72rem;color:var(--muted)">Headword <code>${_baEscHtml(e.headword||"")}</code></span>
+        <button type="button" onclick="_baLexiconCloseModal()" style="margin-left:auto;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.55rem;cursor:pointer">×</button>
+      </div>
+      <div style="overflow-y:auto;padding:0.9rem 1rem">
+        <label style="font-size:0.74rem;color:var(--muted);display:block;margin-bottom:0.6rem">Word / phrase
+          <input id="ba-lex-head-input" type="text" value="${_baEscHtml(e.headword||"")}" maxlength="100" style="width:100%;padding:0.5rem 0.6rem;font-size:0.95rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-weight:600">
+        </label>
+        <label style="font-size:0.74rem;color:var(--muted);display:block;margin-bottom:0.8rem">Definition
+          <textarea id="ba-lex-defn-input" rows="6" style="width:100%;padding:0.55rem 0.65rem;font-size:0.88rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit;line-height:1.4">${_baEscHtml(e.definition||"")}</textarea>
+        </label>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+          <strong style="font-size:0.85rem">Citations</strong>
+          <span style="font-size:0.72rem;color:var(--muted)">Lyrics that use this word + who used it.</span>
+          <button type="button" onclick="_baLexiconCitAdd()" class="archive-btn" style="margin-left:auto;font-size:0.78rem">+ Add citation</button>
+        </div>
+        <div id="ba-lex-cits">${citsHtml || `<div style="color:var(--muted);font-style:italic;padding:0.4rem 0">No citations yet — click + Add citation.</div>`}</div>
+      </div>
+      <div style="padding:0.7rem 1rem;border-top:1px solid var(--border);display:flex;gap:0.5rem;justify-content:flex-end">
+        <button type="button" onclick="_baLexiconCloseModal()" class="archive-btn">Cancel</button>
+        <button type="button" onclick="_baLexiconSaveModal()" class="archive-btn" style="background:var(--accent);color:#000;font-weight:600">Save</button>
+      </div>
+    </div>`;
+}
+
+function _baLexiconCitSet(idx, field, value) {
+  const e = _baLexiconEditCurrent;
+  if (!e || !e.citations[idx]) return;
+  if (field === "year") {
+    const n = parseInt(String(value), 10);
+    e.citations[idx].year = Number.isFinite(n) ? n : null;
+  } else if (field === "song") {
+    e.citations[idx].song = value;
+    e.citations[idx].song_title = value;
+  } else {
+    e.citations[idx][field] = value;
+  }
+}
+window._baLexiconCitSet = _baLexiconCitSet;
+
+function _baLexiconCitAdd() {
+  const e = _baLexiconEditCurrent;
+  if (!e) return;
+  e.citations.push({ quote: "", artist: "", song: "", year: null, position: e.citations.length + 1 });
+  _baLexiconRenderModal();
+}
+window._baLexiconCitAdd = _baLexiconCitAdd;
+
+function _baLexiconCitRemove(idx) {
+  const e = _baLexiconEditCurrent;
+  if (!e || !e.citations[idx]) return;
+  e.citations.splice(idx, 1);
+  _baLexiconRenderModal();
+}
+window._baLexiconCitRemove = _baLexiconCitRemove;
+
+function _baLexiconCitMove(idx, delta) {
+  const e = _baLexiconEditCurrent;
+  if (!e) return;
+  const j = idx + delta;
+  if (j < 0 || j >= e.citations.length) return;
+  const tmp = e.citations[idx];
+  e.citations[idx] = e.citations[j];
+  e.citations[j] = tmp;
+  _baLexiconRenderModal();
+}
+window._baLexiconCitMove = _baLexiconCitMove;
+
+async function _baLexiconSaveModal() {
+  const e = _baLexiconEditCurrent;
+  if (!e) return;
+  const headInput = document.getElementById("ba-lex-head-input");
+  const defnInput = document.getElementById("ba-lex-defn-input");
+  const original  = (e.headword || "").trim().toLowerCase();
+  const newHead   = (headInput?.value || "").trim().toLowerCase();
+  if (!newHead) { showToast?.("Word / phrase can't be empty", "error"); return; }
+  const definition = defnInput?.value ?? "";
+  const citations = (e.citations || []).map((c, i) => ({
+    position:   i + 1,
+    quote:      c.quote ?? null,
+    artist:     c.artist ?? null,
+    song_title: (c.song ?? c.song_title) ?? null,
+    year:       Number.isFinite(c.year) ? c.year : null,
+  }));
+  const r = await apiFetch(`/api/admin/blues-words/${encodeURIComponent(original)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ headword: newHead, definition, citations }),
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    showToast?.(j.error || `Save failed (HTTP ${r.status})`, "error");
+    return;
+  }
+  showToast?.("Saved");
+  _baLexiconCloseModal();
+  // Letter counts may shift if the headword's initial letter changed.
+  _baLexiconLettersLoaded = false;
+  _baLexiconEnsureLetters();
+  _baLexiconLoad();
+}
+window._baLexiconSaveModal = _baLexiconSaveModal;
 
 async function _baLexiconDelete(headword) {
   if (!confirm(`Delete "${headword}" from the lexicon? This can't be undone.`)) return;
