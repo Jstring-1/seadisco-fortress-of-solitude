@@ -4471,7 +4471,6 @@ body.card-mode-list .card-grid {
   flex-direction: column;
   gap: 0;
   align-items: stretch;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 body.card-mode-list .card {
   display: grid;
