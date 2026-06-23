@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260622.757bec5" />
+  <link rel="stylesheet" href="/style.css?v=260622.c13304c" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260622.757bec5"></script>
-<script defer src="/shared.js?v=260622.757bec5"></script>
+<script defer src="/utils.js?v=260622.c13304c"></script>
+<script defer src="/shared.js?v=260622.c13304c"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -142,6 +142,95 @@
           <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Pick a genre + optional style + year range, hit Start. One run at a time.</span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📦 Exports — release_cache &amp; artist cache</summary>
+          <div style="margin-top:0.6rem;display:grid;grid-template-columns:1fr 1fr;gap:0.8rem">
+            <!-- Release cache export -->
+            <div style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.8rem;background:rgba(255,255,255,0.02)">
+              <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Release cache</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem">
+                <label>Type
+                  <select id="rcx-type" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <option value="">Both</option><option value="release">release</option><option value="master">master</option>
+                  </select>
+                </label>
+                <label>Format contains
+                  <input id="rcx-format" type="text" placeholder="Vinyl, CD…" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Genre
+                  <input id="rcx-genre" type="text" placeholder="Blues" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Style
+                  <input id="rcx-style" type="text" placeholder="Country Blues" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Year from
+                  <input id="rcx-year-from" type="number" placeholder="1900" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Year to
+                  <input id="rcx-year-to" type="number" placeholder="1970" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Country contains
+                  <input id="rcx-country" type="text" placeholder="US" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Limit (max 1M)
+                  <input id="rcx-limit" type="number" value="1000000" min="1" max="1000000" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Sort
+                  <select id="rcx-sort" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <option value="cached_at">Cached at</option><option value="year">Year</option><option value="title">Title</option><option value="discogs_id">Discogs ID</option>
+                  </select>
+                </label>
+                <label>Order
+                  <select id="rcx-order" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <option value="desc">Desc</option><option value="asc">Asc</option>
+                  </select>
+                </label>
+              </div>
+              <label style="display:inline-flex;gap:0.3rem;align-items:center;font-size:0.78rem;margin-top:0.4rem">
+                <input id="rcx-has-yt" type="checkbox"> Only rows with YouTube videos
+              </label>
+              <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
+                <button class="admin-btn" type="button" onclick="rcxPreview()">Preview row count</button>
+                <select id="rcx-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option>
+                </select>
+                <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
+                <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
+              </div>
+            </div>
+            <!-- Artist cache export -->
+            <div style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.8rem;background:rgba(255,255,255,0.02)">
+              <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Artist cache (blues_artists)</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem">
+                <label>Name contains
+                  <input id="bax-name" type="text" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Hometown contains
+                  <input id="bax-hometown" type="text" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <label>Born decade
+                  <input id="bax-decade" type="number" step="10" placeholder="1900" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                </label>
+                <div></div>
+              </div>
+              <div style="display:flex;gap:0.6rem;flex-wrap:wrap;font-size:0.78rem;margin-top:0.4rem">
+                <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="bax-has-discogs" type="checkbox"> Has Discogs ID</label>
+                <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="bax-has-wiki" type="checkbox"> Has Wikipedia</label>
+                <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="bax-has-youtube" type="checkbox"> Has YouTube</label>
+              </div>
+              <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
+                <button class="admin-btn" type="button" onclick="baxPreview()">Preview row count</button>
+                <select id="bax-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option><option value="pdf">PDF (printable)</option>
+                </select>
+                <button class="admin-btn" type="button" onclick="baxDownload()">Download</button>
+                <span id="bax-status" style="font-size:0.78rem;color:var(--muted)"></span>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- All Blues background worker: walks release_cache for the
@@ -373,8 +462,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260622.757bec5"></script>
-<script defer src="/blues-admin.js?v=260622.757bec5"></script>
+<script defer src="/modal.js?v=260622.c13304c"></script>
+<script defer src="/blues-admin.js?v=260622.c13304c"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1381,6 +1470,123 @@ async function lexiconUploadJson(event) {
   }
 }
 window.lexiconUploadJson = lexiconUploadJson;
+
+// ── Cache exports ────────────────────────────────────────────────────
+function _rcxBuildParams() {
+  const q = new URLSearchParams();
+  const add = (k, v) => { if (v !== "" && v != null) q.set(k, v); };
+  add("type",      document.getElementById("rcx-type")?.value);
+  add("genre",     document.getElementById("rcx-genre")?.value?.trim());
+  add("style",     document.getElementById("rcx-style")?.value?.trim());
+  add("format",    document.getElementById("rcx-format")?.value?.trim());
+  add("year_from", document.getElementById("rcx-year-from")?.value);
+  add("year_to",   document.getElementById("rcx-year-to")?.value);
+  add("country",   document.getElementById("rcx-country")?.value?.trim());
+  if (document.getElementById("rcx-has-yt")?.checked) q.set("has_youtube", "1");
+  add("sort",  document.getElementById("rcx-sort")?.value);
+  add("order", document.getElementById("rcx-order")?.value);
+  add("limit", document.getElementById("rcx-limit")?.value);
+  return q;
+}
+async function rcxPreview() {
+  const status = document.getElementById("rcx-status");
+  if (status) status.textContent = "Counting…";
+  try {
+    const r = await apiFetch("/api/admin/release-cache/preview?" + _rcxBuildParams().toString());
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
+    if (status) status.textContent = `${(j.count ?? 0).toLocaleString()} row${j.count === 1 ? "" : "s"} match.`;
+  } catch (e) { if (status) status.textContent = `Failed: ${e}`; }
+}
+window.rcxPreview = rcxPreview;
+async function rcxDownload() {
+  const status = document.getElementById("rcx-status");
+  const format = document.getElementById("rcx-format-out")?.value || "csv";
+  const params = _rcxBuildParams();
+  params.set("format", format);
+  if (status) status.textContent = "Preparing download…";
+  // Streamed responses need the auth token in the URL too — easiest
+  // path is to fetch with apiFetch, get a Blob, then create an object
+  // URL and click an anchor. Otherwise navigate the browser to the URL
+  // (no Bearer header) and it'd 401.
+  try {
+    const r = await apiFetch("/api/admin/release-cache/export?" + params.toString(), { timeoutMs: 1000 * 60 * 10 });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (status) status.textContent = `Failed: ${j.error || r.status}`;
+      return;
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ext = format === "json" ? "json" : (format === "ndjson" ? "ndjson" : "csv");
+    a.download = `seadisco-release-cache-${new Date().toISOString().slice(0,10)}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (status) status.textContent = `Downloaded (${(blob.size/1024/1024).toFixed(1)} MB).`;
+  } catch (e) {
+    if (status) status.textContent = `Failed: ${e}`;
+  }
+}
+window.rcxDownload = rcxDownload;
+
+function _baxBuildParams() {
+  const q = new URLSearchParams();
+  const add = (k, v) => { if (v !== "" && v != null) q.set(k, v); };
+  add("name",     document.getElementById("bax-name")?.value?.trim());
+  add("hometown", document.getElementById("bax-hometown")?.value?.trim());
+  add("born_decade", document.getElementById("bax-decade")?.value);
+  if (document.getElementById("bax-has-discogs")?.checked) q.set("has_discogs", "1");
+  if (document.getElementById("bax-has-wiki")?.checked)    q.set("has_wiki", "1");
+  if (document.getElementById("bax-has-youtube")?.checked) q.set("has_youtube", "1");
+  return q;
+}
+async function baxPreview() {
+  const status = document.getElementById("bax-status");
+  if (status) status.textContent = "Counting…";
+  try {
+    const r = await apiFetch("/api/admin/blues/preview?" + _baxBuildParams().toString());
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
+    if (status) status.textContent = `${(j.count ?? 0).toLocaleString()} artist${j.count === 1 ? "" : "s"} match.`;
+  } catch (e) { if (status) status.textContent = `Failed: ${e}`; }
+}
+window.baxPreview = baxPreview;
+async function baxDownload() {
+  const status = document.getElementById("bax-status");
+  const format = document.getElementById("bax-format-out")?.value || "csv";
+  const params = _baxBuildParams();
+  // existing endpoints: /api/admin/blues/export.{csv,pdf,json,ndjson}
+  // CSV + PDF accept only the legacy sort/order params; the new
+  // JSON/NDJSON ones honour the filter set above. We pass the filters
+  // anyway — the existing CSV/PDF endpoints just ignore unknown keys.
+  const url = `/api/admin/blues/export.${format}?${params.toString()}`;
+  if (status) status.textContent = "Preparing download…";
+  try {
+    const r = await apiFetch(url, { timeoutMs: 1000 * 60 * 10 });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (status) status.textContent = `Failed: ${j.error || r.status}`;
+      return;
+    }
+    const blob = await r.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = `seadisco-blues-artists-${new Date().toISOString().slice(0,10)}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    if (status) status.textContent = `Downloaded (${(blob.size/1024/1024).toFixed(1)} MB).`;
+  } catch (e) {
+    if (status) status.textContent = `Failed: ${e}`;
+  }
+}
+window.baxDownload = baxDownload;
 // Per-row "▶ 1900-1970" — directly fires a year-bounded run on a
 // specific (genre, style) combo without round-tripping through the
 // form. Used by the per-combo stats grid.
