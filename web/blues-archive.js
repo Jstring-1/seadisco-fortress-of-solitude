@@ -1021,6 +1021,60 @@ function _baBackToList() {
 }
 window._baBackToList = _baBackToList;
 
+// Session caches for the merged lyric popup's datalists. Both
+// endpoints used to fire on every popup open (the artist list pulls
+// 500 rows) and were serialised — that's the lag the user noticed.
+// Holding the rendered <option> strings in memory means the second
+// (and every subsequent) popup open is a pure local lookup. _baLazyArtist…
+// is exposed as window._baInvalidateArtistOptionsCache so the
+// "+ Create as new" flow can blow the cache when a new artist row
+// gets minted mid-session.
+let _baTuningOptionsCache = null;
+let _baTuningOptionsPromise = null;
+let _baArtistOptionsCache = null;
+let _baArtistOptionsPromise = null;
+async function _baGetTuningOptionsCached() {
+  if (_baTuningOptionsCache != null) return _baTuningOptionsCache;
+  if (!_baTuningOptionsPromise) {
+    _baTuningOptionsPromise = (async () => {
+      try {
+        const tr = await apiFetch("/api/admin/lyrics/tunings");
+        const tunings = tr.ok ? ((await tr.json()).tunings ?? []) : [];
+        const html = tunings
+          .filter(t => t.tuning && t.tuning !== "(unspecified)")
+          .map(t => `<option value="${escHtml(t.tuning)}">`)
+          .join("");
+        _baTuningOptionsCache = html;
+        return html;
+      } catch { _baTuningOptionsCache = ""; return ""; }
+      finally { _baTuningOptionsPromise = null; }
+    })();
+  }
+  return _baTuningOptionsPromise;
+}
+async function _baGetArtistOptionsCached() {
+  if (_baArtistOptionsCache != null) return _baArtistOptionsCache;
+  if (!_baArtistOptionsPromise) {
+    _baArtistOptionsPromise = (async () => {
+      try {
+        const ar = await apiFetch("/api/blues-archive/artists?limit=500");
+        if (!ar.ok) { _baArtistOptionsCache = ""; return ""; }
+        const { rows = [] } = await ar.json();
+        const html = rows.map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`).join("");
+        _baArtistOptionsCache = html;
+        return html;
+      } catch { _baArtistOptionsCache = ""; return ""; }
+      finally { _baArtistOptionsPromise = null; }
+    })();
+  }
+  return _baArtistOptionsPromise;
+}
+function _baInvalidateArtistOptionsCache() {
+  _baArtistOptionsCache = null;
+  _baArtistOptionsPromise = null;
+}
+window._baInvalidateArtistOptionsCache = _baInvalidateArtistOptionsCache;
+
 // Reuse the same lyric viewer the admin Lyrics tab uses. The admin
 // view is on a different page (/admin), so we render a simple inline
 // popup here using the existing chronam-style overlay pattern.
@@ -1030,28 +1084,18 @@ async function _baOpenLyric(id) {
   // before the body lands.
   _baMarkLyricVisited(id);
   try {
+    // Three fetches the popup used to do sequentially (lyric →
+    // tunings → 500-row artist list) are now parallel + cached.
+    // Tunings and artists are session-cached because they barely
+    // change during a curation pass; if they DO change, the cached
+    // datalist is a superset by the time autocomplete matters.
     const r = await apiFetch(`/api/admin/lyrics/${id}`);
     if (!r.ok) return;
     const row = await r.json();
-    // Datalists for the inline editor — same source as the standalone
-    // editor popup. Lazy-loaded; failures degrade to no autocomplete.
-    let tunings = [];
-    try {
-      const tr = await apiFetch("/api/admin/lyrics/tunings");
-      if (tr.ok) tunings = (await tr.json()).tunings ?? [];
-    } catch {}
-    const tuningOpts = tunings
-      .filter(t => t.tuning && t.tuning !== "(unspecified)")
-      .map(t => `<option value="${escHtml(t.tuning)}">`)
-      .join("");
-    let artistOpts = "";
-    try {
-      const ar = await apiFetch("/api/blues-archive/artists?limit=500");
-      if (ar.ok) {
-        const { rows = [] } = await ar.json();
-        artistOpts = rows.map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`).join("");
-      }
-    } catch {}
+    const [tuningOpts, artistOpts] = await Promise.all([
+      _baGetTuningOptionsCached(),
+      _baGetArtistOptionsCached(),
+    ]);
     let overlay = document.getElementById("ba-lyric-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
@@ -1079,18 +1123,18 @@ async function _baOpenLyric(id) {
       : "";
     overlay.innerHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(820px,100%)">
-        <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-          <div style="min-width:0;flex:1">
-            <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.4rem 0.55rem;background:transparent;color:var(--text);border:1px solid transparent;border-radius:4px" onfocus="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.03)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'" oninput="_baLyricDirty()">
-          </div>
-          <div style="display:flex;gap:0.4rem;align-items:start">
-            <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
-            <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${row.id})" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
-            <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row (a future wiki rescrape can pull the same title back in unless you also ban it).">Delete</button>
-            <button class="archive-btn" onclick="_baDeleteAndBanLyric(${row.id}, ${JSON.stringify(row.page_title || "")})" style="color:#e88" title="Delete this row AND fingerprint its EXACT text body (SHA-256 of the normalized plaintext). A re-upload of the same body gets skipped on rescrape, but a re-upload with even a single character changed comes through normally. Doesn't care about title or artist. Manage bans from the Lyrics toolbar Bans button.">Delete + block this exact text</button>
-            <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-          </div>
+        <!-- Action bar: all controls on a single row at the top so the
+             title input directly below gets the full popup width. Makes
+             editing long titles a lot easier than the previous layout
+             that squeezed the input around the buttons. -->
+        <div style="display:flex;gap:0.4rem;align-items:center;justify-content:flex-end;margin-bottom:0.5rem;flex-wrap:wrap">
+          <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
+          <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${row.id})" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
+          <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row (a future wiki rescrape can pull the same title back in unless you also ban it).">Delete</button>
+          <button class="archive-btn" onclick="_baDeleteAndBanLyric(${row.id}, ${JSON.stringify(row.page_title || "")})" style="color:#e88" title="Delete this row AND fingerprint its EXACT text body (SHA-256 of the normalized plaintext). A re-upload of the same body gets skipped on rescrape, but a re-upload with even a single character changed comes through normally. Doesn't care about title or artist. Manage bans from the Lyrics toolbar Bans button.">Delete + block this exact text</button>
+          <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
         </div>
+        <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.45rem 0.6rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:0.6rem" onfocus="this.style.background='rgba(255,255,255,0.03)'" onblur="this.style.background='transparent'" oninput="_baLyricDirty()">
         <datalist id="ba-tuning-options">${tuningOpts}</datalist>
         <datalist id="ba-artist-options">${artistOpts}</datalist>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
@@ -1367,6 +1411,10 @@ async function _baEditCreateArtist() {
     if (dl && j.name) {
       dl.insertAdjacentHTML("beforeend", `<option value="${escHtml(j.name)}" data-id="${j.id}">`);
     }
+    // Invalidate the session cache of the artist datalist so the next
+    // popup opens with the new row included. Without this, the in-mem
+    // cache would keep serving the pre-creation list until reload.
+    if (typeof _baInvalidateArtistOptionsCache === "function") _baInvalidateArtistOptionsCache();
   } catch (e) {
     if (stat) { stat.textContent = `Failed: ${e?.message || e}`; stat.style.color = "#e88"; }
   }
@@ -1479,6 +1527,16 @@ async function _baSaveLyricEdit(id) {
       if (_baDetailArtist && Array.isArray(_baDetailArtist.lyrics)) {
         const j = _baDetailArtist.lyrics.findIndex(x => Number(x.id) === Number(updated.id));
         if (j >= 0) _baDetailArtist.lyrics[j] = { ..._baDetailArtist.lyrics[j], ...updated };
+      }
+      // Derive `snippet` from the returned plaintext so the row
+      // re-render shows the new body in the Snippet column. The PATCH
+      // endpoint returns the full blues_lyrics row, but `snippet` is
+      // a computed alias on list queries (substring(plaintext,1,240))
+      // — getLyricById doesn't ship it. Match the server's 240-char
+      // cap so what the user sees after Save lines up with what the
+      // next list refresh will show.
+      if (updated.snippet == null && typeof updated.plaintext === "string") {
+        updated.snippet = updated.plaintext.slice(0, 240);
       }
       // Surgical DOM patch — both master list <tr> AND artist popup
       // sub-table <tr> are swapped if present. Single-row swap
