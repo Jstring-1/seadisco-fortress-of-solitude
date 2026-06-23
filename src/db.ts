@@ -1116,21 +1116,28 @@ export async function initDb() {
   // PK enforces single row per combo.
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS cache_warm_runs (
-      genre_key       TEXT NOT NULL,
-      style_key       TEXT NOT NULL DEFAULT '',
-      current_year    INT,
-      current_page    INT NOT NULL DEFAULT 1,
-      total_searched  INT NOT NULL DEFAULT 0,
-      total_cached    INT NOT NULL DEFAULT 0,
-      total_skipped   INT NOT NULL DEFAULT 0,
-      total_errors    INT NOT NULL DEFAULT 0,
-      last_run_at     TIMESTAMPTZ,
-      last_cached_at  TIMESTAMPTZ,
-      recent_cached   JSONB NOT NULL DEFAULT '[]'::jsonb,
-      recent_errors   JSONB NOT NULL DEFAULT '[]'::jsonb,
+      genre_key            TEXT NOT NULL,
+      style_key            TEXT NOT NULL DEFAULT '',
+      current_year         INT,
+      current_page         INT NOT NULL DEFAULT 1,
+      total_searched       INT NOT NULL DEFAULT 0,
+      total_cached         INT NOT NULL DEFAULT 0,
+      total_skipped        INT NOT NULL DEFAULT 0,
+      total_errors         INT NOT NULL DEFAULT 0,
+      last_run_at          TIMESTAMPTZ,
+      last_cached_at       TIMESTAMPTZ,
+      no_year_last_run_at  TIMESTAMPTZ,
+      no_year_pages_seen   INT NOT NULL DEFAULT 0,
+      recent_cached        JSONB NOT NULL DEFAULT '[]'::jsonb,
+      recent_errors        JSONB NOT NULL DEFAULT '[]'::jsonb,
       PRIMARY KEY (genre_key, style_key)
     )
   `);
+  // Migration for already-deployed envs that pre-date the no-year sweep
+  // tracking. Independent from current_year / current_page so the dated
+  // and no-year cursors don't clobber each other.
+  await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_last_run_at TIMESTAMPTZ`);
+  await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_pages_seen INT NOT NULL DEFAULT 0`);
 
   // ── Genre cache-warm cron state ──────────────────────────────────
   // One row per Discogs genre in the rotation. The nightly worker
@@ -9647,6 +9654,7 @@ export async function upsertCacheWarmRun(
     "current_year", "current_page",
     "total_searched", "total_cached", "total_skipped", "total_errors",
     "last_run_at", "last_cached_at",
+    "no_year_last_run_at", "no_year_pages_seen",
     "recent_cached", "recent_errors",
   ]);
   const cols: string[] = [];
