@@ -1454,6 +1454,33 @@ export async function initDb() {
     `CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_bans_uniq_idx
        ON blues_lyrics_bans (kind, LOWER(TRIM(value)))`,
   );
+  // Allow 'body_hash' as a third ban kind — fingerprints the exact
+  // plaintext of a deleted lyric so a re-upload of the same body gets
+  // skipped on rescrape, while a real edit (different text, same
+  // title) comes through. Same pattern as the blues_artist_links
+  // migration: drop every existing CHECK that references `kind`, then
+  // add the permissive one.
+  await getPool().query(`
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'blues_lyrics_bans'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE blues_lyrics_bans DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+      ALTER TABLE blues_lyrics_bans ADD CONSTRAINT blues_lyrics_bans_kind_check
+        CHECK (kind IN ('title', 'artist', 'body_hash'));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'blues_lyrics_bans kind CHECK migration skipped: %', SQLERRM;
+    END $$;
+  `);
 
   // ── Tunings grid (read-only) ───────────────────────────────────────
   // Per-track tuning + pitch table seeded from src/data/tunings.csv
@@ -2108,7 +2135,7 @@ export async function getBluesTuningsFacets(): Promise<{
 // and banned-artist pages never get upserted even if the discovery
 // phase finds them.
 export async function addBluesLyricsBans(rows: Array<{
-  kind: "title" | "artist";
+  kind: "title" | "artist" | "body_hash";
   value: string;
   reason?: string | null;
   bannedBy?: string | null;
@@ -2192,6 +2219,17 @@ export async function getBannedLyricTitleSet(): Promise<Set<string>> {
 export async function getBannedLyricArtistSet(): Promise<Set<string>> {
   const r = await getPool().query(
     `SELECT LOWER(TRIM(value)) AS value FROM blues_lyrics_bans WHERE kind = 'artist'`,
+  );
+  return new Set(r.rows.map((row: any) => String(row.value)));
+}
+// Body-hash bans — fingerprint the exact plaintext of a deleted
+// lyric so a re-upload of the same body gets skipped on rescrape
+// without blocking real edits (a single character change produces a
+// different hash). Values are SHA-256 hex digests; the lookup is
+// case-sensitive (hex is normalized lowercase at write-time).
+export async function getBannedLyricBodyHashSet(): Promise<Set<string>> {
+  const r = await getPool().query(
+    `SELECT LOWER(TRIM(value)) AS value FROM blues_lyrics_bans WHERE kind = 'body_hash'`,
   );
   return new Set(r.rows.map((row: any) => String(row.value)));
 }
