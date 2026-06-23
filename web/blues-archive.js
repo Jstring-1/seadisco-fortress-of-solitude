@@ -1196,9 +1196,9 @@ async function _baOpenLyricEditor(id, prefill) {
       ${isNew ? `
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Source URL (optional)</label>
       <input id="ba-edit-page-url" type="url" placeholder="https://… (only for new manual lyrics; scraped rows already have one)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
-      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="The lyric body. Used when no wiki source is available — the viewer popup renders this verbatim.">Lyrics (plaintext)</label>
-      <textarea id="ba-edit-plaintext" rows="10" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;font-family:inherit"></textarea>
       ` : ""}
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="The lyric body the viewer popup renders verbatim. Editing here overwrites the stored plaintext directly — for wiki-sourced rows, use this to override the scraped body with hand-corrected lyrics.">Lyrics (plaintext)</label>
+      <textarea id="ba-edit-plaintext" rows="14" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;font-family:inherit;line-height:1.45">${escHtml(row.plaintext || "")}</textarea>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap">
         ${isNew ? "" : `<button class="archive-btn" onclick="_baDeleteLyric(${id})" style="margin-right:auto;color:#e88" title="Permanently delete this lyric row">Delete</button>`}
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()">Cancel</button>
@@ -1330,6 +1330,7 @@ async function _baSaveLyricEdit(id) {
   const releaseIdRaw = document.getElementById("ba-edit-release-id")?.value ?? "";
   const masterIdRaw  = document.getElementById("ba-edit-master-id")?.value ?? "";
   const firstYearRaw = document.getElementById("ba-edit-first-year")?.value ?? "";
+  const plaintext  = document.getElementById("ba-edit-plaintext")?.value ?? "";
   const discogs_release_id = releaseIdRaw === "" ? null : Number(releaseIdRaw);
   const discogs_master_id  = masterIdRaw  === "" ? null : Number(masterIdRaw);
   const first_release_year = firstYearRaw === "" ? null : Number(firstYearRaw);
@@ -1339,7 +1340,7 @@ async function _baSaveLyricEdit(id) {
     const r = await apiFetch(`/api/admin/lyrics/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist, tuning, page_title, discogs_release_id, discogs_master_id, first_release_year }),
+      body: JSON.stringify({ artist, tuning, page_title, discogs_release_id, discogs_master_id, first_release_year, plaintext }),
     });
     if (!r.ok) {
       // 409 = title already taken on this source_host. Server returns
