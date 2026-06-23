@@ -497,6 +497,16 @@ function _baRenderListTable() {
         const discogsSearchHtml = discogsSearchHref
           ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎</a>`
           : "";
+        // Per-row quick actions: Wikipedia search and full artist
+        // editor. Both stopPropagation so the row-level click that
+        // opens the artist profile doesn't also fire.
+        const wikiSearchHref = row.name
+          ? "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(row.name)
+          : "";
+        const wikiSearchHtml = wikiSearchHref
+          ? `<a href="${escHtml(wikiSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Wikipedia for &quot;${escHtml(row.name || "")}&quot; — opens en.wikipedia.org in a new tab so you can find the canonical article and paste its suffix into wikipedia_suffix." style="margin-left:0.3rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem">📖</a>`
+          : "";
+        const editorHtml = `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="Open the full artist editor (name, dates, hometown, bio, IDs, photo, discogs_releases, etc.)" style="margin-left:0.3rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem">✎</a>`;
         // Discogs ID — click opens the full Edit Artist form so the
         // curator can fix / add the id (or any other field) without
         // an extra trip into the artist profile. stopPropagation so
@@ -533,7 +543,7 @@ function _baRenderListTable() {
           : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="No Wikipedia link — click to edit this artist and add one" style="color:#666;text-decoration:none">—</a>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
-          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${discogsSearchHtml}</td>
+          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${discogsSearchHtml}${wikiSearchHtml}${editorHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:center;font-size:0.9rem">${wikiHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
