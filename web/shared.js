@@ -433,9 +433,9 @@ function _sdInstallListHeader(grid) {
   });
   grid.parentNode.insertBefore(header, grid);
   _sdRefreshListHeaderActive(header, grid);
-  // Stamp each card with the list-mode column cells. Cheap — single
-  // pass over the grid's children.
-  grid.querySelectorAll(":scope > .card").forEach(_sdStampListCells);
+  // Stamp every .card under this grid — including ones wrapped in a
+  // .recent-wrap (home strip), so they all get list-mode column cells.
+  grid.querySelectorAll(".card").forEach(_sdStampListCells);
   // Apply any prior sort (e.g. user just toggled to list mode with
   // a stored sort in the dataset).
   if (grid.dataset.listSort) _sdApplyListSort(grid);
@@ -524,7 +524,7 @@ function _sdStampListCells(card) {
 window._sdStampListCells = _sdStampListCells;
 
 function _sdStampAllVisibleCards() {
-  document.querySelectorAll(".card-grid > .card").forEach(_sdStampListCells);
+  document.querySelectorAll(".card-grid .card").forEach(_sdStampListCells);
 }
 
 function _sdReadCardSortValue(card, key) {
