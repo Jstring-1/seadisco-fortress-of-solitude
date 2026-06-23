@@ -1016,6 +1016,25 @@ async function _baOpenLyric(id) {
     const r = await apiFetch(`/api/admin/lyrics/${id}`);
     if (!r.ok) return;
     const row = await r.json();
+    // Datalists for the inline editor — same source as the standalone
+    // editor popup. Lazy-loaded; failures degrade to no autocomplete.
+    let tunings = [];
+    try {
+      const tr = await apiFetch("/api/admin/lyrics/tunings");
+      if (tr.ok) tunings = (await tr.json()).tunings ?? [];
+    } catch {}
+    const tuningOpts = tunings
+      .filter(t => t.tuning && t.tuning !== "(unspecified)")
+      .map(t => `<option value="${escHtml(t.tuning)}">`)
+      .join("");
+    let artistOpts = "";
+    try {
+      const ar = await apiFetch("/api/blues-archive/artists?limit=500");
+      if (ar.ok) {
+        const { rows = [] } = await ar.json();
+        artistOpts = rows.map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`).join("");
+      }
+    } catch {}
     let overlay = document.getElementById("ba-lyric-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
@@ -1028,51 +1047,104 @@ async function _baOpenLyric(id) {
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
       document.body.appendChild(overlay);
     }
-    // Header meta line — artist (clickable to archive popup if linked,
-    // plain text otherwise), tuning, and the optional Discogs release /
-    // master pins linked out to discogs.com. Each segment shows only
-    // if the field has a value, separated by middle dots.
-    const metaParts = [];
-    if (row.artist) {
-      const artistTxt = escHtml(row.artist);
-      if (row.artist_id) {
-        metaParts.push(`<a href="#" onclick="event.preventDefault();_baOpenArtistFromBadge(${row.artist_id});return false" style="color:var(--accent);text-decoration:none" title="Open in Blues Archive">${artistTxt}</a>`);
-      } else {
-        metaParts.push(`<span>${artistTxt}</span>`);
-      }
-    }
-    if (row.tuning) metaParts.push(`<span>Tuning: ${escHtml(row.tuning)}</span>`);
-    if (row.discogs_release_id) {
-      metaParts.push(`<a href="https://www.discogs.com/release/${row.discogs_release_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none" title="Open release on Discogs">Release ${row.discogs_release_id} ↗</a>`);
-    }
-    if (row.discogs_master_id) {
-      metaParts.push(`<a href="https://www.discogs.com/master/${row.discogs_master_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none" title="Open master on Discogs">Master ${row.discogs_master_id} ↗</a>`);
-    }
-    const metaHtml = metaParts.length
-      ? `<div style="font-size:0.78rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">${metaParts.join('<span style="color:#555">·</span>')}</div>`
+    // Merged viewer + editor: every field is an inline input. Save is
+    // disabled until any value differs from what the server returned.
+    // The previous read-only viewer + separate editor overlay flow is
+    // gone — one popup handles both reading and editing.
+    const artistLink = row.artist_id
+      ? `<a href="#" onclick="event.preventDefault();_baOpenArtistFromBadge(${row.artist_id});return false" style="color:var(--accent);text-decoration:none;font-size:0.74rem;margin-left:0.4rem" title="Open in Blues Archive">↗ open profile</a>`
+      : "";
+    const releaseLink = row.discogs_release_id
+      ? `<a href="https://www.discogs.com/release/${row.discogs_release_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:0.72rem;margin-left:0.4rem" title="Open release on Discogs">↗</a>`
+      : "";
+    const masterLink = row.discogs_master_id
+      ? `<a href="https://www.discogs.com/master/${row.discogs_master_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:0.72rem;margin-left:0.4rem" title="Open master on Discogs">↗</a>`
       : "";
     overlay.innerHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(820px,100%)">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-          <div style="min-width:0">
-            <h3 style="margin:0 0 0.25rem">${escHtml(row.page_title || "")}</h3>
-            ${metaHtml}
+          <div style="min-width:0;flex:1">
+            <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.4rem 0.55rem;background:transparent;color:var(--text);border:1px solid transparent;border-radius:4px" onfocus="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.03)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'" oninput="_baLyricDirty()">
           </div>
           <div style="display:flex;gap:0.4rem;align-items:start">
             <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
-            <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
+            <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${row.id})" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
             <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row">Delete</button>
             <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
           </div>
         </div>
-        <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.88rem;line-height:1.5;color:var(--text);max-height:60vh;overflow:auto;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:4px;padding:0.8rem 1rem;margin:0">${escHtml(row.plaintext || "(no plaintext)")}</pre>
+        <datalist id="ba-tuning-options">${tuningOpts}</datalist>
+        <datalist id="ba-artist-options">${artistOpts}</datalist>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
+          <div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Artist${artistLink}</label>
+            <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()" autocomplete="off">
+          </div>
+          <div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Tuning</label>
+            <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 110px;gap:0.5rem;margin-bottom:0.6rem">
+          <div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Discogs release ID${releaseLink}</label>
+            <input id="ba-edit-release-id" type="number" min="1" value="${row.discogs_release_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+          </div>
+          <div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Discogs master ID${masterLink}</label>
+            <input id="ba-edit-master-id" type="number" min="1" value="${row.discogs_master_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+          </div>
+          <div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">First year</label>
+            <input id="ba-edit-first-year" type="number" min="1850" max="2100" value="${row.first_release_year ?? ""}" placeholder="YYYY" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+          </div>
+        </div>
+        <textarea id="ba-edit-plaintext" rows="20" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.55rem 0.8rem;font-size:0.88rem;line-height:1.5;font-family:inherit;max-height:60vh" oninput="_baLyricDirty()">${escHtml(row.plaintext || "")}</textarea>
+        <div id="ba-edit-status" style="font-size:0.74rem;color:var(--muted);margin-top:0.4rem;min-height:1em"></div>
       </div>
     `;
+    // Snapshot the initial form values so the Save button can stay
+    // disabled until the user actually changes something.
+    overlay.dataset.baInitial = JSON.stringify({
+      page_title: row.page_title || "",
+      artist:     row.artist || "",
+      tuning:     row.tuning || "",
+      discogs_release_id: row.discogs_release_id == null ? "" : String(row.discogs_release_id),
+      discogs_master_id:  row.discogs_master_id  == null ? "" : String(row.discogs_master_id),
+      first_release_year: row.first_release_year == null ? "" : String(row.first_release_year),
+      plaintext:  row.plaintext || "",
+    });
   } catch (e) {
     console.warn("[blues-archive] lyric open failed:", e);
   }
 }
 window._baOpenLyric = _baOpenLyric;
+
+// Toggles the Save button's disabled state by comparing the current
+// form values to the initial snapshot stashed on overlay.dataset. Each
+// inline input calls this from oninput, so the button accurately
+// reflects "is anything dirty right now."
+function _baLyricDirty() {
+  const overlay = document.getElementById("ba-lyric-overlay");
+  const btn = document.getElementById("ba-edit-save-btn");
+  if (!overlay || !btn) return;
+  let initial;
+  try { initial = JSON.parse(overlay.dataset.baInitial || "{}"); }
+  catch { initial = {}; }
+  const cur = {
+    page_title: (document.getElementById("ba-edit-title")?.value ?? "").trim(),
+    artist:     document.getElementById("ba-edit-artist")?.value ?? "",
+    tuning:     document.getElementById("ba-edit-tuning")?.value ?? "",
+    discogs_release_id: document.getElementById("ba-edit-release-id")?.value ?? "",
+    discogs_master_id:  document.getElementById("ba-edit-master-id")?.value ?? "",
+    first_release_year: document.getElementById("ba-edit-first-year")?.value ?? "",
+    plaintext:  document.getElementById("ba-edit-plaintext")?.value ?? "",
+  };
+  const dirty = Object.keys(cur).some(k => String(cur[k]) !== String(initial[k] ?? ""));
+  btn.disabled = !dirty;
+  btn.style.opacity = dirty ? "1" : "0.55";
+}
+window._baLyricDirty = _baLyricDirty;
 
 // Open a release in the same modal the main site uses (modal.js's
 // openModal). Falls back to opening the Discogs page if the function
@@ -1097,6 +1169,9 @@ async function _baOpenLyricEditor(id, prefill) {
   // `prefill` object lets callers (e.g. the site-wide "Add to lyrics"
   // popup action on a track) seed title + artist so the curator
   // only needs to paste the body and hit Create.
+  // For an existing row, the viewer popup IS the editor now — route
+  // there so we don't pop a second overlay.
+  if (id != null) { _baOpenLyric(id); return; }
   const isNew = id == null;
   let row;
   if (isNew) {

@@ -1610,18 +1610,18 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_checked_at TIMESTAMPTZ`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_first_release_year_idx ON blues_lyrics (first_release_year)`);
 
-  // ── One-time scrub: strip the "Go to the original forum thread"
-  // boilerplate (and everything after it) that the weeniecampbell.com
-  // scraper kept at the end of every body. (?is) = case-insensitive +
-  // dot matches newlines, so the match consumes through end-of-text.
-  // \s* before the marker also takes a trailing blank line so the
-  // cleaned body doesn't end in whitespace. Idempotent — after the
-  // first run no rows match the WHERE clause, so subsequent boots
-  // no-op.
+  // ── One-time scrub: strip the weeniecampbell.com footer ("Go to
+  // [the] original forum thread") and any trailing junk that follows.
+  // Regex tolerates a missing "the", flexible inter-word whitespace,
+  // and optional trailing punctuation. (?is) = case-insensitive + dot
+  // matches newlines, so the match consumes through end-of-text. \s*
+  // before the marker also takes a trailing blank line so the cleaned
+  // body doesn't end in whitespace. Idempotent — after the first run
+  // no rows match the WHERE clause, so subsequent boots no-op.
   await getPool().query(`
     UPDATE blues_lyrics
-       SET plaintext = regexp_replace(plaintext, '(?is)\\s*Go to the original forum thread.*$', '')
-     WHERE plaintext ~* 'Go to the original forum thread'
+       SET plaintext = regexp_replace(plaintext, '(?is)\\s*Go\\s+to\\s+(the\\s+)?original\\s+for[ua]m\\s+thread.*$', '')
+     WHERE plaintext ~* 'original\\s+for[ua]m\\s+thread'
   `);
 
   // ── Blues Words lexicon (Stephen Calt-style dictionary) ─────────────

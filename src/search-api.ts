@@ -11378,6 +11378,12 @@ async function _lyricsCollectRecentChanges(opts: {
 async function _lyricsRefreshRecentRun(opts: {
   daysBack: number;
   includeEdits: boolean;
+  // When true, on a clean finish the worker stamps the
+  // `lyrics_scrape_last_at` app-setting so the next "Fetch new" click
+  // can compute its window from "since I last ran this" instead of a
+  // fixed 30d. Only the user-driven "Fetch new" button sets this —
+  // the 30d refresh and stop paths leave the stamp alone.
+  stampLastAt?: boolean;
 }): Promise<void> {
   if (_lyricsScrapeState.running) return;
   _lyricsScrapeState = {
@@ -11473,6 +11479,13 @@ async function _lyricsRefreshRecentRun(opts: {
     }
     _lyricsScrapeState.phase = "done";
     _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} ${opts.includeEdits ? "fetched" : "added"}, ${_lyricsScrapeState.pagesSkipped} skipped, ${_lyricsScrapeState.pagesFailed} failed.`;
+    // Stamp only on a clean finish. If the user hit Stop mid-run, we
+    // don't want the next click to think we covered everything since
+    // last stamp.
+    if (opts.stampLastAt) {
+      try { await setAppSetting("lyrics_scrape_last_at", new Date().toISOString()); }
+      catch (e) { console.warn("[lyrics] stamp lyrics_scrape_last_at failed:", e); }
+    }
   } catch (e: any) {
     _lyricsScrapeState.phase = "error";
     _lyricsScrapeState.error = e?.message ?? String(e);
@@ -11715,6 +11728,53 @@ app.post("/api/admin/lyrics/scrape/recent", express.json({ limit: "1kb" }), asyn
   _lyricsRefreshRecentRun({ daysBack, includeEdits })
     .catch((e) => console.error("[lyrics] recent-changes threw:", e));
   res.json({ ok: true, started: true, daysBack, includeEdits });
+});
+
+// POST /api/admin/lyrics/scrape/since-last — incremental refresh whose
+// window is "since the last time YOU clicked this button" (stored in
+// app_settings as lyrics_scrape_last_at). First run with no stamp
+// falls back to the recentchanges API's 180d max. On clean finish the
+// worker stamps a fresh timestamp so the next click only walks what's
+// been added since.
+app.post("/api/admin/lyrics/scrape/since-last", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_lyricsScrapeState.running) {
+    res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+    return;
+  }
+  let lastAt: Date | null = null;
+  try {
+    const raw = await getAppSetting("lyrics_scrape_last_at");
+    if (raw) {
+      const t = new Date(raw);
+      if (!Number.isNaN(t.getTime())) lastAt = t;
+    }
+  } catch (e) { console.warn("[lyrics] read lyrics_scrape_last_at failed:", e); }
+  // recentchanges accepts up to 180 days. Pad +1d so we never miss
+  // anything added in the same UTC day as the last stamp.
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const daysBack = lastAt
+    ? Math.max(1, Math.min(180, Math.ceil((Date.now() - lastAt.getTime()) / MS_PER_DAY) + 1))
+    : 180;
+  _lyricsRefreshRecentRun({ daysBack, includeEdits: false, stampLastAt: true })
+    .catch((e) => console.error("[lyrics] since-last run threw:", e));
+  res.json({
+    ok: true,
+    started: true,
+    daysBack,
+    lastAt: lastAt ? lastAt.toISOString() : null,
+  });
+});
+
+// GET /api/admin/lyrics/scrape/since-last — read just the stamp so the
+// admin UI can show "Last fetched: ..." next to the button without
+// triggering a job.
+app.get("/api/admin/lyrics/scrape/since-last", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const raw = await getAppSetting("lyrics_scrape_last_at");
+    res.json({ lastAt: raw ?? null });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
 // POST /api/admin/lyrics/scrape/precheck — discovery-only pre-scrape.

@@ -2116,6 +2116,10 @@ function lyricsInit() {
   // If a scrape is already running on the server (e.g. user reloaded
   // the admin page mid-run), poll status so the UI re-attaches.
   lyricsPollScrapeOnce();
+  // Surface the "Last fetched" stamp next to the Fetch new lyrics
+  // button so the curator knows whether the next click would walk a
+  // tight or wide window.
+  if (typeof lyricsRefreshSinceLastHint === "function") lyricsRefreshSinceLastHint();
 }
 window.lyricsInit = lyricsInit;
 
@@ -2389,6 +2393,59 @@ async function lyricsStartPreScrape() {
   }
 }
 window.lyricsStartPreScrape = lyricsStartPreScrape;
+
+// "Fetch new lyrics" button — calls the /since-last endpoint which
+// reads the server-side lyrics_scrape_last_at stamp, computes the
+// recentchanges window from that timestamp (or 180 days on first run),
+// fires the same recent-refresh worker, and re-stamps on clean finish.
+async function lyricsFetchNewSinceLast() {
+  const btn = document.getElementById("lyrics-scrape-btn");
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  if (!btn || !statusEl) return;
+  btn.disabled = true;
+  statusEl.textContent = "Starting…";
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/since-last", { method: "POST" });
+    if (r.status === 409) {
+      statusEl.textContent = "Another job is running — attaching to its status…";
+    } else if (!r.ok) {
+      statusEl.textContent = `Failed: HTTP ${r.status}`;
+      btn.disabled = false;
+      return;
+    } else {
+      const body = await r.json().catch(() => ({}));
+      const win = body?.daysBack ? `${body.daysBack}d` : "180d";
+      statusEl.textContent = body?.lastAt
+        ? `Fetching changes since ${new Date(body.lastAt).toLocaleString()} (window ${win})…`
+        : `First run — falling back to ${win} window…`;
+    }
+    lyricsStartPolling();
+    // Refresh the "Last fetched" hint so the next click already
+    // reflects this run.
+    setTimeout(lyricsRefreshSinceLastHint, 4000);
+  } catch (e) {
+    statusEl.textContent = `Failed: ${e?.message || e}`;
+    btn.disabled = false;
+  }
+}
+window.lyricsFetchNewSinceLast = lyricsFetchNewSinceLast;
+
+// Show the lyrics_scrape_last_at timestamp next to the button so the
+// user can tell whether the next click would walk a tight window or
+// a wide one. Polled on tab show + after a fetch completes.
+async function lyricsRefreshSinceLastHint() {
+  const el = document.getElementById("lyrics-since-last");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/since-last");
+    if (!r.ok) { el.textContent = ""; return; }
+    const { lastAt } = await r.json();
+    el.textContent = lastAt
+      ? `Last fetched: ${new Date(lastAt).toLocaleString()}`
+      : "Never fetched yet";
+  } catch { el.textContent = ""; }
+}
+window.lyricsRefreshSinceLastHint = lyricsRefreshSinceLastHint;
 
 async function lyricsStartScrape() {
   const btn = document.getElementById("lyrics-scrape-btn");

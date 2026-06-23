@@ -1262,7 +1262,8 @@ e.g.  miles davis | coltrane
              upserts any page we don't already have (titles in the DB
              are skipped server-side via getLyricTitlesAlreadyScraped).
              Background job; the status span below polls progress. -->
-        <button type="button" id="lyrics-scrape-btn" class="archive-btn" onclick="lyricsStartScrape()" title="Walk the wiki and pull any lyric we don't already have. Titles already in the DB are skipped — only new pages get fetched. Runs server-side (~80 min for a full walk); you can leave the page.">Rescrape new</button>
+        <button type="button" id="lyrics-scrape-btn" class="archive-btn" onclick="lyricsFetchNewSinceLast()" title="Fetch lyrics added to the wiki since the last time you clicked this button (stored server-side as lyrics_scrape_last_at). First run with no stamp falls back to the recentchanges 180-day max. Existing rows are never overwritten — only new titles are added.">Fetch new lyrics</button>
+        <span id="lyrics-since-last" style="font-size:0.72rem;color:var(--muted);align-self:center"></span>
         <button type="button" id="lyrics-stop-btn" class="archive-btn" onclick="lyricsStopScrape()" style="display:none;color:#e88" title="Stop the running scrape after the current page.">■ Stop</button>
         <button type="button" id="blues-archive-lyrics-clear" class="archive-btn" onclick="_baLyricsClearFilters()" style="display:none" title="Clear search and tuning filters; back to the full list.">Clear filters</button>
         <!-- Idle / running job status (lyrics-scrape-status id kept for the
