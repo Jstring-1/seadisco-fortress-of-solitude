@@ -6899,8 +6899,9 @@ export async function getFeedRareAlbums(
            AND rc.data->'genres' ? $${gIdx}
            AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN ${strictWindow[0]} AND ${strictWindow[1]}
-           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
-           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) < 10
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) > 20
+           AND COALESCE(NULLIF(rc.data->>'num_for_sale','')::int, 0) = 0
            ${excludeClause}
          ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
            LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)),
@@ -6947,8 +6948,9 @@ export async function getFeedRareAlbums(
              ]
            AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN 1900 AND 1999
-           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) <= 3
-           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) >= 20
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) < 10
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) > 20
+           AND COALESCE(NULLIF(rc.data->>'num_for_sale','')::int, 0) = 0
            ${excludeClause}
          LIMIT 5000
       )
