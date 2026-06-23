@@ -1484,13 +1484,47 @@ async function _baSaveLyricEdit(id) {
       // sub-table <tr> are swapped if present. Single-row swap
       // doesn't disturb the surrounding scroll geometry.
       _baPatchLyricRowEverywhere(updated);
-      // If the viewer popup is showing this same lyric, repaint it
-      // with the new values. It's a single overlay so the scroll
-      // impact on the underlying page is zero.
-      const viewerOpen = !!document.getElementById("ba-lyric-overlay");
-      if (viewerOpen) {
-        document.getElementById("ba-lyric-overlay")?.remove();
-        _baOpenLyric(updated.id);
+      // Merged viewer+editor popup: keep it mounted and patch it in
+      // place. Close-and-reopen would re-fetch the lyric, the tunings
+      // datalist, AND a 500-row artist datalist — felt sluggish on
+      // every save. Server already returned the canonical row, so we
+      // just sync the form inputs, reset the dirty snapshot, and
+      // flash a "Saved" hint. No DOM remount, no extra network.
+      const overlay = document.getElementById("ba-lyric-overlay");
+      if (overlay) {
+        const setVal = (elId, v) => {
+          const el = document.getElementById(elId);
+          if (el && el.value !== String(v ?? "")) el.value = String(v ?? "");
+        };
+        setVal("ba-edit-title",       updated.page_title || "");
+        setVal("ba-edit-artist",      updated.artist || "");
+        setVal("ba-edit-tuning",      updated.tuning || "");
+        setVal("ba-edit-release-id",  updated.discogs_release_id == null ? "" : updated.discogs_release_id);
+        setVal("ba-edit-master-id",   updated.discogs_master_id  == null ? "" : updated.discogs_master_id);
+        setVal("ba-edit-first-year",  updated.first_release_year == null ? "" : updated.first_release_year);
+        setVal("ba-edit-plaintext",   updated.plaintext || "");
+        // Reset the initial-values snapshot so the dirty check reads
+        // clean again and the Save button stays disabled until the
+        // next real edit.
+        overlay.dataset.baInitial = JSON.stringify({
+          page_title: updated.page_title || "",
+          artist:     updated.artist || "",
+          tuning:     updated.tuning || "",
+          discogs_release_id: updated.discogs_release_id == null ? "" : String(updated.discogs_release_id),
+          discogs_master_id:  updated.discogs_master_id  == null ? "" : String(updated.discogs_master_id),
+          first_release_year: updated.first_release_year == null ? "" : String(updated.first_release_year),
+          plaintext:  updated.plaintext || "",
+        });
+        const saveBtn = document.getElementById("ba-edit-save-btn");
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = "0.55"; }
+        // Brief "Saved" confirmation that fades on the next dirty edit.
+        if (statusEl) {
+          statusEl.textContent = "Saved.";
+          statusEl.style.color = "#7bc77b";
+          setTimeout(() => {
+            if (statusEl.textContent === "Saved.") { statusEl.textContent = ""; statusEl.style.color = "var(--muted)"; }
+          }, 1800);
+        }
       }
     }
   } catch (e) {
