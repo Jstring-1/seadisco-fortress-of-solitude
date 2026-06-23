@@ -8910,6 +8910,9 @@ export async function listBluesArchive(opts: {
   // When true, restrict to rows whose wikipedia_suffix is NULL or
   // empty — surfaces artists that still need a Wikipedia link added.
   noWiki?: boolean;
+  // When true, restrict to rows whose discogs_id is NULL — surfaces
+  // artists that still need a Discogs profile id pasted in.
+  noDiscogsId?: boolean;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ rows: Array<any>; total: number }> {
@@ -8950,6 +8953,9 @@ export async function listBluesArchive(opts: {
   }
   if (opts.noWiki) {
     where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
+  }
+  if (opts.noDiscogsId) {
+    where.push(`a.discogs_id IS NULL`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));

@@ -1234,6 +1234,10 @@ e.g.  miles davis | coltrane
           <input id="blues-archive-no-wiki" type="checkbox" onchange="_baLoadList()">
           No Wikipedia
         </label>
+        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only artists whose discogs_id is NULL — quick way to triage rows that still need a Discogs profile id pasted in.">
+          <input id="blues-archive-no-discogs" type="checkbox" onchange="_baLoadList()">
+          No Discogs ID
+        </label>
         <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
         <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
         <button type="button" class="archive-btn" onclick="_baLoadList();_baLoadStats();" title="Re-fetch the artist list from the server">↻ Refresh</button>

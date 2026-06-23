@@ -395,6 +395,12 @@ async function _baLoadList() {
   if (document.getElementById("blues-archive-no-wiki")?.checked) {
     params.set("no_wiki", "1");
   }
+  // "No Discogs ID" — same idea, for rows still missing the canonical
+  // Discogs profile id. Pairs with the per-row 🔎 (search Discogs by
+  // name) and the click-to-edit Discogs ID cell.
+  if (document.getElementById("blues-archive-no-discogs")?.checked) {
+    params.set("no_discogs", "1");
+  }
   // Server-side sort — same fix as lyrics. Client-side sort over only
   // the visible 100 rows used to mislead users into thinking the
   // entire DB had been sorted.
