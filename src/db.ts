@@ -2672,53 +2672,66 @@ export async function ingestBluesWords(
     }))
     .filter(e => e.headword);
   if (!norm.length) return { upserted: 0, citations: 0 };
-  const heads      = norm.map(e => e.headword);
-  const defns      = norm.map(e => String(e.definition ?? ""));
-  const vols       = norm.map(e => e.source_volume ?? null);
-  // Postgres needs a uniform array shape; null entries become empty
-  // arrays (NULL'd by the COALESCE on update path).
-  const pagesArr   = norm.map(e => (e.source_pages && e.source_pages.length ? e.source_pages : []));
-  const citHeads:  string[]         = [];
-  const citPos:    number[]         = [];
-  const citQuotes: (string | null)[] = [];
-  const citArtists:(string | null)[] = [];
-  const citSongs:  (string | null)[] = [];
-  const citYears:  (number | null)[] = [];
+  // Build a JSONB payload — handles the int[] source_pages column
+  // cleanly (UNNEST can't carry nested arrays as per-row values).
+  const wordsPayload = norm.map(e => ({
+    headword:      e.headword,
+    definition:    String(e.definition ?? ""),
+    source_volume: e.source_volume ?? null,
+    source_pages:  (e.source_pages && e.source_pages.length) ? e.source_pages : null,
+  }));
+  const citsPayload: any[] = [];
   for (const e of norm) {
     const list = (e.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
     list.forEach((c, i) => {
-      citHeads.push(e.headword);
-      citPos.push(c.position ?? i + 1);
-      citQuotes.push(c.quote ?? null);
-      citArtists.push(c.artist ?? null);
-      citSongs.push(c.song_title ?? null);
-      citYears.push(Number.isFinite(c.year as number) ? (c.year as number) : null);
+      citsPayload.push({
+        headword:   e.headword,
+        position:   c.position ?? i + 1,
+        quote:      c.quote ?? null,
+        artist:     c.artist ?? null,
+        song_title: c.song_title ?? null,
+        year:       Number.isFinite(c.year as number) ? (c.year as number) : null,
+      });
     });
   }
+  const heads = norm.map(e => e.headword);
   const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query(
       `INSERT INTO blues_words (headword, definition, source_volume, source_pages, updated_at)
-         SELECT h, d, v, CASE WHEN array_length(p, 1) IS NULL THEN NULL ELSE p END, NOW()
-           FROM UNNEST($1::text[], $2::text[], $3::text[], $4::int[][]) AS t(h, d, v, p)
+         SELECT x.headword, x.definition, x.source_volume, x.source_pages, NOW()
+           FROM jsonb_to_recordset($1::jsonb) AS x(
+             headword      text,
+             definition    text,
+             source_volume text,
+             source_pages  int[]
+           )
         ON CONFLICT (headword) DO UPDATE SET
           definition    = EXCLUDED.definition,
           source_volume = COALESCE(EXCLUDED.source_volume, blues_words.source_volume),
           source_pages  = COALESCE(EXCLUDED.source_pages, blues_words.source_pages),
           updated_at    = NOW()`,
-      [heads, defns, vols, pagesArr],
+      [JSON.stringify(wordsPayload)],
     );
     await client.query(
       `DELETE FROM blues_word_citations WHERE headword = ANY($1::text[])`,
       [heads],
     );
-    if (citHeads.length) {
+    if (citsPayload.length) {
       await client.query(
         `INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
-           SELECT * FROM UNNEST($1::text[], $2::int[], $3::text[], $4::text[], $5::text[], $6::int[])`,
-        [citHeads, citPos, citQuotes, citArtists, citSongs, citYears],
+           SELECT x.headword, x.position, x.quote, x.artist, x.song_title, x.year
+             FROM jsonb_to_recordset($1::jsonb) AS x(
+               headword   text,
+               position   int,
+               quote      text,
+               artist     text,
+               song_title text,
+               year       int
+             )`,
+        [JSON.stringify(citsPayload)],
       );
     }
     await client.query("COMMIT");
@@ -2728,7 +2741,7 @@ export async function ingestBluesWords(
   } finally {
     client.release();
   }
-  return { upserted: norm.length, citations: citHeads.length };
+  return { upserted: norm.length, citations: citsPayload.length };
 }
 
 // Public list/search. q matches headword + definition + citation quote/artist/song_title.
