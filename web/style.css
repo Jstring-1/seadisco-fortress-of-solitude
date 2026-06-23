@@ -4453,6 +4453,146 @@ body.card-mode-wide .card-artist {
   opacity: 0.5;
   cursor: progress;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   List view (toggled via the same ▦ button — body.card-mode-list).
+   Single column of single-row cards: thumb | title | artist | year
+   | format. Sortable header bar above the grid (injected by
+   _sdInstallListHeader). Mobile collapses to thumb + title + artist.
+   ───────────────────────────────────────────────────────────────── */
+body.card-mode-list .card-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+}
+body.card-mode-list .card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 2fr) minmax(0, 1.5fr) 64px 80px auto;
+  grid-template-areas: "thumb title artist year format actions";
+  align-items: center;
+  aspect-ratio: auto;
+  height: auto;
+  padding: 0.35rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  gap: 0.6rem;
+}
+body.card-mode-list .card:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+body.card-mode-list .card-thumb-wrap {
+  grid-area: thumb;
+  width: 48px;
+  height: 48px;
+  position: static;
+  overflow: hidden;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+body.card-mode-list .card-thumb-wrap img {
+  width: 48px !important;
+  height: 48px !important;
+  object-fit: cover;
+}
+body.card-mode-list .card-body {
+  display: contents; /* let its children inherit the .card grid */
+  margin: 0;
+  padding: 0;
+}
+body.card-mode-list .card-title {
+  grid-area: title;
+  font-size: 0.85rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: unset;
+  display: block;
+}
+body.card-mode-list .card-artist {
+  grid-area: artist;
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: unset;
+  display: block;
+}
+/* Year + format are heuristically pulled from .card-bottom; in list
+   mode we hide the original bottom strip and let the data attrs we
+   stamp on the card surface in pseudo-columns. Surfaces that haven't
+   added data-card-year etc. fall through to text scanning, which is
+   tolerant of slight misses. */
+body.card-mode-list .card-bottom {
+  grid-area: format;
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Wide-mode extras (image strip, tracklist) hidden in list mode. */
+body.card-mode-list .card-images-strip,
+body.card-mode-list .card-tracklist,
+body.card-mode-list .card-refresh-btn {
+  display: none !important;
+}
+/* Sortable header bar */
+.sd-list-header {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 2fr) minmax(0, 1.5fr) 64px 80px auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.55rem;
+  border-bottom: 2px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.sd-list-header .sd-lh-thumb { display: block; }
+.sd-list-header .sd-lh-cell {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sd-list-header .sd-lh-cell:hover,
+.sd-list-header .sd-lh-cell.is-active { color: var(--accent); }
+.sd-list-header .sd-lh-arrow { font-size: 0.78rem; margin-left: 0.15rem; }
+/* Mobile: collapse to thumb + title + artist; year + format dropped. */
+@media (max-width: 640px) {
+  body.card-mode-list .card,
+  .sd-list-header {
+    grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-areas: "thumb title artist";
+  }
+  body.card-mode-list .card-thumb-wrap,
+  body.card-mode-list .card-thumb-wrap img {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  body.card-mode-list .card-bottom,
+  .sd-list-header .sd-lh-year,
+  .sd-list-header .sd-lh-format { display: none; }
+}
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper
    chunk and the strip is a fixed-height row underneath. Hidden in
