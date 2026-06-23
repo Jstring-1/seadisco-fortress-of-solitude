@@ -210,11 +210,19 @@ export async function startCacheWarmRun(opts: {
   // completion, or Force-clear.
   await _writeActiveRun({ genreKey, styleKey, fromYear: opts.fromYear, toYear: opts.toYear });
 
-  await upsertCacheWarmRun(genreKey, styleKey, {
-    current_year: cursorYear,
-    current_page: cursorPage,
-    last_run_at: new Date(),
-  });
+  // No-year sweeps (fromYear=0 toYear=0) must not touch the dated
+  // cursor — the two sweep histories are kept independent so the
+  // "no-year done" indicator and the dated resume point survive each
+  // other.
+  if (opts.fromYear === 0 && opts.toYear === 0) {
+    await upsertCacheWarmRun(genreKey, styleKey, { last_run_at: new Date() });
+  } else {
+    await upsertCacheWarmRun(genreKey, styleKey, {
+      current_year: cursorYear,
+      current_page: cursorPage,
+      last_run_at: new Date(),
+    });
+  }
 
   // Fire-and-forget: caller doesn't wait. Worker tears down state on exit.
   console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}`);
@@ -291,9 +299,18 @@ async function _runWorker(
       // Empty year — advance.
       year += 1;
       page = 1;
-      await upsertCacheWarmRun(genreKey, styleKey, {
-        current_year: year, current_page: page, last_run_at: new Date(),
-      });
+      if (noYearMode) {
+        // No-year sweep finished a page set: stamp no_year_last_run_at
+        // and leave the dated cursor (current_year / current_page)
+        // untouched so a subsequent dated run resumes where it left off.
+        await upsertCacheWarmRun(genreKey, styleKey, {
+          no_year_last_run_at: new Date(), last_run_at: new Date(),
+        });
+      } else {
+        await upsertCacheWarmRun(genreKey, styleKey, {
+          current_year: year, current_page: page, last_run_at: new Date(),
+        });
+      }
       continue;
     }
 
@@ -354,10 +371,20 @@ async function _runWorker(
     } else {
       page = nextPage;
     }
-    await upsertCacheWarmRun(genreKey, styleKey, {
-      current_year: Math.min(year, endYear + 1),
-      current_page: page,
-      last_run_at: new Date(),
-    });
+    if (noYearMode) {
+      // Stamp the no-year fields and bump pages-seen; leave the dated
+      // cursor alone so the two sweep histories don't clobber each other.
+      await upsertCacheWarmRun(genreKey, styleKey, {
+        no_year_last_run_at: new Date(),
+        no_year_pages_seen: page,
+        last_run_at: new Date(),
+      });
+    } else {
+      await upsertCacheWarmRun(genreKey, styleKey, {
+        current_year: Math.min(year, endYear + 1),
+        current_page: page,
+        last_run_at: new Date(),
+      });
+    }
   }
 }

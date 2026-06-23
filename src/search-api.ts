@@ -9348,6 +9348,8 @@ async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: nu
       cwr.total_errors,
       cwr.last_run_at,
       cwr.last_cached_at,
+      cwr.no_year_last_run_at,
+      cwr.no_year_pages_seen,
       cwr.recent_cached,
       cwr.recent_errors,
       COALESCE(ac.in_cache, 0) AS in_cache,
