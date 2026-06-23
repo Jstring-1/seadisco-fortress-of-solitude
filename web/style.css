@@ -4460,43 +4460,54 @@ body.card-mode-wide .card-artist {
    | format. Sortable header bar above the grid (injected by
    _sdInstallListHeader). Mobile collapses to thumb + title + artist.
    ───────────────────────────────────────────────────────────────── */
+/* Shared column track for both card rows and the header bar. Edit
+   this single variable to retune column widths sitewide. */
+:root {
+  --sd-list-cols: 44px minmax(0, 2.2fr) minmax(0, 1.6fr) minmax(0, 1.2fr);
+}
 body.card-mode-list .card-grid {
   display: flex;
   flex-direction: column;
   gap: 0;
   align-items: stretch;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 body.card-mode-list .card {
   display: grid;
-  grid-template-columns: 56px minmax(0, 2fr) minmax(0, 1.5fr) 64px 80px auto;
-  grid-template-areas: "thumb title artist year format actions";
+  grid-template-columns: var(--sd-list-cols);
+  grid-template-areas: "thumb title artist details";
   align-items: center;
   aspect-ratio: auto;
   height: auto;
-  padding: 0.35rem 0.55rem;
-  border-bottom: 1px solid var(--border);
+  padding: 0.32rem 0.6rem;
+  border: 0;
   border-radius: 0;
-  gap: 0.6rem;
+  background: transparent;
+  gap: 0.7rem;
+  /* Hairline separator instead of a hard border — sterile-table look
+     was too boxy. Inset-box-shadow keeps the gap visually clean
+     between rows without inheriting the global .card border style. */
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.035);
 }
 body.card-mode-list .card:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.035);
 }
 body.card-mode-list .card-thumb-wrap {
   grid-area: thumb;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   position: static;
   overflow: hidden;
   border-radius: 3px;
   flex-shrink: 0;
 }
 body.card-mode-list .card-thumb-wrap img {
-  width: 48px !important;
-  height: 48px !important;
+  width: 36px !important;
+  height: 36px !important;
   object-fit: cover;
 }
 body.card-mode-list .card-body {
-  display: contents; /* let its children inherit the .card grid */
+  display: contents;
   margin: 0;
   padding: 0;
 }
@@ -4521,39 +4532,53 @@ body.card-mode-list .card-artist {
   -webkit-line-clamp: unset;
   display: block;
 }
-/* Year + format are heuristically pulled from .card-bottom; in list
-   mode we hide the original bottom strip and let the data attrs we
-   stamp on the card surface in pseudo-columns. Surfaces that haven't
-   added data-card-year etc. fall through to text scanning, which is
-   tolerant of slight misses. */
+/* .card-bottom on most surfaces is a stack of label / format / genre
+   / year blocks rendered as separate divs. In list mode squash to a
+   single inline line so it fits the Details column without ballooning
+   row height. */
 body.card-mode-list .card-bottom {
-  grid-area: format;
+  grid-area: details;
   margin: 0;
   font-size: 0.74rem;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
 }
-/* Wide-mode extras (image strip, tracklist) hidden in list mode. */
+body.card-mode-list .card-bottom > * {
+  display: inline;
+  margin: 0;
+}
+body.card-mode-list .card-bottom > * + *::before {
+  content: " · ";
+  color: rgba(255, 255, 255, 0.18);
+  padding: 0 0.25rem;
+}
+/* Hide everything inside .card we're not deliberately placing in a
+   grid area — image strip, tracklist, refresh button, sparse-row
+   action chips etc. */
 body.card-mode-list .card-images-strip,
 body.card-mode-list .card-tracklist,
-body.card-mode-list .card-refresh-btn {
+body.card-mode-list .card-refresh-btn,
+body.card-mode-list .card .card-meta-stack,
+body.card-mode-list .card .card-extra {
   display: none !important;
 }
-/* Sortable header bar */
+/* Sortable header bar — uses the same column track as the rows so
+   the cells line up exactly. */
 .sd-list-header {
   display: grid;
-  grid-template-columns: 56px minmax(0, 2fr) minmax(0, 1.5fr) 64px 80px auto;
+  grid-template-columns: var(--sd-list-cols);
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.35rem 0.55rem;
-  border-bottom: 2px solid var(--border);
-  background: rgba(0, 0, 0, 0.25);
-  font-size: 0.72rem;
+  gap: 0.7rem;
+  padding: 0.3rem 0.6rem;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.7rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   user-select: none;
   position: sticky;
   top: 0;
@@ -4577,21 +4602,15 @@ body.card-mode-list .card-refresh-btn {
 .sd-list-header .sd-lh-cell:hover,
 .sd-list-header .sd-lh-cell.is-active { color: var(--accent); }
 .sd-list-header .sd-lh-arrow { font-size: 0.78rem; margin-left: 0.15rem; }
-/* Mobile: collapse to thumb + title + artist; year + format dropped. */
+/* Mobile: drop the Details column; keep thumb + title + artist. */
 @media (max-width: 640px) {
+  :root { --sd-list-cols: 36px minmax(0, 2fr) minmax(0, 1fr); }
   body.card-mode-list .card,
   .sd-list-header {
-    grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1fr);
     grid-template-areas: "thumb title artist";
   }
-  body.card-mode-list .card-thumb-wrap,
-  body.card-mode-list .card-thumb-wrap img {
-    width: 40px !important;
-    height: 40px !important;
-  }
   body.card-mode-list .card-bottom,
-  .sd-list-header .sd-lh-year,
-  .sd-list-header .sd-lh-format { display: none; }
+  .sd-list-header .sd-lh-details { display: none; }
 }
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper
