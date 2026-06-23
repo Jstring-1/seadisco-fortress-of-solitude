@@ -12348,11 +12348,13 @@ app.get("/api/blues-archive/artists", async (req, res) => {
       .find(c => c === rawCat) || undefined;
     const limit   = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
     const offset  = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const noWiki  = req.query.no_wiki === "1" || req.query.no_wiki === "true";
     res.json(await listBluesArchive({
       search: q || undefined,
       sort: sort || undefined,
       order,
       category,
+      noWiki,
       limit, offset,
     }));
   } catch (err) {
