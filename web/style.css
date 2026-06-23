@@ -4461,9 +4461,10 @@ body.card-mode-wide .card-artist {
    _sdInstallListHeader). Mobile collapses to thumb + title + artist.
    ───────────────────────────────────────────────────────────────── */
 /* Shared column track for both card rows and the header bar. Edit
-   this single variable to retune column widths sitewide. */
+   this single variable to retune column widths sitewide.
+   Columns: thumb | title | artist | year | label | cat# | format. */
 :root {
-  --sd-list-cols: 44px minmax(0, 2.2fr) minmax(0, 1.6fr) minmax(0, 1.2fr);
+  --sd-list-cols: 40px minmax(0, 2fr) minmax(0, 1.5fr) 56px minmax(0, 1fr) 100px 90px;
 }
 body.card-mode-list .card-grid {
   display: flex;
@@ -4475,7 +4476,7 @@ body.card-mode-list .card-grid {
 body.card-mode-list .card {
   display: grid;
   grid-template-columns: var(--sd-list-cols);
-  grid-template-areas: "thumb title artist details";
+  grid-template-areas: "thumb title artist year label cat format";
   align-items: center;
   aspect-ratio: auto;
   height: auto;
@@ -4532,32 +4533,11 @@ body.card-mode-list .card-artist {
   -webkit-line-clamp: unset;
   display: block;
 }
-/* .card-bottom on most surfaces is a stack of label / format / genre
-   / year blocks rendered as separate divs. In list mode squash to a
-   single inline line so it fits the Details column without ballooning
-   row height. */
-body.card-mode-list .card-bottom {
-  grid-area: details;
-  margin: 0;
-  font-size: 0.74rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
-}
-body.card-mode-list .card-bottom > * {
-  display: inline;
-  margin: 0;
-}
-body.card-mode-list .card-bottom > * + *::before {
-  content: " · ";
-  color: rgba(255, 255, 255, 0.18);
-  padding: 0 0.25rem;
-}
-/* Hide everything inside .card we're not deliberately placing in a
-   grid area — image strip, tracklist, refresh button, sparse-row
-   action chips etc. */
+/* The original .card-bottom block (multi-line stack of label/format/
+   genre/year) is hidden in list mode — its child values are mirrored
+   into the per-column .sd-list-cell-* spans by _sdStampListCells in
+   shared.js. */
+body.card-mode-list .card-bottom,
 body.card-mode-list .card-images-strip,
 body.card-mode-list .card-tracklist,
 body.card-mode-list .card-refresh-btn,
@@ -4565,16 +4545,35 @@ body.card-mode-list .card .card-meta-stack,
 body.card-mode-list .card .card-extra {
   display: none !important;
 }
+/* Per-column stamped cells. Hidden by default so they don't show in
+   compact/wide modes; revealed in list mode and placed via grid-area. */
+.sd-list-cell { display: none; }
+body.card-mode-list .card .sd-list-cell {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+body.card-mode-list .card .sd-list-year   { grid-area: year;   font-variant-numeric: tabular-nums; }
+body.card-mode-list .card .sd-list-label  { grid-area: label;  }
+body.card-mode-list .card .sd-list-cat    { grid-area: cat;    font-variant-numeric: tabular-nums; }
+body.card-mode-list .card .sd-list-format { grid-area: format; }
 /* Sortable header bar — uses the same column track as the rows so
-   the cells line up exactly. */
+   the cells line up exactly. Subtle dark fill so it remains legible
+   over the page background; a pure-transparent header was invisible. */
 .sd-list-header {
   display: grid;
   grid-template-columns: var(--sd-list-cols);
   align-items: center;
   gap: 0.7rem;
-  padding: 0.3rem 0.6rem;
-  background: transparent;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-width: 2px;
+  border-radius: 4px 4px 0 0;
   font-size: 0.7rem;
   color: var(--muted);
   text-transform: uppercase;
@@ -4602,15 +4601,18 @@ body.card-mode-list .card .card-extra {
 .sd-list-header .sd-lh-cell:hover,
 .sd-list-header .sd-lh-cell.is-active { color: var(--accent); }
 .sd-list-header .sd-lh-arrow { font-size: 0.78rem; margin-left: 0.15rem; }
-/* Mobile: drop the Details column; keep thumb + title + artist. */
+/* Mobile: drop year/label/cat#/format — keep thumb + title + artist. */
 @media (max-width: 640px) {
   :root { --sd-list-cols: 36px minmax(0, 2fr) minmax(0, 1fr); }
   body.card-mode-list .card,
   .sd-list-header {
     grid-template-areas: "thumb title artist";
   }
-  body.card-mode-list .card-bottom,
-  .sd-list-header .sd-lh-details { display: none; }
+  body.card-mode-list .card .sd-list-cell,
+  .sd-list-header .sd-lh-year,
+  .sd-list-header .sd-lh-label,
+  .sd-list-header .sd-lh-cat,
+  .sd-list-header .sd-lh-format { display: none; }
 }
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper
