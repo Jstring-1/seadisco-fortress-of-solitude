@@ -8648,6 +8648,11 @@ export async function listLyrics(opts: {
    *  (release_id OR master_id non-NULL). The mirror image of
    *  unpinnedOnly: surfaces lyrics that already resolve to an album. */
   pinnedOnly?: boolean;
+  /** True → only return rows whose page_title contains '-' or '(' —
+   *  surfaces parenthetical disambiguation (e.g. "Stagger Lee (1928
+   *  version)") and dash-separated variants that often pile up across
+   *  multiple takes of the same song. */
+  titleHasPunct?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -8722,6 +8727,9 @@ export async function listLyrics(opts: {
   }
   if (opts.pinnedOnly) {
     where.push(`(discogs_release_id IS NOT NULL OR discogs_master_id IS NOT NULL)`);
+  }
+  if (opts.titleHasPunct) {
+    where.push(`(page_title LIKE '%-%' OR page_title LIKE '%(%')`);
   }
   if (opts.favoritesOnly && opts.favoriteUserId) {
     params.push(opts.favoriteUserId);

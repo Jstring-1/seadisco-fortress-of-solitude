@@ -11921,6 +11921,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
     const noArtist  = req.query.noArtist  === "1" || req.query.noArtist  === "true";
     const pinned    = req.query.pinned    === "1" || req.query.pinned    === "true";
     const favorites = req.query.favorites === "1" || req.query.favorites === "true";
+    const titlePunct = req.query.titlePunct === "1" || req.query.titlePunct === "true";
     // Sort column (whitelisted server-side) + direction. Anything else
     // is ignored / falls back to the default in listLyrics.
     const sort  = String(req.query.sort  ?? "").trim().slice(0, 30);
@@ -11938,6 +11939,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
       pinnedOnly: pinned,
       favoritesOnly: favorites,
       favoriteUserId: favorites ? adminUserId : null,
+      titleHasPunct: titlePunct,
       sort: sort || undefined,
       order,
       limit, offset,
