@@ -312,45 +312,191 @@ function _sdUnlockBodyScroll(id) {
 window._sdLockBodyScroll = _sdLockBodyScroll;
 window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
 
-// ── Card display mode (compact / wide) ────────────────────────────
-// User-toggleable via the ▦ Wide button on the search bar. Persisted
-// in localStorage so the choice sticks across reloads and tabs. Wide
-// mode roughly doubles per-card width so all artist + title text
-// shows in full without clamping. Compact mode is the default.
+// ── Card display mode (compact / wide / list) ─────────────────────
+// User-toggleable via the ▦ button on the search bar. Persisted in
+// localStorage so the choice sticks across reloads and tabs. Three
+// modes:
+//   compact — default; small grid cards.
+//   wide    — roughly doubles per-card width, drops title/artist
+//             clamps, adds image strip + tracklist.
+//   list    — Discogs-style single-row layout with sortable headers.
+//             Container becomes a single column; every .card becomes
+//             a flex row of [thumb | title | artist | year | format].
 const _SD_CARD_MODE_KEY = "sd_card_mode";
+const _SD_CARD_MODES = ["compact", "wide", "list"];
 function _sdGetCardMode() {
-  try { return localStorage.getItem(_SD_CARD_MODE_KEY) === "wide" ? "wide" : "compact"; }
-  catch { return "compact"; }
+  try {
+    const v = localStorage.getItem(_SD_CARD_MODE_KEY);
+    return _SD_CARD_MODES.includes(v) ? v : "compact";
+  } catch { return "compact"; }
 }
 function _sdApplyCardMode() {
   const mode = _sdGetCardMode();
   document.body.classList.toggle("card-mode-wide", mode === "wide");
-  // Reflect state across EVERY toggle button on the page — the search
-  // controls bar has one (#card-mode-toggle) and each records-view
-  // controls row has its own (#cw-card-mode-toggle). Additional
-  // surfaces can opt in just by adding the .card-mode-toggle-btn
-  // class. Inline styles override the buttons' own inline `style=`
-  // attributes (which set the bordered-pill base look).
+  document.body.classList.toggle("card-mode-list", mode === "list");
+  // Reflect state across EVERY toggle button on the page.
+  const label = mode === "wide" ? "▦ Wide"
+              : mode === "list" ? "☰ List"
+              : "▦ Cards";
   document.querySelectorAll(".card-mode-toggle-btn").forEach(btn => {
-    btn.classList.toggle("is-on", mode === "wide");
-    btn.style.color       = mode === "wide" ? "var(--accent)" : "var(--muted)";
-    btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
-    btn.title = mode === "wide"
-      ? "Wide card mode is ON — click for compact"
-      : "Wide card mode (shows full title + artist) — click to enable";
+    btn.textContent = label;
+    btn.classList.toggle("is-on", mode !== "compact");
+    btn.style.color       = mode !== "compact" ? "var(--accent)" : "var(--muted)";
+    btn.style.borderColor = mode !== "compact" ? "var(--accent)" : "var(--border)";
+    btn.title = mode === "compact" ? "Switch to wide cards (next: ▦ Wide)"
+             :  mode === "wide"    ? "Switch to list view (next: ☰ List)"
+             :                       "Switch back to compact cards (next: ▦ Cards)";
   });
+  // After mode change, ensure every visible .card-grid gets / drops
+  // its sortable list header.
+  if (mode === "list") {
+    document.querySelectorAll(".card-grid").forEach(g => _sdInstallListHeader(g));
+  } else {
+    document.querySelectorAll(".sd-list-header").forEach(h => h.remove());
+  }
 }
 function _sdToggleCardMode() {
-  const next = _sdGetCardMode() === "wide" ? "compact" : "wide";
+  const i = _SD_CARD_MODES.indexOf(_sdGetCardMode());
+  const next = _SD_CARD_MODES[(i + 1) % _SD_CARD_MODES.length];
   try { localStorage.setItem(_SD_CARD_MODE_KEY, next); } catch {}
   _sdApplyCardMode();
-  // Toggling on enriches every visible release/master card with
-  // cached image-strip + tracklist data so favorites, collection,
-  // search results etc. all get the wide-card extras.
-  _sdScheduleCardEnrich();
+  // Wide/List both want the per-card enrichment so years + tracklists
+  // are available (list mode uses year for sorting, wide displays
+  // tracklist + image strip).
+  if (next !== "compact") _sdScheduleCardEnrich();
 }
 window._sdToggleCardMode = _sdToggleCardMode;
 window._sdApplyCardMode = _sdApplyCardMode;
+
+// ── List-view sortable header ─────────────────────────────────────
+// Injected above a .card-grid when card-mode-list is active. Renders
+// a row of clickable column headers (Title / Artist / Year / Format)
+// that re-sort the grid's card children in place. State is stored on
+// the grid element (dataset.listSort) so re-renders that wipe the
+// header can reinstate it. A single shared sort helper means every
+// surface — search results, recent strip, collection, wantlist,
+// blues archive — gets sortable list view for free.
+function _sdInstallListHeader(grid) {
+  if (!grid || !(grid instanceof Element)) return;
+  if (!grid.classList.contains("card-grid")) return;
+  if (document.body.classList.contains("card-mode-list") === false) return;
+  // Skip if a header already exists at the top of this grid.
+  const existing = grid.previousElementSibling;
+  if (existing && existing.classList && existing.classList.contains("sd-list-header") && existing.dataset.forGridId === (grid.id || "_anon")) {
+    _sdRefreshListHeaderActive(existing, grid);
+    return;
+  }
+  const header = document.createElement("div");
+  header.className = "sd-list-header";
+  header.dataset.forGridId = grid.id || "_anon";
+  const cols = [
+    { key: "title",  label: "Title",  cls: "sd-lh-title"  },
+    { key: "artist", label: "Artist", cls: "sd-lh-artist" },
+    { key: "year",   label: "Year",   cls: "sd-lh-year"   },
+    { key: "format", label: "Format", cls: "sd-lh-format" },
+  ];
+  // Spacer for the thumb column on the left.
+  header.innerHTML = `<span class="sd-lh-thumb"></span>` + cols.map(c =>
+    `<button type="button" class="sd-lh-cell ${c.cls}" data-sort-key="${c.key}">${c.label}<span class="sd-lh-arrow"></span></button>`
+  ).join("");
+  header.addEventListener("click", e => {
+    const btn = e.target.closest(".sd-lh-cell");
+    if (!btn) return;
+    const key = btn.dataset.sortKey;
+    if (!key) return;
+    const prev = (grid.dataset.listSort || "").split(":");
+    const dir  = (prev[0] === key && prev[1] === "asc") ? "desc" : "asc";
+    grid.dataset.listSort = `${key}:${dir}`;
+    _sdApplyListSort(grid);
+    _sdRefreshListHeaderActive(header, grid);
+  });
+  grid.parentNode.insertBefore(header, grid);
+  _sdRefreshListHeaderActive(header, grid);
+  // Apply any prior sort (e.g. user just toggled to list mode with
+  // a stored sort in the dataset).
+  if (grid.dataset.listSort) _sdApplyListSort(grid);
+}
+window._sdInstallListHeader = _sdInstallListHeader;
+
+function _sdRefreshListHeaderActive(header, grid) {
+  const [activeKey, activeDir] = (grid.dataset.listSort || "").split(":");
+  header.querySelectorAll(".sd-lh-cell").forEach(btn => {
+    const on = btn.dataset.sortKey === activeKey;
+    btn.classList.toggle("is-active", on);
+    const arrow = btn.querySelector(".sd-lh-arrow");
+    if (arrow) arrow.textContent = on ? (activeDir === "asc" ? " ↑" : " ↓") : "";
+  });
+}
+
+function _sdReadCardSortValue(card, key) {
+  if (!card) return "";
+  // Prefer an explicit data attribute set by the renderer; fall back
+  // to visible text content so surfaces that haven't been updated to
+  // emit data-card-* still sort tolerably well.
+  const attr = card.dataset[`card${key.charAt(0).toUpperCase()}${key.slice(1)}`];
+  if (attr != null && attr !== "") return attr;
+  if (key === "title")  return (card.querySelector(".card-title")?.textContent || "").trim();
+  if (key === "artist") return (card.querySelector(".card-artist")?.textContent || "").trim();
+  if (key === "year") {
+    // Parse 4-digit year from the bottom strip (e.g. "1962 • LP • US").
+    const txt = (card.querySelector(".card-bottom")?.textContent || card.textContent || "");
+    const m = txt.match(/\b(18|19|20)\d{2}\b/);
+    return m ? m[0] : "";
+  }
+  if (key === "format") {
+    const txt = (card.querySelector(".card-bottom")?.textContent || "");
+    // Heuristic: first token that looks like a format/media word.
+    const m = txt.match(/\b(LP|EP|7"|10"|12"|45|78|CD|Cassette|Vinyl|Shellac|Single|Album)\b/i);
+    return m ? m[0] : "";
+  }
+  return "";
+}
+
+function _sdApplyListSort(grid) {
+  if (!grid?.dataset?.listSort) return;
+  const [key, dir] = grid.dataset.listSort.split(":");
+  const cards = Array.from(grid.children).filter(el => el.classList?.contains("card") || el.classList?.contains("recent-wrap"));
+  const mul = dir === "asc" ? 1 : -1;
+  const numeric = key === "year";
+  cards.sort((a, b) => {
+    const av = _sdReadCardSortValue(a, key);
+    const bv = _sdReadCardSortValue(b, key);
+    const aMissing = !av;
+    const bMissing = !bv;
+    if (aMissing && !bMissing) return 1;
+    if (!aMissing && bMissing) return -1;
+    if (numeric) return (Number(av) - Number(bv)) * mul;
+    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * mul;
+  });
+  for (const c of cards) grid.appendChild(c);
+}
+window._sdApplyListSort = _sdApplyListSort;
+
+// Watch for new .card-grid elements (re-renders, view switches) and
+// auto-install / refresh the header. Single observer for the whole
+// page — way cheaper than per-surface hooks.
+(function _sdWatchCardGrids() {
+  if (typeof MutationObserver === "undefined") return;
+  const apply = (root) => {
+    if (!(root instanceof Element)) return;
+    if (root.classList?.contains("card-grid")) {
+      if (document.body.classList.contains("card-mode-list")) _sdInstallListHeader(root);
+    }
+    root.querySelectorAll?.(".card-grid").forEach(g => {
+      if (document.body.classList.contains("card-mode-list")) _sdInstallListHeader(g);
+    });
+  };
+  const obs = new MutationObserver(muts => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) apply(n);
+    }
+  });
+  // Wait for body to exist (this file is loaded before DOMContentLoaded
+  // on some entry points).
+  const start = () => obs.observe(document.body, { childList: true, subtree: true });
+  if (document.body) start();
+  else document.addEventListener("DOMContentLoaded", start, { once: true });
+})();
 
 // ── Wide-card enrichment ────────────────────────────────────────
 // Cards on most surfaces (favorites, collection, search results,
@@ -1578,7 +1724,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260622.32c5104";
+  const SITE_VERSION = "build 260622.f255fba";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
