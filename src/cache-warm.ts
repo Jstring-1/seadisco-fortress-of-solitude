@@ -166,6 +166,11 @@ export async function startCacheWarmRun(opts: {
   fromYear?: number;
   toYear?: number;
   resetCursor?: boolean;
+  // When true, after the dated sweep exits cleanly (not stopped) the
+  // worker continues with a no-year sweep on the same combo. Used by
+  // the per-row "▶ 1900-1970" button so a single click covers both the
+  // dated range AND the long-tail no-year releases.
+  alsoNoYear?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   if (_runningKey) {
     return { ok: false, error: `Another run is in progress: ${_runningKey}` };
@@ -225,11 +230,19 @@ export async function startCacheWarmRun(opts: {
   }
 
   // Fire-and-forget: caller doesn't wait. Worker tears down state on exit.
-  console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}`);
+  console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}${opts.alsoNoYear ? " + no-year follow-up" : ""}`);
   (async () => {
     try {
       await _runWorker(client, genreKey, styleKey, cursorYear, cursorPage, toYear);
       console.log(`[cache-warm] worker for ${key} exited cleanly`);
+      // Chained no-year follow-up: only fires when the dated sweep
+      // exited cleanly (not stopped). One click on "▶ 1900-1970" then
+      // covers both the dated walk AND the long-tail no-year releases.
+      if (opts.alsoNoYear && !_stopRequested) {
+        console.log(`[cache-warm] chaining no-year sweep for ${key}`);
+        await _runWorker(client, genreKey, styleKey, 0, 1, 0);
+        console.log(`[cache-warm] no-year follow-up for ${key} exited cleanly`);
+      }
       // Natural exit = clear the resume intent. Crashes leave it
       // set so the next boot will retry.
       await _clearActiveRun();

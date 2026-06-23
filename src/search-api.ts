@@ -9427,6 +9427,7 @@ app.post("/api/admin/cache-warm-runs/start", express.json({ limit: "4kb" }), asy
       fromYear: num(body.fromYear),
       toYear:   num(body.toYear),
       resetCursor: !!body.resetCursor,
+      alsoNoYear: !!body.alsoNoYear,
     });
     if (!out.ok) { res.status(409).json({ error: out.error || "could not start" }); return; }
     _invalidateCwStats();
