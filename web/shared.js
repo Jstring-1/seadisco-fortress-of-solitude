@@ -412,10 +412,14 @@ function _sdInstallListHeader(grid) {
     { key: "cat",    label: "Cat #",  cls: "sd-lh-cat"    },
     { key: "format", label: "Format", cls: "sd-lh-format" },
   ];
-  // Spacer for the thumb column on the left.
+  // Icons column header (non-sortable — just a spacer label that
+  // aligns with the Indicators column on each row).
+  const iconsCellHtml = `<span class="sd-lh-cell sd-lh-icons" data-sort-key="">·</span>`;
+  // Spacer for the thumb column on the left + sortable column buttons
+  // + a placeholder cell for the (non-sortable) Icons column.
   header.innerHTML = `<span class="sd-lh-thumb"></span>` + cols.map(c =>
     `<button type="button" class="sd-lh-cell ${c.cls}" data-sort-key="${c.key}">${c.label}<span class="sd-lh-arrow"></span></button>`
-  ).join("");
+  ).join("") + iconsCellHtml;
   header.addEventListener("click", e => {
     const btn = e.target.closest(".sd-lh-cell");
     if (!btn) return;
@@ -496,6 +500,25 @@ function _sdStampListCells(card) {
   mk("sd-list-label",  label);
   mk("sd-list-cat",    cat);
   mk("sd-list-format", format);
+  // Clone any indicator badges that live inside / next to the thumb
+  // (collection / wantlist / favorite / inventory / contribution /
+  // instance count / blues / lyric markers) into a dedicated Icons
+  // column cell. The originals are hidden in list mode via CSS so we
+  // don't get duplicate clickable badges; inline onclick handlers
+  // copy with cloneNode, so the cloned icons stay actionable.
+  let icons = card.querySelector(":scope > .sd-list-icons");
+  if (!icons) {
+    icons = document.createElement("span");
+    icons.className = "sd-list-cell sd-list-icons";
+    card.appendChild(icons);
+  }
+  icons.innerHTML = "";
+  const badgeSources = card.querySelectorAll(".card-thumb-badges, .card-contribution-badge, .card-instance-badge, .card-yt-override-badge, .track-yt-override-badge, .blues-archive-badge, .lyric-badge, .card-notes-btn");
+  badgeSources.forEach(src => {
+    const clone = src.cloneNode(true);
+    clone.classList.add("sd-list-icon-clone");
+    icons.appendChild(clone);
+  });
   card.dataset.sdListStamped = "1";
 }
 window._sdStampListCells = _sdStampListCells;
@@ -1799,7 +1822,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260622.dd4d31d";
+  const SITE_VERSION = "build 260622.e598640";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
