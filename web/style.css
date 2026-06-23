@@ -2452,7 +2452,14 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 300;
+  /* 400: above #version-overlay (370), #series-overlay (360), and
+     #modal-overlay (350) so the docked player stays interactive when a
+     release / version / series popup is open. The popups' backdrop-
+     click-to-close handlers only fire when e.target === the overlay
+     itself, and the player is a sibling root — clicks on it never
+     bubble to those overlays, so playback / queue controls work
+     without dismissing the popup. */
+  z-index: 400;
   background: #111;
   /* Subtle accent on the top edge anchors the bar against the page
      content so it reads as a docked surface rather than a floating
@@ -7649,7 +7656,11 @@ a.profile-stat-link:hover {
   position: fixed;
   right: 1rem;
   bottom: 60px;
-  z-index: 320;
+  /* 410: above .mini-player (400) so the drawer stays on top of the
+     bar AND above #modal-overlay / #version-overlay / #series-overlay
+     so the queue is clickable while a popup is open. Sibling root —
+     clicks don't bubble to the popup backdrops, so the popup stays. */
+  z-index: 410;
   width: 360px;
   max-width: calc(100vw - 2rem);
   max-height: 60vh;
