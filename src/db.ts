@@ -1138,6 +1138,21 @@ export async function initDb() {
   // and no-year cursors don't clobber each other.
   await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_last_run_at TIMESTAMPTZ`);
   await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_pages_seen INT NOT NULL DEFAULT 0`);
+  // One-time backfill: the pre-indicator no-year worker would land
+  // its cursor at current_year=1 / current_page=1 (cursorYear=0 →
+  // Math.min(year, endYear+1) → 1 after the first empty-page advance).
+  // Stamp the no-year indicator for those rows and clear the bogus
+  // dated cursor so the per-combo grid stops reading "1·p1" as a
+  // dated position. Idempotent via the IS NULL gate on
+  // no_year_last_run_at — runs once per row, never again.
+  await getPool().query(`
+    UPDATE cache_warm_runs
+       SET no_year_last_run_at = COALESCE(last_run_at, NOW()),
+           current_year        = NULL,
+           current_page        = 1
+     WHERE current_year = 1
+       AND no_year_last_run_at IS NULL
+  `);
 
   // ── Genre cache-warm cron state ──────────────────────────────────
   // One row per Discogs genre in the rotation. The nightly worker

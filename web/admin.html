@@ -1133,9 +1133,16 @@ let _cwSort = { col: "in_cache", dir: "desc" };
 // When true, the per-combo grid hides rows that have a style_key —
 // only genre-only rows are shown so you can see total cache by genre.
 let _cwGenresOnly = false;
+// Last /status response, kept so display-only toggles (genres-only
+// filter, sort header clicks) can re-render without paying for
+// another network round-trip + heavy server-side CTE.
+let _cwLastResp = null;
 function _cwToggleGenresOnly() {
   _cwGenresOnly = !_cwGenresOnly;
-  loadCacheWarm();
+  // Re-render from the cached status payload — toggling a pure
+  // display filter shouldn't pay for another /status round-trip (the
+  // CTE behind it is heavy and the click felt unresponsive).
+  loadCacheWarm({ fromCache: true });
 }
 window._cwToggleGenresOnly = _cwToggleGenresOnly;
 const _CW_NUMERIC_COLS = new Set([
@@ -1169,18 +1176,27 @@ function _cwSortBy(col) {
     // default to asc (A-Z).
     _cwSort.dir = _CW_NUMERIC_COLS.has(col) || col === "last_run_at" ? "desc" : "asc";
   }
-  loadCacheWarm();
+  // Sort is purely client-side — re-render off the cached payload so
+  // header clicks feel instant.
+  loadCacheWarm({ fromCache: true });
 }
 window._cwSortBy = _cwSortBy;
-async function loadCacheWarm() {
+async function loadCacheWarm(opts) {
   const el = document.getElementById("cw-content");
   if (!el) return;
   try {
-    const r = await apiFetch("/api/admin/cache-warm-runs/status");
-    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    let resp;
+    if (opts?.fromCache && _cwLastResp) {
+      resp = _cwLastResp;
+    } else {
+      const r = await apiFetch("/api/admin/cache-warm-runs/status");
+      if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+      resp = await r.json();
+      _cwLastResp = resp;
+    }
     // let (not const) on rows because the sort-headers helper
     // re-assigns it to the sorted copy before rendering tbody.
-    let { rows = [], release_cache_total = 0, active = null, running = false } = await r.json();
+    let { rows = [], release_cache_total = 0, active = null, running = false } = resp;
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
     const fmt = n => Number(n || 0).toLocaleString();
     // Preserve form values across re-renders (poll, refresh).
