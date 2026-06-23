@@ -1749,6 +1749,7 @@ let _baLyricsEmpty = false;
 let _baLyricsNoArtist = false;
 let _baLyricsPinned = false;     // only rows with a release/master pin
 let _baLyricsFavorites = false;  // only rows the user has favorited
+let _baLyricsTitlePunct = false; // only rows whose title has '-' or '('
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", first_release_year: "num" };
@@ -1865,6 +1866,17 @@ function _baLyricsApplyFavorites() {
   _baLoadLyrics();
 }
 window._baLyricsApplyFavorites = _baLyricsApplyFavorites;
+
+// "Title has - or (" — surfaces lyrics whose page_title contains a
+// dash or opening parenthesis. Useful for finding parenthetical
+// disambiguation ("Stagger Lee (1928 version)") or dash-variants that
+// pile up across multiple takes of the same song.
+function _baLyricsApplyTitlePunct() {
+  _baLyricsTitlePunct = !!document.getElementById("blues-archive-lyrics-title-punct")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyTitlePunct = _baLyricsApplyTitlePunct;
 
 // Cheap pass: set every lyric's first_release_year from its linked
 // artist's discogs_releases (title match). Zero Discogs API calls.
@@ -2352,6 +2364,7 @@ function _baLyricsClearFilters() {
   _baLyricsNoArtist  = false;
   _baLyricsPinned    = false;
   _baLyricsFavorites = false;
+  _baLyricsTitlePunct = false;
   _baLyricsPage      = 0;
   _baLoadLyrics();
 }
@@ -2413,10 +2426,11 @@ async function _baLoadLyrics() {
   if (_baLyricsNoArtist)  params.set("noArtist",  "1");
   if (_baLyricsPinned)    params.set("pinned",    "1");
   if (_baLyricsFavorites) params.set("favorites", "1");
+  if (_baLyricsTitlePunct) params.set("titlePunct", "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites || _baLyricsTitlePunct) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current
