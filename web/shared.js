@@ -400,14 +400,17 @@ function _sdInstallListHeader(grid) {
   const header = document.createElement("div");
   header.className = "sd-list-header";
   header.dataset.forGridId = grid.id || "_anon";
-  // Three sortable columns line up with the CSS grid track in
-  // style.css (--sd-list-cols). Details rolls year + format + label
-  // into one inline line; year/format are still parseable via the
-  // sort helper if you click Details to sort.
+  // Six sortable columns line up with --sd-list-cols in style.css.
+  // Year / Label / Cat# / Format are extracted from each .card-bottom
+  // via _sdStampListCells (label/format/cat# pulled by class; year
+  // pulled from .card-meta or via 4-digit regex fallback).
   const cols = [
-    { key: "title",   label: "Title",   cls: "sd-lh-title"   },
-    { key: "artist",  label: "Artist",  cls: "sd-lh-artist"  },
-    { key: "details", label: "Details", cls: "sd-lh-details" },
+    { key: "title",  label: "Title",  cls: "sd-lh-title"  },
+    { key: "artist", label: "Artist", cls: "sd-lh-artist" },
+    { key: "year",   label: "Year",   cls: "sd-lh-year"   },
+    { key: "label",  label: "Label",  cls: "sd-lh-label"  },
+    { key: "cat",    label: "Cat #",  cls: "sd-lh-cat"    },
+    { key: "format", label: "Format", cls: "sd-lh-format" },
   ];
   // Spacer for the thumb column on the left.
   header.innerHTML = `<span class="sd-lh-thumb"></span>` + cols.map(c =>
@@ -426,6 +429,9 @@ function _sdInstallListHeader(grid) {
   });
   grid.parentNode.insertBefore(header, grid);
   _sdRefreshListHeaderActive(header, grid);
+  // Stamp each card with the list-mode column cells. Cheap — single
+  // pass over the grid's children.
+  grid.querySelectorAll(":scope > .card").forEach(_sdStampListCells);
   // Apply any prior sort (e.g. user just toggled to list mode with
   // a stored sort in the dataset).
   if (grid.dataset.listSort) _sdApplyListSort(grid);
@@ -442,32 +448,73 @@ function _sdRefreshListHeaderActive(header, grid) {
   });
 }
 
+// Walk a card and extract the per-column values we display in list
+// mode. Reads from the existing .card-bottom child classes (label,
+// format, cat#, meta/year) without touching the renderer. Result is
+// stamped on the card as data attributes AND injected as visible
+// .sd-list-cell-* spans so CSS grid can place them into named areas
+// alongside title/artist. Idempotent — re-running on the same card
+// updates the spans in place.
+function _sdStampListCells(card) {
+  if (!card || card.dataset?.sdListStamped === "1") return;
+  const bottom = card.querySelector(".card-bottom");
+  let year = "", label = "", cat = "", format = "";
+  if (bottom) {
+    const subs = bottom.querySelectorAll(".card-sub");
+    if (subs.length) label = (subs[0].textContent || "").trim();
+    const fmt  = bottom.querySelector(".card-format");
+    if (fmt) format = (fmt.textContent || "").trim();
+    const cn   = bottom.querySelector(".card-catno-line");
+    if (cn) cat = (cn.textContent || "").trim();
+    const meta = bottom.querySelector(".card-meta");
+    if (meta) {
+      const m = (meta.textContent || "").match(/\b(18|19|20)\d{2}\b/);
+      if (m) year = m[0];
+    }
+    if (!year) {
+      // Fallback: scan the whole card-bottom for a year.
+      const m = (bottom.textContent || "").match(/\b(18|19|20)\d{2}\b/);
+      if (m) year = m[0];
+    }
+  }
+  card.dataset.cardYear   = year;
+  card.dataset.cardLabel  = label;
+  card.dataset.cardCat    = cat;
+  card.dataset.cardFormat = format;
+  // Inject visible cells for the list-mode grid. They sit inside the
+  // card but stay hidden in compact/wide modes via CSS.
+  const mk = (cls, txt) => {
+    let el = card.querySelector(`:scope > .${cls}`);
+    if (!el) {
+      el = document.createElement("span");
+      el.className = `sd-list-cell ${cls}`;
+      card.appendChild(el);
+    }
+    el.textContent = txt || "";
+  };
+  mk("sd-list-year",   year);
+  mk("sd-list-label",  label);
+  mk("sd-list-cat",    cat);
+  mk("sd-list-format", format);
+  card.dataset.sdListStamped = "1";
+}
+window._sdStampListCells = _sdStampListCells;
+
+function _sdStampAllVisibleCards() {
+  document.querySelectorAll(".card-grid > .card").forEach(_sdStampListCells);
+}
+
 function _sdReadCardSortValue(card, key) {
   if (!card) return "";
-  // Prefer an explicit data attribute set by the renderer; fall back
-  // to visible text content so surfaces that haven't been updated to
-  // emit data-card-* still sort tolerably well.
   const attr = card.dataset[`card${key.charAt(0).toUpperCase()}${key.slice(1)}`];
   if (attr != null && attr !== "") return attr;
   if (key === "title")  return (card.querySelector(".card-title")?.textContent || "").trim();
   if (key === "artist") return (card.querySelector(".card-artist")?.textContent || "").trim();
-  if (key === "year") {
-    const txt = (card.querySelector(".card-bottom")?.textContent || card.textContent || "");
-    const m = txt.match(/\b(18|19|20)\d{2}\b/);
-    return m ? m[0] : "";
-  }
-  if (key === "format") {
-    const txt = (card.querySelector(".card-bottom")?.textContent || "");
-    const m = txt.match(/\b(LP|EP|7"|10"|12"|45|78|CD|Cassette|Vinyl|Shellac|Single|Album)\b/i);
-    return m ? m[0] : "";
-  }
-  if (key === "details") {
-    // Default sort axis for the rolled-up details column is year —
-    // it's the most useful ordering for record lists. Fall back to
-    // the raw text so missing-year rows still sort deterministically.
-    const txt = (card.querySelector(".card-bottom")?.textContent || card.textContent || "");
-    const m = txt.match(/\b(18|19|20)\d{2}\b/);
-    return m ? m[0] : "";
+  // For columns whose values live inside .card-bottom we lazily stamp
+  // the card here too — covers cards added before the observer fired.
+  if (["year", "label", "cat", "format"].includes(key)) {
+    _sdStampListCells(card);
+    return card.dataset[`card${key.charAt(0).toUpperCase()}${key.slice(1)}`] || "";
   }
   return "";
 }
@@ -475,9 +522,16 @@ function _sdReadCardSortValue(card, key) {
 function _sdApplyListSort(grid) {
   if (!grid?.dataset?.listSort) return;
   const [key, dir] = grid.dataset.listSort.split(":");
-  const cards = Array.from(grid.children).filter(el => el.classList?.contains("card") || el.classList?.contains("recent-wrap"));
+  // Partition: sortable rows vs everything else (Load More buttons,
+  // empty-state placeholders, etc.). The non-row siblings get
+  // re-appended AFTER the sorted rows so they stay anchored at the
+  // bottom of the grid where they belong — previously appendChild'ing
+  // cards alone left Load More stuck above them.
+  const allChildren = Array.from(grid.children);
+  const cards = allChildren.filter(el => el.classList?.contains("card") || el.classList?.contains("recent-wrap"));
+  const tail  = allChildren.filter(el => !(el.classList?.contains("card") || el.classList?.contains("recent-wrap")));
   const mul = dir === "asc" ? 1 : -1;
-  const numeric = key === "year" || key === "details";
+  const numeric = key === "year";
   cards.sort((a, b) => {
     const av = _sdReadCardSortValue(a, key);
     const bv = _sdReadCardSortValue(b, key);
@@ -489,6 +543,7 @@ function _sdApplyListSort(grid) {
     return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * mul;
   });
   for (const c of cards) grid.appendChild(c);
+  for (const t of tail)  grid.appendChild(t);
 }
 window._sdApplyListSort = _sdApplyListSort;
 
@@ -1744,7 +1799,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260622.fb82546";
+  const SITE_VERSION = "build 260622.eda5918";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
