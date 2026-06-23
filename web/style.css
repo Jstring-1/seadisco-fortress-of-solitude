@@ -4462,9 +4462,9 @@ body.card-mode-wide .card-artist {
    ───────────────────────────────────────────────────────────────── */
 /* Shared column track for both card rows and the header bar. Edit
    this single variable to retune column widths sitewide.
-   Columns: thumb | title | artist | year | label | cat# | format. */
+   Columns: thumb | title | artist | year | label | cat# | format | icons. */
 :root {
-  --sd-list-cols: 40px minmax(0, 2fr) minmax(0, 1.5fr) 56px minmax(0, 1fr) 100px 90px;
+  --sd-list-cols: 40px minmax(0, 2fr) minmax(0, 1.5fr) 56px minmax(0, 1fr) 100px 90px 110px;
 }
 body.card-mode-list .card-grid {
   display: flex;
@@ -4476,7 +4476,7 @@ body.card-mode-list .card-grid {
 body.card-mode-list .card {
   display: grid;
   grid-template-columns: var(--sd-list-cols);
-  grid-template-areas: "thumb title artist year label cat format";
+  grid-template-areas: "thumb title artist year label cat format icons";
   align-items: center;
   aspect-ratio: auto;
   height: auto;
@@ -4561,6 +4561,60 @@ body.card-mode-list .card .sd-list-year   { grid-area: year;   font-variant-nume
 body.card-mode-list .card .sd-list-label  { grid-area: label;  }
 body.card-mode-list .card .sd-list-cat    { grid-area: cat;    font-variant-numeric: tabular-nums; }
 body.card-mode-list .card .sd-list-format { grid-area: format; }
+/* Indicators column — collection / wantlist / favorite / contribution
+   / instance count / blues / lyric badges cloned into this cell by
+   _sdStampListCells. The original badges (still inside .card-thumb-
+   wrap) are hidden in list mode so we don't get double clickable
+   icons. */
+body.card-mode-list .card .sd-list-icons {
+  grid-area: icons;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  overflow: hidden;
+  justify-content: flex-start;
+}
+body.card-mode-list .card .sd-list-icons .sd-list-icon-clone {
+  display: inline-flex;
+  align-items: center;
+}
+/* Cloned badges shouldn't try to absolute-position over a thumb that
+   no longer exists in their new home. Reset to inline-flex, normal
+   size. The .card-thumb-badges wrapper itself sometimes carries
+   position:absolute; flatten it. */
+body.card-mode-list .card .sd-list-icons .card-thumb-badges,
+body.card-mode-list .card .sd-list-icons .card-badge,
+body.card-mode-list .card .sd-list-icons .card-contribution-badge,
+body.card-mode-list .card .sd-list-icons .card-instance-badge,
+body.card-mode-list .card .sd-list-icons .card-notes-btn {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  display: inline-flex;
+  align-items: center;
+}
+body.card-mode-list .card .sd-list-icons .card-thumb-badges {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  padding: 0;
+  background: transparent;
+}
+body.card-mode-list .card .sd-list-icons .card-badge {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.3rem;
+}
+/* Hide the originals (still in DOM inside the thumb wrap). */
+body.card-mode-list .card-thumb-wrap > .card-thumb-badges,
+body.card-mode-list .card-thumb-wrap > .card-contribution-badge,
+body.card-mode-list .card-thumb-wrap > .card-instance-badge {
+  display: none !important;
+}
 /* Sortable header bar — uses the same column track as the rows so
    the cells line up exactly. Subtle dark fill so it remains legible
    over the page background; a pure-transparent header was invisible. */
@@ -4601,7 +4655,7 @@ body.card-mode-list .card .sd-list-format { grid-area: format; }
 .sd-list-header .sd-lh-cell:hover,
 .sd-list-header .sd-lh-cell.is-active { color: var(--accent); }
 .sd-list-header .sd-lh-arrow { font-size: 0.78rem; margin-left: 0.15rem; }
-/* Mobile: drop year/label/cat#/format — keep thumb + title + artist. */
+/* Mobile: drop year/label/cat#/format/icons — keep thumb + title + artist. */
 @media (max-width: 640px) {
   :root { --sd-list-cols: 36px minmax(0, 2fr) minmax(0, 1fr); }
   body.card-mode-list .card,
@@ -4612,7 +4666,8 @@ body.card-mode-list .card .sd-list-format { grid-area: format; }
   .sd-list-header .sd-lh-year,
   .sd-list-header .sd-lh-label,
   .sd-list-header .sd-lh-cat,
-  .sd-list-header .sd-lh-format { display: none; }
+  .sd-list-header .sd-lh-format,
+  .sd-list-header .sd-lh-icons { display: none; }
 }
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper
