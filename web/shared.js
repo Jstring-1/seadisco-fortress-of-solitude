@@ -582,12 +582,22 @@ window._sdApplyListSort = _sdApplyListSort;
   if (typeof MutationObserver === "undefined") return;
   const apply = (root) => {
     if (!(root instanceof Element)) return;
+    const inListMode = document.body.classList.contains("card-mode-list");
     if (root.classList?.contains("card-grid")) {
-      if (document.body.classList.contains("card-mode-list")) _sdInstallListHeader(root);
+      if (inListMode) _sdInstallListHeader(root);
     }
     root.querySelectorAll?.(".card-grid").forEach(g => {
-      if (document.body.classList.contains("card-mode-list")) _sdInstallListHeader(g);
+      if (inListMode) _sdInstallListHeader(g);
     });
+    // Stamp any newly added .card nodes (or descendants thereof) so
+    // strips that re-fetch and innerHTML-replace their cards still get
+    // their list-mode cells populated. Without this, only the initial
+    // installListHeader pass would stamp — subsequent card replacements
+    // would leave Year / Label / Cat # / Format / Icons blank.
+    if (inListMode) {
+      if (root.classList?.contains("card")) _sdStampListCells(root);
+      root.querySelectorAll?.(".card").forEach(_sdStampListCells);
+    }
   };
   const obs = new MutationObserver(muts => {
     for (const m of muts) {
