@@ -1086,7 +1086,8 @@ async function _baOpenLyric(id) {
           <div style="display:flex;gap:0.4rem;align-items:start">
             <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
             <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${row.id})" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
-            <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row">Delete</button>
+            <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row (a future wiki rescrape can pull the same title back in unless you also ban it).">Delete</button>
+            <button class="archive-btn" onclick="_baDeleteAndBanLyric(${row.id}, ${JSON.stringify(row.page_title || "")})" style="color:#e88" title="Delete this row AND add its title to the rescrape ban list so a future wiki rescrape skips it. Manage bans from the Lyrics toolbar Bans button.">Delete + ban title</button>
             <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
           </div>
         </div>
@@ -1533,6 +1534,50 @@ async function _baDeleteLyric(id) {
   }
 }
 window._baDeleteLyric = _baDeleteLyric;
+
+// Delete this row AND ban its title from future wiki rescrapes. The
+// title is the long-term ban key — same row could otherwise come back
+// every time the user clicks "Fetch new lyrics" (which walks
+// recentchanges and would re-add the title as a brand-new row). Bans
+// can be lifted from the Lyrics toolbar's Bans button.
+async function _baDeleteAndBanLyric(id, pageTitle) {
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) return;
+  const title = (pageTitle || "").trim();
+  if (!title) { alert("This row has no title to ban — use plain Delete instead."); return; }
+  if (!confirm(`Delete lyric #${n} AND ban the title "${title}" from future rescrapes? Cannot be undone (but the ban is reversible from the Bans button).`)) return;
+  try {
+    // Add the ban first so even if Delete fails the title is still
+    // protected. Server is idempotent — re-banning is a no-op.
+    const br = await apiFetch("/api/admin/lyrics/bans", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "title", value: title, reason: "deleted via lyric popup" }),
+    });
+    if (!br.ok) {
+      const body = await br.json().catch(() => ({}));
+      alert(`Ban failed: ${body?.error || `HTTP ${br.status}`} — row was NOT deleted.`);
+      return;
+    }
+    const dr = await apiFetch(`/api/admin/lyrics/${n}`, { method: "DELETE" });
+    if (!dr.ok) {
+      const body = await dr.json().catch(() => ({}));
+      alert(`Delete failed (ban added anyway): ${body?.error || `HTTP ${dr.status}`}`);
+      return;
+    }
+    document.getElementById("ba-lyric-edit-overlay")?.remove();
+    document.getElementById("ba-lyric-overlay")?.remove();
+    _baLyricsRowsCache = _baLyricsRowsCache.filter(x => Number(x.id) !== n);
+    if (_baDetailArtist && Array.isArray(_baDetailArtist.lyrics)) {
+      _baDetailArtist.lyrics = _baDetailArtist.lyrics.filter(x => Number(x.id) !== n);
+    }
+    document.querySelectorAll(`tr[data-lyric-row="${n}"]`).forEach(tr => tr.remove());
+    if (typeof showToast === "function") showToast(`Deleted + banned "${title}"`, "ok");
+  } catch (e) {
+    alert(`Failed: ${e?.message || e}`);
+  }
+}
+window._baDeleteAndBanLyric = _baDeleteAndBanLyric;
 
 // ── Merge picker ─────────────────────────────────────────────────────
 // Two-step flow: type to filter the artist list, click the target,
