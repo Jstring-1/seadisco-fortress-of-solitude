@@ -380,9 +380,20 @@ function _sdInstallListHeader(grid) {
   if (!grid || !(grid instanceof Element)) return;
   if (!grid.classList.contains("card-grid")) return;
   if (document.body.classList.contains("card-mode-list") === false) return;
-  // Skip if a header already exists at the top of this grid.
+  // Hide the header on grids that aren't currently visible — surfaces
+  // commonly keep a hidden empty .card-grid in the DOM as a placeholder
+  // (search results before a search, etc.). Showing a sortable header
+  // above an empty / hidden grid reads as a duplicate.
+  const visible = grid.offsetParent !== null;
+  const hasCards = !!grid.querySelector(":scope > .card, :scope > .recent-wrap");
   const existing = grid.previousElementSibling;
-  if (existing && existing.classList && existing.classList.contains("sd-list-header") && existing.dataset.forGridId === (grid.id || "_anon")) {
+  const matchesExisting = existing && existing.classList && existing.classList.contains("sd-list-header") && existing.dataset.forGridId === (grid.id || "_anon");
+  if (!visible || !hasCards) {
+    if (matchesExisting) existing.remove();
+    return;
+  }
+  // Skip if a header already exists at the top of this grid.
+  if (matchesExisting) {
     _sdRefreshListHeaderActive(existing, grid);
     return;
   }
@@ -1724,7 +1735,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260622.7b9b706";
+  const SITE_VERSION = "build 260622.f840605";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
