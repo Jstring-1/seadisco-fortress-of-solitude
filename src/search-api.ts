@@ -9305,9 +9305,12 @@ const _CW_CANONICAL_STYLES: Record<string, Set<string>> = {
   "Non-Music":      new Set(["Spoken Word","Field Recording","Comedy","Interview","Audiobook","Religious"]),
 };
 function _isCanonicalCombo(genre: string, style: string): boolean {
+  // Genre must be one Discogs actually publishes — filters out junk
+  // tags like "1" that leak in from release_cache.data.genres when a
+  // release was mislabelled.
+  if (!_CW_CANONICAL_STYLES[genre]) return false;
   if (!style) return true;                       // all-of-genre row
-  const set = _CW_CANONICAL_STYLES[genre];
-  return !!set && set.has(style);
+  return _CW_CANONICAL_STYLES[genre].has(style);
 }
 async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: number }> {
   const totalR = await getPool().query(
