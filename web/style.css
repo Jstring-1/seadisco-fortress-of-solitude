@@ -4456,15 +4456,17 @@ body.card-mode-wide .card-artist {
 
 /* ─────────────────────────────────────────────────────────────────
    List view (toggled via the same ▦ button — body.card-mode-list).
-   Single column of single-row cards: thumb | title | artist | year
-   | format. Sortable header bar above the grid (injected by
-   _sdInstallListHeader). Mobile collapses to thumb + title + artist.
+   Single column of single-row cards: thumb | title | artist | year |
+   label | cat# | format | icons. Mobile collapses to thumb + title +
+   artist.
    ───────────────────────────────────────────────────────────────── */
-/* Shared column track for both card rows and the header bar. Edit
-   this single variable to retune column widths sitewide.
-   Columns: thumb | title | artist | year | label | cat# | format | icons. */
+/* Shared column track for the list-mode card grid. Edit this single
+   variable to retune column widths sitewide.
+   Columns: thumb | type | title | artist | year | label | cat# | format | icons.
+   "type" is a single-letter M/R/A/L cell stamped from the card's
+   .card-type-* class. */
 :root {
-  --sd-list-cols: 40px minmax(0, 2fr) minmax(0, 1.5fr) 56px minmax(0, 1fr) 100px 90px 110px;
+  --sd-list-cols: 40px 22px minmax(0, 2fr) minmax(0, 1.5fr) 56px minmax(0, 1fr) 100px 90px 110px;
 }
 body.card-mode-list .card-grid {
   display: flex;
@@ -4475,13 +4477,13 @@ body.card-mode-list .card-grid {
 body.card-mode-list .card {
   display: grid;
   grid-template-columns: var(--sd-list-cols);
-  grid-template-areas: "thumb title artist year label cat format icons";
+  grid-template-areas: "thumb type title artist year label cat format icons";
   align-items: center;
   aspect-ratio: auto;
   height: auto;
   padding: 0.32rem 0.6rem;
   border: 0;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   gap: 0.7rem;
   /* Hairline separator instead of a hard border — sterile-table look
@@ -4564,6 +4566,14 @@ body.card-mode-list .card .sd-list-cell {
   text-overflow: ellipsis;
   margin: 0;
 }
+body.card-mode-list .card .sd-list-type {
+  grid-area: type;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-align: center;
+  color: var(--muted);
+  letter-spacing: 0;
+}
 body.card-mode-list .card .sd-list-year   { grid-area: year;   font-variant-numeric: tabular-nums; }
 body.card-mode-list .card .sd-list-label  { grid-area: label;  }
 body.card-mode-list .card .sd-list-cat    { grid-area: cat;    font-variant-numeric: tabular-nums; }
@@ -4622,56 +4632,11 @@ body.card-mode-list .card-thumb-wrap > .card-contribution-badge,
 body.card-mode-list .card-thumb-wrap > .card-instance-badge {
   display: none !important;
 }
-/* Sortable header bar — uses the same column track as the rows so
-   the cells line up exactly. Subtle dark fill so it remains legible
-   over the page background; a pure-transparent header was invisible. */
-.sd-list-header {
-  display: grid;
-  grid-template-columns: var(--sd-list-cols);
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.4rem 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.72rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  user-select: none;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-}
-.sd-list-header .sd-lh-thumb { display: block; }
-.sd-list-header .sd-lh-cell {
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-transform: inherit;
-  letter-spacing: inherit;
-  padding: 0.2rem 0;
-  cursor: pointer;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sd-list-header .sd-lh-cell:hover,
-.sd-list-header .sd-lh-cell.is-active { color: var(--accent); }
-.sd-list-header .sd-lh-arrow { font-size: 0.78rem; margin-left: 0.15rem; }
 /* Mobile: drop year/label/cat#/format/icons — keep thumb + title + artist. */
 @media (max-width: 640px) {
   :root { --sd-list-cols: 36px minmax(0, 2fr) minmax(0, 1fr); }
-  body.card-mode-list .card,
-  .sd-list-header {
-    grid-template-areas: "thumb title artist";
-  }
-  body.card-mode-list .card .sd-list-cell,
-  .sd-list-header .sd-lh-year,
-  .sd-list-header .sd-lh-label,
-  .sd-list-header .sd-lh-cat,
-  .sd-list-header .sd-lh-format,
-  .sd-list-header .sd-lh-icons { display: none; }
+  body.card-mode-list .card { grid-template-areas: "thumb title artist"; }
+  body.card-mode-list .card .sd-list-cell { display: none; }
 }
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper

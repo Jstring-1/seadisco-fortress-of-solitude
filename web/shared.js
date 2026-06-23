@@ -347,12 +347,13 @@ function _sdApplyCardMode() {
              :  mode === "wide"    ? "Switch to list view (next: ☰ List)"
              :                       "Switch back to compact cards (next: ▦ Cards)";
   });
-  // After mode change, ensure every visible .card-grid gets / drops
-  // its sortable list header.
+  // Sortable column header was removed — each surface already has its
+  // own Sort dropdown. Strip any leftover .sd-list-header from earlier
+  // builds; in list mode, stamp every visible card so the per-column
+  // cells (Year / Label / Cat # / Format / Icons) get populated.
+  document.querySelectorAll(".sd-list-header").forEach(h => h.remove());
   if (mode === "list") {
-    document.querySelectorAll(".card-grid").forEach(g => _sdInstallListHeader(g));
-  } else {
-    document.querySelectorAll(".sd-list-header").forEach(h => h.remove());
+    document.querySelectorAll(".card-grid .card").forEach(_sdStampListCells);
   }
 }
 function _sdToggleCardMode() {
@@ -368,89 +369,8 @@ function _sdToggleCardMode() {
 window._sdToggleCardMode = _sdToggleCardMode;
 window._sdApplyCardMode = _sdApplyCardMode;
 
-// ── List-view sortable header ─────────────────────────────────────
-// Injected above a .card-grid when card-mode-list is active. Renders
-// a row of clickable column headers (Title / Artist / Year / Format)
-// that re-sort the grid's card children in place. State is stored on
-// the grid element (dataset.listSort) so re-renders that wipe the
-// header can reinstate it. A single shared sort helper means every
-// surface — search results, recent strip, collection, wantlist,
-// blues archive — gets sortable list view for free.
-function _sdInstallListHeader(grid) {
-  if (!grid || !(grid instanceof Element)) return;
-  if (!grid.classList.contains("card-grid")) return;
-  if (document.body.classList.contains("card-mode-list") === false) return;
-  // Hide the header on grids that aren't currently visible — surfaces
-  // commonly keep a hidden empty .card-grid in the DOM as a placeholder
-  // (search results before a search, etc.). Showing a sortable header
-  // above an empty / hidden grid reads as a duplicate.
-  const visible = grid.offsetParent !== null;
-  const hasCards = !!grid.querySelector(":scope > .card, :scope > .recent-wrap");
-  const existing = grid.previousElementSibling;
-  const matchesExisting = existing && existing.classList && existing.classList.contains("sd-list-header") && existing.dataset.forGridId === (grid.id || "_anon");
-  if (!visible || !hasCards) {
-    if (matchesExisting) existing.remove();
-    return;
-  }
-  // Skip if a header already exists at the top of this grid.
-  if (matchesExisting) {
-    _sdRefreshListHeaderActive(existing, grid);
-    return;
-  }
-  const header = document.createElement("div");
-  header.className = "sd-list-header";
-  header.dataset.forGridId = grid.id || "_anon";
-  // Six sortable columns line up with --sd-list-cols in style.css.
-  // Year / Label / Cat# / Format are extracted from each .card-bottom
-  // via _sdStampListCells (label/format/cat# pulled by class; year
-  // pulled from .card-meta or via 4-digit regex fallback).
-  const cols = [
-    { key: "title",  label: "Title",  cls: "sd-lh-title"  },
-    { key: "artist", label: "Artist", cls: "sd-lh-artist" },
-    { key: "year",   label: "Year",   cls: "sd-lh-year"   },
-    { key: "label",  label: "Label",  cls: "sd-lh-label"  },
-    { key: "cat",    label: "Cat #",  cls: "sd-lh-cat"    },
-    { key: "format", label: "Format", cls: "sd-lh-format" },
-  ];
-  // Icons column header (non-sortable — just a spacer label that
-  // aligns with the Indicators column on each row).
-  const iconsCellHtml = `<span class="sd-lh-cell sd-lh-icons" data-sort-key="">·</span>`;
-  // Spacer for the thumb column on the left + sortable column buttons
-  // + a placeholder cell for the (non-sortable) Icons column.
-  header.innerHTML = `<span class="sd-lh-thumb"></span>` + cols.map(c =>
-    `<button type="button" class="sd-lh-cell ${c.cls}" data-sort-key="${c.key}">${c.label}<span class="sd-lh-arrow"></span></button>`
-  ).join("") + iconsCellHtml;
-  header.addEventListener("click", e => {
-    const btn = e.target.closest(".sd-lh-cell");
-    if (!btn) return;
-    const key = btn.dataset.sortKey;
-    if (!key) return;
-    const prev = (grid.dataset.listSort || "").split(":");
-    const dir  = (prev[0] === key && prev[1] === "asc") ? "desc" : "asc";
-    grid.dataset.listSort = `${key}:${dir}`;
-    _sdApplyListSort(grid);
-    _sdRefreshListHeaderActive(header, grid);
-  });
-  grid.parentNode.insertBefore(header, grid);
-  _sdRefreshListHeaderActive(header, grid);
-  // Stamp every .card under this grid — including ones wrapped in a
-  // .recent-wrap (home strip), so they all get list-mode column cells.
-  grid.querySelectorAll(".card").forEach(_sdStampListCells);
-  // Apply any prior sort (e.g. user just toggled to list mode with
-  // a stored sort in the dataset).
-  if (grid.dataset.listSort) _sdApplyListSort(grid);
-}
-window._sdInstallListHeader = _sdInstallListHeader;
-
-function _sdRefreshListHeaderActive(header, grid) {
-  const [activeKey, activeDir] = (grid.dataset.listSort || "").split(":");
-  header.querySelectorAll(".sd-lh-cell").forEach(btn => {
-    const on = btn.dataset.sortKey === activeKey;
-    btn.classList.toggle("is-active", on);
-    const arrow = btn.querySelector(".sd-lh-arrow");
-    if (arrow) arrow.textContent = on ? (activeDir === "asc" ? " ↑" : " ↓") : "";
-  });
-}
+// The sortable list-view column header was removed — each surface
+// already has its own Sort dropdown.
 
 // Walk a card and extract the per-column values we display in list
 // mode. Reads from the existing .card-bottom child classes (label,
@@ -465,7 +385,7 @@ function _sdStampListCells(card) {
   // missing. A card re-render (innerHTML reset by its owner) wipes the
   // appended spans while leaving the dataset flag on the element, so a
   // strict early-return on the flag would leave the row blank forever.
-  if (card.dataset?.sdListStamped === "1" && card.querySelector(":scope > .sd-list-year")) return;
+  if (card.dataset?.sdListStamped === "1" && card.querySelector(":scope > .sd-list-type")) return;
   const bottom = card.querySelector(".card-bottom");
   let year = "", label = "", cat = "", format = "";
   if (bottom) {
@@ -486,10 +406,19 @@ function _sdStampListCells(card) {
       if (m) year = m[0];
     }
   }
+  // Master vs release marker. Cards carry a .card-type-{master,release,
+  // artist,label} class on the same element; show a single letter for
+  // M/R (and A/L for the less common artist/label hits).
+  let typeLetter = "";
+  if (card.classList.contains("card-type-master"))       typeLetter = "M";
+  else if (card.classList.contains("card-type-release")) typeLetter = "R";
+  else if (card.classList.contains("card-type-artist"))  typeLetter = "A";
+  else if (card.classList.contains("card-type-label"))   typeLetter = "L";
   card.dataset.cardYear   = year;
   card.dataset.cardLabel  = label;
   card.dataset.cardCat    = cat;
   card.dataset.cardFormat = format;
+  card.dataset.cardType   = typeLetter;
   // Inject visible cells for the list-mode grid. They sit inside the
   // card but stay hidden in compact/wide modes via CSS.
   const mk = (cls, txt) => {
@@ -501,6 +430,7 @@ function _sdStampListCells(card) {
     }
     el.textContent = txt || "";
   };
+  mk("sd-list-type",   typeLetter);
   mk("sd-list-year",   year);
   mk("sd-list-label",  label);
   mk("sd-list-cat",    cat);
@@ -532,49 +462,6 @@ function _sdStampAllVisibleCards() {
   document.querySelectorAll(".card-grid .card").forEach(_sdStampListCells);
 }
 
-function _sdReadCardSortValue(card, key) {
-  if (!card) return "";
-  const attr = card.dataset[`card${key.charAt(0).toUpperCase()}${key.slice(1)}`];
-  if (attr != null && attr !== "") return attr;
-  if (key === "title")  return (card.querySelector(".card-title")?.textContent || "").trim();
-  if (key === "artist") return (card.querySelector(".card-artist")?.textContent || "").trim();
-  // For columns whose values live inside .card-bottom we lazily stamp
-  // the card here too — covers cards added before the observer fired.
-  if (["year", "label", "cat", "format"].includes(key)) {
-    _sdStampListCells(card);
-    return card.dataset[`card${key.charAt(0).toUpperCase()}${key.slice(1)}`] || "";
-  }
-  return "";
-}
-
-function _sdApplyListSort(grid) {
-  if (!grid?.dataset?.listSort) return;
-  const [key, dir] = grid.dataset.listSort.split(":");
-  // Partition: sortable rows vs everything else (Load More buttons,
-  // empty-state placeholders, etc.). The non-row siblings get
-  // re-appended AFTER the sorted rows so they stay anchored at the
-  // bottom of the grid where they belong — previously appendChild'ing
-  // cards alone left Load More stuck above them.
-  const allChildren = Array.from(grid.children);
-  const cards = allChildren.filter(el => el.classList?.contains("card") || el.classList?.contains("recent-wrap"));
-  const tail  = allChildren.filter(el => !(el.classList?.contains("card") || el.classList?.contains("recent-wrap")));
-  const mul = dir === "asc" ? 1 : -1;
-  const numeric = key === "year";
-  cards.sort((a, b) => {
-    const av = _sdReadCardSortValue(a, key);
-    const bv = _sdReadCardSortValue(b, key);
-    const aMissing = !av;
-    const bMissing = !bv;
-    if (aMissing && !bMissing) return 1;
-    if (!aMissing && bMissing) return -1;
-    if (numeric) return (Number(av) - Number(bv)) * mul;
-    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * mul;
-  });
-  for (const c of cards) grid.appendChild(c);
-  for (const t of tail)  grid.appendChild(t);
-}
-window._sdApplyListSort = _sdApplyListSort;
-
 // Watch for new .card-grid elements (re-renders, view switches) and
 // auto-install / refresh the header. Single observer for the whole
 // page — way cheaper than per-surface hooks.
@@ -582,22 +469,12 @@ window._sdApplyListSort = _sdApplyListSort;
   if (typeof MutationObserver === "undefined") return;
   const apply = (root) => {
     if (!(root instanceof Element)) return;
-    const inListMode = document.body.classList.contains("card-mode-list");
-    if (root.classList?.contains("card-grid")) {
-      if (inListMode) _sdInstallListHeader(root);
-    }
-    root.querySelectorAll?.(".card-grid").forEach(g => {
-      if (inListMode) _sdInstallListHeader(g);
-    });
+    if (!document.body.classList.contains("card-mode-list")) return;
     // Stamp any newly added .card nodes (or descendants thereof) so
     // strips that re-fetch and innerHTML-replace their cards still get
-    // their list-mode cells populated. Without this, only the initial
-    // installListHeader pass would stamp — subsequent card replacements
-    // would leave Year / Label / Cat # / Format / Icons blank.
-    if (inListMode) {
-      if (root.classList?.contains("card")) _sdStampListCells(root);
-      root.querySelectorAll?.(".card").forEach(_sdStampListCells);
-    }
+    // their per-column cells populated.
+    if (root.classList?.contains("card")) _sdStampListCells(root);
+    root.querySelectorAll?.(".card").forEach(_sdStampListCells);
   };
   const obs = new MutationObserver(muts => {
     for (const m of muts) {
