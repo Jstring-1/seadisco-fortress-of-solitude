@@ -704,24 +704,16 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 function _applySplashVisibility(clerk) {
   const splash    = document.getElementById("splash-section");
   const form      = document.getElementById("main-search-form");
-  const anonSplash = document.getElementById("anon-splash");
   const stripWrap  = document.getElementById("random-records");
   const resultsEl  = document.getElementById("results");
   const signedIn = !!clerk?.user;
   if (splash) splash.style.display = "none"; // legacy splash, never used now
-  // Anon visitors get the same surfaces signed-in users do — search
-  // bar, results grid, home strip — so they can preview the catalog
-  // (the Feed tab in the home strip is anon-accessible). The
-  // anon-splash node is now a thin signup banner above everything
-  // rather than a full takeover. The body class lets CSS shrink the
-  // splash node (and any other anon-only nudges) to a slim banner.
+  // body.sd-anon controls all anon-only UI (inline CTA bar, side rail, etc.)
   document.body.classList.toggle("sd-anon", !signedIn);
   if (form)       form.style.display      = "";
   if (resultsEl)  resultsEl.style.display = "";
-  if (anonSplash) anonSplash.style.display = signedIn ? "none" : "";
   if (stripWrap)  stripWrap.style.display  = "";
-  // Sticky sign-in/sign-up rail on the left middle — replaces the
-  // old splash paragraph for anon visitors. Hidden when signed-in.
+  // Sticky sign-in/sign-up rail on the left middle — hidden when signed-in.
   const sideRail = document.getElementById("anon-side-rail");
   if (sideRail) sideRail.style.display = signedIn ? "none" : "";
 }
