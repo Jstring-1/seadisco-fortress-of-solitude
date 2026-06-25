@@ -1147,11 +1147,58 @@ function _albumRenderFooter() {
   footer.innerHTML = `
     <div class="album-suggest-status-list">${rows}</div>
     <div class="album-suggest-submit-row">
+      <button type="button" class="archive-btn" onclick="_youtubeAlbumStageAll(this)" title="Walk every result row and stage its auto-matched track in one click. Already-staged tracks are left alone; results with no auto-match are skipped.">⤓ Stage all suggestions</button>
       <button type="button" class="archive-btn archive-btn-suggest album-suggest-submit-btn" ${stagedCount ? "" : "disabled"} onclick="_youtubeAlbumSubmit(this)">Submit ${stagedCount} assignment${stagedCount === 1 ? "" : "s"}</button>
       <button type="button" class="archive-btn" onclick="_youtubePopupRequestClose()">Cancel</button>
     </div>
   `;
 }
+
+// "Stage all suggestions" — walks every visible result row, reads the
+// dropdown's auto-matched value (set by _albumAutoMatchTrack at
+// render time), and commits each via the same window._sdSuggestStaged
+// map that the per-row Stage button uses. Results with no auto-match
+// (dropdown defaulted to skip) are left alone; tracks that already
+// have a different video staged keep theirs unless this pass picks a
+// stronger match for them. Idempotent — re-clicking adds nothing new
+// once everything's already staged.
+function _youtubeAlbumStageAll(btn) {
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx) return;
+  const resultsEl = document.getElementById("youtube-popup-results");
+  if (!resultsEl) return;
+  const staged = window._sdSuggestStaged || (window._sdSuggestStaged = {});
+  let added = 0;
+  resultsEl.querySelectorAll(".yt-row").forEach(row => {
+    const select = row.querySelector(".album-assign-select");
+    const videoId = row.dataset.vid || "";
+    const videoTitle = row.dataset.title || "";
+    if (!select || !videoId) return;
+    const pos = select.value || "";
+    if (!pos) return; // "— skip —" (no auto-match) — leave it for manual review
+    // Don't clobber an existing staging on another track unless we're
+    // replacing it because the auto-match landed here.
+    for (const k of Object.keys(staged)) {
+      if (staged[k] && staged[k].videoId === videoId && k !== pos) delete staged[k];
+    }
+    const trackTitle = (ctx.tracks || []).find(t => t.position === pos)?.title || "";
+    // First-match-wins per track: don't overwrite an already-staged
+    // pick, so re-clicking after a manual stage doesn't undo it.
+    if (!staged[pos]) {
+      staged[pos] = { videoId, videoTitle, trackTitle };
+      added++;
+    }
+  });
+  _albumRenderFooter();
+  const status = document.getElementById("youtube-popup-status");
+  if (status) {
+    const total = Object.values(staged).filter(Boolean).length;
+    status.innerHTML = added
+      ? `<span style="color:#7eb8da">Staged ${added} new (${total} total).</span>`
+      : `<span style="color:var(--muted)">Nothing new to stage — already up to date.</span>`;
+  }
+}
+window._youtubeAlbumStageAll = _youtubeAlbumStageAll;
 
 // Dropdown change handler — does nothing on its own; the user has to
 // press "Stage" to commit. This way they can scan multiple videos
