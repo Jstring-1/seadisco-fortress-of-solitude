@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry, type BluesWordEntryInput, type BluesWordCitationInput } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry, type BluesWordEntryInput, type BluesWordCitationInput } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
@@ -11972,25 +11972,20 @@ function _ytReviewScoreTitle(candTitle: string, artist: string, track: string): 
 // getYoutubeSearchCache / setYoutubeSearchCache so a query the regular
 // search already paid for is free. Returns the raw Google API body or
 // null on hard failure (logged + counted as an error).
-async function _ytReviewSearch(q: string): Promise<{ body: any; cached: boolean } | null> {
+type YtReviewSearchResult =
+  | { ok: true; body: any; cached: boolean }
+  | { ok: false; reason: string };
+async function _ytReviewSearch(q: string): Promise<YtReviewSearchResult> {
   const cacheKey = `q:${q}`;
   try {
     const cached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000);
-    if (cached) return { body: cached, cached: true };
+    if (cached) return { ok: true, body: cached, cached: true };
   } catch {}
-  if (!_youtubeApiKey) return null;
-  // Quota gates BEFORE we fire upstream. _ytQuotaUnitsToday is the
-  // project-wide counter shared with manual user search; the worker
-  // contributes to it so the soft cap accounts for both. The worker
-  // also has its own 9k/day search cap so it can't eat the entire
-  // pool and starve manual activity.
+  if (!_youtubeApiKey) return { ok: false, reason: "no_api_key" };
   _ytQuotaMaybeReset();
   _ytReviewMaybeReset();
-  if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) return null;
-  if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET) return null;
-  // 50 is the Google API per-call max and the quota cost (100 units)
-  // is flat regardless of count — so we pull the ceiling. Reuses the
-  // same cache as the popup endpoint, keyed on q.
+  if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) return { ok: false, reason: "project_cap" };
+  if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET) return { ok: false, reason: "worker_cap" };
   const params = [
     "part=snippet",
     "type=video",
@@ -12002,16 +11997,23 @@ async function _ytReviewSearch(q: string): Promise<{ body: any; cached: boolean 
   try {
     const resp = await fetch(url);
     if (!resp.ok) {
-      console.warn(`[yt-review] search failed: HTTP ${resp.status} for q=${q}`);
-      return null;
+      let errSummary = "";
+      try {
+        const txt = await resp.text();
+        const j = JSON.parse(txt);
+        errSummary = j?.error?.errors?.[0]?.reason || j?.error?.message || txt.slice(0, 200);
+      } catch {}
+      console.warn(`[yt-review] search failed: HTTP ${resp.status} for q=${q}${errSummary ? ` — ${errSummary}` : ""}`);
+      return { ok: false, reason: `http_${resp.status}${errSummary ? `: ${errSummary}` : ""}` };
     }
     const body = await resp.json();
     _bumpYtQuotaPersisted(1, 100);
     try { await setYoutubeSearchCache(cacheKey, body); } catch {}
-    return { body, cached: false };
+    return { ok: true, body, cached: false };
   } catch (e: any) {
-    console.warn(`[yt-review] search threw for q=${q}:`, e?.message ?? e);
-    return null;
+    const msg = e?.message ?? String(e);
+    console.warn(`[yt-review] search threw for q=${q}:`, msg);
+    return { ok: false, reason: `throw: ${msg}` };
   }
 }
 
@@ -12084,19 +12086,28 @@ async function _runYtReviewWorker(): Promise<void> {
       const q = (masterTitle ? `${masterArtist} ${masterTitle}` : masterArtist).trim() || eligibleTracks[0].title;
       await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — ${masterTitle || "(no title)"}` });
       const result = await _ytReviewSearch(q);
-      if (!result) {
-        // Caps are checked at the top of the loop, so a null here means
-        // an upstream/transient error. Advance the cursor (so we don't
-        // wedge on the same master) and continue — only bail after a
-        // run of consecutive failures suggests something systemic.
+      if (!result.ok) {
+        // Caps are re-checked at top of loop, so these should be rare
+        // here — but surface the actual reason in last_error so the
+        // admin can see WHY it stopped without digging into logs.
+        if (result.reason === "project_cap" || result.reason === "worker_cap") {
+          await updateReviewState({ message: `Stopping: ${result.reason === "worker_cap" ? "worker" : "project"} daily cap reached.`, running: false });
+          break;
+        }
+        if (result.reason === "no_api_key") {
+          await updateReviewState({ message: `Stopping: YouTube API key missing.`, last_error: result.reason, running: false });
+          break;
+        }
         consecutiveErrors++;
         await bumpReviewCounter("total_errors", 1);
+        await logReviewError(masterId, q, result.reason).catch(() => {});
         await updateReviewState({
-          message: `Skipping master ${masterId} after upstream error on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
+          message: `Skipping master ${masterId}: ${result.reason} on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
+          last_error: result.reason,
           cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null,
         });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-          await updateReviewState({ message: `Stopping after ${MAX_CONSECUTIVE_ERRORS} consecutive upstream errors. Press Start to resume.`, running: false });
+          await updateReviewState({ message: `Stopping after ${MAX_CONSECUTIVE_ERRORS} consecutive errors. Last: ${result.reason}.`, running: false });
           break;
         }
         await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
@@ -12241,6 +12252,15 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
       });
     }
     res.json({ ok: true });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+app.get("/api/admin/yt-review/errors", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+    const rows = await listReviewErrors(limit);
+    res.json({ rows });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 

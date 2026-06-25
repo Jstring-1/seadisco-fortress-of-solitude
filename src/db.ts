@@ -440,6 +440,21 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_at_idx ON track_yt_review_searched (last_searched_at)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_empty_idx ON track_yt_review_searched (candidate_count) WHERE candidate_count = 0`);
 
+  // Persisted worker error log. One row per upstream failure so the
+  // admin can drill into the Errors tile and see the exact reason
+  // (HTTP 403 quotaExceeded, throw: ECONNRESET, etc.) without having
+  // to dig through Railway logs.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_errors (
+      id          SERIAL PRIMARY KEY,
+      ts          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      master_id   BIGINT,
+      query       TEXT,
+      reason      TEXT NOT NULL
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_errors_ts_idx ON track_yt_review_errors (ts DESC)`);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -6788,6 +6803,24 @@ export async function updateReviewState(patch: Record<string, any>): Promise<voi
     `UPDATE track_yt_review_state SET ${setSql} WHERE id = 1`,
     vals,
   );
+}
+
+export async function logReviewError(masterId: number | null, query: string | null, reason: string): Promise<void> {
+  await getPool().query(
+    `INSERT INTO track_yt_review_errors (master_id, query, reason) VALUES ($1, $2, $3)`,
+    [masterId, query, reason.slice(0, 500)],
+  );
+}
+
+export async function listReviewErrors(limit = 100): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT id, ts, master_id, query, reason
+       FROM track_yt_review_errors
+      ORDER BY ts DESC
+      LIMIT $1`,
+    [Math.max(1, Math.min(500, limit))],
+  );
+  return r.rows;
 }
 
 export async function bumpReviewCounter(field: "total_searched" | "total_queued" | "total_skipped" | "total_errors", by = 1): Promise<void> {

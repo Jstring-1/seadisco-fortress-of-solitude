@@ -1734,7 +1734,9 @@ async function loadYtReview() {
         ${ytrTile("Skipped",  c.skipped,  "var(--muted)", "skipped")}
         ${ytrTile("Searched", st.total_searched || 0, "var(--text)")}
         ${ytrTile("Queued",   st.total_queued   || 0, "var(--text)")}
-        ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
+        <div style="cursor:pointer" onclick="ytrShowErrors()" title="Click to view recent worker errors.">
+          ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
+        </div>
       </div>
     `;
     // Poll while running so the cursor + counters stay live.
@@ -1868,6 +1870,46 @@ async function ytrDeleteApproval(id) {
   } catch (e) { alert(`Delete failed: ${e?.message || e}`); }
 }
 window.ytrDeleteApproval = ytrDeleteApproval;
+async function ytrShowErrors() {
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const existing = document.getElementById("ytr-errors-modal");
+  if (existing) existing.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "ytr-errors-modal";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;max-width:900px;width:100%;max-height:80vh;overflow:auto;padding:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
+      <div style="font-weight:600">YT Review worker errors</div>
+      <button class="admin-btn" onclick="document.getElementById('ytr-errors-modal').remove()">Close</button>
+    </div>
+    <div id="ytr-errors-body" style="color:var(--muted);font-size:0.85rem">Loading…</div>
+  </div>`;
+  document.body.appendChild(overlay);
+  try {
+    const r = await apiFetch("/api/admin/yt-review/errors?limit=200");
+    if (!r.ok) { document.getElementById("ytr-errors-body").innerHTML = `<span style="color:#e88">HTTP ${r.status}</span>`; return; }
+    const { rows = [] } = await r.json();
+    const body = document.getElementById("ytr-errors-body");
+    if (!rows.length) { body.innerHTML = "No errors logged."; return; }
+    body.innerHTML = `<div style="display:grid;grid-template-columns:160px 90px 1fr 1fr;gap:0.4rem;font-size:0.78rem;font-family:ui-monospace,monospace">
+      <div style="color:var(--muted);text-transform:uppercase;font-size:0.68rem">When</div>
+      <div style="color:var(--muted);text-transform:uppercase;font-size:0.68rem">Master</div>
+      <div style="color:var(--muted);text-transform:uppercase;font-size:0.68rem">Query</div>
+      <div style="color:var(--muted);text-transform:uppercase;font-size:0.68rem">Reason</div>
+      ${rows.map(r => `
+        <div>${esc(new Date(r.ts).toLocaleString())}</div>
+        <div>${r.master_id ?? "—"}</div>
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.query || "")}">${esc(r.query || "—")}</div>
+        <div style="color:#e88;overflow-wrap:anywhere">${esc(r.reason || "")}</div>
+      `).join("")}
+    </div>`;
+  } catch (e) {
+    const b = document.getElementById("ytr-errors-body");
+    if (b) b.innerHTML = `<span style="color:#e88">${esc(e?.message || e)}</span>`;
+  }
+}
+window.ytrShowErrors = ytrShowErrors;
 window.loadYtReview = loadYtReview;
 
 // Stats panel shows queue (pending/done/error), cached artist count,
