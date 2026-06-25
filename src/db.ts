@@ -366,6 +366,61 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS yt_video_unavailable_status_idx ON youtube_video_unavailable (status)`);
 
+  // ── YT-match review queue (admin tab, v1) ──────────────────────────
+  // Background worker walks earliest-year Blues masters and proposes
+  // YouTube videos for tracks that have no override yet. v1 puts
+  // every candidate into this queue for human review — no auto-accept.
+  // Approving copies the row into track_youtube_overrides; rejecting
+  // leaves a tombstone so the same video isn't re-proposed next run.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_queue (
+      id                          SERIAL PRIMARY KEY,
+      master_id                   BIGINT NOT NULL,
+      track_position              TEXT NOT NULL,
+      track_title                 TEXT NOT NULL,
+      track_artist                TEXT,
+      master_year                 INTEGER,
+      master_cover_url            TEXT,
+      candidate_video_id          TEXT NOT NULL,
+      candidate_title             TEXT,
+      candidate_channel_title     TEXT,
+      candidate_channel_id        TEXT,
+      candidate_duration_seconds  INTEGER,
+      candidate_thumbnail_url     TEXT,
+      candidate_published_at      TIMESTAMPTZ,
+      title_score                 REAL,
+      duration_ok                 BOOLEAN,
+      status                      TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','approved','rejected','skipped','superseded')),
+      reviewed_at                 TIMESTAMPTZ,
+      reviewed_by                 TEXT,
+      created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_status_idx ON track_yt_review_queue (status, created_at)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_master_idx ON track_yt_review_queue (master_id, track_position)`);
+  await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS track_yt_review_queue_uniq_idx ON track_yt_review_queue (master_id, track_position, candidate_video_id)`);
+
+  // Single-row state for the YT-review worker. id is pinned to 1 so
+  // upserts and reads stay trivial.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_state (
+      id                INT PRIMARY KEY DEFAULT 1,
+      running           BOOLEAN NOT NULL DEFAULT false,
+      cursor_year       INT,
+      cursor_master_id  BIGINT,
+      cursor_track_pos  TEXT,
+      total_searched    INT NOT NULL DEFAULT 0,
+      total_queued      INT NOT NULL DEFAULT 0,
+      total_skipped     INT NOT NULL DEFAULT 0,
+      total_errors      INT NOT NULL DEFAULT 0,
+      last_run_at       TIMESTAMPTZ,
+      last_error        TEXT,
+      message           TEXT
+    )
+  `);
+  await getPool().query(`INSERT INTO track_yt_review_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -6520,6 +6575,173 @@ export async function suggestTrackYtOverridesBatch(
   } finally {
     client.release();
   }
+}
+
+// ── YT review queue helpers (v1: human-reviewed background matcher) ──
+export async function insertReviewCandidate(args: {
+  masterId: number | string;
+  trackPosition: string;
+  trackTitle: string;
+  trackArtist?: string | null;
+  masterYear?: number | null;
+  masterCoverUrl?: string | null;
+  candidateVideoId: string;
+  candidateTitle?: string | null;
+  candidateChannelTitle?: string | null;
+  candidateChannelId?: string | null;
+  candidateDurationSeconds?: number | null;
+  candidateThumbnailUrl?: string | null;
+  candidatePublishedAt?: Date | string | null;
+  titleScore?: number | null;
+  durationOk?: boolean | null;
+}): Promise<boolean> {
+  const r = await getPool().query(
+    `INSERT INTO track_yt_review_queue
+       (master_id, track_position, track_title, track_artist, master_year, master_cover_url,
+        candidate_video_id, candidate_title, candidate_channel_title, candidate_channel_id,
+        candidate_duration_seconds, candidate_thumbnail_url, candidate_published_at,
+        title_score, duration_ok)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ON CONFLICT (master_id, track_position, candidate_video_id) DO NOTHING
+     RETURNING id`,
+    [
+      Number(args.masterId), args.trackPosition, args.trackTitle, args.trackArtist ?? null,
+      args.masterYear ?? null, args.masterCoverUrl ?? null,
+      args.candidateVideoId, args.candidateTitle ?? null, args.candidateChannelTitle ?? null,
+      args.candidateChannelId ?? null, args.candidateDurationSeconds ?? null,
+      args.candidateThumbnailUrl ?? null,
+      args.candidatePublishedAt ?? null,
+      args.titleScore ?? null, args.durationOk ?? null,
+    ]
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Has this (master, track) ever been considered? Used by the worker to
+// skip tracks that already have a pending OR resolved (approved /
+// rejected / skipped) candidate so a single track only enqueues once.
+export async function reviewQueueHasEntry(masterId: number | string, trackPosition: string): Promise<boolean> {
+  const r = await getPool().query(
+    `SELECT 1 FROM track_yt_review_queue WHERE master_id = $1 AND track_position = $2 LIMIT 1`,
+    [Number(masterId), trackPosition],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+export async function listReviewQueue(opts: {
+  status?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ rows: any[]; total: number }> {
+  const status = opts.status || "pending";
+  const limit = Math.max(1, Math.min(200, opts.limit ?? 50));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const totalR = await getPool().query(
+    `SELECT COUNT(*)::int AS n FROM track_yt_review_queue WHERE status = $1`,
+    [status],
+  );
+  const r = await getPool().query(
+    `SELECT * FROM track_yt_review_queue
+      WHERE status = $1
+      ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC, id ASC
+      LIMIT $2 OFFSET $3`,
+    [status, limit, offset],
+  );
+  return { rows: r.rows, total: totalR.rows[0]?.n ?? 0 };
+}
+
+export async function getReviewQueueCounts(): Promise<{ pending: number; approved: number; rejected: number; skipped: number; total: number }> {
+  const r = await getPool().query(
+    `SELECT status, COUNT(*)::int AS n FROM track_yt_review_queue GROUP BY status`,
+  );
+  const out = { pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 };
+  for (const row of r.rows) {
+    const s = String(row.status);
+    if (s in out) (out as any)[s] = Number(row.n);
+    out.total += Number(row.n);
+  }
+  return out;
+}
+
+export async function reviewQueueDecide(id: number, action: "approve" | "reject" | "skip", reviewer: string | null): Promise<{ ok: boolean; videoId?: string; masterId?: number; trackPosition?: string; trackTitle?: string }> {
+  const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "skipped";
+  const upd = await getPool().query(
+    `UPDATE track_yt_review_queue
+        SET status = $2, reviewed_at = NOW(), reviewed_by = $3
+      WHERE id = $1 AND status = 'pending'
+    RETURNING master_id, track_position, track_title, candidate_video_id, candidate_title`,
+    [id, status, reviewer],
+  );
+  if ((upd.rowCount ?? 0) === 0) return { ok: false };
+  const row = upd.rows[0];
+  // Approve also marks any OTHER pending candidates for the same
+  // (master, track) as 'superseded' so the queue collapses to one
+  // resolved row per track.
+  if (action === "approve") {
+    await getPool().query(
+      `UPDATE track_yt_review_queue
+          SET status = 'superseded', reviewed_at = NOW(), reviewed_by = $3
+        WHERE master_id = $1 AND track_position = $2 AND id <> $4 AND status = 'pending'`,
+      [Number(row.master_id), String(row.track_position), reviewer, id],
+    );
+  }
+  return {
+    ok: true,
+    videoId: row.candidate_video_id,
+    masterId: Number(row.master_id),
+    trackPosition: String(row.track_position),
+    trackTitle: String(row.track_title || ""),
+  };
+}
+
+export async function getReviewState(): Promise<any> {
+  const r = await getPool().query(`SELECT * FROM track_yt_review_state WHERE id = 1`);
+  return r.rows[0] ?? null;
+}
+
+export async function updateReviewState(patch: Record<string, any>): Promise<void> {
+  const allowed = new Set([
+    "running", "cursor_year", "cursor_master_id", "cursor_track_pos",
+    "total_searched", "total_queued", "total_skipped", "total_errors",
+    "last_run_at", "last_error", "message",
+  ]);
+  const cols: string[] = [];
+  const vals: any[] = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (!allowed.has(k)) continue;
+    cols.push(k); vals.push(v);
+  }
+  if (!cols.length) return;
+  const setSql = cols.map((c, i) => `${c} = $${i + 1}`).join(", ");
+  await getPool().query(
+    `UPDATE track_yt_review_state SET ${setSql} WHERE id = 1`,
+    vals,
+  );
+}
+
+export async function bumpReviewCounter(field: "total_searched" | "total_queued" | "total_skipped" | "total_errors", by = 1): Promise<void> {
+  await getPool().query(`UPDATE track_yt_review_state SET ${field} = ${field} + $1, last_run_at = NOW() WHERE id = 1`, [by]);
+}
+
+// Finds the next earliest Blues master (year ASC) past the cursor that
+// the worker should propose tracks for. Vinyl + Blues genre strict.
+// Returns null when the cache is exhausted past the cursor.
+export async function getNextBluesMasterAfter(cursorYear: number | null, cursorMasterId: number | null): Promise<{ master_id: number; year: number | null; data: any } | null> {
+  const r = await getPool().query(
+    `SELECT rc.discogs_id AS master_id,
+            COALESCE(NULLIF(rc.data->>'year','')::int, NULL) AS year,
+            rc.data
+       FROM release_cache rc
+      WHERE rc.type = 'master'
+        AND rc.data->'genres' ? 'Blues'
+        AND COALESCE(NULLIF(rc.data->>'year','')::int, 9999) >= COALESCE($1, 0)
+        AND (COALESCE(NULLIF(rc.data->>'year','')::int, 9999) > COALESCE($1, 0)
+             OR rc.discogs_id > COALESCE($2, 0))
+      ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 9999) ASC, rc.discogs_id ASC
+      LIMIT 1`,
+    [cursorYear, cursorMasterId],
+  );
+  return r.rows[0] ?? null;
 }
 
 // Admin: delete a single override (called from the album popup or the

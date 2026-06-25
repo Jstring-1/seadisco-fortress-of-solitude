@@ -57,6 +57,7 @@
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
         <button class="admin-tab" onclick="switchAdminTab('all-blues')">All Blues</button>
+        <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -269,6 +270,22 @@
           </label>
           <span id="lexicon-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
+      </div>
+
+      <!-- ── YT Review tab (v1) ──────────────────────────────────────
+           Background worker walks earliest-year Blues masters and
+           proposes YouTube videos for tracks with no override yet.
+           v1 = everything goes here for human review; no auto-accept. -->
+      <div class="admin-tab-panel admin-grp-yt-review" id="panel-yt-review" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">YT Review worker</h2>
+          <button class="admin-refresh-btn" id="ytr-refresh-btn" onclick="_adminClickRefresh(this, loadYtReview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="ytr-refresh-status" class="admin-refresh-status"></span>
+          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">v1 — every candidate is human-reviewed; nothing auto-pinned.</span>
+        </div>
+        <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
+        <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+        <div id="ytr-pager" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.6rem;font-size:0.8rem"></div>
       </div>
 
       <!-- Style suggestions per Discogs genre. The genre dropdown
@@ -549,6 +566,10 @@ const _adminGroups = {
   'all-blues': {
     panels: ['panel-all-blues'],
     load: () => { loadAllBluesAdmin(); },
+  },
+  'yt-review': {
+    panels: ['panel-yt-review'],
+    load: () => { loadYtReview(); },
   },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
@@ -1671,6 +1692,153 @@ async function loadGenreCacheWarm() { return loadCacheWarm(); }
 // ── All Blues worker (admin panel) ────────────────────────────────
 // Same pattern as cache-warm: Start posts the year window + reset
 // flag, Stop signals the running worker, status polls counters.
+// ── YT Review worker (v1) ────────────────────────────────────────────
+// Background YouTube-match proposer for earliest-year Blues masters.
+// Every candidate goes through human review here before being pinned.
+let _ytrPage = 0;
+let _ytrStatus = "pending";
+const _YTR_LIMIT = 50;
+let _ytrPollTimer = null;
+async function loadYtReview() {
+  const stEl = document.getElementById("ytr-status");
+  if (!stEl) return;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/status");
+    if (!r.ok) { stEl.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const s = await r.json();
+    const c = s.counts || { pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 };
+    const running = !!s.running;
+    const st = s.state || {};
+    const runPill = running
+      ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
+      : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
+    stEl.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:0.7rem;align-items:center;margin-bottom:0.5rem">
+        ${runPill}
+        ${running
+          ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
+          : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>`}
+        <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
+        <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">${esc(st.message || "Idle.")}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;font-size:0.82rem">
+        ${ytrTile("Pending",  c.pending,  "#7ed196", "pending")}
+        ${ytrTile("Approved", c.approved, "#7ed196", "approved")}
+        ${ytrTile("Rejected", c.rejected, "#e88",    "rejected")}
+        ${ytrTile("Skipped",  c.skipped,  "var(--muted)", "skipped")}
+        ${ytrTile("Searched", st.total_searched || 0, "var(--text)")}
+        ${ytrTile("Queued",   st.total_queued   || 0, "var(--text)")}
+        ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
+      </div>
+    `;
+    // Poll while running so the cursor + counters stay live.
+    if (_ytrPollTimer) { clearTimeout(_ytrPollTimer); _ytrPollTimer = null; }
+    if (running && document.getElementById("panel-yt-review")?.style.display !== "none") {
+      _ytrPollTimer = setTimeout(loadYtReview, 5000);
+    }
+    await loadYtReviewQueue();
+  } catch (e) { stEl.innerHTML = `<span style="color:#e88">Failed: ${esc(e?.message || e)}</span>`; }
+}
+function ytrTile(label, n, color, status) {
+  const onclick = status ? ` style="cursor:pointer;text-decoration:underline" onclick="ytrSetStatus('${status}')"` : "";
+  return `<div${onclick ? ' ' + onclick : ''} style="border:1px solid var(--border);border-radius:5px;padding:0.4rem 0.55rem">
+    <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">${label}</div>
+    <div style="font-size:0.95rem;font-weight:600;color:${color};font-variant-numeric:tabular-nums">${Number(n||0).toLocaleString()}</div>
+  </div>`;
+}
+function ytrSetStatus(s) { _ytrStatus = s; _ytrPage = 0; loadYtReviewQueue(); }
+window.ytrSetStatus = ytrSetStatus;
+async function ytrStart() {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
+    if (r.status === 409) { alert("Already running."); loadYtReview(); return; }
+    if (!r.ok) { alert(`Start failed: HTTP ${r.status}`); return; }
+    loadYtReview();
+  } catch (e) { alert(`Start failed: ${e?.message || e}`); }
+}
+window.ytrStart = ytrStart;
+async function ytrStop() {
+  try {
+    await apiFetch("/api/admin/yt-review/stop", { method: "POST" });
+    loadYtReview();
+  } catch (e) { alert(`Stop failed: ${e?.message || e}`); }
+}
+window.ytrStop = ytrStop;
+async function loadYtReviewQueue() {
+  const el = document.getElementById("ytr-queue");
+  if (!el) return;
+  try {
+    const params = new URLSearchParams({ status: _ytrStatus, limit: String(_YTR_LIMIT), offset: String(_ytrPage * _YTR_LIMIT) });
+    const r = await apiFetch(`/api/admin/yt-review/queue?${params}`);
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Queue load failed: HTTP ${r.status}</span>`; return; }
+    const { rows = [], total = 0 } = await r.json();
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No ${_ytrStatus} rows.</div>`;
+      ytrRenderPager(total);
+      return;
+    }
+    el.innerHTML = rows.map(ytrRowHtml).join("");
+    ytrRenderPager(total);
+  } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
+}
+function ytrRowHtml(r) {
+  const ytUrl = `https://www.youtube.com/watch?v=${esc(r.candidate_video_id)}`;
+  const score = r.title_score != null ? Number(r.title_score).toFixed(2) : "—";
+  const showActions = _ytrStatus === "pending";
+  const yr = r.master_year || "?";
+  return `<div style="border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center;background:rgba(255,255,255,0.015)">
+    ${r.master_cover_url
+      ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy">`
+      : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
+    ${r.candidate_thumbnail_url
+      ? `<a href="${esc(ytUrl)}" target="_blank" rel="noopener" title="Open on YouTube"><img src="${esc(r.candidate_thumbnail_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy"></a>`
+      : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
+    <div style="min-width:0">
+      <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(r.candidate_title || "")}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")} <span style="color:#555">·</span> match ${score}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}</div>
+    </div>
+    ${showActions
+      ? `<div style="display:flex;gap:0.3rem;align-items:center">
+          <button class="admin-btn" onclick="ytrDecide(${r.id},'approve')" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
+          <button class="admin-btn" onclick="ytrDecide(${r.id},'reject')" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
+          <button class="admin-btn" onclick="ytrDecide(${r.id},'skip')" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+        </div>`
+      : `<div style="color:var(--muted);font-size:0.74rem">${esc(r.status || "")}</div>`}
+  </div>`;
+}
+function ytrRenderPager(total) {
+  const el = document.getElementById("ytr-pager");
+  if (!el) return;
+  const pages = Math.max(1, Math.ceil(total / _YTR_LIMIT));
+  const cur = _ytrPage + 1;
+  if (pages <= 1) { el.innerHTML = `<span style="color:var(--muted)">${total} row${total === 1 ? "" : "s"}</span>`; return; }
+  el.innerHTML = `
+    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} onclick="ytrPage(${_ytrPage - 1})">‹ Prev</button>
+    <span style="color:var(--muted)">Page ${cur} / ${pages} · ${total.toLocaleString()} ${_ytrStatus}</span>
+    <button class="admin-btn" ${cur >= pages ? "disabled" : ""} onclick="ytrPage(${_ytrPage + 1})">Next ›</button>
+  `;
+}
+function ytrPage(p) { _ytrPage = Math.max(0, p); loadYtReviewQueue(); }
+window.ytrPage = ytrPage;
+async function ytrDecide(id, action) {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      alert(`${action} failed: ${body?.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    loadYtReview();
+  } catch (e) { alert(`${action} failed: ${e?.message || e}`); }
+}
+window.ytrDecide = ytrDecide;
+window.loadYtReview = loadYtReview;
+
 // Stats panel shows queue (pending/done/error), cached artist count,
 // and links-by-kind so the admin can watch progress.
 async function loadAllBluesAdmin() {
