@@ -1702,6 +1702,10 @@ let _ytrPollTimer = null;
 async function loadYtReview() {
   const stEl = document.getElementById("ytr-status");
   if (!stEl) return;
+  // esc is a function-local const elsewhere in this file (loadCacheWarm
+  // et al), not global — define our own here so the templates below
+  // don't ReferenceError.
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
   try {
     const r = await apiFetch("/api/admin/yt-review/status");
     if (!r.ok) { stEl.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
@@ -1769,6 +1773,7 @@ window.ytrStop = ytrStop;
 async function loadYtReviewQueue() {
   const el = document.getElementById("ytr-queue");
   if (!el) return;
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
   try {
     const params = new URLSearchParams({ status: _ytrStatus, limit: String(_YTR_LIMIT), offset: String(_ytrPage * _YTR_LIMIT) });
     const r = await apiFetch(`/api/admin/yt-review/queue?${params}`);
@@ -1784,6 +1789,7 @@ async function loadYtReviewQueue() {
   } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
 }
 function ytrRowHtml(r) {
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
   const ytUrl = `https://www.youtube.com/watch?v=${esc(r.candidate_video_id)}`;
   const score = r.title_score != null ? Number(r.title_score).toFixed(2) : "—";
   const showActions = _ytrStatus === "pending";

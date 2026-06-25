@@ -11905,6 +11905,21 @@ function _ytReviewMaybeReset() {
 // Normalise + score a candidate title against the (artist, track)
 // pair. Cheap word-bag overlap — title must mention BOTH artist and
 // track for a worker-quality score. Returns [0..1].
+// Aggressive title normaliser shared by the album-mode auto-matcher.
+// Collapses smart quotes/dashes to ASCII, then strips ALL non-
+// alphanumeric characters so punctuation differences don't kill a
+// match. Keep in sync with _ytNormTitle in web/youtube.js — when one
+// changes, change both.
+function _ytNormTitleTS(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[‘’′ʼ‵]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—−]/g, "-")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 // Port of web/youtube.js _albumAutoMatchTrack — given a YouTube video
 // title and a list of album tracks, return the track whose title is a
 // case-insensitive substring of the video title, preferring the
@@ -11913,12 +11928,12 @@ function _ytReviewMaybeReset() {
 // means the worker's queue is consistent with what a curator would
 // stage by hand.
 function _ytAlbumAutoMatch(videoTitle: string, tracks: Array<{ position: string; title: string }>): { position: string; title: string } | null {
-  const v = String(videoTitle || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const v = _ytNormTitleTS(videoTitle);
   if (!v || !Array.isArray(tracks) || !tracks.length) return null;
   let best: { position: string; title: string } | null = null;
   let bestScore = 0;
   for (const t of tracks) {
-    const tt = String(t.title || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const tt = _ytNormTitleTS(t.title);
     if (!tt || tt.length < 3) continue;
     if (v.includes(tt)) {
       if (tt.length > bestScore) { best = t; bestScore = tt.length; }
