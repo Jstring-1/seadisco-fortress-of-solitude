@@ -6690,7 +6690,8 @@ export async function listReviewQueue(opts: {
   const r = await getPool().query(
     `SELECT * FROM track_yt_review_queue
       WHERE status = $1
-      ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC, id ASC
+      ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC,
+               title_score DESC NULLS LAST, id ASC
       LIMIT $2 OFFSET $3`,
     [status, limit, offset],
   );
