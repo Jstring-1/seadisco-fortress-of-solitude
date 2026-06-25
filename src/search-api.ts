@@ -11897,7 +11897,7 @@ app.get("/api/admin/lyrics/scrape/since-last", async (req, res) => {
 // gracefully and doesn't compete with regular user search activity.
 let _ytReviewRunning = false;
 let _ytReviewStopRequested = false;
-const _YT_REVIEW_THROTTLE_MS = 45_000;
+const _YT_REVIEW_THROTTLE_MS = 3_000;
 // Worker-only cap, distinct from the project-wide soft cap. 9,000
 // searches/day leaves ~1,000 (100k units) for manual admin / user
 // searches so the worker can't starve you out. Persists across worker
