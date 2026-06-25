@@ -6743,6 +6743,24 @@ export async function reviewQueueDecide(id: number, action: "approve" | "reject"
   };
 }
 
+export async function reviewQueueDeleteApproval(id: number, reviewer: string | null): Promise<{ ok: boolean; masterId?: number; trackPosition?: string }> {
+  const row = (await getPool().query(
+    `SELECT master_id, track_position, status FROM track_yt_review_queue WHERE id = $1`,
+    [id],
+  )).rows[0];
+  if (!row || row.status !== "approved") return { ok: false };
+  const masterId = Number(row.master_id);
+  const trackPosition = String(row.track_position);
+  await deleteTrackYtOverride(masterId, "master", trackPosition);
+  await getPool().query(
+    `UPDATE track_yt_review_queue
+        SET status = 'rejected', reviewed_at = NOW(), reviewed_by = $2
+      WHERE id = $1`,
+    [id, reviewer],
+  );
+  return { ok: true, masterId, trackPosition };
+}
+
 export async function getReviewState(): Promise<any> {
   const r = await getPool().query(`SELECT * FROM track_yt_review_state WHERE id = 1`);
   return r.rows[0] ?? null;
