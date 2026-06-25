@@ -12028,11 +12028,18 @@ async function _runYtReviewWorker(): Promise<void> {
   _ytReviewStopRequested = false;
   await updateReviewState({ running: true, last_error: null, message: "Walking Blues masters by year…" });
   let searchesThisRun = 0;
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 5;
   try {
     while (!_ytReviewStopRequested) {
       _ytReviewMaybeReset();
+      _ytQuotaMaybeReset();
       if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET) {
         await updateReviewState({ message: `Worker daily search cap reached (${_YT_REVIEW_DAILY_BUDGET}). Resumes after UTC midnight.`, running: false });
+        break;
+      }
+      if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) {
+        await updateReviewState({ message: `Project daily quota cap reached. Resumes after UTC midnight.`, running: false });
         break;
       }
       const state = await getReviewState();
@@ -12078,10 +12085,24 @@ async function _runYtReviewWorker(): Promise<void> {
       await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — ${masterTitle || "(no title)"}` });
       const result = await _ytReviewSearch(q);
       if (!result) {
-        await updateReviewState({ message: `Stopping: cap hit or upstream error on "${q}".`, running: false });
-        _ytReviewStopRequested = true;
-        break;
+        // Caps are checked at the top of the loop, so a null here means
+        // an upstream/transient error. Advance the cursor (so we don't
+        // wedge on the same master) and continue — only bail after a
+        // run of consecutive failures suggests something systemic.
+        consecutiveErrors++;
+        await bumpReviewCounter("total_errors", 1);
+        await updateReviewState({
+          message: `Skipping master ${masterId} after upstream error on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
+          cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null,
+        });
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          await updateReviewState({ message: `Stopping after ${MAX_CONSECUTIVE_ERRORS} consecutive upstream errors. Press Start to resume.`, running: false });
+          break;
+        }
+        await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
+        continue;
       }
+      consecutiveErrors = 0;
       const { body } = result;
       searchesThisRun++;
       await bumpReviewCounter("total_searched", 1);
