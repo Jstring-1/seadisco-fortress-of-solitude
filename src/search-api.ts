@@ -9297,10 +9297,35 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
 // without it ever looking stale. Invalidated by any mutation route
 // (start/stop/reset/delete/force-clear) so the next poll re-runs the
 // query immediately after the admin clicks something.
-const CW_STATS_TTL_MS = 15_000;
+// Fresh window: while younger than this, the cached payload is
+// returned directly with no recompute. in_cache counts barely change
+// when no worker is running, so a few minutes of staleness is fine.
+const CW_STATS_TTL_MS = 5 * 60 * 1000;
+// Stale-but-acceptable window: between TTL and this, the cached
+// payload is returned IMMEDIATELY and a background recompute fires
+// so the next read is fresh. Stale-while-revalidate keeps the panel
+// snappy after idle without sacrificing eventual accuracy.
+const CW_STATS_STALE_MS = 60 * 60 * 1000;
 let _cwStatsCache: { at: number; rows: any[]; release_cache_total: number } | null = null;
 let _cwStatsInflight: Promise<{ rows: any[]; release_cache_total: number }> | null = null;
 function _invalidateCwStats(): void { _cwStatsCache = null; }
+// Fire-and-forget background recompute used by the SWR path. Returns
+// silently on failure — the next foreground call retries.
+function _kickCwStatsBackgroundRefresh(): void {
+  if (_cwStatsInflight) return;
+  _cwStatsInflight = (async () => {
+    try {
+      const out = await _computeCwStats();
+      _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+      return out;
+    } catch (err) {
+      console.warn("[cw-stats] background refresh failed:", err);
+      throw err;
+    } finally {
+      _cwStatsInflight = null;
+    }
+  })();
+}
 
 // Canonical (genre → styles) map mirroring the admin datalists in
 // web/admin.html. Discogs tags genres and styles independently per
@@ -9399,8 +9424,23 @@ async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: nu
 }
 async function _getCwStats(): Promise<{ rows: any[]; release_cache_total: number }> {
   const now = Date.now();
-  if (_cwStatsCache && now - _cwStatsCache.at < CW_STATS_TTL_MS) {
-    return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+  if (_cwStatsCache) {
+    const age = now - _cwStatsCache.at;
+    if (age < CW_STATS_TTL_MS) {
+      // Fresh enough — return immediately.
+      return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+    }
+    if (age < CW_STATS_STALE_MS) {
+      // Stale-but-acceptable: return the cached payload right away
+      // and kick a background recompute so the next read is fresh.
+      // The panel feels snappy even after a long idle — the heavy
+      // CTE only ever runs out-of-band.
+      _kickCwStatsBackgroundRefresh();
+      return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+    }
+    // Older than the stale window — fall through to a foreground
+    // recompute. (Effectively only happens on the first open after
+    // a deploy; warm-on-boot covers the typical case.)
   }
   // Singleflight: if a recompute is already in flight, await that
   // promise instead of kicking a second concurrent CTE scan.
@@ -15178,6 +15218,12 @@ app.listen(PORT, "0.0.0.0", async () => {
     try { initCacheWarmModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] cache-warm init failed:", e);
     }
+    // Warm the cache-warm-runs stats cache out of band so the first
+    // admin who opens the panel after deploy doesn't pay for the
+    // ~10s CTE in the foreground. Delayed a few seconds to let the
+    // DB schema settle. Errors are swallowed — next foreground call
+    // will retry.
+    setTimeout(() => { _kickCwStatsBackgroundRefresh(); }, 5000);
     try { initAllBluesModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] all-blues init failed:", e);
     }
