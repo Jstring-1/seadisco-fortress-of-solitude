@@ -1719,6 +1719,8 @@ async function loadYtReview() {
           ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
           : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
+        <span style="font-size:0.74rem;color:var(--muted)" title="Worker searches today / daily cap. Hard cap so manual searches always have budget left.">worker: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.searchesToday||0).toLocaleString()}</strong>/${Number(s.dailyBudget||9000).toLocaleString()}</span>
+        <span style="font-size:0.74rem;color:var(--muted)" title="Project-wide YouTube quota units consumed today (worker + manual). Resets at UTC midnight.">project: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.projectUnitsToday||0).toLocaleString()}</strong>/${Number(s.projectUnitsCap||950000).toLocaleString()} u</span>
         <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">${esc(st.message || "Idle.")}</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;font-size:0.82rem">

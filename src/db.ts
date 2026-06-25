@@ -421,6 +421,22 @@ export async function initDb() {
   `);
   await getPool().query(`INSERT INTO track_yt_review_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
 
+  // Per (master, track) search log so the worker can skip what it
+  // already tried, and the admin can later trigger "retry tracks
+  // that got 0 candidates" without re-walking every other track.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_searched (
+      master_id        BIGINT NOT NULL,
+      track_position   TEXT NOT NULL,
+      last_searched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      candidate_count  INT NOT NULL DEFAULT 0,
+      source           TEXT NOT NULL DEFAULT 'album',
+      PRIMARY KEY (master_id, track_position)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_at_idx ON track_yt_review_searched (last_searched_at)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_empty_idx ON track_yt_review_searched (candidate_count) WHERE candidate_count = 0`);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -6615,6 +6631,37 @@ export async function insertReviewCandidate(args: {
     ]
   );
   return (r.rowCount ?? 0) > 0;
+}
+
+// Mark a (master, track) pair as searched (regardless of outcome) so
+// the next worker pass skips it. candidate_count tracks how many
+// videos auto-matched to this track from the album-level search.
+export async function logTrackSearched(masterId: number | string, trackPosition: string, candidateCount: number, source = "album"): Promise<void> {
+  await getPool().query(
+    `INSERT INTO track_yt_review_searched (master_id, track_position, candidate_count, source)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (master_id, track_position)
+     DO UPDATE SET last_searched_at = NOW(), candidate_count = EXCLUDED.candidate_count, source = EXCLUDED.source`,
+    [Number(masterId), trackPosition, Math.max(0, candidateCount | 0), source],
+  );
+}
+
+export async function isTrackAlreadySearched(masterId: number | string, trackPosition: string): Promise<boolean> {
+  const r = await getPool().query(
+    `SELECT 1 FROM track_yt_review_searched WHERE master_id = $1 AND track_position = $2 LIMIT 1`,
+    [Number(masterId), trackPosition],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Clear searched-log rows that yielded 0 candidates so the worker
+// will retry them on its next pass. Optional master_id scopes the
+// clear to a single album.
+export async function clearEmptySearchedRows(masterId?: number | null): Promise<number> {
+  const r = masterId == null
+    ? await getPool().query(`DELETE FROM track_yt_review_searched WHERE candidate_count = 0`)
+    : await getPool().query(`DELETE FROM track_yt_review_searched WHERE candidate_count = 0 AND master_id = $1`, [Number(masterId)]);
+  return r.rowCount ?? 0;
 }
 
 // Has this (master, track) ever been considered? Used by the worker to
