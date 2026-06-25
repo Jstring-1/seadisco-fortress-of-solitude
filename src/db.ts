@@ -6770,21 +6770,28 @@ export async function bumpReviewCounter(field: "total_searched" | "total_queued"
   await getPool().query(`UPDATE track_yt_review_state SET ${field} = ${field} + $1, last_run_at = NOW() WHERE id = 1`, [by]);
 }
 
-// Finds the next earliest Blues master (year ASC) past the cursor that
-// the worker should propose tracks for. Vinyl + Blues genre strict.
-// Returns null when the cache is exhausted past the cursor.
+// Finds the next earliest STRICT-Blues master (year ASC) past the
+// cursor. "Strict" = genres array is exactly ['Blues'] (length 1) —
+// a master tagged ['Blues','Rock'] is skipped. No-year masters are
+// also skipped for now per the v1.1 spec; revisit when the dated
+// catalog is exhausted. Returns null when no more matches exist past
+// the cursor.
 export async function getNextBluesMasterAfter(cursorYear: number | null, cursorMasterId: number | null): Promise<{ master_id: number; year: number | null; data: any } | null> {
   const r = await getPool().query(
     `SELECT rc.discogs_id AS master_id,
-            COALESCE(NULLIF(rc.data->>'year','')::int, NULL) AS year,
+            (rc.data->>'year')::int AS year,
             rc.data
        FROM release_cache rc
       WHERE rc.type = 'master'
+        AND jsonb_typeof(rc.data->'genres') = 'array'
+        AND jsonb_array_length(rc.data->'genres') = 1
         AND rc.data->'genres' ? 'Blues'
-        AND COALESCE(NULLIF(rc.data->>'year','')::int, 9999) >= COALESCE($1, 0)
-        AND (COALESCE(NULLIF(rc.data->>'year','')::int, 9999) > COALESCE($1, 0)
+        AND rc.data->>'year' ~ '^[0-9]+$'
+        AND (rc.data->>'year')::int > 0
+        AND (rc.data->>'year')::int >= COALESCE($1, 0)
+        AND ((rc.data->>'year')::int > COALESCE($1, 0)
              OR rc.discogs_id > COALESCE($2, 0))
-      ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 9999) ASC, rc.discogs_id ASC
+      ORDER BY (rc.data->>'year')::int ASC, rc.discogs_id ASC
       LIMIT 1`,
     [cursorYear, cursorMasterId],
   );
