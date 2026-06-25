@@ -439,15 +439,32 @@ function _youtubeRowHtml(it) {
   `;
 }
 
+// Aggressive title normaliser used by the album-mode auto-matcher.
+// Collapses smart quotes/dashes to ASCII, then strips ALL non-
+// alphanumeric characters so punctuation differences don't kill a
+// match. "Don't Mistreat Me" / "Dont Mistreat Me", "Hot-Time Blues" /
+// "Hot Time Blues", "Hey, Hey, Hey" / "Hey Hey Hey" all collapse to
+// the same string. Keep this in sync with _ytAlbumAutoMatch in
+// src/search-api.ts so the worker and the popup agree.
+function _ytNormTitle(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[‘’′ʼ‵]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—−]/g, "-")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 // Album-mode auto-match: pick the missing track whose title appears as
 // a substring of the YouTube video title. Score by track-title length
 // (longer = more specific). Returns null if no track matches.
 function _albumAutoMatchTrack(videoTitle, tracks) {
-  const v = String(videoTitle || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const v = _ytNormTitle(videoTitle);
   if (!v || !Array.isArray(tracks) || !tracks.length) return null;
   let best = null, bestScore = 0;
   for (const t of tracks) {
-    const tt = String(t.title || "").toLowerCase().replace(/\s+/g, " ").trim();
+    const tt = _ytNormTitle(t.title);
     if (!tt || tt.length < 3) continue; // skip generic 1-2 char titles
     if (v.includes(tt)) {
       if (tt.length > bestScore) { best = t; bestScore = tt.length; }
