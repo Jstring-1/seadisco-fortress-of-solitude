@@ -11897,7 +11897,8 @@ app.get("/api/admin/lyrics/scrape/since-last", async (req, res) => {
 // gracefully and doesn't compete with regular user search activity.
 let _ytReviewRunning = false;
 let _ytReviewStopRequested = false;
-const _YT_REVIEW_THROTTLE_MS = 3_000;
+const _YT_REVIEW_THROTTLE_MS = 8_000;
+const _YT_REVIEW_RATE_LIMIT_BACKOFF_MS = 60_000;
 // Worker-only cap, distinct from the project-wide soft cap. 9,000
 // searches/day leaves ~1,000 (100k units) for manual admin / user
 // searches so the worker can't starve you out. Persists across worker
@@ -12098,19 +12099,30 @@ async function _runYtReviewWorker(): Promise<void> {
           await updateReviewState({ message: `Stopping: YouTube API key missing.`, last_error: result.reason, running: false });
           break;
         }
-        consecutiveErrors++;
-        await bumpReviewCounter("total_errors", 1);
+        // YouTube rate-limit (429 rateLimitExceeded) means "slow down",
+        // not "you're broken". Don't count it as a hard error — wait
+        // longer and retry without incrementing the consecutive-error
+        // counter that would stop the worker.
+        const isRateLimited = /rateLimitExceeded|http_429/i.test(result.reason);
+        if (!isRateLimited) {
+          consecutiveErrors++;
+          await bumpReviewCounter("total_errors", 1);
+        }
         await logReviewError(masterId, q, result.reason).catch(() => {});
         await updateReviewState({
-          message: `Skipping master ${masterId}: ${result.reason} on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
+          message: isRateLimited
+            ? `Rate-limited by YouTube; backing off ${_YT_REVIEW_RATE_LIMIT_BACKOFF_MS / 1000}s on master ${masterId}.`
+            : `Skipping master ${masterId}: ${result.reason} on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
           last_error: result.reason,
-          cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null,
+          cursor_year: isRateLimited ? cursorYear : year,
+          cursor_master_id: isRateLimited ? cursorMasterId : masterId,
+          cursor_track_pos: null,
         });
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           await updateReviewState({ message: `Stopping after ${MAX_CONSECUTIVE_ERRORS} consecutive errors. Last: ${result.reason}.`, running: false });
           break;
         }
-        await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
+        await new Promise(r => setTimeout(r, isRateLimited ? _YT_REVIEW_RATE_LIMIT_BACKOFF_MS : _YT_REVIEW_THROTTLE_MS));
         continue;
       }
       consecutiveErrors = 0;
