@@ -1789,7 +1789,8 @@ async function loadYtReviewQueue() {
   } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
 }
 function ytrRowHtml(r) {
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const decode = s => String(s ?? "").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
+  const esc = s => decode(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
   const ytUrl = `https://www.youtube.com/watch?v=${esc(r.candidate_video_id)}`;
   const score = r.title_score != null ? Number(r.title_score).toFixed(2) : "—";
   const showActions = _ytrStatus === "pending";
