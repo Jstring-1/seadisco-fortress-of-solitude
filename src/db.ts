@@ -6699,7 +6699,9 @@ export async function listReviewQueue(opts: {
 
 export async function getReviewQueueCounts(): Promise<{ pending: number; approved: number; rejected: number; skipped: number; total: number }> {
   const r = await getPool().query(
-    `SELECT status, COUNT(*)::int AS n FROM track_yt_review_queue GROUP BY status`,
+    `SELECT status, COUNT(DISTINCT (master_id, track_position))::int AS n
+       FROM track_yt_review_queue
+      GROUP BY status`,
   );
   const out = { pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 };
   for (const row of r.rows) {
