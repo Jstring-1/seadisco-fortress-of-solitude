@@ -420,6 +420,9 @@ export async function initDb() {
     )
   `);
   await getPool().query(`INSERT INTO track_yt_review_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+  await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_date TEXT`);
+  await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_worker_searches INT NOT NULL DEFAULT 0`);
+  await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_project_units INT NOT NULL DEFAULT 0`);
 
   // Per (master, track) search log so the worker can skip what it
   // already tried, and the admin can later trigger "retry tracks
@@ -6789,6 +6792,42 @@ export async function updateReviewState(patch: Record<string, any>): Promise<voi
 
 export async function bumpReviewCounter(field: "total_searched" | "total_queued" | "total_skipped" | "total_errors", by = 1): Promise<void> {
   await getPool().query(`UPDATE track_yt_review_state SET ${field} = ${field} + $1, last_run_at = NOW() WHERE id = 1`, [by]);
+}
+
+// Persisted daily-quota counters. quota_date is the UTC YYYY-MM-DD the
+// counters apply to; if today's UTC date differs, the counters reset.
+// Reads return the post-reset values so callers can gate on them.
+function _utcDateString(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+export async function getReviewQuotaToday(): Promise<{ workerSearches: number; projectUnits: number }> {
+  const today = _utcDateString();
+  const r = await getPool().query(
+    `SELECT quota_date, quota_worker_searches AS w, quota_project_units AS p
+       FROM track_yt_review_state WHERE id = 1`,
+  );
+  const row = r.rows[0];
+  if (!row || row.quota_date !== today) {
+    await getPool().query(
+      `UPDATE track_yt_review_state
+          SET quota_date = $1, quota_worker_searches = 0, quota_project_units = 0
+        WHERE id = 1`,
+      [today],
+    );
+    return { workerSearches: 0, projectUnits: 0 };
+  }
+  return { workerSearches: Number(row.w) || 0, projectUnits: Number(row.p) || 0 };
+}
+export async function bumpReviewQuota(workerSearches: number, projectUnits: number): Promise<void> {
+  const today = _utcDateString();
+  await getPool().query(
+    `UPDATE track_yt_review_state
+        SET quota_date = $1,
+            quota_worker_searches = CASE WHEN quota_date = $1 THEN quota_worker_searches + $2 ELSE $2 END,
+            quota_project_units   = CASE WHEN quota_date = $1 THEN quota_project_units   + $3 ELSE $3 END
+      WHERE id = 1`,
+    [today, workerSearches, projectUnits],
+  );
 }
 
 // Finds the next earliest STRICT-Blues master (year ASC) past the
