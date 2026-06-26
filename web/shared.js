@@ -1930,6 +1930,20 @@ function renderSharedFooter(opts) {
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div><a href="#" onclick="_seaDiscoOpenJimmy(event);return false;" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
+    <div style="margin-top:0.5rem;display:flex;justify-content:center;align-items:center;gap:0.35rem;color:#999;font-size:0.78rem">
+      <span>Catalog data from</span>
+      <a href="https://www.discogs.com" target="_blank" rel="noopener" style="text-decoration:none;color:#fff;font-weight:600">Discogs</a>
+    </div>
+    <div style="margin-top:0.35rem;display:flex;justify-content:center;align-items:center;gap:0.4rem;color:#999;font-size:0.78rem">
+      <span>Track playback and video search powered by</span>
+      <a href="https://www.youtube.com" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:0.25rem;text-decoration:none;color:#fff" aria-label="YouTube">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 20" height="16" role="img" aria-hidden="true">
+          <path fill="#FF0000" d="M27.4 3.1A3.5 3.5 0 0 0 24.9.6C22.7 0 14 0 14 0S5.3 0 3.1.6A3.5 3.5 0 0 0 .6 3.1C0 5.3 0 10 0 10s0 4.7.6 6.9A3.5 3.5 0 0 0 3.1 19.4C5.3 20 14 20 14 20s8.7 0 10.9-.6a3.5 3.5 0 0 0 2.5-2.5C28 14.7 28 10 28 10s0-4.7-.6-6.9Z"/>
+          <path fill="#fff" d="M11.2 14.3 18.6 10l-7.4-4.3z"/>
+        </svg>
+        <span style="font-weight:600;letter-spacing:-0.01em">YouTube</span>
+      </a>
+    </div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco</div>`;
 
   // Wire the live href-sync system so footer link hrefs always reflect

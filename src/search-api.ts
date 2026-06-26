@@ -11903,7 +11903,7 @@ const _YT_REVIEW_RATE_LIMIT_BACKOFF_MS = 60_000;
 // searches/day leaves ~1,000 (100k units) for manual admin / user
 // searches so the worker can't starve you out. Persists across worker
 // runs within the same UTC day; reset alongside the project counter.
-const _YT_REVIEW_DAILY_BUDGET = 9000;
+const _YT_REVIEW_DAILY_BUDGET = 90;
 let _ytReviewSearchesResetAt = (() => {
   const d = new Date(); d.setUTCHours(24, 0, 0, 0); return d.getTime();
 })();
