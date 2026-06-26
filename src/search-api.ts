@@ -67,7 +67,8 @@ function _extractDiscogsProfile(profile: any): any {
 }
 
 // ── Global API kill switch ──────────────────────────────────────────────
-const MAX_USERS         = 25;
+const MAX_USERS         = 100;
+const HIBERNATION_DAYS  = 90;
 let _apiKillSwitch = false;
 
 // ── Token-bucket rate limiter (shared across all callers) ──────────────
@@ -783,7 +784,7 @@ app.get("/api/user/token", async (req, res) => {
     if (!isPrivileged) {
       const activeCount = await getActiveUserCount();
       if (activeCount >= MAX_USERS) {
-        res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
+        res.status(403).json({ error: "hibernated", message: `Welcome back — your account was hibernated after ${HIBERNATION_DAYS} days of inactivity (synced collection data was cleared). Reactivation is automatic, but all ${MAX_USERS} active spots are currently taken. Try signing in again later; once a seat opens, you'll be reactivated automatically and your collection will re-sync from Discogs on demand.` });
         return;
       }
     }
@@ -1257,7 +1258,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
       if (!isPrivileged) {
         const userCount = await getActiveUserCount();
         if (userCount >= MAX_USERS) {
-          res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
+          res.status(403).send(`SeaDisco's active-user cap (${MAX_USERS}) is full right now, so new registrations are temporarily closed. Seats open up as inactive accounts (no activity for ${HIBERNATION_DAYS} days) are auto-hibernated. Please try again in a few days. <a href="/">Home</a>`);
           return;
         }
       }
