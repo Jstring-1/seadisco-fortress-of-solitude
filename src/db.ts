@@ -9356,6 +9356,11 @@ const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
   // Has-photo: 1 when photo_url is set + non-empty, 0 otherwise.
   // Sorting DESC puts rows WITH a photo first (find-by-eye),
   // ASC puts MISSING rows first (curation queue).
+  // Count of cached masters in release_cache where genres=['Blues']
+  // exactly AND this artist is a primary credit. Populated by the
+  // pre-1950 strict pad button; DESC surfaces artists with the most
+  // strictly-Blues releases first.
+  strict_count: "a.seed_strict_count",
   has_photo: "CASE WHEN COALESCE(a.photo_url, '') <> '' THEN 1 ELSE 0 END",
   // Has-wiki: same idea for wikipedia_suffix. ASC surfaces rows still
   // missing a Wikipedia link so the curator can knock them out.
