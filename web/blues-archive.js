@@ -401,6 +401,12 @@ async function _baLoadList() {
   if (document.getElementById("blues-archive-no-discogs")?.checked) {
     params.set("no_discogs", "1");
   }
+  // "Has strict-Blues release" — surfaces only artists with a cached
+  // master whose genres = ['Blues'] exactly. Lit when the strict-pad
+  // button has populated seed_strict_count.
+  if (document.getElementById("blues-archive-has-strict")?.checked) {
+    params.set("has_strict", "1");
+  }
   // Server-side sort — same fix as lyrics. Client-side sort over only
   // the visible 100 rows used to mislead users into thinking the
   // entire DB had been sorted.
@@ -486,6 +492,13 @@ function _baRenderListTable() {
         const nameHtml = (typeof entityLookupLinkHtml === "function" && row.name)
           ? entityLookupLinkHtml("artist", row.name, { entityId: row.discogs_id, title: `Lookup options for "${row.name}"` })
           : escHtml(row.name || "");
+        // Strict-Blues badge — lit when the artist has at least one
+        // cached MASTER whose genres = ['Blues'] exactly. Populated by
+        // the strict-pad button. Tooltip shows the actual count.
+        const strictCount = Number(row.seed_strict_count) || 0;
+        const strictBadge = strictCount > 0
+          ? `<span title="${strictCount} cached master${strictCount === 1 ? "" : "s"} with genres = ['Blues'] exactly" style="margin-left:0.3rem;font-size:0.74rem;color:#c5687a;border:1px solid rgba(197,104,122,0.4);border-radius:4px;padding:0.05rem 0.32rem;vertical-align:middle">🩸 ${strictCount}</span>`
+          : "";
         // Per-row "Search Discogs as artist" affordance — fastest way
         // to track down the canonical id when curating. Opens
         // discogs.com's artist-scoped site search in a new tab; the
@@ -543,7 +556,7 @@ function _baRenderListTable() {
           : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="No Wikipedia link — click to edit this artist and add one" style="color:#666;text-decoration:none">—</a>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
-          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${discogsSearchHtml}${wikiSearchHtml}${editorHtml}</td>
+          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${strictBadge}${discogsSearchHtml}${wikiSearchHtml}${editorHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:center;font-size:0.9rem">${wikiHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
@@ -1839,6 +1852,52 @@ async function bluesArchivePurgeImports() {
   }
 }
 window.bluesArchivePurgeImports = bluesArchivePurgeImports;
+
+// Admin button — strict-Blues pad. Scans release_cache for every
+// primary artist on a master whose genres = ['Blues'] exactly, and
+// inserts any missing rows into blues_artists with their strict count.
+// Existing manually-edited fields are untouched — only the
+// seed_strict_count column is refreshed.
+async function bluesArchivePadStrict() {
+  const btn = document.getElementById("blues-pad-strict-btn");
+  if (!confirm("Pad the Blues Archive with every artist who has at least one cached master whose genres = ['Blues'] exactly?\n\nExisting artists are untouched; only their strict-count is refreshed.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Padding…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/pad/strict", { method: "POST", timeoutMs: 120000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    alert(`Strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
+    _baLoadList();
+    if (typeof _baLoadStats === "function") _baLoadStats();
+  } catch (e) {
+    alert(`Strict pad failed: ${e?.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "+ Pad with strict-Blues artists"; }
+  }
+}
+window.bluesArchivePadStrict = bluesArchivePadStrict;
+
+// Admin button — destructive Constellations cleanup. Deletes every
+// row in all_blues_artist_queue (and orphaned all_blues_links rows)
+// whose discogs_id isn't a primary credit on at least one strict-Blues
+// master. Server busts the graph response cache so the next public
+// fetch sees the trimmed graph.
+async function bluesArchivePruneConstellations() {
+  const btn = document.getElementById("blues-prune-constellations-btn");
+  if (!confirm("⚠ Destructive: remove every Constellations artist who doesn't have at least one strictly-Blues master in the cache. Their links go with them. Re-run the All Blues worker to rebuild from any non-strict seeds.\n\nProceed?")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Pruning…"; }
+  try {
+    const r = await apiFetch("/api/all-blues/prune-non-strict", { method: "POST", timeoutMs: 120000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    alert(`Constellations prune: ${j.artistsRemoved.toLocaleString()} artists removed · ${j.linksRemoved.toLocaleString()} links removed.`);
+  } catch (e) {
+    alert(`Prune failed: ${e?.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Prune Constellations → strict-only"; }
+  }
+}
+window.bluesArchivePruneConstellations = bluesArchivePruneConstellations;
 
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any
