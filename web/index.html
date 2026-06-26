@@ -1237,9 +1237,13 @@ e.g.  miles davis | coltrane
           <input id="blues-archive-no-discogs" type="checkbox" onchange="_baLoadList()">
           No Discogs ID
         </label>
-        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only artists with seed_strict_count > 0 — i.e. at least one cached MASTER in release_cache whose genres = ['Blues'] exactly. Populated by the strict-pad button.">
-          <input id="blues-archive-has-strict" type="checkbox" onchange="_baLoadList()">
-          Has strict-Blues release
+        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Filter by strict-Blues evidence in release_cache. 'Has' = seed_strict_count > 0 (at least one cached MASTER whose genres = ['Blues'] exactly). 'No' = seed_strict_count = 0 (no such master cached).">
+          Strict-Blues
+          <select id="blues-archive-strict-filter" onchange="_baLoadList()" style="font-size:0.78rem">
+            <option value="">(any)</option>
+            <option value="has">Has</option>
+            <option value="no">No</option>
+          </select>
         </label>
         <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
         <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
