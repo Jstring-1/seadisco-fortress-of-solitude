@@ -1878,27 +1878,27 @@ async function bluesArchivePruneRecent24h() {
 window.bluesArchivePruneRecent24h = bluesArchivePruneRecent24h;
 
 // Admin button — re-pad with strict-Blues artists whose earliest
-// master is in or before 1970. Inserts are tagged
-// enrichment_status.source = "strict_pad_pre1970" for precise future
+// master is in or before 1950. Inserts are tagged
+// enrichment_status.source = "strict_pad_pre1950" for precise future
 // cleanup. Existing rows are untouched beyond seed_strict_count.
-async function bluesArchivePadStrictPre1970() {
-  const btn = document.getElementById("blues-pad-pre1970-btn");
-  if (!confirm("Pad the Blues Archive with every artist whose EARLIEST strict-Blues master in release_cache is in or before 1970?\n\nExisting artists are untouched; only their seed_strict_count is refreshed.")) return;
+async function bluesArchivePadStrictPre1950() {
+  const btn = document.getElementById("blues-pad-pre1950-btn");
+  if (!confirm("Pad the Blues Archive with every artist whose EARLIEST strict-Blues master in release_cache is in or before 1950?\n\nExisting artists are untouched; only their seed_strict_count is refreshed.")) return;
   if (btn) { btn.disabled = true; btn.textContent = "Padding…"; }
   try {
-    const r = await apiFetch("/api/blues-archive/pad/strict-pre-1970", { method: "POST", timeoutMs: 120000 });
+    const r = await apiFetch("/api/blues-archive/pad/strict-pre-1950", { method: "POST", timeoutMs: 120000 });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    alert(`Pre-1970 strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
+    alert(`Pre-1950 strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
     _baLoadList();
     if (typeof _baLoadStats === "function") _baLoadStats();
   } catch (e) {
     alert(`Strict pad failed: ${e?.message || e}`);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "+ Pad strict-Blues (pre-1970)"; }
+    if (btn) { btn.disabled = false; btn.textContent = "+ Pad strict-Blues (pre-1950)"; }
   }
 }
-window.bluesArchivePadStrictPre1970 = bluesArchivePadStrictPre1970;
+window.bluesArchivePadStrictPre1950 = bluesArchivePadStrictPre1950;
 
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any
