@@ -1853,6 +1853,30 @@ async function bluesArchivePurgeImports() {
 }
 window.bluesArchivePurgeImports = bluesArchivePurgeImports;
 
+// Admin button — cleanup for the (removed) strict-pad button which
+// had no year filter. Deletes every artist whose earliest strict-Blues
+// master in release_cache is after 1970. Manually-curated rows are
+// preserved by the server-side guard.
+async function bluesArchivePrunePost1970() {
+  const btn = document.getElementById("blues-prune-post-1970-btn");
+  if (!confirm("Delete every artist whose EARLIEST strict-Blues master in release_cache is after 1970?\n\nManually-curated rows (with IDs, dates, notes, photo, or releases) are kept. Artists with no year-tagged strict-Blues master are kept.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Pruning…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/prune-post-1970", { method: "POST", timeoutMs: 120000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const sample = (j.names && j.names.length) ? `\n\nSample: ${j.names.slice(0, 10).join(", ")}` : "";
+    alert(`Removed ${j.removed.toLocaleString()} artist${j.removed === 1 ? "" : "s"}.${sample}`);
+    _baLoadList();
+    if (typeof _baLoadStats === "function") _baLoadStats();
+  } catch (e) {
+    alert(`Prune failed: ${e?.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Prune post-1970 strict-Blues"; }
+  }
+}
+window.bluesArchivePrunePost1970 = bluesArchivePrunePost1970;
+
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any
 // artist. Reuses /api/admin/lyrics (admin-gated, which matches the

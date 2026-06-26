@@ -9177,6 +9177,53 @@ export async function getLyricCount(): Promise<number> {
 // blues_lyrics, and the JSONB releases array into a single per-artist
 // page. Matching of lyrics → artist is case-insensitive on name.
 
+// Delete blues_artists rows whose EARLIEST strict-Blues master in
+// release_cache is after 1970 — cleanup for the (now-removed) strict
+// pad button which had no year filter and pulled in modern artists.
+// Only deletes rows with no manually-curated data (mirrors the same
+// guard as purge-lyric-imports) so hand-edited entries are preserved.
+// Artists with no year-tagged strict-Blues master are KEPT (unknown
+// year is treated as safe). Returns { removed, names } for the UI.
+export async function pruneBluesArtistsFirstStrictAfter1970(): Promise<{ removed: number; names: string[] }> {
+  const r = await getPool().query(`
+    WITH first_year AS (
+      SELECT (a->>'id')::int AS aid,
+             MIN((rc.data->>'year')::int) AS first_year
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(rc.data->'artists', '[]'::jsonb)
+        ) AS a
+       WHERE rc.type = 'master'
+         AND jsonb_typeof(rc.data->'genres') = 'array'
+         AND jsonb_array_length(rc.data->'genres') = 1
+         AND rc.data->'genres' ? 'Blues'
+         AND (a->>'id') ~ '^[0-9]+$'
+         AND (a->>'id')::int > 0
+         AND rc.data->>'year' ~ '^[0-9]+$'
+         AND (rc.data->>'year')::int > 0
+       GROUP BY (a->>'id')::int
+    )
+    DELETE FROM blues_artists ba
+     USING first_year fy
+     WHERE ba.discogs_id        = fy.aid
+       AND fy.first_year        > 1970
+       AND ba.wikidata_qid      IS NULL
+       AND ba.musicbrainz_mbid  IS NULL
+       AND ba.birth_date        IS NULL
+       AND ba.death_date        IS NULL
+       AND (ba.notes            IS NULL OR ba.notes           = '')
+       AND (ba.birth_place      IS NULL OR ba.birth_place     = '')
+       AND (ba.hometown_region  IS NULL OR ba.hometown_region = '')
+       AND (ba.photo_url        IS NULL OR ba.photo_url       = '')
+       AND (ba.discogs_releases IS NULL OR jsonb_array_length(ba.discogs_releases) = 0)
+    RETURNING ba.name
+  `);
+  return {
+    removed: r.rowCount ?? 0,
+    names: (r.rows ?? []).slice(0, 50).map((row: any) => row.name),
+  };
+}
+
 // Walks distinct lyrics.artist values, finds those that don't already
 // exist as a blues_artists.name (case-insensitive), and inserts each
 // as a minimal new row (name only). Returns { added, total, existing }
