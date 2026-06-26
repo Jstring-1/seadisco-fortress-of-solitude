@@ -12931,8 +12931,19 @@ app.get("/api/blues-archive/releases", async (req, res) => {
     "artist", "release", "release-group", "recording", "work", "label",
   ]);
 
+  // Admin or demo-allowlist user gate, mirroring requireGutenbergAccess.
+  // MB proxy is server-cached so widening past admin is cheap.
+  async function requireMusicbrainzAccess(req: express.Request, res: express.Response): Promise<string | null> {
+    const userId = await getClerkUserId(req);
+    if (!userId) { res.status(401).json({ error: "auth_required" }); return null; }
+    if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+      res.status(403).json({ error: "forbidden" }); return null;
+    }
+    return userId;
+  }
+
   app.get("/api/musicbrainz/search", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
+    if (!await requireMusicbrainzAccess(req, res)) return;
     try {
       // Entity selector lives on `entity=`; `type=` is reserved for a
       // *Lucene filter* (e.g. release type "Album"). The previous build
@@ -13002,7 +13013,7 @@ app.get("/api/blues-archive/releases", async (req, res) => {
   // title path. Cache key for QID lookups is "qid:Q…" so repeat opens
   // skip the Wikidata round-trip too.
   app.get("/api/musicbrainz/wiki", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
+    if (!await requireMusicbrainzAccess(req, res)) return;
     try {
       const titleRaw = String(req.query.title ?? "").trim();
       const qidRaw = String(req.query.qid ?? "").trim();
@@ -13186,7 +13197,7 @@ app.get("/api/blues-archive/releases", async (req, res) => {
   // newest-first; the id-list endpoint hands back the compact
   // "type:mbid" key set the client uses to decorate row stars.
   app.get("/api/musicbrainz/saves", async (req, res) => {
-    const userId = await requireAdmin(req, res); if (!userId) return;
+    const userId = await requireMusicbrainzAccess(req, res); if (!userId) return;
     try {
       const entityType = String(req.query.type ?? "").trim() || undefined;
       const rows = await listMbSaves(userId, entityType);
@@ -13194,12 +13205,12 @@ app.get("/api/blues-archive/releases", async (req, res) => {
     } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
   app.get("/api/musicbrainz/saves/ids", async (req, res) => {
-    const userId = await requireAdmin(req, res); if (!userId) return;
+    const userId = await requireMusicbrainzAccess(req, res); if (!userId) return;
     try { res.json({ ids: await listMbSaveIds(userId) }); }
     catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
   app.post("/api/musicbrainz/saves", express.json({ limit: "32kb" }), async (req, res) => {
-    const userId = await requireAdmin(req, res); if (!userId) return;
+    const userId = await requireMusicbrainzAccess(req, res); if (!userId) return;
     try {
       const entityType = String(req.body?.entity_type ?? "").trim();
       const mbid       = String(req.body?.mbid ?? "").trim();
@@ -13211,7 +13222,7 @@ app.get("/api/blues-archive/releases", async (req, res) => {
     } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
   app.delete("/api/musicbrainz/saves/:type/:mbid", async (req, res) => {
-    const userId = await requireAdmin(req, res); if (!userId) return;
+    const userId = await requireMusicbrainzAccess(req, res); if (!userId) return;
     try {
       const removed = await removeMbSave(userId, String(req.params.type), String(req.params.mbid));
       res.json({ ok: true, removed });
@@ -13219,7 +13230,7 @@ app.get("/api/blues-archive/releases", async (req, res) => {
   });
 
   app.get("/api/musicbrainz/:type/:mbid", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
+    if (!await requireMusicbrainzAccess(req, res)) return;
     try {
       const type = String(req.params.type ?? "").toLowerCase();
       const mbid = String(req.params.mbid ?? "");
