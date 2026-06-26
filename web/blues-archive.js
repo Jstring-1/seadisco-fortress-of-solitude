@@ -1853,52 +1853,6 @@ async function bluesArchivePurgeImports() {
 }
 window.bluesArchivePurgeImports = bluesArchivePurgeImports;
 
-// Admin button — strict-Blues pad. Scans release_cache for every
-// primary artist on a master whose genres = ['Blues'] exactly, and
-// inserts any missing rows into blues_artists with their strict count.
-// Existing manually-edited fields are untouched — only the
-// seed_strict_count column is refreshed.
-async function bluesArchivePadStrict() {
-  const btn = document.getElementById("blues-pad-strict-btn");
-  if (!confirm("Pad the Blues Archive with every artist who has at least one cached master whose genres = ['Blues'] exactly?\n\nExisting artists are untouched; only their strict-count is refreshed.")) return;
-  if (btn) { btn.disabled = true; btn.textContent = "Padding…"; }
-  try {
-    const r = await apiFetch("/api/blues-archive/pad/strict", { method: "POST", timeoutMs: 120000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    alert(`Strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
-    _baLoadList();
-    if (typeof _baLoadStats === "function") _baLoadStats();
-  } catch (e) {
-    alert(`Strict pad failed: ${e?.message || e}`);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "+ Pad with strict-Blues artists"; }
-  }
-}
-window.bluesArchivePadStrict = bluesArchivePadStrict;
-
-// Admin button — destructive Constellations cleanup. Deletes every
-// row in all_blues_artist_queue (and orphaned all_blues_links rows)
-// whose discogs_id isn't a primary credit on at least one strict-Blues
-// master. Server busts the graph response cache so the next public
-// fetch sees the trimmed graph.
-async function bluesArchivePruneConstellations() {
-  const btn = document.getElementById("blues-prune-constellations-btn");
-  if (!confirm("⚠ Destructive: remove every Constellations artist who doesn't have at least one strictly-Blues master in the cache. Their links go with them. Re-run the All Blues worker to rebuild from any non-strict seeds.\n\nProceed?")) return;
-  if (btn) { btn.disabled = true; btn.textContent = "Pruning…"; }
-  try {
-    const r = await apiFetch("/api/all-blues/prune-non-strict", { method: "POST", timeoutMs: 120000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    alert(`Constellations prune: ${j.artistsRemoved.toLocaleString()} artists removed · ${j.linksRemoved.toLocaleString()} links removed.`);
-  } catch (e) {
-    alert(`Prune failed: ${e?.message || e}`);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Prune Constellations → strict-only"; }
-  }
-}
-window.bluesArchivePruneConstellations = bluesArchivePruneConstellations;
-
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any
 // artist. Reuses /api/admin/lyrics (admin-gated, which matches the
