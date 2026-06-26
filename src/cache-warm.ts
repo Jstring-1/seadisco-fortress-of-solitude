@@ -15,10 +15,11 @@ import {
   getCacheWarmRun,
   upsertCacheWarmRun,
   recordCacheWarmRunHit,
-  recordCacheWarmRunSkip,
   recordCacheWarmRunSearched,
   recordCacheWarmRunError,
   isReleaseCached,
+  getCachedReleaseIds,
+  bumpCacheWarmRunSkip,
   cacheRelease,
   getOAuthCredentials,
   getAppSetting,
@@ -327,15 +328,30 @@ async function _runWorker(
       continue;
     }
 
+    // One batch cache-check + one bulk skip-counter bump per page
+    // instead of N round-trips. Re-runs over already-cached genres
+    // used to spend ~2 DB calls per result (SELECT + UPDATE) on every
+    // hit; this collapses each page's 100 hits to 2 queries total.
+    const pageIds: number[] = [];
+    for (const r of results) {
+      const id = Number(r?.id);
+      if (Number.isFinite(id) && id > 0) pageIds.push(id);
+    }
+    let cachedIds: Set<number>;
+    try {
+      cachedIds = await getCachedReleaseIds(pageIds, "release");
+    } catch {
+      cachedIds = new Set();
+    }
+    const skipsThisPage = pageIds.filter(id => cachedIds.has(id)).length;
+    if (skipsThisPage > 0) await bumpCacheWarmRunSkip(genreKey, styleKey, skipsThisPage);
+
     for (const r of results) {
       if (_stopRequested) break;
       const id = Number(r?.id);
       if (!Number.isFinite(id) || id <= 0) continue;
 
-      if (await isReleaseCached(id, "release")) {
-        await recordCacheWarmRunSkip(genreKey, styleKey);
-        continue;
-      }
+      if (cachedIds.has(id)) continue;
       try {
         await _sleep(REQ_INTERVAL_MS);
         const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
