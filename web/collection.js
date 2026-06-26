@@ -696,6 +696,13 @@ function switchView(view, skipPushState = false) {
       if (searchDesc) searchDesc.textContent = "";
       const searchReturned = document.getElementById("search-returned");
       if (searchReturned) searchReturned.textContent = "";
+      // AI quality phrase + its container — otherwise the stale
+      // librarian-style phrase from the prior search lingers on the
+      // home strip when the user clears the search or clicks the logo.
+      const searchAi = document.getElementById("search-ai-summary");
+      if (searchAi) searchAi.textContent = "";
+      const searchInfoBlock = document.getElementById("search-info-block");
+      if (searchInfoBlock) searchInfoBlock.style.display = "none";
       const blurb = document.getElementById("blurb");
       if (blurb) blurb.style.display = "";
       const ws = document.getElementById("random-records");
