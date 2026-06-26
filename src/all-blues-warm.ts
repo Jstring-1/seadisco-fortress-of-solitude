@@ -208,86 +208,20 @@ export async function startAllBluesRun(opts: {
   return { ok: true };
 }
 
-// ── Phase 1: collect blues seed artists from cached releases ──────
-// One bulk SQL pass. Walks release_cache for releases that:
-//   • have a year in the requested window (default 1900-1970)
-//   • list 'Blues' in their data->'genres' array
-// For each such release, we grab every artist in data->'artists' (the
-// primary credit) and add them as a seed with seed_year = the earliest
-// year of any blues release they appear on. extraartists are NOT seeds
-// — they include sidemen / producers / guest spots that often span
-// genres and would pull jazz/folk contemporaries into the network.
-// They can still appear as edge targets if they're also a primary on
-// some other blues release.
+// ── Phase 1: seed the queue from blues_artists ────────────────────
+// Single source of truth: every blues_artists row with a discogs_id
+// becomes a seed. Previously we ALSO auto-collected seeds from
+// release_cache (every primary + musical-role sideman on any release
+// with 'Blues' in genres), but that re-bloated the network with broad-
+// Blues / jazz / folk / R&B contemporaries every run. The Blues Archive
+// admin is now the only curation surface; the pad buttons there are
+// how new artists enter the graph.
+//
+// fromYear / toYear are kept on the signature because the release-notes
+// phase still uses them to bound which releases get scanned for prose
+// mentions + extraartist credits between existing seeds.
 async function _runCollect(fromYear: number, toYear: number): Promise<void> {
-  console.log(`[all-blues] collect phase: years ${fromYear}-${toYear} (Blues genre only)`);
-  const sql = `
-    WITH blues_releases AS (
-      SELECT rc.data, (rc.data->>'year')::int AS yr
-        FROM release_cache rc
-       WHERE rc.type = 'release'
-         AND (rc.data->>'year') ~ '^[0-9]+$'
-         AND (rc.data->>'year')::int BETWEEN $1 AND $2
-         AND EXISTS (
-           SELECT 1
-             FROM jsonb_array_elements_text(COALESCE(rc.data->'genres', '[]'::jsonb)) AS g
-            WHERE g = 'Blues'
-         )
-    ),
-    primary_refs AS (
-      -- Every artist listed in data.artists (the release's primary
-      -- credits) — singers, bandleaders, the named-up-front folks.
-      SELECT (a->>'id')::int AS aid,
-             br.yr,
-             a->>'name' AS name
-        FROM blues_releases br
-        CROSS JOIN LATERAL jsonb_array_elements(
-          COALESCE(br.data->'artists', '[]'::jsonb)
-        ) AS a
-       WHERE (a->>'id') ~ '^[0-9]+$'
-         AND (a->>'id')::int > 0
-    ),
-    sideman_refs AS (
-      -- Every extraartist credited with a musical-performance role.
-      -- Catches session players, sidemen, accompanists who only show
-      -- up in extraartists, never as primaries. The role filter
-      -- excludes producer / engineer / liner-notes / photography /
-      -- design — those aren't musical collaboration.
-      SELECT (a->>'id')::int AS aid,
-             br.yr,
-             a->>'name' AS name
-        FROM blues_releases br
-        CROSS JOIN LATERAL jsonb_array_elements(
-          COALESCE(br.data->'extraartists', '[]'::jsonb)
-        ) AS a
-       WHERE (a->>'id') ~ '^[0-9]+$'
-         AND (a->>'id')::int > 0
-         AND (a->>'role') ~* '\\b(guitar|piano|harmonica|vocals?|voice|bass|drums|sax|saxophone|fiddle|violin|mandolin|banjo|harp|organ|trumpet|cornet|clarinet|trombone|percussion|harmony vocals?|backing vocals?|accompani(?:ed|ment|st)|kazoo|jug|washboard|tambourine|tuba|ukulele|accordion)\\b'
-    ),
-    artist_refs AS (
-      SELECT aid,
-             MIN(yr) AS first_year,
-             -- earliest non-empty name we see for this artist across
-             -- the union of primary + sideman appearances.
-             (array_agg(name ORDER BY yr) FILTER (WHERE COALESCE(name,'') <> ''))[1] AS name
-        FROM (
-          SELECT aid, yr, name FROM primary_refs
-          UNION ALL
-          SELECT aid, yr, name FROM sideman_refs
-        ) AS combined
-       GROUP BY aid
-    )
-    INSERT INTO all_blues_artist_queue (discogs_id, seed_year, name)
-    SELECT aid, first_year, name FROM artist_refs
-    ON CONFLICT (discogs_id) DO UPDATE
-      SET seed_year = LEAST(
-            COALESCE(all_blues_artist_queue.seed_year, EXCLUDED.seed_year),
-            EXCLUDED.seed_year
-          ),
-          name = COALESCE(all_blues_artist_queue.name, EXCLUDED.name)
-  `;
-  const result = await getPool().query(sql, [fromYear, toYear]);
-  const queued = result.rowCount ?? 0;
+  console.log(`[all-blues] collect phase: seeding from blues_artists only (release-notes window ${fromYear}-${toYear})`);
 
   // ── Manual seed import from Blues Archive ──────────────────────
   // Every blues_artists row with a discogs_id becomes a seed too, so
@@ -336,9 +270,9 @@ async function _runCollect(fromYear: number, toYear: number): Promise<void> {
     `UPDATE all_blues_warm_state SET artists_queued = artists_queued + $1,
        links_inserted = links_inserted + $2,
        phase='fetch', last_tick_at=NOW() WHERE id=1`,
-    [queued + (manualSeeds.rowCount ?? 0), manualLinks.rowCount ?? 0],
+    [manualSeeds.rowCount ?? 0, manualLinks.rowCount ?? 0],
   );
-  console.log(`[all-blues] collect: ${queued} from release_cache + ${manualSeeds.rowCount ?? 0} manual seeds + ${manualLinks.rowCount ?? 0} manual edges`);
+  console.log(`[all-blues] collect: ${manualSeeds.rowCount ?? 0} manual seeds + ${manualLinks.rowCount ?? 0} manual edges`);
 }
 
 // ── Phase 2: fetch each pending artist, parse mentions ────────────
