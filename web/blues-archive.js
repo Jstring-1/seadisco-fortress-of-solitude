@@ -19,7 +19,7 @@ let _baListRowsCache = [];
 //   "", "with_both", "with_lyrics_only", "with_releases_only", "empty"
 let _baListCategory = "";
 const _baListSort = { key: "name", dir: "asc" };
-const _BA_LIST_TYPES = { name: "str", discogs_id: "num", has_photo: "num", first_release_year: "num", lyrics_count: "num", releases_count: "num" };
+const _BA_LIST_TYPES = { name: "str", discogs_id: "num", has_photo: "num", first_release_year: "num", lyrics_count: "num", releases_count: "num", strict_count: "num" };
 
 let _baDetailArtist = null;
 const _baLyricsSort = { key: "page_title", dir: "asc" };
@@ -256,10 +256,11 @@ function _baToggleSort(state, key) {
   if (state.key === key) state.dir = state.dir === "asc" ? "desc" : "asc";
   else { state.key = key; state.dir = "asc"; }
 }
-function _baSortTh(label, key, state, fn, extraStyle) {
+function _baSortTh(label, key, state, fn, extraStyle, title) {
   const active = state.key === key;
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
-  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
+  const titleAttr = title ? ` title="${String(title).replace(/"/g, "&quot;")}"` : "";
+  return `<th class="admin-sort-th${active ? " is-active" : ""}"${titleAttr} style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
 }
 
 function initBluesArchiveView() {
@@ -473,6 +474,7 @@ function _baRenderListTable() {
         <col style="width:70px">
         <col style="width:70px">
         <col style="width:80px">
+        <col style="width:60px">
       </colgroup>
       <thead><tr>
         ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
@@ -482,6 +484,7 @@ function _baRenderListTable() {
         ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
         ${_baSortTh("Lyrics",     "lyrics_count",       S, "_baSortList", "text-align:right")}
         ${_baSortTh("Releases",   "releases_count",     S, "_baSortList", "text-align:right")}
+        ${_baSortTh("🩸",         "strict_count",       S, "_baSortList", "text-align:right", "Cached masters whose genres = ['Blues'] exactly with this artist as a primary credit")}
       </tr></thead>
       <tbody>${rows.map(row => {
         // Name cell uses entityLookupLinkHtml so clicking the text
@@ -562,6 +565,7 @@ function _baRenderListTable() {
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
           <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
+          <td style="text-align:right;color:${strictCount ? "#c5687a" : "var(--muted)"}" title="Cached masters whose genres = ['Blues'] exactly with ${escHtml(fullName)} as primary credit">${strictCount || ""}</td>
         </tr>`;
       }).join("")}</tbody>
     </table>`;
