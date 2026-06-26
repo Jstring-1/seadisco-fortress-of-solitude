@@ -10304,6 +10304,16 @@ export async function recordCacheWarmRunSkip(genreKey: string, styleKey: string)
     [genreKey, styleKey || ""],
   );
 }
+// Bulk variant — one UPDATE for a whole page's worth of cache hits
+// instead of N round-trips. No-op when n <= 0.
+export async function bumpCacheWarmRunSkip(genreKey: string, styleKey: string, n: number): Promise<void> {
+  if (!Number.isFinite(n) || n <= 0) return;
+  await getPool().query(
+    `UPDATE cache_warm_runs SET total_skipped = total_skipped + $3
+      WHERE genre_key = $1 AND style_key = $2`,
+    [genreKey, styleKey || "", n],
+  );
+}
 export async function recordCacheWarmRunSearched(genreKey: string, styleKey: string, n: number): Promise<void> {
   await getPool().query(
     `UPDATE cache_warm_runs SET total_searched = total_searched + $3
@@ -10357,6 +10367,22 @@ export async function isReleaseCached(
     [discogsId, type],
   );
   return (r.rowCount ?? 0) > 0;
+}
+
+// Batch variant — one query for up to several hundred ids. Returns a
+// Set of the ids that are already cached so callers can fast-path
+// cache hits without N round-trips. Used by the cache-warm worker to
+// skip throttling on a full page of already-cached releases.
+export async function getCachedReleaseIds(
+  ids: number[],
+  type: "release" | "master" = "release",
+): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const r = await getPool().query(
+    `SELECT discogs_id FROM release_cache WHERE type = $1 AND discogs_id = ANY($2::int[])`,
+    [type, ids],
+  );
+  return new Set((r.rows ?? []).map((row: any) => Number(row.discogs_id)));
 }
 
 
