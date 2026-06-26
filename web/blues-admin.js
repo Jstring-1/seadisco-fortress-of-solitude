@@ -1725,6 +1725,7 @@ async function bluesDbSaveEditor() {
     bluesDbCloseEditor();
     bluesDbLoadStats();
     bluesDbRenderList();
+    if (typeof showToast === "function") showToast(id ? "Artist saved" : "Artist created", "success");
     // One-shot hook for non-admin callers (e.g. the Discovery Blues
     // Archive view) — gets the just-saved id so they can refresh
     // whatever surface they had open behind the editor overlay.

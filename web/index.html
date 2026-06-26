@@ -1665,6 +1665,12 @@ e.g.  miles davis | coltrane
         <label>YouTube URLs <input name="youtube_urls"></label>
       </div>
       <label style="grid-column:1/-1">Discogs masters/releases (JSON array — populated by "Seed from Discogs", edit cautiously) <textarea name="discogs_releases" rows="4" style="width:100%;font-family:monospace;font-size:0.78rem"></textarea></label>
+      <!-- Hidden round-trip fields: Discogs enrichment populates these
+           (external_urls = Wikipedia/AllMusic/etc. links; enrichment_status
+           = bookkeeping stamps). Without form inputs, the patch fields
+           are silently dropped before Save reaches the server. -->
+      <input type="hidden" name="external_urls">
+      <input type="hidden" name="enrichment_status">
       <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
       <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
       <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
