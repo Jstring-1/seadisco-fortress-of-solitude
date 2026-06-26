@@ -1129,6 +1129,12 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS seed_strict_count INT NOT NULL DEFAULT 0
   `);
+  // Idempotent cleanup: remove Discogs placeholder artists that aren't
+  // real people (Various=194, Unknown Artist=355). The strict-Blues pad
+  // also excludes these going forward.
+  await getPool().query(
+    `DELETE FROM blues_artists WHERE discogs_id IN (194, 355)`,
+  );
 
   // ── Blues lyrics (scraped from weeniecampbell.com wiki, admin-only) ───
   // Source: weeniecampbell.com/wiki, Category:Lyrics (and subcategories).
@@ -9220,6 +9226,7 @@ export async function padBluesArtistsStrictPre1950(): Promise<{ scanned: number;
          AND rc.data->'genres' ? 'Blues'
          AND (a->>'id') ~ '^[0-9]+$'
          AND (a->>'id')::int > 0
+         AND (a->>'id')::int NOT IN (194, 355)
          AND rc.data->>'year' ~ '^[0-9]+$'
          AND (rc.data->>'year')::int > 0
        GROUP BY (a->>'id')::int
