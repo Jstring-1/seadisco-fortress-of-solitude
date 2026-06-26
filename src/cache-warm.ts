@@ -6,7 +6,7 @@
 // each missing one into release_cache. Persists cursor + counters
 // in cache_warm_runs so a restart resumes from where it left off.
 //
-// Rate limit: 1.1s between Discogs calls (Discogs's authed 60/min).
+// Rate limit: 1.0s between Discogs calls (Discogs's authed 60/min).
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 
@@ -17,7 +17,6 @@ import {
   recordCacheWarmRunHit,
   recordCacheWarmRunSearched,
   recordCacheWarmRunError,
-  isReleaseCached,
   getCachedReleaseIds,
   bumpCacheWarmRunSkip,
   cacheRelease,
@@ -46,7 +45,7 @@ async function _readActiveRun(): Promise<{ genreKey: string; styleKey: string; f
 }
 
 const PER_PAGE        = 100;
-const REQ_INTERVAL_MS = 1100;
+const REQ_INTERVAL_MS = 1000;
 
 // In-memory state only — survives process lifetime, resets on
 // Railway restart. Mid-run restarts leave cursor in the DB so the
@@ -291,8 +290,17 @@ async function _runWorker(
     const noYearMode = year === 0;
     try {
       searchRes = await _withRetry(`search ${genreKey}/${styleKey || "*"} ${noYearMode ? "no-year" : year} p${page}`, () =>
+        // Sweep MASTERS rather than individual releases. Each master
+        // already aggregates pressings, year, primary artist, tracklist,
+        // and cover — so for the app's wide-card / search / feed views
+        // it's the unit we actually want cached. Sweeping releases
+        // instead would pay the Discogs throttle for every pressing of
+        // the same album (potentially dozens). Orphan releases — ones
+        // with no parent master — are not surfaced by this search and
+        // would need a separate type=release pass filtered to
+        // master_id == null. Tracked as a possible future button.
         client.search("", {
-          type: "release",
+          type: "master",
           genre: genreKey,
           style: styleKey || undefined,
           year: noYearMode ? undefined : String(year),
@@ -339,7 +347,7 @@ async function _runWorker(
     }
     let cachedIds: Set<number>;
     try {
-      cachedIds = await getCachedReleaseIds(pageIds, "release");
+      cachedIds = await getCachedReleaseIds(pageIds, "master");
     } catch {
       cachedIds = new Set();
     }
@@ -354,33 +362,12 @@ async function _runWorker(
       if (cachedIds.has(id)) continue;
       try {
         await _sleep(REQ_INTERVAL_MS);
-        const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
-        await cacheRelease(id, "release", full as object);
+        const full = await _withRetry(`master ${id}`, () => client.getMasterRelease(id)) as any;
+        await cacheRelease(id, "master", full as object);
         const title = String(full?.title ?? r?.title ?? "(untitled)");
         await recordCacheWarmRunHit(genreKey, styleKey, title, id);
-        // Also warm the parent master if this release has one and we
-        // haven't cached that master yet. Search results with the
-        // `master+` filter come back as type=master and the enrich
-        // endpoint looks up (id, type) exactly — without this, every
-        // master result was a cache-miss on the wide-card tracklist /
-        // image strip even when we'd cached dozens of its releases.
-        // One extra Discogs call per *new* master only; cached
-        // masters short-circuit via isReleaseCached.
-        const masterId = Number(full?.master_id);
-        if (Number.isFinite(masterId) && masterId > 0) {
-          try {
-            if (!(await isReleaseCached(masterId, "master"))) {
-              await _sleep(REQ_INTERVAL_MS);
-              const fullM = await _withRetry(`master ${masterId}`, () => client.getMasterRelease(masterId)) as any;
-              await cacheRelease(masterId, "master", fullM as object);
-            }
-          } catch (mErr: any) {
-            await recordCacheWarmRunError(genreKey, styleKey, `master ${masterId}: ${mErr?.message ?? String(mErr)}`);
-            await _sleep(REQ_INTERVAL_MS);
-          }
-        }
       } catch (err: any) {
-        await recordCacheWarmRunError(genreKey, styleKey, `release ${id}: ${err?.message ?? String(err)}`);
+        await recordCacheWarmRunError(genreKey, styleKey, `master ${id}: ${err?.message ?? String(err)}`);
         await _sleep(REQ_INTERVAL_MS);
       }
     }
