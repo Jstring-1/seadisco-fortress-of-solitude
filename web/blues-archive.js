@@ -1853,16 +1853,16 @@ async function bluesArchivePurgeImports() {
 }
 window.bluesArchivePurgeImports = bluesArchivePurgeImports;
 
-// Admin button — cleanup for the (removed) strict-pad button which
-// had no year filter. Deletes every artist whose earliest strict-Blues
-// master in release_cache is after 1970. Manually-curated rows are
-// preserved by the server-side guard.
-async function bluesArchivePrunePost1970() {
-  const btn = document.getElementById("blues-prune-post-1970-btn");
-  if (!confirm("Delete every artist whose EARLIEST strict-Blues master in release_cache is after 1970?\n\nManually-curated rows (with IDs, dates, notes, photo, or releases) are kept. Artists with no year-tagged strict-Blues master are kept.")) return;
+// Admin button — cleanup for the (removed) no-year pad button.
+// Deletes every blues_artists row added in the last 24 hours.
+// User confirmed they haven't manually added anyone in over a week,
+// so this is a precise pad-insert signal.
+async function bluesArchivePruneRecent24h() {
+  const btn = document.getElementById("blues-prune-recent-btn");
+  if (!confirm("Delete every blues_artists row added in the last 24 hours?\n\nThis assumes you haven't manually added anyone recently.")) return;
   if (btn) { btn.disabled = true; btn.textContent = "Pruning…"; }
   try {
-    const r = await apiFetch("/api/blues-archive/prune-post-1970", { method: "POST", timeoutMs: 120000 });
+    const r = await apiFetch("/api/blues-archive/prune-recent-24h", { method: "POST", timeoutMs: 60000 });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     const sample = (j.names && j.names.length) ? `\n\nSample: ${j.names.slice(0, 10).join(", ")}` : "";
@@ -1872,10 +1872,33 @@ async function bluesArchivePrunePost1970() {
   } catch (e) {
     alert(`Prune failed: ${e?.message || e}`);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Prune post-1970 strict-Blues"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Prune last-24h adds"; }
   }
 }
-window.bluesArchivePrunePost1970 = bluesArchivePrunePost1970;
+window.bluesArchivePruneRecent24h = bluesArchivePruneRecent24h;
+
+// Admin button — re-pad with strict-Blues artists whose earliest
+// master is in or before 1970. Inserts are tagged
+// enrichment_status.source = "strict_pad_pre1970" for precise future
+// cleanup. Existing rows are untouched beyond seed_strict_count.
+async function bluesArchivePadStrictPre1970() {
+  const btn = document.getElementById("blues-pad-pre1970-btn");
+  if (!confirm("Pad the Blues Archive with every artist whose EARLIEST strict-Blues master in release_cache is in or before 1970?\n\nExisting artists are untouched; only their seed_strict_count is refreshed.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Padding…"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/pad/strict-pre-1970", { method: "POST", timeoutMs: 120000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    alert(`Pre-1970 strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
+    _baLoadList();
+    if (typeof _baLoadStats === "function") _baLoadStats();
+  } catch (e) {
+    alert(`Strict pad failed: ${e?.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "+ Pad strict-Blues (pre-1970)"; }
+  }
+}
+window.bluesArchivePadStrictPre1970 = bluesArchivePadStrictPre1970;
 
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any

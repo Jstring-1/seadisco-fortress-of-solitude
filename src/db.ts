@@ -9177,17 +9177,38 @@ export async function getLyricCount(): Promise<number> {
 // blues_lyrics, and the JSONB releases array into a single per-artist
 // page. Matching of lyrics → artist is case-insensitive on name.
 
-// Delete blues_artists rows whose EARLIEST strict-Blues master in
-// release_cache is after 1970 — cleanup for the (now-removed) strict
-// pad button which had no year filter and pulled in modern artists.
-// Only deletes rows with no manually-curated data (mirrors the same
-// guard as purge-lyric-imports) so hand-edited entries are preserved.
-// Artists with no year-tagged strict-Blues master are KEPT (unknown
-// year is treated as safe). Returns { removed, names } for the UI.
-export async function pruneBluesArtistsFirstStrictAfter1970(): Promise<{ removed: number; names: string[] }> {
+// Delete blues_artists rows added in the last 24 hours — cleanup for
+// the (now-removed) strict pad button which had no year filter and
+// pulled in modern artists. User confirmed they haven't manually
+// added an artist in over a week, so date_added alone is a precise
+// signal for "pad-inserted" rows. Returns { removed, names } for UI.
+export async function pruneBluesArtistsRecent24h(): Promise<{ removed: number; names: string[] }> {
   const r = await getPool().query(`
-    WITH first_year AS (
+    DELETE FROM blues_artists
+     WHERE date_added >= NOW() - INTERVAL '24 hours'
+    RETURNING name
+  `);
+  return {
+    removed: r.rowCount ?? 0,
+    names: (r.rows ?? []).slice(0, 50).map((row: any) => row.name),
+  };
+}
+
+// Bulk-insert blues_artists for every artist who appears as a primary
+// credit on at least one strictly-Blues master in release_cache whose
+// EARLIEST such master is in or before 1970. Tags inserts with
+// enrichment_status.source = "strict_pad_pre1970" so future cleanup
+// can target them precisely. Existing rows have their seed_strict_count
+// refreshed but their other fields are untouched.
+export async function padBluesArtistsStrictPre1970(): Promise<{ scanned: number; inserted: number; refreshed: number }> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`
+      CREATE TEMP TABLE _pad_pre1970 ON COMMIT DROP AS
       SELECT (a->>'id')::int AS aid,
+             MIN(a->>'name') AS name,
+             COUNT(*)::int   AS strict_count,
              MIN((rc.data->>'year')::int) AS first_year
         FROM release_cache rc
         CROSS JOIN LATERAL jsonb_array_elements(
@@ -9202,26 +9223,43 @@ export async function pruneBluesArtistsFirstStrictAfter1970(): Promise<{ removed
          AND rc.data->>'year' ~ '^[0-9]+$'
          AND (rc.data->>'year')::int > 0
        GROUP BY (a->>'id')::int
-    )
-    DELETE FROM blues_artists ba
-     USING first_year fy
-     WHERE ba.discogs_id        = fy.aid
-       AND fy.first_year        > 1970
-       AND ba.wikidata_qid      IS NULL
-       AND ba.musicbrainz_mbid  IS NULL
-       AND ba.birth_date        IS NULL
-       AND ba.death_date        IS NULL
-       AND (ba.notes            IS NULL OR ba.notes           = '')
-       AND (ba.birth_place      IS NULL OR ba.birth_place     = '')
-       AND (ba.hometown_region  IS NULL OR ba.hometown_region = '')
-       AND (ba.photo_url        IS NULL OR ba.photo_url       = '')
-       AND (ba.discogs_releases IS NULL OR jsonb_array_length(ba.discogs_releases) = 0)
-    RETURNING ba.name
-  `);
-  return {
-    removed: r.rowCount ?? 0,
-    names: (r.rows ?? []).slice(0, 50).map((row: any) => row.name),
-  };
+      HAVING MIN((rc.data->>'year')::int) <= 1970
+    `);
+    const scannedR = await client.query(`SELECT COUNT(*)::int AS n FROM _pad_pre1970`);
+    const scanned = scannedR.rows[0]?.n ?? 0;
+    if (!scanned) {
+      await client.query("COMMIT");
+      return { scanned: 0, inserted: 0, refreshed: 0 };
+    }
+    const refreshedR = await client.query(`
+      UPDATE blues_artists ba
+         SET seed_strict_count = c.strict_count,
+             updated_at        = NOW()
+        FROM _pad_pre1970 c
+       WHERE ba.discogs_id = c.aid
+    `);
+    const refreshed = refreshedR.rowCount ?? 0;
+    const insertedR = await client.query(`
+      INSERT INTO blues_artists (discogs_id, name, seed_strict_count, enrichment_status)
+      SELECT c.aid,
+             LEFT(COALESCE(NULLIF(TRIM(c.name), ''), 'Artist ' || c.aid), 200),
+             c.strict_count,
+             '{"source":"strict_pad_pre1970"}'::jsonb
+        FROM _pad_pre1970 c
+       WHERE NOT EXISTS (SELECT 1 FROM blues_artists ba WHERE ba.discogs_id = c.aid)
+      ON CONFLICT (discogs_id) DO UPDATE
+        SET seed_strict_count = EXCLUDED.seed_strict_count,
+            updated_at        = NOW()
+    `);
+    const inserted = insertedR.rowCount ?? 0;
+    await client.query("COMMIT");
+    return { scanned, inserted, refreshed };
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Walks distinct lyrics.artist values, finds those that don't already
