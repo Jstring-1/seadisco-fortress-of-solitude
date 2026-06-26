@@ -1124,7 +1124,7 @@ e.g.  miles davis | coltrane
       <label style="display:inline-flex;gap:0.3rem;align-items:center"
              title="A Played-with connection is a band/sideman credit. These dominate the network; raising this number trims artists with fewer than N Played-with edges.">
         Min Played-with
-        <input id="ab-min-degree" type="number" value="4" min="1" max="20" style="width:4em" onchange="(window._abApplyFilters && window._abCy) ? window._abApplyFilters() : window.allBluesReload()">
+        <input id="ab-min-degree" type="number" value="1" min="1" max="20" style="width:4em" onchange="(window._abApplyFilters && window._abCy) ? window._abApplyFilters() : window.allBluesReload()">
       </label>
       <button type="button" class="archive-btn" onclick="allBluesReload()">Reload graph</button>
       <!-- Admin-only layout cache controls. _abSyncSaveLayoutButton
@@ -1243,8 +1243,6 @@ e.g.  miles davis | coltrane
         </label>
         <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
         <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
-        <button type="button" id="blues-pad-strict-btn" class="archive-btn" onclick="bluesArchivePadStrict()" title="Scan release_cache for every artist who appears as a primary credit on at least one MASTER with genres = ['Blues'] (strictly). Insert any missing rows; refresh seed_strict_count on every match. Existing manually-edited fields are untouched.">+ Pad with strict-Blues artists</button>
-        <button type="button" id="blues-prune-constellations-btn" class="archive-btn" onclick="bluesArchivePruneConstellations()" title="Delete every Constellations-graph artist (and their links) who is NOT a primary credit on at least one strict-Blues master. Destructive — re-run the All Blues worker to rebuild.">Prune Constellations → strict-only</button>
         <button type="button" class="archive-btn" onclick="_baLoadList();_baLoadStats();" title="Re-fetch the artist list from the server">↻ Refresh</button>
         <!-- Export CSV / PDF moved to the Export sub-tab. -->
         <button type="button" class="archive-btn" onclick="_baSwitchSubtab('export')" title="Open the unified Export hub (artists / lyrics / releases / tunings)." style="color:var(--muted)">Export ↗</button>
