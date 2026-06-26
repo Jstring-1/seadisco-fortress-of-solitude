@@ -3385,7 +3385,7 @@ export async function hibernateInactiveUsers(): Promise<number> {
     `UPDATE user_tokens
      SET hibernated_at = NOW()
      WHERE hibernated_at IS NULL
-       AND last_active_at < NOW() - INTERVAL '6 months'
+       AND last_active_at < NOW() - INTERVAL '90 days'
      RETURNING clerk_user_id`
   );
   return r.rowCount ?? 0;

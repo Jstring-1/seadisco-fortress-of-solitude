@@ -519,6 +519,9 @@ e.g.  miles davis | coltrane
       <button type="button" class="anon-cta-join" onclick="openSignUpModal()">Join SeaDisco</button>
       <button type="button" class="anon-cta-signin" onclick="openSignInModal()">Sign in</button>
     </div>
+    <div class="anon-cta-fineprint" style="flex-basis:100%;margin-top:0.4rem;color:var(--muted);font-size:0.72rem;line-height:1.4">
+      Sign-up is free and open. Connecting a Discogs account (for collection sync &amp; marketplace features) is capped at 100 active connected accounts at a time — connected accounts that go 90 days without activity are auto-hibernated to free a seat. Sign back in any time to reactivate (silent and automatic if a seat is open). Details in the <a href="/?v=privacy" onclick="switchView('privacy');return false;" style="color:#5a9aaa">Privacy Policy</a> and <a href="/?v=terms" onclick="switchView('terms');return false;" style="color:#5a9aaa">Terms</a>.
+    </div>
   </div>
 
   <!-- Sticky sign-in / sign-up rail for anonymous visitors. Pinned to
@@ -529,6 +532,7 @@ e.g.  miles davis | coltrane
     <div style="color:var(--muted);font-size:0.7rem;line-height:1.35;margin-bottom:0.55rem">Sync your collection, build a personalized feed.</div>
     <button type="button" onclick="openSignUpModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;margin-bottom:0.35rem;background:var(--accent);color:#000;border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:0.76rem">Sign up</button>
     <button type="button" onclick="openSignInModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:0.76rem">Sign in</button>
+    <div style="margin-top:0.55rem;color:var(--muted);font-size:0.64rem;line-height:1.35">100 active-user cap · accounts auto-hibernate after 90 days idle (sign in to reactivate).</div>
   </div>
 
   <!-- ── Recent history (primary front-page strip) ────────────────── -->
@@ -663,7 +667,7 @@ e.g.  miles davis | coltrane
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: May 25, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: June 25, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and, if you connect your Discogs account, the OAuth access credentials returned by Discogs.</p>
@@ -698,7 +702,7 @@ e.g.  miles davis | coltrane
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Synced user data (collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, and cached profile) is automatically deleted 30 days after it was last synced, or immediately on request. Your authentication tokens are retained for as long as your account exists.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Accounts that go unused for 6 months are hibernated: the account remains but its synced data is cleared and you'll see a hibernation notice the next time you sign in. Contact the admin to reactivate a hibernated account.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco caps Discogs-connected accounts at 100 seats at a time — sign-in alone (via Clerk) is unlimited and only counts toward the cap once you connect your Discogs account via OAuth. Discogs-connected accounts with no activity for 90 days are automatically hibernated. Your account row, email, and Discogs credentials are kept, but synced collection / wantlist / inventory / order data is cleared so the seat frees up. When you sign in again, you're reactivated silently if a seat is available and your data re-syncs from Discogs on demand. If all 100 seats are taken at that moment you'll see a notice; just try again later — no action needed and nothing is lost beyond the local cache.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: API logs and search caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion. Note that deleting your SeaDisco account does <strong style="color:#ccc">not</strong> alter anything on Discogs itself — your Discogs account, listings, and orders are untouched.</p>
 
@@ -712,7 +716,7 @@ e.g.  miles davis | coltrane
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: May 25, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: June 25, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
@@ -722,7 +726,7 @@ e.g.  miles davis | coltrane
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account Access</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco is invite-only. Total user count is capped, and accounts that go unused for 6 months are hibernated (synced data cleared; the account itself remains until explicitly deleted). When the cap is full, hibernated accounts can't be reactivated until a slot opens. Contact the admin to reactivate or for an invite.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco is open to public sign-ups via Clerk authentication, and signing in alone (browsing the public catalog, reading the Blues Archive, etc.) is unrestricted. Connecting your Discogs account via OAuth — which is what enables collection sync, wantlist sync, marketplace listing management, and personalized features — is capped at 100 active Discogs-connected accounts at a time. To keep that seat pool circulating, any Discogs-connected account with no activity for 90 days is automatically hibernated: the account row, email, and Discogs credentials are preserved, but synced collection / wantlist / inventory / order data is cleared and the seat is freed for someone else. When a hibernated user signs in again, reactivation is silent and automatic if a seat is available — no admin intervention required, and the collection re-syncs from Discogs on demand. If all 100 seats are taken at the moment they retry, they'll see a notice asking them to try again later; nothing is lost. If you want to leave permanently, use the Delete Account button on the Account page — that erases all of your data immediately and irreversibly.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We reserve the right to suspend or remove accounts at our sole discretion, with or without notice, particularly for abuse, automated scraping, or violations of these terms or Discogs' own terms of service.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Marketplace Actions</h3>
@@ -1500,6 +1504,9 @@ e.g.  miles davis | coltrane
           <button id="oauth-connect-btn" onclick="startOAuth()" style="font-size:0.88rem;padding:0.5rem 1.2rem;background:#333;color:#fff;border:1px solid #555;border-radius:6px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:0.5rem">
             <span style="font-size:1.1rem">🔗</span> Connect with Discogs
           </button>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:0.55rem">
+            Don't have a Discogs account yet? <a href="https://www.discogs.com/users/create" target="_blank" rel="noopener" style="color:#5a9aaa">Sign up free at discogs.com ↗</a> — then come back and click Connect.
+          </div>
           <div id="oauth-status" style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;display:none"></div>
         </div>
 
