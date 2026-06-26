@@ -777,9 +777,9 @@ function switchView(view, skipPushState = false) {
         if (baTab) baTab.style.display = baAccess ? "" : "none";
         if (baSep) baSep.style.display = baAccess ? "" : "none";
       };
-      // MusicBrainz: admin-only (same gating as Blues Archive).
+      // MusicBrainz: admin + demo (server-side gate is requireMusicbrainzAccess).
       const _syncMusicbrainz = () => {
-        const mbAccess = !!window._isAdmin;
+        const mbAccess = !!(window._isAdmin || window._sdIsDemo);
         const mbSep = document.getElementById("extras-tab-musicbrainz-sep");
         const mbTab = tabs["musicbrainz"];
         if (mbTab) mbTab.style.display = mbAccess ? "" : "none";

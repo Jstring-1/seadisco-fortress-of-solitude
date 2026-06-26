@@ -524,16 +524,6 @@ e.g.  miles davis | coltrane
     </div>
   </div>
 
-  <!-- Sticky sign-in / sign-up rail for anonymous visitors. Pinned to
-       the left middle of the viewport. _applyAnonSideRailVisibility
-       (in app.js) shows when signed-out, hides when signed-in. -->
-  <div id="anon-side-rail" style="display:none;position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:340;background:var(--bg-panel, #111);border:1px solid var(--border, #333);border-radius:10px;padding:0.75rem 0.6rem;box-shadow:0 6px 20px rgba(0,0,0,0.45);max-width:170px;font-size:0.78rem;color:var(--text, #ddd)">
-    <div style="font-weight:600;margin-bottom:0.4rem;font-size:0.78rem;letter-spacing:0.02em">Join SeaDisco</div>
-    <div style="color:var(--muted);font-size:0.7rem;line-height:1.35;margin-bottom:0.55rem">Sync your collection, build a personalized feed.</div>
-    <button type="button" onclick="openSignUpModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;margin-bottom:0.35rem;background:var(--accent);color:#000;border:none;border-radius:5px;font-weight:600;cursor:pointer;font-size:0.76rem">Sign up</button>
-    <button type="button" onclick="openSignInModal()" style="display:block;width:100%;padding:0.32rem 0.5rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:0.76rem">Sign in</button>
-    <div style="margin-top:0.55rem;color:var(--muted);font-size:0.64rem;line-height:1.35">100 active-user cap · accounts auto-hibernate after 90 days idle (sign in to reactivate).</div>
-  </div>
 
   <!-- ── Recent history (primary front-page strip) ────────────────── -->
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
@@ -790,7 +780,7 @@ e.g.  miles davis | coltrane
          All responses cached server-side. Mirrors the blues-archive
          gating. -->
     <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — admin-only proxied entity search with caching" style="display:none">MusicBrainz</span>
+    <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — proxied entity search with caching (admin/demo only)" style="display:none">MusicBrainz</span>
     <!-- All Blues tab — admin-only network view of inferred artist
          relationships from cached Discogs profiles. -->
     <span id="extras-tab-all-blues-sep" class="rr-tab-sep" style="display:none">/</span>

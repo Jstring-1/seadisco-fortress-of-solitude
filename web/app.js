@@ -713,9 +713,6 @@ function _applySplashVisibility(clerk) {
   if (form)       form.style.display      = "";
   if (resultsEl)  resultsEl.style.display = "";
   if (stripWrap)  stripWrap.style.display  = "";
-  // Sticky sign-in/sign-up rail on the left middle — hidden when signed-in.
-  const sideRail = document.getElementById("anon-side-rail");
-  if (sideRail) sideRail.style.display = signedIn ? "none" : "";
 }
 
 async function applyAuthState(clerk) {
