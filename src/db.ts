@@ -9196,16 +9196,16 @@ export async function pruneBluesArtistsRecent24h(): Promise<{ removed: number; n
 
 // Bulk-insert blues_artists for every artist who appears as a primary
 // credit on at least one strictly-Blues master in release_cache whose
-// EARLIEST such master is in or before 1970. Tags inserts with
-// enrichment_status.source = "strict_pad_pre1970" so future cleanup
+// EARLIEST such master is in or before 1950. Tags inserts with
+// enrichment_status.source = "strict_pad_pre1950" so future cleanup
 // can target them precisely. Existing rows have their seed_strict_count
 // refreshed but their other fields are untouched.
-export async function padBluesArtistsStrictPre1970(): Promise<{ scanned: number; inserted: number; refreshed: number }> {
+export async function padBluesArtistsStrictPre1950(): Promise<{ scanned: number; inserted: number; refreshed: number }> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
     await client.query(`
-      CREATE TEMP TABLE _pad_pre1970 ON COMMIT DROP AS
+      CREATE TEMP TABLE _pad_pre1950 ON COMMIT DROP AS
       SELECT (a->>'id')::int AS aid,
              MIN(a->>'name') AS name,
              COUNT(*)::int   AS strict_count,
@@ -9223,9 +9223,9 @@ export async function padBluesArtistsStrictPre1970(): Promise<{ scanned: number;
          AND rc.data->>'year' ~ '^[0-9]+$'
          AND (rc.data->>'year')::int > 0
        GROUP BY (a->>'id')::int
-      HAVING MIN((rc.data->>'year')::int) <= 1970
+      HAVING MIN((rc.data->>'year')::int) <= 1950
     `);
-    const scannedR = await client.query(`SELECT COUNT(*)::int AS n FROM _pad_pre1970`);
+    const scannedR = await client.query(`SELECT COUNT(*)::int AS n FROM _pad_pre1950`);
     const scanned = scannedR.rows[0]?.n ?? 0;
     if (!scanned) {
       await client.query("COMMIT");
@@ -9235,7 +9235,7 @@ export async function padBluesArtistsStrictPre1970(): Promise<{ scanned: number;
       UPDATE blues_artists ba
          SET seed_strict_count = c.strict_count,
              updated_at        = NOW()
-        FROM _pad_pre1970 c
+        FROM _pad_pre1950 c
        WHERE ba.discogs_id = c.aid
     `);
     const refreshed = refreshedR.rowCount ?? 0;
@@ -9244,8 +9244,8 @@ export async function padBluesArtistsStrictPre1970(): Promise<{ scanned: number;
       SELECT c.aid,
              LEFT(COALESCE(NULLIF(TRIM(c.name), ''), 'Artist ' || c.aid), 200),
              c.strict_count,
-             '{"source":"strict_pad_pre1970"}'::jsonb
-        FROM _pad_pre1970 c
+             '{"source":"strict_pad_pre1950"}'::jsonb
+        FROM _pad_pre1950 c
        WHERE NOT EXISTS (SELECT 1 FROM blues_artists ba WHERE ba.discogs_id = c.aid)
       ON CONFLICT (discogs_id) DO UPDATE
         SET seed_strict_count = EXCLUDED.seed_strict_count,
