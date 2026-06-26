@@ -3765,7 +3765,13 @@ function _baOpenFullEditor(id) {
   // entry text, etc.) without needing a manual refresh.
   window._bluesDbAfterSaveOnce = (savedId) => {
     const targetId = Number(savedId || id);
-    if (Number.isFinite(targetId)) _baOpenArtist(targetId);
+    if (Number.isFinite(targetId)) {
+      // Invalidate the LRU cache so the re-open fetches the freshly-
+      // saved row instead of the pre-edit copy. Without this, the bio
+      // and any other field that just changed would render stale.
+      _baArtistCache.delete(targetId);
+      _baOpenArtist(targetId);
+    }
     if (typeof _baLoadList === "function") { try { _baLoadList(); } catch {} }
     if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
   };
