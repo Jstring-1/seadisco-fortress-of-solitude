@@ -1120,6 +1120,15 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS external_urls JSONB DEFAULT '[]'::jsonb
   `);
+  // Count of cached MASTERS in release_cache where genres = ['Blues']
+  // (exactly one genre, that genre is Blues) AND the artist appears as
+  // a primary credit. Populated by padBluesArtistsStrict — used to
+  // distinguish "this artist has an actual blues album in our cache"
+  // from "this artist was added manually / from lyrics / etc.".
+  await getPool().query(`
+    ALTER TABLE blues_artists
+    ADD COLUMN IF NOT EXISTS seed_strict_count INT NOT NULL DEFAULT 0
+  `);
 
   // ── Blues lyrics (scraped from weeniecampbell.com wiki, admin-only) ───
   // Source: weeniecampbell.com/wiki, Category:Lyrics (and subcategories).
@@ -9168,6 +9177,104 @@ export async function getLyricCount(): Promise<number> {
 // blues_lyrics, and the JSONB releases array into a single per-artist
 // page. Matching of lyrics → artist is case-insensitive on name.
 
+// Find every artist who appears as a PRIMARY credit on at least one
+// cached MASTER in release_cache whose genres array is exactly
+// ['Blues'] (one genre, that genre = Blues). Insert any missing into
+// blues_artists; refresh seed_strict_count on every match. Existing
+// curated rows keep all manually-edited fields untouched — only the
+// seed_strict_count is updated, and only the discogs_id linkage is
+// used to match (so artists without a discogs_id linkage stay at 0
+// and won't be confused with imported rows).
+//
+// Returns { scanned, inserted, refreshed } so the admin can see what
+// happened. Idempotent — re-running with no new cache data is a no-op.
+export async function padBluesArtistsStrict(): Promise<{ scanned: number; inserted: number; refreshed: number }> {
+  // Per-artist count of strict-Blues masters. Only artists with a
+  // numeric Discogs id participate — we use discogs_id as the merge
+  // key for both insert and refresh.
+  const counts = await getPool().query(`
+    SELECT (a->>'id')::int AS aid,
+           MIN(a->>'name') AS name,
+           COUNT(*)::int   AS strict_count
+      FROM release_cache rc
+      CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(rc.data->'artists', '[]'::jsonb)
+      ) AS a
+     WHERE rc.type = 'master'
+       AND jsonb_typeof(rc.data->'genres') = 'array'
+       AND jsonb_array_length(rc.data->'genres') = 1
+       AND rc.data->'genres' ? 'Blues'
+       AND (a->>'id') ~ '^[0-9]+$'
+       AND (a->>'id')::int > 0
+     GROUP BY (a->>'id')::int
+  `);
+  const scanned = counts.rowCount ?? 0;
+  if (!scanned) return { scanned: 0, inserted: 0, refreshed: 0 };
+
+  // Reset everyone's count to 0 first — handles the case where a
+  // previous strict-Blues artist later had all their Blues releases
+  // re-cached with different genre arrays (rare, but otherwise leaves
+  // stale counts).
+  await getPool().query(`UPDATE blues_artists SET seed_strict_count = 0 WHERE seed_strict_count > 0`);
+
+  let inserted = 0;
+  let refreshed = 0;
+  for (const row of counts.rows as Array<{ aid: number; name: string; strict_count: number }>) {
+    // Update existing row by discogs_id first; if no row exists, insert
+    // a minimal one carrying just the name + discogs_id + count.
+    const upd = await getPool().query(
+      `UPDATE blues_artists
+          SET seed_strict_count = $2, updated_at = NOW()
+        WHERE discogs_id = $1
+      RETURNING id`,
+      [row.aid, row.strict_count],
+    );
+    if ((upd.rowCount ?? 0) > 0) { refreshed++; continue; }
+    await getPool().query(
+      `INSERT INTO blues_artists (discogs_id, name, seed_strict_count)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (discogs_id) DO UPDATE
+         SET seed_strict_count = EXCLUDED.seed_strict_count, updated_at = NOW()`,
+      [row.aid, String(row.name || `Artist ${row.aid}`).slice(0, 200), row.strict_count],
+    );
+    inserted++;
+  }
+  return { scanned, inserted, refreshed };
+}
+
+// Delete every row from all_blues_artist_queue whose discogs_id does
+// NOT appear as a primary credit on at least one strict-Blues master
+// in release_cache. Cascades to all_blues_links via the existing FK.
+// Busts the graph response cache so the next public fetch sees the
+// trimmed graph. Returns counts so the admin can see what was pruned.
+export async function pruneAllBluesQueueToStrict(): Promise<{ artistsRemoved: number; linksRemoved: number }> {
+  const linksBefore = (await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`)).rows[0]?.n ?? 0;
+  const result = await getPool().query(`
+    DELETE FROM all_blues_artist_queue
+     WHERE discogs_id NOT IN (
+       SELECT DISTINCT (a->>'id')::int
+         FROM release_cache rc
+         CROSS JOIN LATERAL jsonb_array_elements(
+           COALESCE(rc.data->'artists', '[]'::jsonb)
+         ) AS a
+        WHERE rc.type = 'master'
+          AND jsonb_typeof(rc.data->'genres') = 'array'
+          AND jsonb_array_length(rc.data->'genres') = 1
+          AND rc.data->'genres' ? 'Blues'
+          AND (a->>'id') ~ '^[0-9]+$'
+          AND (a->>'id')::int > 0
+     )
+  `);
+  // Sweep up any links whose endpoints just disappeared.
+  await getPool().query(`
+    DELETE FROM all_blues_links
+     WHERE src_id NOT IN (SELECT discogs_id FROM all_blues_artist_queue)
+        OR dst_id NOT IN (SELECT discogs_id FROM all_blues_artist_queue)
+  `);
+  const linksAfter = (await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`)).rows[0]?.n ?? 0;
+  return { artistsRemoved: result.rowCount ?? 0, linksRemoved: Math.max(0, linksBefore - linksAfter) };
+}
+
 // Walks distinct lyrics.artist values, finds those that don't already
 // exist as a blues_artists.name (case-insensitive), and inserts each
 // as a minimal new row (name only). Returns { added, total, existing }
@@ -9284,6 +9391,10 @@ export async function listBluesArchive(opts: {
   // When true, restrict to rows whose discogs_id is NULL — surfaces
   // artists that still need a Discogs profile id pasted in.
   noDiscogsId?: boolean;
+  // When true, restrict to rows whose seed_strict_count > 0 — i.e. the
+  // artist has at least one cached MASTER in release_cache with
+  // genres = ['Blues'] exactly. Populated by padBluesArtistsStrict.
+  hasStrict?: boolean;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ rows: Array<any>; total: number }> {
@@ -9328,6 +9439,9 @@ export async function listBluesArchive(opts: {
   if (opts.noDiscogsId) {
     where.push(`a.discogs_id IS NULL`);
   }
+  if (opts.hasStrict) {
+    where.push(`a.seed_strict_count > 0`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
   const offset = Math.max(0, opts.offset ?? 0);
@@ -9354,6 +9468,7 @@ export async function listBluesArchive(opts: {
             a.photo_url,
             a.discogs_id,
             a.wikipedia_suffix,
+            COALESCE(a.seed_strict_count, 0) AS seed_strict_count,
             COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
             -- lyrics_count: prefer FK count (canonical) but fall back
             -- to the legacy name-match count for any unmigrated rows

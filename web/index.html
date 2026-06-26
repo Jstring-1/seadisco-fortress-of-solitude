@@ -1237,8 +1237,14 @@ e.g.  miles davis | coltrane
           <input id="blues-archive-no-discogs" type="checkbox" onchange="_baLoadList()">
           No Discogs ID
         </label>
+        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only artists with seed_strict_count > 0 — i.e. at least one cached MASTER in release_cache whose genres = ['Blues'] exactly. Populated by the strict-pad button.">
+          <input id="blues-archive-has-strict" type="checkbox" onchange="_baLoadList()">
+          Has strict-Blues release
+        </label>
         <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
         <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
+        <button type="button" id="blues-pad-strict-btn" class="archive-btn" onclick="bluesArchivePadStrict()" title="Scan release_cache for every artist who appears as a primary credit on at least one MASTER with genres = ['Blues'] (strictly). Insert any missing rows; refresh seed_strict_count on every match. Existing manually-edited fields are untouched.">+ Pad with strict-Blues artists</button>
+        <button type="button" id="blues-prune-constellations-btn" class="archive-btn" onclick="bluesArchivePruneConstellations()" title="Delete every Constellations-graph artist (and their links) who is NOT a primary credit on at least one strict-Blues master. Destructive — re-run the All Blues worker to rebuild.">Prune Constellations → strict-only</button>
         <button type="button" class="archive-btn" onclick="_baLoadList();_baLoadStats();" title="Re-fetch the artist list from the server">↻ Refresh</button>
         <!-- Export CSV / PDF moved to the Export sub-tab. -->
         <button type="button" class="archive-btn" onclick="_baSwitchSubtab('export')" title="Open the unified Export hub (artists / lyrics / releases / tunings)." style="color:var(--muted)">Export ↗</button>
