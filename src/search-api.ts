@@ -12897,6 +12897,7 @@ app.get("/api/blues-archive/artists", async (req, res) => {
     const noWiki      = req.query.no_wiki      === "1" || req.query.no_wiki      === "true";
     const noDiscogsId = req.query.no_discogs   === "1" || req.query.no_discogs   === "true";
     const hasStrict   = req.query.has_strict   === "1" || req.query.has_strict   === "true";
+    const noStrict    = req.query.no_strict    === "1" || req.query.no_strict    === "true";
     res.json(await listBluesArchive({
       search: q || undefined,
       sort: sort || undefined,
@@ -12905,6 +12906,7 @@ app.get("/api/blues-archive/artists", async (req, res) => {
       noWiki,
       noDiscogsId,
       hasStrict,
+      noStrict,
       limit, offset,
     }));
   } catch (err) {

@@ -9394,6 +9394,10 @@ export async function listBluesArchive(opts: {
   // artist has at least one cached MASTER in release_cache with
   // genres = ['Blues'] exactly.
   hasStrict?: boolean;
+  // When true, restrict to rows whose seed_strict_count = 0 — surfaces
+  // artists with no strict-Blues master in the cache (curation queue
+  // for "this row is missing genre evidence").
+  noStrict?: boolean;
   limit?: number;
   offset?: number;
 } = {}): Promise<{ rows: Array<any>; total: number }> {
@@ -9440,6 +9444,9 @@ export async function listBluesArchive(opts: {
   }
   if (opts.hasStrict) {
     where.push(`a.seed_strict_count > 0`);
+  }
+  if (opts.noStrict) {
+    where.push(`COALESCE(a.seed_strict_count, 0) = 0`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));

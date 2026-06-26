@@ -402,12 +402,12 @@ async function _baLoadList() {
   if (document.getElementById("blues-archive-no-discogs")?.checked) {
     params.set("no_discogs", "1");
   }
-  // "Has strict-Blues release" — surfaces only artists with a cached
-  // master whose genres = ['Blues'] exactly. Lit when the strict-pad
-  // button has populated seed_strict_count.
-  if (document.getElementById("blues-archive-has-strict")?.checked) {
-    params.set("has_strict", "1");
-  }
+  // Strict-Blues filter — tri-state select. "has" = seed_strict_count > 0
+  // (at least one cached MASTER whose genres = ['Blues'] exactly).
+  // "no" = seed_strict_count = 0 (missing genre evidence). Empty = any.
+  const strictMode = document.getElementById("blues-archive-strict-filter")?.value || "";
+  if (strictMode === "has") params.set("has_strict", "1");
+  else if (strictMode === "no") params.set("no_strict", "1");
   // Server-side sort — same fix as lyrics. Client-side sort over only
   // the visible 100 rows used to mislead users into thinking the
   // entire DB had been sorted.
