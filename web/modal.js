@@ -2657,6 +2657,16 @@ async function _baStampMiniPlayerNow() {
   const trackLbl  = trackSpan?.dataset?.npLabel  || "";
   const artistLbl = artistSpan?.dataset?.npLabel || "";
   if (!trackLbl && !artistLbl) return;
+  // Pull the currently-playing Discogs context. When the track came
+  // from a known album (queue meta / track-link / openVideo dispatch),
+  // _playerReleaseType + _playerReleaseId pinpoint the release or
+  // master. Sending those lets the server's pinned-lyric match path
+  // hit even when the YT channel name (e.g. "Bessie Smith - Topic")
+  // doesn't match any blues_artists alias.
+  const playerRelType = window._playerReleaseType || "";
+  const playerRelIdN  = Number(window._playerReleaseId);
+  const releaseId = (playerRelType === "release" && Number.isFinite(playerRelIdN) && playerRelIdN > 0) ? playerRelIdN : undefined;
+  const masterId  = (playerRelType === "master"  && Number.isFinite(playerRelIdN) && playerRelIdN > 0) ? playerRelIdN : undefined;
   try {
     const r = await apiFetch("/api/blues-archive/check", {
       method: "POST",
@@ -2664,6 +2674,8 @@ async function _baStampMiniPlayerNow() {
       body: JSON.stringify({
         artistNames: artistLbl ? [artistLbl] : [],
         trackTitles: trackLbl  ? [trackLbl]  : [],
+        releaseId,
+        masterId,
       }),
     });
     if (!r.ok) return;
