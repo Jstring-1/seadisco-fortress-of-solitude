@@ -12261,3 +12261,21 @@ body.gutenberg-reader-open { overflow: hidden; }
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* Admin cache-warm panel on mobile.
+   - Stack the genre / style / from-year / to-year inputs vertically so
+     each is readable instead of getting squeezed to ~50 px.
+   - Let the stats table keep its desktop column widths but scroll
+     horizontally inside its wrapper, rather than crushing every cell. */
+@media (max-width: 720px) {
+  #panel-cache-warm .cw-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  #panel-cache-warm .cw-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #panel-cache-warm .cw-stats-table {
+    min-width: 760px;
+  }
+}

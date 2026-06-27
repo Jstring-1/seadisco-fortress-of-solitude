@@ -1289,7 +1289,7 @@ async function loadCacheWarm(opts) {
           <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
         </div>
         ${activeBlock}
-        <div style="display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:0.5rem;align-items:end">
+        <div class="cw-form-grid" style="display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:0.5rem;align-items:end">
           <label style="font-size:0.74rem;color:var(--muted)">Genre
             <select id="cw-form-genre" onchange="_cwSyncStyleList()" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">${genreOptions}</select>
           </label>
@@ -1330,7 +1330,7 @@ async function loadCacheWarm(opts) {
             const arrow = isActive ? (_cwSort.dir === "asc" ? " ↑" : " ↓") : "";
             return `<th style="text-align:${align};cursor:pointer;user-select:none" onclick="_cwSortBy('${key}')" title="Sort by ${label}">${label}${arrow}</th>`;
           };
-          return `<table class="api-log-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
+          return `<div class="cw-table-wrap" style="overflow-x:auto"><table class="api-log-table cw-stats-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
               <col style="width:15%">
               <col style="width:15%">
@@ -1391,7 +1391,7 @@ async function loadCacheWarm(opts) {
                 </td>
               </tr>`;
             }).join("")}</tbody>
-          </table>`;
+          </table></div>`;
         })()
         : `<div style="color:var(--muted);font-style:italic;padding:0.5rem 0">No cached releases yet — start a run above.</div>`}
     `;
