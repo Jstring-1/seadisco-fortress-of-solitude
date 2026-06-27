@@ -13794,23 +13794,56 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       const archiveArtistIds = Array.from(new Set(resolvedArchiveArtistIds));
 
       // Path 1+2: pinned matches by Discogs release/master id.
+      // The pinning is the curator's vouch that "this lyric belongs to
+      // this release", so a strict LOWER(TRIM(page_title)) equality is
+      // too brittle — YouTube titles often differ by a parenthetical,
+      // punctuation, or "feat. X" suffix that the lyric's page_title
+      // doesn't carry. Fetch all lyrics pinned to the release/master,
+      // then fuzzy-match titles in JS: strip parens / punctuation /
+      // common noise tokens and accept exact-or-containment matches.
       if ((Number.isFinite(releaseId) && releaseId > 0) || (Number.isFinite(masterId) && masterId > 0)) {
         const r = await getPool().query(
           `SELECT id, page_title, artist, artist_id,
                   discogs_release_id, discogs_master_id
              FROM blues_lyrics
-            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
-              AND (
-                ($2::bigint IS NOT NULL AND discogs_release_id = $2::bigint)
-                OR
-                ($3::bigint IS NOT NULL AND discogs_master_id  = $3::bigint)
-              )`,
-          [titlesLc, Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
-                     Number.isFinite(masterId)  && masterId  > 0 ? masterId  : null],
+            WHERE ($1::bigint IS NOT NULL AND discogs_release_id = $1::bigint)
+               OR ($2::bigint IS NOT NULL AND discogs_master_id  = $2::bigint)`,
+          [Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
+           Number.isFinite(masterId)  && masterId  > 0 ? masterId  : null],
         );
+        const normTitle = (s: string): string => String(s || "")
+          .toLowerCase()
+          // Drop parentheticals + bracketed asides ("(Take 2)", "[Live]").
+          .replace(/\([^)]*\)/g, " ")
+          .replace(/\[[^\]]*\]/g, " ")
+          // Drop "feat. X" / "ft. X" tails — common YT addition.
+          .replace(/\b(feat|ft)\.?\s.+$/i, " ")
+          // Strip non-alphanumeric noise; collapse whitespace.
+          .replace(/[^a-z0-9 ]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const submittedNormToLc: Array<{ raw: string; norm: string }> = trackTitles.map(t => ({
+          raw: t.trim().toLowerCase(),
+          norm: normTitle(t),
+        }));
         for (const row of r.rows) {
-          const k = String(row.page_title).trim().toLowerCase();
-          out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+          const rowNorm = normTitle(row.page_title);
+          if (!rowNorm) continue;
+          for (const { raw, norm } of submittedNormToLc) {
+            if (!norm) continue;
+            const minLen = 4;
+            const isMatch =
+              norm === rowNorm ||
+              (rowNorm.length >= minLen && norm.includes(rowNorm)) ||
+              (norm.length    >= minLen && rowNorm.includes(norm));
+            if (isMatch) {
+              // Key by the submitted title so the client's lookup by
+              // sent-title finds the hit. First match wins; later
+              // paths (artist match etc.) only fill empty slots.
+              out.tracks[raw] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+              break;
+            }
+          }
         }
       }
 
