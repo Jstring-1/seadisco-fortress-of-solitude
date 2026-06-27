@@ -13826,6 +13826,19 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
           raw: t.trim().toLowerCase(),
           norm: normTitle(t),
         }));
+        // Jaccard similarity over normalized word tokens — robust against
+        // single-character substitutions ("Is" mis-OCR'd as "Ls"),
+        // word-order swaps, and minor word-count diffs. Threshold of
+        // 0.6 admits ~one differing word in a seven-word title without
+        // collapsing to false positives for unrelated tracks.
+        const jaccardWords = (a: string, b: string): number => {
+          const A = new Set(a.split(" ").filter(Boolean));
+          const B = new Set(b.split(" ").filter(Boolean));
+          if (!A.size || !B.size) return 0;
+          let inter = 0;
+          for (const w of A) if (B.has(w)) inter++;
+          return inter / (A.size + B.size - inter);
+        };
         for (const row of r.rows) {
           const rowNorm = normTitle(row.page_title);
           if (!rowNorm) continue;
@@ -13835,7 +13848,8 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
             const isMatch =
               norm === rowNorm ||
               (rowNorm.length >= minLen && norm.includes(rowNorm)) ||
-              (norm.length    >= minLen && rowNorm.includes(norm));
+              (norm.length    >= minLen && rowNorm.includes(norm)) ||
+              jaccardWords(norm, rowNorm) >= 0.6;
             if (isMatch) {
               // Key by the submitted title so the client's lookup by
               // sent-title finds the hit. First match wins; later
