@@ -1389,27 +1389,63 @@ window._baOpenLyricEditor = _baOpenLyricEditor;
 
 // Live status under the Artist input: tells the user whether the
 // currently-typed name matches an existing blues_artists row (✓), is
-// blank (cleared), or doesn't match (will save as orphan).
+// blank (cleared), or doesn't match (will save as orphan). The static
+// datalist is capped at 500 names, which silently hid existing artists
+// past the cap — instead, debounce-search the server for the typed
+// substring so anyone in blues_artists can be linked.
+let _baEditArtistTimer = null;
+let _baEditArtistReqSeq = 0;
 function _baEditArtistInput() {
   const input = document.getElementById("ba-edit-artist");
-  const dl    = document.getElementById("ba-artist-options");
   const stat  = document.getElementById("ba-edit-artist-status");
   if (!input || !stat) return;
   const v = input.value.trim();
   if (!v) { stat.textContent = "Will clear the artist on save."; stat.style.color = "var(--muted)"; return; }
-  const lc = v.toLowerCase();
-  const matched = dl
-    ? [...dl.querySelectorAll("option")].some(o => o.value.toLowerCase() === lc)
-    : false;
-  if (matched) {
-    stat.textContent = "✓ Matches an existing artist row — will link on save.";
-    stat.style.color = "#7bc77b";
-  } else {
-    stat.textContent = "No matching artist row — will save as orphan. Click '+ Create as new' to mint one.";
-    stat.style.color = "#e8a85a";
-  }
+  // Provisional status while the server lookup is in flight, so the
+  // user isn't told "No matching artist" before we've actually checked.
+  stat.textContent = "Searching…";
+  stat.style.color = "var(--muted)";
+  if (_baEditArtistTimer) clearTimeout(_baEditArtistTimer);
+  _baEditArtistTimer = setTimeout(() => _baEditArtistLookup(v), 180);
 }
 window._baEditArtistInput = _baEditArtistInput;
+
+async function _baEditArtistLookup(v) {
+  const dl    = document.getElementById("ba-artist-options");
+  const stat  = document.getElementById("ba-edit-artist-status");
+  const input = document.getElementById("ba-edit-artist");
+  if (!input || !stat) return;
+  // Bail if the user kept typing and this lookup is stale.
+  if (input.value.trim() !== v) return;
+  const mySeq = ++_baEditArtistReqSeq;
+  try {
+    const r = await apiFetch(`/api/blues-archive/artists?q=${encodeURIComponent(v)}&limit=50`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    // Drop late responses if the user has typed more since.
+    if (mySeq !== _baEditArtistReqSeq) return;
+    if (input.value.trim() !== v) return;
+    if (dl) {
+      dl.innerHTML = rows
+        .map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`)
+        .join("");
+    }
+    const lc = v.toLowerCase();
+    const matched = rows.some(a => String(a.name).trim().toLowerCase() === lc);
+    if (matched) {
+      stat.textContent = "✓ Matches an existing artist row — will link on save.";
+      stat.style.color = "#7bc77b";
+    } else {
+      stat.textContent = "No matching artist row — will save as orphan. Click '+ Create as new' to mint one.";
+      stat.style.color = "#e8a85a";
+    }
+  } catch (e) {
+    if (mySeq !== _baEditArtistReqSeq) return;
+    stat.textContent = `Lookup failed: ${e?.message || e}`;
+    stat.style.color = "#e88";
+  }
+}
+window._baEditArtistLookup = _baEditArtistLookup;
 
 // "+ Create as new" — POST a new blues_artists row with the typed
 // name, then save the lyric edit so the FK links immediately. Skips
