@@ -167,7 +167,6 @@
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="release"> Releases</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
-      <label style="display:flex;align-items:center;gap:0.25rem;margin-left:0.5rem" title="Ask Claude for music recommendations"><input type="radio" name="result-type" value="ai" id="ai-radio"> ✦ AI</label>
     </div>
     <span style="color:#333;margin:0 0.25rem">|</span>
     <label class="sort-label" style="flex-shrink:0">
@@ -372,7 +371,6 @@
   <div id="search-info-block" class="content-narrow search-info-row" style="display:none">
     <span id="search-returned" class="search-info-cell"></span>
     <span id="search-desc" class="search-info-cell"></span>
-    <span id="search-ai-summary" class="search-info-cell search-info-ai"></span>
   </div>
   </div><!-- /main-search-form -->
 
@@ -505,7 +503,6 @@ e.g.  miles davis | coltrane
   <div id="artist-alts"></div>
   <div id="alts-popup-backdrop" onclick="closeAltsPopup()"></div>
   <div id="alts-popup"><h4>Other artists</h4></div>
-  <div id="blurb" class="content-narrow"></div>
   <div id="results" class="card-grid"></div>
   <div id="search-load-more" class="load-more-wrap" style="display:none">
     <button id="search-load-more-btn" class="load-more-btn" onclick="loadMoreResults()">Load more results</button>
@@ -544,8 +541,6 @@ e.g.  miles davis | coltrane
         <span id="rr-tab-rare" class="rr-tab" onclick="_sdSwitchHomeStripTab('rare')" title="Early-era vinyl with many collectors wanting it and almost no one owning it">Rare</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-dig" class="rr-tab" onclick="_sdSwitchHomeStripTab('dig')" title="Long-tail vinyl that nobody on SeaDisco has opened yet — pure crate digging">Dig</span>
-        <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')" title="Personalized vinyl suggestions generated hourly from your library's taste profile">Suggestions</span>
         <!-- Legacy id kept as a hidden node so older code paths that
              write to it don't blow up; visible state is on the tabs above. -->
         <span id="random-records-title" style="display:none">Feed</span>

@@ -1905,7 +1905,6 @@ function renderSharedFooter(opts) {
       </div>
       <div class="footer-col">
         ${stripLink("Recent",      "recent")}
-        ${stripLink("Suggestions", "suggestions")}
         ${(window._isAdmin || window._sdIsDemo) ? stripLink("Submitted", "submitted") : ""}
         ${stripLink("Feed",        "feed")}
       </div>
