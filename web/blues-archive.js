@@ -1492,6 +1492,9 @@ async function _baCreateLyric() {
     document.getElementById("ba-lyric-edit-overlay")?.remove();
     _baLoadStats().catch(() => {});
     if (_baSubtab === "lyrics") _baLoadLyrics();
+    // Re-stamp the mini-player so the 📜 appears immediately if the
+    // new lyric matches the currently-playing track.
+    try { window._baStampMiniPlayer?.(); } catch {}
     // Open the newly-created lyric in the viewer so the user sees
     // confirmation + can quick-fix anything they got wrong.
     setTimeout(() => _baOpenLyric(created.id), 80);
@@ -1608,6 +1611,9 @@ async function _baSaveLyricEdit(id) {
         });
         const saveBtn = document.getElementById("ba-edit-save-btn");
         if (saveBtn) { saveBtn.disabled = true; saveBtn.style.opacity = "0.55"; }
+        // Re-stamp the mini-player so a title/artist edit that newly
+        // matches the playing track shows 📜 immediately.
+        try { window._baStampMiniPlayer?.(); } catch {}
         // Brief "Saved" confirmation that fades on the next dirty edit.
         if (statusEl) {
           statusEl.textContent = "Saved.";
