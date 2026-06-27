@@ -140,7 +140,6 @@
           <h2 style="margin:0">Cache-warm runs</h2>
           <button class="admin-refresh-btn" id="cw-refresh-btn" onclick="_adminClickRefresh(this, loadCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="cw-refresh-status" class="admin-refresh-status"></span>
-          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Pick a genre + optional style + year range, hit Start. One run at a time.</span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
@@ -1312,14 +1311,9 @@ async function loadCacheWarm(opts) {
             <button class="admin-btn" onclick="cacheWarmForceClear()" title="Force-clear the in-memory 'running' lock when the worker is stuck or crashed silently. Doesn't affect cached data. Use if Start refuses to fire.">⚠ Force clear lock</button>
           </div>
         </div>
-        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.5rem">
-          Walks Discogs ${selectedStyle ? `<strong>${esc(selectedStyle)}</strong> in ` : ""}<strong>${esc(selectedGenre)}</strong> year-by-year at 1.1 s/req. Skips already-cached releases.
-        </div>
       </div>
 
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
-        <strong style="font-size:0.9rem">Per-combo stats</strong>
-        <span style="font-size:0.72rem;color:var(--muted)">One row per (genre, style) combo you've ever run.</span>
         <button class="admin-btn" type="button" onclick="_cwToggleGenresOnly()" style="margin-left:auto" title="Hide rows that have a style set so only top-level genre rows remain.">${_cwGenresOnly ? "Show all (genres + styles)" : "Hide styles (genres only)"}</button>
       </div>
       ${rows.length
