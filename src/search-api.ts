@@ -9380,8 +9380,13 @@ function _isCanonicalCombo(genre: string, style: string): boolean {
   return _CW_CANONICAL_STYLES[genre].has(style);
 }
 async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: number }> {
+  // Count both 'release' AND 'master' rows. The cache-warm worker
+  // switched to masters (one row per work, not per pressing), so
+  // filtering on type='release' alone hid every row the worker added.
+  // 'artist' / 'master-versions' rows have no genres array so they
+  // don't belong in this panel's total.
   const totalR = await getPool().query(
-    `SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`,
+    `SELECT COUNT(*)::int AS n FROM release_cache WHERE type IN ('release', 'master')`,
   );
   const arrOf = (path: string) =>
     `CASE WHEN jsonb_typeof(rc.data->'${path}') = 'array'
@@ -9392,7 +9397,7 @@ async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: nu
              COUNT(DISTINCT rc.discogs_id)::int AS in_cache
         FROM release_cache rc
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
-       WHERE rc.type = 'release'
+       WHERE rc.type IN ('release', 'master')
        GROUP BY g.value
     ),
     per_style AS (
@@ -9401,7 +9406,7 @@ async function _computeCwStats(): Promise<{ rows: any[]; release_cache_total: nu
         FROM release_cache rc
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("styles")}) s
-       WHERE rc.type = 'release'
+       WHERE rc.type IN ('release', 'master')
        GROUP BY g.value, s.value
     ),
     auto_combos AS (
