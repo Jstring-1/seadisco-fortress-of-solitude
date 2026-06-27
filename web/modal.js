@@ -4944,7 +4944,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // the W / 🏛 / 📺 icons that used to follow the title are now
         // options in that popup.
         const titleLink = t.title
-          ? entityLookupLinkHtml("track", t.title, { className: "track-title-link", trackArtist, title: `Lookup options for "${t.title}"` })
+          ? entityLookupLinkHtml("track", t.title, {
+              className: "track-title-link",
+              trackArtist,
+              // Thread release/master IDs so "Add to lyrics" can pin the
+              // new lyric to this album without manual ID entry.
+              releaseId: entityType === "master" ? "" : (releaseId || ""),
+              masterId:  entityType === "master" ? (releaseId || "") : (d.master_id || ""),
+              title: `Lookup options for "${t.title}"`,
+            })
           : "";
         // searchIcon / wikiW / locL / ytSearchEnd were retired here —
         // those affordances live in the lookup popup now.

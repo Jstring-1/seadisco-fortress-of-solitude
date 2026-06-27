@@ -2159,6 +2159,12 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // searching. Optional; the button is only added when both are set.
   const openIdAttr   = opts.openId   != null && opts.openId   !== "" ? ` data-lk-open-id="${escHtml(String(opts.openId))}"`     : "";
   const openTypeAttr = opts.openType ? ` data-lk-open-type="${escHtml(String(opts.openType))}"` : "";
+  // Discogs release/master IDs that came from the surrounding context
+  // (album modal). Threaded so the "Add to lyrics" action can pre-fill
+  // the editor's discogs_release_id / discogs_master_id without the
+  // curator having to copy them in by hand.
+  const relIdAttr    = opts.releaseId != null && opts.releaseId !== "" ? ` data-lk-release-id="${escHtml(String(opts.releaseId))}"` : "";
+  const mstIdAttr    = opts.masterId  != null && opts.masterId  !== "" ? ` data-lk-master-id="${escHtml(String(opts.masterId))}"`   : "";
   const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`                  : "";
   const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
   // <span> not <a> — these markups can be embedded inside card <a>
@@ -2166,7 +2172,7 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // anchor is encountered, which broke wide-card layout (each card
   // split across multiple grid cells). Click semantics are unchanged
   // because the onclick handler does the work.
-  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr}${relIdAttr}${mstIdAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
@@ -2177,6 +2183,8 @@ function _handleLookupClick(el, ev) {
     entityId:    el.dataset.lkId        || "",
     openId:      el.dataset.lkOpenId    || "",
     openType:    el.dataset.lkOpenType  || "",
+    releaseId:   el.dataset.lkReleaseId || "",
+    masterId:    el.dataset.lkMasterId  || "",
   };
   openLookupPopup(ev, scope, label, ctx);
 }
@@ -2244,6 +2252,8 @@ function openLookupPopup(ev, scope, label, ctx) {
   const entityId    = ctx?.entityId    || "";
   const openId      = ctx?.openId      || "";
   const openType    = ctx?.openType    || "";
+  const ctxReleaseId = ctx?.releaseId  || "";
+  const ctxMasterId  = ctx?.masterId   || "";
 
   // Build the YouTube search query — scope-aware for disambiguation.
   // We send users to the in-app YouTube view (results play in the
@@ -2547,6 +2557,14 @@ function openLookupPopup(ev, scope, label, ctx) {
             page_title: String(label || "").trim(),
             artist: String(trackArtist || "").trim(),
           };
+          // When the popup was opened from an album modal, the album's
+          // Discogs release_id / master_id ride along in ctx. Pin them
+          // onto the new lyric so the album-modal 📜 affordance picks
+          // this lyric for exact-match tracks on that release.
+          const relNum = Number(ctxReleaseId);
+          const mstNum = Number(ctxMasterId);
+          if (Number.isFinite(relNum) && relNum > 0) seed.discogs_release_id = relNum;
+          if (Number.isFinite(mstNum) && mstNum > 0) seed.discogs_master_id  = mstNum;
           const open = () => {
             if (typeof window._baOpenLyricEditor === "function") {
               window._baOpenLyricEditor(null, seed);
