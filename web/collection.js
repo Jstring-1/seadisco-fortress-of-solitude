@@ -1484,7 +1484,7 @@ async function loadInventoryTab(page = 1, filters) {
   const q = document.getElementById("cw-query")?.value?.trim() || "";
   if (q) f.q = q;
   setActiveTab("inventory");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   renderInventoryToolbar();
@@ -1630,7 +1630,7 @@ let _favTabQuery = "";
 
 async function loadFavoritesTab() {
   setActiveTab("favorites");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setCwStatus("");
@@ -1751,7 +1751,7 @@ let _listsFiltered = [];
 
 async function loadListsTab() {
   setActiveTab("lists");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setCwStatus("");
@@ -1957,7 +1957,7 @@ async function loadCollectionTab(page = 1, filters) {
   const cwSort = document.getElementById("cw-sort")?.value || "";
 
   setActiveTab("collection");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setCwStatus("");
@@ -2021,7 +2021,7 @@ async function loadWantlistTab(page = 1, filters) {
   _wlPage = page;
   const f = filters || getCwFilters();
   setActiveTab("wantlist");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setCwStatus("");
@@ -2083,7 +2083,7 @@ let _wantedItems = null;
 
 async function loadWantedTab() {
   setActiveTab("wanted");
-  document.getElementById("blurb").style.display = "none";
+  document.getElementById("blurb")?.setAttribute("style", "display:none");
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   if (_wantedItems) { renderWantedItems(_wantedItems); return; }

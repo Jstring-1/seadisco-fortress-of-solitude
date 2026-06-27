@@ -210,13 +210,6 @@ window._ensureAdminFlag = _ensureAdminFlag;
     setTimeout(() => { try { openVideo(null, playUrl); } catch {} }, 0);
   }
 
-  // 6) Restore AI search panel if shared.
-  const aiParam = p.get("ai");
-  if (aiParam && typeof doAiSearch === "function") {
-    await authReadyPromise;
-    setTimeout(() => { try { doAiSearch(aiParam); } catch {} }, 0);
-  }
-
   // Invite-only mode: signed-out users see only the splash on the home view,
   // so we no longer pre-load community records here. Signed-in users still
   // get their own random records via loadDiscogsIds → loadRandomRecords.
@@ -257,13 +250,11 @@ window.addEventListener("popstate", () => {
       doSearch(_getPage(p), true);
     } else {
       document.getElementById("results").innerHTML = "";
-      document.getElementById("blurb").style.display = "none";
       document.getElementById("artist-alts").innerHTML = "";
       document.getElementById("status").textContent = "";
       document.getElementById("pagination").style.display = "none";
       document.getElementById("search-desc").textContent = "";
       document.getElementById("search-returned").textContent = "";
-      document.getElementById("search-ai-summary").textContent = "";
       document.getElementById("search-info-block").style.display = "none";
       // Belt-and-suspenders: ensure the strip is visible + populated
       // even if switchView's no-results path didn't kick (e.g. a race

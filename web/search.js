@@ -129,7 +129,6 @@ function clearFormFieldsOnly() {
 
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-returned").textContent = "";
-  document.getElementById("search-ai-summary").textContent = "";
   document.getElementById("search-info-block").style.display = "none";
   window._lastResults = null;
   if (typeof resetSelectHighlights === "function") resetSelectHighlights();
@@ -258,8 +257,6 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   }
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
-  if (resultType === "ai") { doAiSearch(q); return; }
-
   // Barcode counts as "search term" for the empty-form guard so a
   // pure barcode lookup doesn't bounce off the missing-fields check.
   const barcode = (typeof window.currentBarcode === "string" && window.currentBarcode) ? window.currentBarcode : "";
@@ -287,7 +284,6 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   document.getElementById("search-btn").disabled = true;
   document.getElementById("search-load-more").style.display = "none";
   if (!_append) {
-    document.getElementById("blurb").style.display = "none";
     document.getElementById("artist-alts").innerHTML = "";
     closeAltsPopup();
     setStatus("");
@@ -688,15 +684,14 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
           bioData.parentLabel    ?? null, bioData.sublabels ?? [], true
         );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
-        blurbEl.innerHTML = heading + bioHtml + readMore + relLinks;
-        blurbEl.style.display = "block";
-
-        const bu = new URL(window.location.href);
-        if (!bu.searchParams.has("b")) { bu.searchParams.set("b", "y"); history.replaceState({}, "", bu.toString()); }
+        if (blurbEl) {
+          blurbEl.innerHTML = heading + bioHtml + readMore + relLinks;
+          blurbEl.style.display = "block";
+        }
 
         // Admin-only: probe the archive for this artist and, if matched,
         // append a "View in Blues Archive →" link to the bio panel.
-        if (window._isAdmin && bioData.name) {
+        if (blurbEl && window._isAdmin && bioData.name) {
           (async () => {
             try {
               const r = await apiFetch("/api/blues-archive/check", {
@@ -746,9 +741,6 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
       // duplicates the message. Clear the slot so only the card is
       // visible. (Leaving the rest of the info block intact so the
       // "Returned :: 0 results" line — when present — still shows.)
-      const noResAi = document.getElementById("search-ai-summary");
-      noResAi.innerHTML = "";
-      noResAi.title = "";
       document.getElementById("search-info-block").style.display = "";
       const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       return;
@@ -772,39 +764,6 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     document.getElementById("search-info-block").style.display = "";
     renderResults(items, _appendMode);
     renderPagination();
-
-    {
-      const qualityQuery = [
-        q,
-        artist  ? `Artist: ${artist}`   : "",
-        release ? `Release: ${release}` : "",
-        year    ? `Year: ${year}`       : "",
-        label   ? `Label: ${label}`     : "",
-        genre   ? `Genre: ${genre}`     : "",
-        style   ? `Style: ${style}`     : "",
-      ].filter(Boolean).join(", ");
-      const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
-      // Endpoint requires sign-in (anthropic-backed, costs tokens), so
-      // skip the call entirely for anon users — saves a 401 in the
-      // console and a wasted server roundtrip per search. Use
-      // apiFetch (not raw fetch) so the Clerk session token is
-      // attached; raw fetch was hitting requireUser unauthenticated
-      // and 401ing even for signed-in users.
-      const _signedIn = !!window._clerk?.user;
-      if (_signedIn && qualityQuery && qualityTitles.length && typeof apiFetch === "function") {
-        const aiEl = document.getElementById("search-ai-summary");
-        if (aiEl) aiEl.textContent = "…";
-        apiFetch("/api/result-quality", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
-        }).then(r => r.ok ? r.json() : null).then(d => {
-          if (aiEl) { aiEl.textContent = d?.phrase || ""; aiEl.title = d?.phrase || ""; }
-        }).catch(() => {
-          if (aiEl) { aiEl.textContent = ""; aiEl.title = ""; }
-        });
-      }
-    }
 
     if (typeof gtag === "function") {
       gtag("event", "page_view", {
