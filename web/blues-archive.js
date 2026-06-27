@@ -1335,6 +1335,7 @@ async function _baOpenLyricEditor(id, prefill) {
         <div style="min-width:0">
           <h3 style="margin:0 0 0.25rem">${isNew ? "Add lyric" : "Edit lyric"}</h3>
           ${row.page_url ? `<div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url)}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>` : ""}
+          ${isNew && row.page_title && row.artist ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:0.15rem"><a href="https://www.google.com/search?q=${encodeURIComponent(`${row.artist} Lyrics ${row.page_title}`)}" target="_blank" rel="noopener" style="color:var(--accent)" title="Open a Google search to find the lyrics text">🔍 Google "${escHtml(row.artist)} Lyrics ${escHtml(row.page_title)}" ↗</a></div>` : ""}
         </div>
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
