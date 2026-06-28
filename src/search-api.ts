@@ -8371,6 +8371,7 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
   const { sql: whereSql, args } = _buildReleaseCacheWhere(req.query);
   const orderSql = _releaseCacheOrderBy(req.query);
   const limit = Math.max(1, Math.min(parseInt(String(req.query.limit ?? "1000000"), 10) || 1000000, 1000000));
+  console.log(`[release-cache export] query={${Object.entries(req.query).map(([k,v])=>`${k}=${v}`).join(", ")}} whereSql=${whereSql} args=${JSON.stringify(args)} limit=${limit}`);
   const date = new Date().toISOString().slice(0, 10);
   const ext = format === "json" ? "json" : (format === "ndjson" ? "ndjson" : "csv");
   res.setHeader("Content-Type",
@@ -8392,14 +8393,13 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     for (let offset = 0; offset < limit; offset += CHUNK) {
       const take = Math.min(CHUNK, limit - offset);
       const argsWithPaging = args.concat([take, offset]);
-      const r = await getPool().query(
-        `SELECT rc.discogs_id, rc.type, rc.cached_at, rc.data
+      const sqlText = `SELECT rc.discogs_id, rc.type, rc.cached_at, rc.data
            FROM release_cache rc
            ${whereSql}
            ${orderSql}
-           LIMIT $${argsWithPaging.length - 1} OFFSET $${argsWithPaging.length}`,
-        argsWithPaging,
-      );
+           LIMIT $${argsWithPaging.length - 1} OFFSET $${argsWithPaging.length}`;
+      const r = await getPool().query(sqlText, argsWithPaging);
+      if (offset === 0) console.log(`[release-cache export] first-chunk rows=${r.rows.length} args=${JSON.stringify(argsWithPaging)}`);
       if (!r.rows.length) break;
       for (const row of r.rows) {
         const d = row.data || {};
