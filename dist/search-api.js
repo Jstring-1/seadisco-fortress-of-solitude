@@ -8,9 +8,12 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun } from "./db.js";
-import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
+import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
+import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
+import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
+import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -57,7 +60,8 @@ function _extractDiscogsProfile(profile) {
     };
 }
 // ── Global API kill switch ──────────────────────────────────────────────
-const MAX_USERS = 25;
+const MAX_USERS = 100;
+const HIBERNATION_DAYS = 90;
 let _apiKillSwitch = false;
 // ── Token-bucket rate limiter (shared across all callers) ──────────────
 //
@@ -366,6 +370,11 @@ const _CLERK_USERNAME_TTL_MS = 10 * 60 * 1000; // 10 min
 let _clerkUsernameCache = null;
 let _clerkUsernameCacheAt = 0;
 let _clerkUsernameInflight = null;
+// Populated in lockstep with _clerkUsernameCache: clerk_user_id → ms
+// timestamp of Clerk account creation. Used by the admin behavior
+// table so "Signed up" reflects the actual Clerk signup, not the
+// downstream user_tokens.created_at (which marks Discogs connection).
+let _clerkCreatedAtCache = new Map();
 async function _refreshClerkUsernameCache(force = false) {
     const now = Date.now();
     if (!force && _clerkUsernameCache && now - _clerkUsernameCacheAt < _CLERK_USERNAME_TTL_MS) {
@@ -377,6 +386,7 @@ async function _refreshClerkUsernameCache(force = false) {
         return _clerkUsernameInflight;
     _clerkUsernameInflight = (async () => {
         const out = new Map();
+        const createdOut = new Map();
         const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
         if (!clerkSecret)
             return out;
@@ -401,6 +411,9 @@ async function _refreshClerkUsernameCache(force = false) {
                         || "";
                     if (display)
                         out.set(u.id, display);
+                    if (typeof u.created_at === "number" && Number.isFinite(u.created_at)) {
+                        createdOut.set(u.id, u.created_at);
+                    }
                 }
                 if (clerkUsers.length < 100)
                     break;
@@ -408,6 +421,7 @@ async function _refreshClerkUsernameCache(force = false) {
             }
             _clerkUsernameCache = out;
             _clerkUsernameCacheAt = Date.now();
+            _clerkCreatedAtCache = createdOut;
         }
         catch (e) {
             console.warn("[clerk username cache]", e?.message ?? e);
@@ -798,7 +812,7 @@ app.get("/api/user/token", async (req, res) => {
         if (!isPrivileged) {
             const activeCount = await getActiveUserCount();
             if (activeCount >= MAX_USERS) {
-                res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
+                res.status(403).json({ error: "hibernated", message: `Welcome back — your account was hibernated after ${HIBERNATION_DAYS} days of inactivity (synced collection data was cleared). Reactivation is automatic, but all ${MAX_USERS} active spots are currently taken. Try signing in again later; once a seat opens, you'll be reactivated automatically and your collection will re-sync from Discogs on demand.` });
                 return;
             }
         }
@@ -1311,7 +1325,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
             if (!isPrivileged) {
                 const userCount = await getActiveUserCount();
                 if (userCount >= MAX_USERS) {
-                    res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
+                    res.status(403).send(`SeaDisco's active-user cap (${MAX_USERS}) is full right now, so new registrations are temporarily closed. Seats open up as inactive accounts (no activity for ${HIBERNATION_DAYS} days) are auto-hibernated. Please try again in a few days. <a href="/">Home</a>`);
                     return;
                 }
             }
@@ -3921,7 +3935,7 @@ async function _fetchArchiveCollection(collectionId) {
 // Bump this whenever the cached payload shape or fetch strategy
 // changes; _maybeRefreshArchive will discard older-schema caches and
 // rebuild on next boot. Avoids stuck-stale-cache after deploys.
-//   v2: added rows=1000 paging (was rows=300 hardcoded)
+//   v3: added rows=1000 paging (was rows=300 hardcoded)
 //   v3: tried (collection:X OR uploader:X) — works but unnecessarily
 //       wide; v5 below uses uploader: alone
 //   v4: reverted to collection:X — confirmed too narrow (300 vs 2541)
@@ -6472,6 +6486,7 @@ const _ytInflight = new Map();
 // hit Google so the last few hundred units of headroom aren't burned
 // on whatever happens to land first. Reset at UTC midnight.
 let _ytQuotaUnitsToday = 0;
+let _ytReviewSearchesToday = 0;
 let _ytQuotaResetAt = (() => {
     const d = new Date();
     d.setUTCHours(24, 0, 0, 0);
@@ -6481,16 +6496,29 @@ function _ytQuotaMaybeReset() {
     const now = Date.now();
     if (now >= _ytQuotaResetAt) {
         _ytQuotaUnitsToday = 0;
+        _ytReviewSearchesToday = 0;
         const d = new Date();
         d.setUTCHours(24, 0, 0, 0);
         _ytQuotaResetAt = d.getTime();
     }
 }
+// Persist + bump. Mirrors the in-memory counters into
+// track_yt_review_state so a Railway redeploy doesn't lose the day's
+// spend. Errors are swallowed — the in-memory count is authoritative
+// for gating; the DB row is a recovery cache.
+function _bumpYtQuotaPersisted(workerSearches, projectUnits) {
+    _ytQuotaUnitsToday += projectUnits;
+    _ytReviewSearchesToday += workerSearches;
+    if (workerSearches || projectUnits) {
+        bumpReviewQuota(workerSearches, projectUnits).catch((e) => console.warn("[yt-quota] persist failed:", e?.message ?? e));
+    }
+}
 // Soft cap: refuse new search.list calls once we've spent this many
-// units in the current UTC day. Leaves a safety margin under the 10k
-// project quota for whatever else might be going on (account creation
-// quota usage, etc.).
-const _YT_DAILY_SOFT_CAP_UNITS = 9000;
+// units in the current UTC day. Tracks total project consumption
+// (manual user search + the yt-review background worker, both register
+// here). The 950k cap sits 5% under the granted 1M/day so a burst of
+// concurrent admin activity doesn't graze Google's hard 403.
+const _YT_DAILY_SOFT_CAP_UNITS = 950_000;
 // Per-user daily quota: signed-in users bypass the per-IP throttle,
 // which is correct (the IP belongs to many users behind NAT). But
 // without ANY upper bound, one user opening dozens of album popups
@@ -6521,7 +6549,10 @@ function _ytUserCheckAndBump(userId) {
 // invalidated when the user reports a video unavailable (the
 // /api/youtube/report-unavailable path drops broken videos from the
 // global override filter regardless of cache freshness).
-const _YT_SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// YouTube Terms of Service §III.E allow cached API data up to 30 days
+// before requiring a refresh or deletion. We sit just inside that
+// window so popular queries return instantly without burning quota.
+const _YT_SEARCH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const _YT_SEARCH_CACHE_MAX = 500;
 function _ytCacheGet(key) {
     const entry = _ytSearchCache.get(key);
@@ -6604,7 +6635,7 @@ async function _ytBackfillDurationsIfNeeded(cacheKey, body) {
             console.warn("[youtube/search] backfill HTTP", dr.status);
             return body;
         }
-        _ytQuotaUnitsToday += 1;
+        _bumpYtQuotaPersisted(0, 1);
         const dj = await dr.json();
         const byId = new Map();
         for (const it of (dj?.items ?? [])) {
@@ -6765,12 +6796,12 @@ app.get("/api/youtube/search", async (req, res) => {
         // Count units regardless of status — the failed call still spends
         // quota unless it's a 4xx pre-check rejection by Google's gateway.
         if (r.status !== 400 && r.status !== 401 && r.status !== 403) {
-            _ytQuotaUnitsToday += 100;
+            _bumpYtQuotaPersisted(0, 100);
         }
         else if (r.status === 403) {
             // 403 from Google is most often quotaExceeded — count it so we
             // proactively soft-cap until UTC midnight rather than retrying.
-            _ytQuotaUnitsToday += 100;
+            _bumpYtQuotaPersisted(0, 100);
         }
         if (!r.ok) {
             const errText = await r.text().catch(() => "");
@@ -6813,7 +6844,7 @@ app.get("/api/youtube/search", async (req, res) => {
                     const dUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
                     const dr = await loggedFetch("youtube", dUrl, { context: "youtube-videos-duration" });
                     if (dr.ok) {
-                        _ytQuotaUnitsToday += 1;
+                        _bumpYtQuotaPersisted(0, 1);
                         const dj = await dr.json();
                         const byId = new Map();
                         for (const it of (dj?.items ?? [])) {
@@ -6930,7 +6961,7 @@ app.get("/api/youtube/video-info", async (req, res) => {
         const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(_youtubeApiKey)}`;
         const r = await loggedFetch("youtube", url, { context: "youtube-video-info" });
         if (r.status !== 400 && r.status !== 401)
-            _ytQuotaUnitsToday += 1;
+            _bumpYtQuotaPersisted(0, 1);
         if (!r.ok) {
             const errText = await r.text().catch(() => "");
             console.warn("[youtube/video-info] HTTP", r.status, errText.slice(0, 200));
@@ -7331,7 +7362,77 @@ app.get("/api/feed/random", async (req, res) => {
                 return { id, type: t };
             }).filter((x) => !!x).slice(0, 500)
             : [];
-        const rows = await getFeedRandomAlbums(limit, type, excludeIds);
+        // mode=rare uses a dedicated sampler that hunts for early-era
+        // releases with high want / near-zero have. No taste bias — the
+        // whole point is rarity, not affinity. Default mode keeps the
+        // weighted-random behaviour with optional taste bias for
+        // signed-in users.
+        const mode = String(req.query.mode ?? "").trim();
+        let rows;
+        // Catalog modes (feed/rare/dig/active/played) read from the
+        // pre-computed pool table for sub-second response. The
+        // background refresher (every ~2h) reruns the heavy SQL and
+        // replaces the pool. If the pool is empty (cold boot, first
+        // deploy), we fall back to the direct query and trigger a
+        // refresh in the background so subsequent requests land on a
+        // warm pool.
+        if (mode === "rare") {
+            const genreParam = String(req.query.genre ?? "").trim();
+            if (genreParam) {
+                // Strict-genre Rare bypasses the pool — the pool only holds
+                // the cross-genre default; per-genre would explode the
+                // table. The direct query is already fast (single genre
+                // window).
+                rows = await getFeedRareAlbums(limit, excludeIds, genreParam);
+            }
+            else {
+                rows = await getFeedPoolItems("rare", limit, excludeIds);
+                if (!rows.length) {
+                    rows = await getFeedRareAlbums(limit, excludeIds, null);
+                    refreshFeedPool("rare").catch(() => { });
+                }
+            }
+        }
+        else if (mode === "dig") {
+            rows = await getFeedPoolItems("dig", limit, excludeIds);
+            if (!rows.length) {
+                rows = await getFeedDigAlbums(limit, excludeIds);
+                refreshFeedPool("dig").catch(() => { });
+            }
+        }
+        else if (mode === "active") {
+            rows = await getFeedPoolItems("active", limit, excludeIds);
+            if (!rows.length) {
+                rows = await getFeedActiveAlbums(limit, excludeIds);
+                refreshFeedPool("active").catch(() => { });
+            }
+        }
+        else if (mode === "played") {
+            rows = await getFeedPoolItems("played", limit, excludeIds);
+            if (!rows.length) {
+                rows = await getFeedPlayedAlbums(limit, excludeIds);
+                refreshFeedPool("played").catch(() => { });
+            }
+        }
+        else {
+            // Feed: try the pool first. Signed-in users still get the
+            // taste bias on the cold path (when pool is empty); when the
+            // pool is warm we trade the per-user nudge for sub-second
+            // response. The pool itself was picked with the scarcity
+            // weighting so the bar is already high.
+            rows = await getFeedPoolItems("feed", limit, excludeIds);
+            if (!rows.length) {
+                let tasteProfile = null;
+                try {
+                    const uid = await getClerkUserId(req);
+                    if (uid)
+                        tasteProfile = await getOrComputeUserTasteProfile(uid);
+                }
+                catch { /* fall through with no bias */ }
+                rows = await getFeedRandomAlbums(limit, type, excludeIds, tasteProfile);
+                refreshFeedPool("feed").catch(() => { });
+            }
+        }
         const items = rows.map((row) => {
             const d = row.data ?? {};
             const artistList = Array.isArray(d.artists) ? d.artists.map((a) => a.name).filter(Boolean) : [];
@@ -7454,13 +7555,18 @@ app.get("/api/user/personal-suggestions", async (req, res) => {
         // strip pages through it client-side via Load More.
         const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
         const rows = await getUserPersonalSuggestions(userId, limit);
-        const items = rows.map(row => ({
+        const allItems = rows.map(row => ({
             id: row.discogs_id,
             type: row.entity_type,
             ...(row.data ?? {}),
             _suggestionScore: row.score,
             _suggestionGeneratedAt: row.generated_at,
         }));
+        // Vinyl-only filter to match the Feed / Rare tabs. Suggestions
+        // are pre-generated against masters and releases; the snapshot's
+        // `format` array (built by the generator from data.formats) is
+        // the source of truth here.
+        const items = allItems.filter((it) => Array.isArray(it.format) && it.format.includes("Vinyl"));
         res.json({ items, generatedAt: rows[0]?.generated_at ?? null });
     }
     catch (e) {
@@ -8132,10 +8238,18 @@ app.get("/api/admin/behavior-stats", async (req, res) => {
             getUserBehaviorStats(),
             _refreshClerkUsernameCache().catch(() => new Map()),
         ]);
-        const enriched = items.map((u) => ({
-            ...u,
-            clerk_username: clerkUsernames.get(u.clerk_user_id) ?? null,
-        }));
+        const enriched = items.map((u) => {
+            const clerkCreatedMs = _clerkCreatedAtCache.get(u.clerk_user_id);
+            return {
+                ...u,
+                clerk_username: clerkUsernames.get(u.clerk_user_id) ?? null,
+                // Clerk created_at is the actual signup moment. Falls back
+                // to the Discogs-connect timestamp (user_tokens.created_at)
+                // when the Clerk cache hasn't seen this user yet — e.g. a
+                // brand-new account between Clerk pagination ticks.
+                clerk_created_at: clerkCreatedMs ? new Date(clerkCreatedMs).toISOString() : null,
+            };
+        });
         res.json({ items: enriched });
     }
     catch (e) {
@@ -8769,6 +8883,281 @@ app.get("/api/admin/blues/export.csv", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// ── Release cache export (admin) ─────────────────────────────────────
+// Streamed export of release_cache rows. Supports filters across
+// genres/styles/year/country/format/has-youtube and three formats
+// (csv | json | ndjson). Streams in 2k-row chunks so a multi-million
+// row dump doesn't OOM the worker.
+function _buildReleaseCacheWhere(q) {
+    const where = [];
+    const args = [];
+    const type = String(q.type || "").trim().toLowerCase();
+    if (type === "release" || type === "master") {
+        args.push(type);
+        where.push(`rc.type = $${args.length}`);
+    }
+    // Use the same row-by-row jsonb_array_elements_text pattern the
+    // cache-warm stats CTE uses — `@> '["Blues"]'::jsonb` was returning
+    // 0 rows in practice even when the stats grid clearly knew Blues
+    // rows existed. The jsonb_typeof guard tolerates rows whose
+    // data.genres is missing or stored as a non-array (some old cache
+    // entries were object-wrapped) without throwing.
+    const genre = String(q.genre || "").trim();
+    if (genre) {
+        args.push(genre);
+        where.push(`EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(rc.data->'genres') = 'array'
+             THEN rc.data->'genres' ELSE '[]'::jsonb END
+      ) AS g(value) WHERE g.value = $${args.length}
+    )`);
+    }
+    const style = String(q.style || "").trim();
+    if (style) {
+        args.push(style);
+        where.push(`EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(rc.data->'styles') = 'array'
+             THEN rc.data->'styles' ELSE '[]'::jsonb END
+      ) AS s(value) WHERE s.value = $${args.length}
+    )`);
+    }
+    const yearFrom = parseInt(String(q.year_from ?? ""), 10);
+    if (Number.isFinite(yearFrom)) {
+        args.push(yearFrom);
+        where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 0) >= $${args.length}`);
+    }
+    const yearTo = parseInt(String(q.year_to ?? ""), 10);
+    if (Number.isFinite(yearTo)) {
+        args.push(yearTo);
+        where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= $${args.length}`);
+    }
+    const country = String(q.country || "").trim();
+    if (country) {
+        args.push(`%${country.toLowerCase()}%`);
+        where.push(`LOWER(COALESCE(rc.data->>'country', '')) LIKE $${args.length}`);
+    }
+    const formatContains = String(q.format || "").trim();
+    if (formatContains) {
+        args.push(JSON.stringify([{ name: formatContains }]));
+        where.push(`rc.data->'formats' @> $${args.length}::jsonb`);
+    }
+    if (String(q.has_youtube || "") === "1") {
+        where.push(`rc.data->'videos' IS NOT NULL AND jsonb_array_length(rc.data->'videos') > 0`);
+    }
+    return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
+}
+function _releaseCacheOrderBy(q) {
+    const sort = String(q.sort || "cached_at").toLowerCase();
+    const dir = String(q.order || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+    const map = {
+        cached_at: "rc.cached_at",
+        year: "COALESCE(NULLIF(rc.data->>'year','')::int, 0)",
+        title: "LOWER(COALESCE(rc.data->>'title',''))",
+        discogs_id: "rc.discogs_id",
+    };
+    const col = map[sort] || map.cached_at;
+    return ` ORDER BY ${col} ${dir} `;
+}
+function _csvEscape(v) {
+    if (v == null)
+        return "";
+    let s;
+    if (Array.isArray(v)) {
+        const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+        s = isComplex ? JSON.stringify(v) : v.join(" | ");
+    }
+    else if (typeof v === "object") {
+        s = JSON.stringify(v);
+    }
+    else {
+        s = String(v);
+    }
+    if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s))
+        return `"${s.replace(/"/g, '""')}"`;
+    return s;
+}
+app.get("/api/admin/release-cache/preview", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const { sql, args } = _buildReleaseCacheWhere(req.query);
+        const r = await getPool().query(`SELECT COUNT(*)::bigint AS n FROM release_cache rc ${sql}`, args);
+        res.json({ count: Number(r.rows[0]?.n ?? 0) });
+    }
+    catch (err) {
+        console.error("[release-cache preview]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/release-cache/export", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const format = String(req.query.format || "csv").toLowerCase();
+    if (!["csv", "json", "ndjson"].includes(format)) {
+        res.status(400).json({ error: "format must be csv | json | ndjson" });
+        return;
+    }
+    const { sql: whereSql, args } = _buildReleaseCacheWhere(req.query);
+    const orderSql = _releaseCacheOrderBy(req.query);
+    const limit = Math.max(1, Math.min(parseInt(String(req.query.limit ?? "1000000"), 10) || 1000000, 1000000));
+    const date = new Date().toISOString().slice(0, 10);
+    const ext = format === "json" ? "json" : (format === "ndjson" ? "ndjson" : "csv");
+    res.setHeader("Content-Type", format === "csv" ? "text/csv; charset=utf-8"
+        : format === "ndjson" ? "application/x-ndjson; charset=utf-8"
+            : "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-${date}.${ext}"`);
+    const CSV_COLS = [
+        "discogs_id", "type", "title", "artist", "year", "country", "formats",
+        "genres", "styles", "video_count", "want", "have", "cached_at",
+    ];
+    // CSV header + BOM for Excel
+    if (format === "csv")
+        res.write("﻿" + CSV_COLS.join(",") + "\n");
+    if (format === "json")
+        res.write("[\n");
+    const CHUNK = 2000;
+    let written = 0;
+    let firstJson = true;
+    try {
+        for (let offset = 0; offset < limit; offset += CHUNK) {
+            const take = Math.min(CHUNK, limit - offset);
+            const argsWithPaging = args.concat([take, offset]);
+            const r = await getPool().query(`SELECT rc.discogs_id, rc.type, rc.cached_at, rc.data
+           FROM release_cache rc
+           ${whereSql}
+           ${orderSql}
+           LIMIT $${argsWithPaging.length - 1} OFFSET $${argsWithPaging.length}`, argsWithPaging);
+            if (!r.rows.length)
+                break;
+            for (const row of r.rows) {
+                const d = row.data || {};
+                if (format === "csv") {
+                    const flat = [
+                        row.discogs_id,
+                        row.type,
+                        d.title,
+                        Array.isArray(d.artists) ? d.artists.map((a) => a?.name).filter(Boolean).join(" / ") : null,
+                        d.year,
+                        d.country,
+                        Array.isArray(d.formats) ? d.formats.map((f) => f?.name).filter(Boolean).join(" | ") : null,
+                        Array.isArray(d.genres) ? d.genres.join(" | ") : null,
+                        Array.isArray(d.styles) ? d.styles.join(" | ") : null,
+                        Array.isArray(d.videos) ? d.videos.length : 0,
+                        d?.community?.want ?? null,
+                        d?.community?.have ?? null,
+                        row.cached_at?.toISOString?.() ?? row.cached_at,
+                    ];
+                    res.write(flat.map(_csvEscape).join(",") + "\n");
+                }
+                else if (format === "ndjson") {
+                    res.write(JSON.stringify({
+                        discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+                    }) + "\n");
+                }
+                else {
+                    if (!firstJson)
+                        res.write(",\n");
+                    firstJson = false;
+                    res.write(JSON.stringify({
+                        discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+                    }));
+                }
+                written++;
+            }
+            if (r.rows.length < take)
+                break;
+        }
+        if (format === "json")
+            res.write("\n]\n");
+        res.end();
+        console.log(`[release-cache export ${format}] ${written} rows`);
+    }
+    catch (err) {
+        console.error("[release-cache export]", err);
+        if (!res.headersSent)
+            res.status(500).json({ error: err?.message ?? String(err) });
+        else
+            res.end();
+    }
+});
+// ── Artist cache JSON / NDJSON exports (CSV + PDF already exist) ─────
+function _buildBluesArtistsWhere(q) {
+    const where = [];
+    const args = [];
+    const name = String(q.name || "").trim();
+    if (name) {
+        args.push(`%${name.toLowerCase()}%`);
+        where.push(`LOWER(name) LIKE $${args.length}`);
+    }
+    if (String(q.has_discogs || "") === "1")
+        where.push(`discogs_id IS NOT NULL`);
+    if (String(q.has_wiki || "") === "1")
+        where.push(`wikipedia_suffix IS NOT NULL AND wikipedia_suffix <> ''`);
+    if (String(q.has_youtube || "") === "1")
+        where.push(`youtube_urls IS NOT NULL AND jsonb_array_length(youtube_urls) > 0`);
+    const town = String(q.hometown || "").trim();
+    if (town) {
+        args.push(`%${town.toLowerCase()}%`);
+        where.push(`LOWER(COALESCE(hometown_region, '')) LIKE $${args.length}`);
+    }
+    const decade = parseInt(String(q.born_decade ?? ""), 10);
+    if (Number.isFinite(decade)) {
+        const start = String(decade);
+        const end = String(decade + 9);
+        args.push(`^(${start[0]}${start[1]}${start[2]}[${start[3]}-${end[3]}])`);
+        where.push(`SUBSTRING(COALESCE(birth_date,'') FROM '^[0-9]{4}') ~ $${args.length}`);
+    }
+    return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
+}
+app.get("/api/admin/blues/export.json", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const { sql, args } = _buildBluesArtistsWhere(req.query);
+        const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0, 10)}.json"`);
+        res.send(JSON.stringify(r.rows, null, 2));
+    }
+    catch (err) {
+        console.error("[blues export.json]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/blues/export.ndjson", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const { sql, args } = _buildBluesArtistsWhere(req.query);
+        res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0, 10)}.ndjson"`);
+        const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
+        for (const row of r.rows)
+            res.write(JSON.stringify(row) + "\n");
+        res.end();
+    }
+    catch (err) {
+        console.error("[blues export.ndjson]", err);
+        if (!res.headersSent)
+            res.status(500).json({ error: err?.message ?? String(err) });
+        else
+            res.end();
+    }
+});
+app.get("/api/admin/blues/preview", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const { sql, args } = _buildBluesArtistsWhere(req.query);
+        const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_artists ${sql}`, args);
+        res.json({ count: r.rows[0]?.n ?? 0 });
+    }
+    catch (err) {
+        console.error("[blues preview]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // GET /api/admin/lyrics/export.csv — dump every blues_lyrics row.
 // Mirrors the artists CSV: UTF-8 BOM, Excel-friendly quoting, formula-
 // injection guard on cells starting with =/@/+/-. plaintext is the
@@ -9245,6 +9634,41 @@ app.get("/api/admin/blues/:id(\\d+)", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+// On unique-violation of discogs_id (PG SQLSTATE 23505), parse the
+// offending id out of the error detail, look up the row that already
+// claims it, and return a structured 409 the editor can render as a
+// "merge into…?" prompt rather than a useless raw error string.
+async function _handleBluesUniqueConflict(err, res) {
+    if (err?.code !== "23505")
+        return false;
+    const detail = String(err.detail || "");
+    const constraint = String(err.constraint || "");
+    // Postgres reports `Key (discogs_id)=(12345) already exists.`. The
+    // constraint name is typically blues_artists_discogs_id_key — but the
+    // detail string is the same regardless of how PG named it, so we
+    // match on either.
+    const m = detail.match(/\(discogs_id\)=\((\d+)\)/);
+    if (!m && !constraint.includes("discogs_id"))
+        return false;
+    const conflictId = m ? parseInt(m[1], 10) : NaN;
+    let existing = null;
+    if (Number.isFinite(conflictId)) {
+        try {
+            const r = await getPool().query(`SELECT id, name, discogs_id, photo_url FROM blues_artists WHERE discogs_id = $1 LIMIT 1`, [conflictId]);
+            existing = r.rows[0] ?? null;
+        }
+        catch { /* fall through */ }
+    }
+    res.status(409).json({
+        error: "discogs_id_conflict",
+        discogs_id: Number.isFinite(conflictId) ? conflictId : null,
+        existing,
+        message: existing
+            ? `Discogs ID ${conflictId} is already on "${existing.name}" (id ${existing.id}).`
+            : `Discogs ID is already on another artist.`,
+    });
+    return true;
+}
 app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
@@ -9258,6 +9682,8 @@ app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) 
         res.json({ ok: true, id });
     }
     catch (err) {
+        if (await _handleBluesUniqueConflict(err, res))
+            return;
         console.error("[blues insert]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
@@ -9275,6 +9701,8 @@ app.put("/api/admin/blues/:id(\\d+)", express.json({ limit: "200kb" }), async (r
         res.json({ ok: true });
     }
     catch (err) {
+        if (await _handleBluesUniqueConflict(err, res))
+            return;
         console.error("[blues update]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
@@ -9363,6 +9791,52 @@ app.get("/api/blues-archive/tunings/facets", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// POST /api/blues-archive/tunings — append a new tuning row. Admin
+// only. Body: { artist, title, track?, position?, pitch?, notes? }.
+// Artist + title are required (track-untitled rows put the title in
+// notes via the "With X:: <title>" convention; that path stays manual).
+app.post("/api/blues-archive/tunings", express.json({ limit: "8kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const b = req.body ?? {};
+        const artist = String(b.artist ?? "").trim().slice(0, 200);
+        const title = String(b.title ?? "").trim().slice(0, 200);
+        if (!artist || !title) {
+            res.status(400).json({ error: "artist and title required" });
+            return;
+        }
+        const track = (b.track != null ? String(b.track).trim() : "").slice(0, 40) || null;
+        const position = (b.position != null ? String(b.position).trim() : "").slice(0, 80) || null;
+        const pitch = (b.pitch != null ? String(b.pitch).trim() : "").slice(0, 40) || null;
+        const notes = (b.notes != null ? String(b.notes).trim() : "").slice(0, 500) || null;
+        const r = await getPool().query(`INSERT INTO blues_tunings_grid (artist, track, title, position, pitch, notes)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [artist, track, title, position, pitch, notes]);
+        res.json({ ok: true, id: r.rows[0].id });
+    }
+    catch (err) {
+        console.error("[blues tunings POST]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// DELETE /api/blues-archive/tunings/:id — remove one row. Admin only.
+app.delete("/api/blues-archive/tunings/:id(\\d+)", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+        res.status(400).json({ error: "bad id" });
+        return;
+    }
+    try {
+        const r = await getPool().query(`DELETE FROM blues_tunings_grid WHERE id = $1`, [id]);
+        res.json({ ok: true, deleted: r.rowCount ?? 0 });
+    }
+    catch (err) {
+        console.error("[blues tunings DELETE]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // ── Lyric ban list management ─────────────────────────────────────
 // CRUD over blues_lyrics_bans. The scrape consults these sets on
 // every run, so removing a row from here re-enables that title /
@@ -9387,21 +9861,48 @@ app.post("/api/admin/lyrics/bans", express.json({ limit: "8kb" }), async (req, r
         return;
     try {
         const kind = String(req.body?.kind ?? "").trim();
-        const value = String(req.body?.value ?? "").trim();
         const reason = (req.body?.reason ? String(req.body.reason).trim().slice(0, 400) : null);
-        if (kind !== "title" && kind !== "artist") {
-            res.status(400).json({ error: "kind must be 'title' or 'artist'" });
+        if (kind !== "title" && kind !== "artist" && kind !== "body_hash") {
+            res.status(400).json({ error: "kind must be 'title', 'artist', or 'body_hash'" });
             return;
         }
-        if (!value) {
-            res.status(400).json({ error: "value required" });
-            return;
+        let value;
+        if (kind === "body_hash") {
+            // Body-hash bans: client sends a lyricId; server reads the row's
+            // plaintext, hashes with the same normalisation the worker uses
+            // (CRLF→LF, trim trailing whitespace; case + punctuation
+            // preserved), and stores the digest. Keeping the hash logic
+            // server-side guarantees the popup and the rescrape worker
+            // produce the same fingerprint.
+            const lyricId = parseInt(String(req.body?.lyricId ?? ""), 10);
+            if (!Number.isFinite(lyricId) || lyricId <= 0) {
+                res.status(400).json({ error: "lyricId required for body_hash ban" });
+                return;
+            }
+            const row = await getLyricById(lyricId).catch(() => null);
+            if (!row) {
+                res.status(404).json({ error: "lyric not found" });
+                return;
+            }
+            const plaintext = String(row.plaintext ?? "").trim();
+            if (!plaintext) {
+                res.status(400).json({ error: "lyric has no plaintext to fingerprint" });
+                return;
+            }
+            value = _lyricsBodyHash(plaintext);
+        }
+        else {
+            value = String(req.body?.value ?? "").trim();
+            if (!value) {
+                res.status(400).json({ error: "value required" });
+                return;
+            }
         }
         const n = await addBluesLyricsBans([{
                 kind, value, reason,
                 bannedBy: req.clerkUserId ?? null,
             }]);
-        res.json({ ok: true, inserted: n });
+        res.json({ ok: true, inserted: n, value });
     }
     catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
@@ -9458,7 +9959,7 @@ app.post("/api/admin/blues/:id(\\d+)/links", express.json({ limit: "8kb" }), asy
         res.status(400).json({ error: "bad otherId" });
         return;
     }
-    if (kind !== "pseudonym" && kind !== "band") {
+    if (!BLUES_ARTIST_LINK_KINDS.includes(kind)) {
         res.status(400).json({ error: "bad kind" });
         return;
     }
@@ -9467,6 +9968,42 @@ app.post("/api/admin/blues/:id(\\d+)/links", express.json({ limit: "8kb" }), asy
         res.json({ ok: true });
     }
     catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// References to this artist's name in other rows' freeform fields
+// (aliases / collaborators / notes). Powers the editor's References
+// panel — surfaces unconnected mentions so the curator can promote
+// them into structured links without scanning the whole DB by hand.
+app.get("/api/admin/blues/:id(\\d+)/references", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+        res.status(400).json({ error: "bad id" });
+        return;
+    }
+    try {
+        const rows = await findBluesArtistReferences(id);
+        res.json({ rows });
+    }
+    catch (err) {
+        console.error("[blues references]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Whole-graph snapshot for the Connections viz. Admin-only — same
+// gate as the rest of /api/blues-archive/*. Cheap because the link
+// table is small; no pagination needed.
+app.get("/api/blues-archive/connections", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const out = await listBluesConnectionsGraph();
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive connections]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
@@ -9479,8 +10016,13 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
         res.status(400).json({ error: "bad id" });
         return;
     }
+    // Optional ?kind=X removes just one kind of link between the pair
+    // (the table now allows multiple kinds per pair). Omit kind to wipe
+    // every link between them.
+    const kindParam = String(req.query.kind ?? "").trim();
+    const kind = BLUES_ARTIST_LINK_KINDS.includes(kindParam) ? kindParam : undefined;
     try {
-        await removeBluesArtistLink(id, other);
+        await removeBluesArtistLink(id, other, kind);
         res.json({ ok: true });
     }
     catch (err) {
@@ -9500,10 +10042,38 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
 // without it ever looking stale. Invalidated by any mutation route
 // (start/stop/reset/delete/force-clear) so the next poll re-runs the
 // query immediately after the admin clicks something.
-const CW_STATS_TTL_MS = 15_000;
+// Fresh window: while younger than this, the cached payload is
+// returned directly with no recompute. in_cache counts barely change
+// when no worker is running, so a few minutes of staleness is fine.
+const CW_STATS_TTL_MS = 5 * 60 * 1000;
+// Stale-but-acceptable window: between TTL and this, the cached
+// payload is returned IMMEDIATELY and a background recompute fires
+// so the next read is fresh. Stale-while-revalidate keeps the panel
+// snappy after idle without sacrificing eventual accuracy.
+const CW_STATS_STALE_MS = 60 * 60 * 1000;
 let _cwStatsCache = null;
 let _cwStatsInflight = null;
 function _invalidateCwStats() { _cwStatsCache = null; }
+// Fire-and-forget background recompute used by the SWR path. Returns
+// silently on failure — the next foreground call retries.
+function _kickCwStatsBackgroundRefresh() {
+    if (_cwStatsInflight)
+        return;
+    _cwStatsInflight = (async () => {
+        try {
+            const out = await _computeCwStats();
+            _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            return out;
+        }
+        catch (err) {
+            console.warn("[cw-stats] background refresh failed:", err);
+            throw err;
+        }
+        finally {
+            _cwStatsInflight = null;
+        }
+    })();
+}
 // Canonical (genre → styles) map mirroring the admin datalists in
 // web/admin.html. Discogs tags genres and styles independently per
 // release — a single Blues release that's also tagged "Psychedelic
@@ -9530,13 +10100,22 @@ const _CW_CANONICAL_STYLES = {
     "Non-Music": new Set(["Spoken Word", "Field Recording", "Comedy", "Interview", "Audiobook", "Religious"]),
 };
 function _isCanonicalCombo(genre, style) {
+    // Genre must be one Discogs actually publishes — filters out junk
+    // tags like "1" that leak in from release_cache.data.genres when a
+    // release was mislabelled.
+    if (!_CW_CANONICAL_STYLES[genre])
+        return false;
     if (!style)
         return true; // all-of-genre row
-    const set = _CW_CANONICAL_STYLES[genre];
-    return !!set && set.has(style);
+    return _CW_CANONICAL_STYLES[genre].has(style);
 }
 async function _computeCwStats() {
-    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
+    // Count both 'release' AND 'master' rows. The cache-warm worker
+    // switched to masters (one row per work, not per pressing), so
+    // filtering on type='release' alone hid every row the worker added.
+    // 'artist' / 'master-versions' rows have no genres array so they
+    // don't belong in this panel's total.
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type IN ('release', 'master')`);
     const arrOf = (path) => `CASE WHEN jsonb_typeof(rc.data->'${path}') = 'array'
           THEN rc.data->'${path}' ELSE '[]'::jsonb END`;
     const gridR = await getPool().query(`
@@ -9545,7 +10124,7 @@ async function _computeCwStats() {
              COUNT(DISTINCT rc.discogs_id)::int AS in_cache
         FROM release_cache rc
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
-       WHERE rc.type = 'release'
+       WHERE rc.type IN ('release', 'master')
        GROUP BY g.value
     ),
     per_style AS (
@@ -9554,7 +10133,7 @@ async function _computeCwStats() {
         FROM release_cache rc
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("genres")}) g
         CROSS JOIN LATERAL jsonb_array_elements_text(${arrOf("styles")}) s
-       WHERE rc.type = 'release'
+       WHERE rc.type IN ('release', 'master')
        GROUP BY g.value, s.value
     ),
     auto_combos AS (
@@ -9571,6 +10150,8 @@ async function _computeCwStats() {
       cwr.total_errors,
       cwr.last_run_at,
       cwr.last_cached_at,
+      cwr.no_year_last_run_at,
+      cwr.no_year_pages_seen,
       cwr.recent_cached,
       cwr.recent_errors,
       COALESCE(ac.in_cache, 0) AS in_cache,
@@ -9592,8 +10173,23 @@ async function _computeCwStats() {
 }
 async function _getCwStats() {
     const now = Date.now();
-    if (_cwStatsCache && now - _cwStatsCache.at < CW_STATS_TTL_MS) {
-        return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+    if (_cwStatsCache) {
+        const age = now - _cwStatsCache.at;
+        if (age < CW_STATS_TTL_MS) {
+            // Fresh enough — return immediately.
+            return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+        }
+        if (age < CW_STATS_STALE_MS) {
+            // Stale-but-acceptable: return the cached payload right away
+            // and kick a background recompute so the next read is fresh.
+            // The panel feels snappy even after a long idle — the heavy
+            // CTE only ever runs out-of-band.
+            _kickCwStatsBackgroundRefresh();
+            return { rows: _cwStatsCache.rows, release_cache_total: _cwStatsCache.release_cache_total };
+        }
+        // Older than the stale window — fall through to a foreground
+        // recompute. (Effectively only happens on the first open after
+        // a deploy; warm-on-boot covers the typical case.)
     }
     // Singleflight: if a recompute is already in flight, await that
     // promise instead of kicking a second concurrent CTE scan.
@@ -9651,6 +10247,7 @@ app.post("/api/admin/cache-warm-runs/start", express.json({ limit: "4kb" }), asy
             fromYear: num(body.fromYear),
             toYear: num(body.toYear),
             resetCursor: !!body.resetCursor,
+            alsoNoYear: !!body.alsoNoYear,
         });
         if (!out.ok) {
             res.status(409).json({ error: out.error || "could not start" });
@@ -9733,6 +10330,800 @@ app.all(/^\/api\/admin\/genre-cache-warm\/.*/, async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     res.status(410).json({ error: "Replaced by /api/admin/cache-warm/* — refresh the admin page" });
+});
+// ── All Blues worker + graph ──────────────────────────────────────
+// Walks release_cache (year window, default 1900-1970), collects
+// artist IDs, fetches each artist's Discogs profile, parses inline
+// [aNNNNN] mentions into all_blues_links with kind inferred from
+// surrounding prose. Admin-gated; the graph endpoint also requires
+// admin since it surfaces inferred relationships.
+app.get("/api/admin/all-blues/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const stateR = await getPool().query(`SELECT * FROM all_blues_warm_state WHERE id=1`);
+        const state = stateR.rows[0] || {};
+        const qR = await getPool().query(`SELECT status, COUNT(*)::int AS n FROM all_blues_artist_queue GROUP BY status`);
+        const queue = {};
+        for (const r of qR.rows)
+            queue[r.status] = r.n;
+        const cacheR = await getPool().query(`SELECT COUNT(*)::int AS n FROM discogs_artist_cache`);
+        const linksR = await getPool().query(`SELECT kind, COUNT(*)::int AS n FROM all_blues_links GROUP BY kind`);
+        const linksByKind = {};
+        for (const r of linksR.rows)
+            linksByKind[r.kind] = r.n;
+        // Seeds with zero edges (no row in all_blues_links where they're
+        // src or dst). After a worker run this measures the long tail of
+        // artists nobody ever mentioned and who never co-credited on a
+        // release — useful to know how much of the queue resulted in
+        // dead-end nodes.
+        const isolatedR = await getPool().query(`
+      SELECT COUNT(*)::int AS n
+        FROM all_blues_artist_queue q
+       WHERE q.seed_year IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM all_blues_links l
+            WHERE l.src_id = q.discogs_id OR l.dst_id = q.discogs_id
+         )
+    `);
+        const totalSeedsR = await getPool().query(`
+      SELECT COUNT(*)::int AS n
+        FROM all_blues_artist_queue
+       WHERE seed_year IS NOT NULL
+    `);
+        res.json({
+            running: isAllBluesRunning(),
+            active: getAllBluesActiveParams(),
+            state,
+            queue,
+            cached_artists: cacheR.rows[0]?.n ?? 0,
+            links_by_kind: linksByKind,
+            isolated_seeds: isolatedR.rows[0]?.n ?? 0,
+            total_seeds: totalSeedsR.rows[0]?.n ?? 0,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/all-blues/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body ?? {};
+    const num = (v) => {
+        const n = parseInt(String(v ?? ""), 10);
+        return Number.isFinite(n) ? n : undefined;
+    };
+    try {
+        const out = await startAllBluesRun({
+            fromYear: num(body.fromYear),
+            toYear: num(body.toYear),
+            resetQueue: !!body.resetQueue,
+        });
+        if (!out.ok) {
+            res.status(409).json({ error: out.error || "could not start" });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/all-blues/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestAllBluesStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/all-blues/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearAllBluesRunning();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Save fcose positions. Admin-only. Body shape:
+//   { "positions": { "123": { "x": 12.5, "y": -34.7 }, ... } }
+// One bulk UPDATE keyed by UNNEST over parallel arrays so even tens
+// of thousands of seeds land in a single round trip.
+app.post("/api/admin/all-blues/positions", express.json({ limit: "8mb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const positions = req.body?.positions;
+    if (!positions || typeof positions !== "object") {
+        res.status(400).json({ error: "positions object required" });
+        return;
+    }
+    try {
+        const ids = [];
+        const xs = [];
+        const ys = [];
+        for (const [k, v] of Object.entries(positions)) {
+            const id = parseInt(k, 10);
+            if (!Number.isFinite(id) || id <= 0)
+                continue;
+            const x = Number(v?.x);
+            const y = Number(v?.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y))
+                continue;
+            ids.push(id);
+            xs.push(x);
+            ys.push(y);
+        }
+        if (!ids.length) {
+            res.json({ ok: true, updated: 0 });
+            return;
+        }
+        const r = await getPool().query(`UPDATE all_blues_artist_queue q
+          SET pos_x = u.x, pos_y = u.y
+         FROM unnest($1::int[], $2::float8[], $3::float8[]) AS u(id, x, y)
+        WHERE q.discogs_id = u.id`, [ids, xs, ys]);
+        // Bust the in-memory response cache so other visitors get the
+        // freshly-saved positions immediately instead of waiting for TTL.
+        _graphCacheClear();
+        res.json({ ok: true, updated: r.rowCount ?? 0 });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Bucket → raw kinds map for the admin connection-pill editor.
+// Mirrors _AB_KINDS in web/all-blues.js so the four user-facing chips
+// (Played with / Pseudonyms / Family / Mentions) translate to the
+// underlying worker kinds the DB actually stores.
+const _AB_BUCKET_RAW = {
+    played_with: ["band"],
+    pseudonyms: ["alias"],
+    family: ["family", "spouse", "mentor"],
+    mentions: ["mention", "traveled"],
+};
+// Delete every raw kind in a bucket for a given artist pair. Both
+// directions (src→dst and dst→src) are wiped since all_blues_links
+// stores directional rows but the UI treats the pair as a single edge.
+app.post("/api/admin/all-blues/link/delete", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const srcId = parseInt(String(req.body?.src_id ?? ""), 10);
+    const dstId = parseInt(String(req.body?.dst_id ?? ""), 10);
+    const bucket = String(req.body?.bucket ?? "");
+    const raws = _AB_BUCKET_RAW[bucket];
+    if (!Number.isFinite(srcId) || !Number.isFinite(dstId) || srcId <= 0 || dstId <= 0 || srcId === dstId || !raws) {
+        res.status(400).json({ error: "src_id, dst_id, valid bucket required" });
+        return;
+    }
+    try {
+        const r = await getPool().query(`DELETE FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])`, [srcId, dstId, raws]);
+        _graphCacheClear();
+        res.json({ ok: true, deleted: r.rowCount ?? 0 });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Change the bucket on a pair's connection: delete every raw kind in
+// the old bucket, insert the canonical raw kind of the new bucket
+// (= first raw in the bucket's list). Direction follows the existing
+// row if present, otherwise src_id → dst_id from the request.
+app.post("/api/admin/all-blues/link/change-bucket", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const srcId = parseInt(String(req.body?.src_id ?? ""), 10);
+    const dstId = parseInt(String(req.body?.dst_id ?? ""), 10);
+    const fromBucket = String(req.body?.from_bucket ?? "");
+    const toBucket = String(req.body?.to_bucket ?? "");
+    const fromRaws = _AB_BUCKET_RAW[fromBucket];
+    const toRaws = _AB_BUCKET_RAW[toBucket];
+    if (!Number.isFinite(srcId) || !Number.isFinite(dstId) || srcId <= 0 || dstId <= 0 || srcId === dstId || !fromRaws || !toRaws) {
+        res.status(400).json({ error: "src_id, dst_id, valid from_bucket + to_bucket required" });
+        return;
+    }
+    if (fromBucket === toBucket) {
+        res.json({ ok: true, changed: 0 });
+        return;
+    }
+    const newKind = toRaws[0];
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Capture an excerpt from any of the old rows so the new row keeps
+        // the original source context (e.g. liner-note quote).
+        const exR = await client.query(`SELECT excerpt FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])
+          AND excerpt IS NOT NULL
+        LIMIT 1`, [srcId, dstId, fromRaws]);
+        const carriedExcerpt = exR.rows[0]?.excerpt ?? null;
+        const delR = await client.query(`DELETE FROM all_blues_links
+        WHERE ((src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1))
+          AND kind = ANY($3::text[])`, [srcId, dstId, fromRaws]);
+        await client.query(`INSERT INTO all_blues_links (src_id, dst_id, kind, excerpt)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (src_id, dst_id, kind) DO NOTHING`, [srcId, dstId, newKind, carriedExcerpt]);
+        await client.query("COMMIT");
+        _graphCacheClear();
+        res.json({ ok: true, deleted: delR.rowCount ?? 0, new_kind: newKind });
+    }
+    catch (err) {
+        await client.query("ROLLBACK").catch(() => { });
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+    finally {
+        client.release();
+    }
+});
+// Wipe queue + edges + counters. Optionally also wipe the Discogs
+// artist-profile cache (?cache=1). Refuses while the worker is
+// running — admin must Stop first so we don't yank tables out from
+// under in-flight INSERTs.
+app.post("/api/admin/all-blues/wipe", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (isAllBluesRunning()) {
+        res.status(409).json({ error: "Stop the worker before wiping." });
+        return;
+    }
+    const alsoCache = String(req.query.cache ?? req.body?.cache ?? "") === "1";
+    const ARCHIVE_EXCERPT = "From Blues Archive (manually curated)";
+    try {
+        // Wipe the queue fully — manual seeds get re-inserted by the next
+        // collect via ON CONFLICT, so there's no data loss.
+        await getPool().query(`DELETE FROM all_blues_artist_queue`);
+        // Preserve edges that came from the Blues Archive manual import
+        // (they have the sentinel excerpt). Delete everything else — the
+        // auto-parsed profile / liner-notes edges the worker scraped.
+        const delLinks = await getPool().query(`DELETE FROM all_blues_links
+        WHERE excerpt IS DISTINCT FROM $1`, [ARCHIVE_EXCERPT]);
+        if (alsoCache)
+            await getPool().query(`DELETE FROM discogs_artist_cache`);
+        // Reset counters; total links_inserted is replaced by the live
+        // surviving count so the stats panel doesn't show a negative
+        // delta after the next collect adds new edges.
+        const remainingLinks = await getPool().query(`SELECT COUNT(*)::int AS n FROM all_blues_links`);
+        await getPool().query(`UPDATE all_blues_warm_state SET artists_queued=0, artists_fetched=0,
+         artists_errored=0, links_inserted=$1, last_error=NULL,
+         phase='idle' WHERE id=1`, [remainingLinks.rows[0]?.n ?? 0]);
+        res.json({
+            ok: true,
+            wipedCache: alsoCache,
+            deletedLinks: delLinks.rowCount ?? 0,
+            preservedArchiveLinks: remainingLinks.rows[0]?.n ?? 0,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Graph snapshot for the network view. Returns every node referenced
+// by any edge plus its display name from the cache (falls back to
+// "(unknown)" if we haven't fetched that artist yet). PUBLIC: any
+// signed-in or anonymous visitor can hit this — the page is shareable.
+// Only the worker controls (start/stop/status) stay admin-only.
+// Artist detail: name, bio, thumbnail, list of cached releases this
+// artist appears on as a primary credit, and every connection
+// (edge) to other blues seeds. Used by the clickable-node popup on
+// the Constellations graph. PUBLIC.
+app.get("/api/all-blues/artist", async (req, res) => {
+    try {
+        const id = parseInt(String(req.query.id ?? ""), 10);
+        if (!Number.isFinite(id) || id <= 0) {
+            res.status(400).json({ error: "id required" });
+            return;
+        }
+        const aR = await getPool().query(`SELECT q.discogs_id,
+              COALESCE(c.name, q.name) AS name,
+              q.seed_year,
+              c.data AS data,
+              c.profile AS cached_profile
+         FROM all_blues_artist_queue q
+         LEFT JOIN discogs_artist_cache c USING (discogs_id)
+        WHERE q.discogs_id = $1`, [id]);
+        if (!aR.rows.length) {
+            res.status(404).json({ error: "artist not found in the constellations queue" });
+            return;
+        }
+        const row = aR.rows[0];
+        const data = row.data || {};
+        const thumb = Array.isArray(data.images) && data.images[0]
+            ? (data.images[0].uri150 || data.images[0].uri || null)
+            : null;
+        const profileRaw = row.cached_profile || data.profile || "";
+        // Resolve [a] artist refs inside the bio. Discogs uses several
+        // forms; we accept all of them:
+        //   [aNNN]             — bare numeric id
+        //   [a=NNN]            — equals + numeric id
+        //   [aNNN|Display]     — id with display override
+        //   [a=NNN|Display]    — equals form with display override
+        //   [a=Display Name]   — equals + literal name (no Discogs id linked)
+        //   [a=Name (N)]       — equals + name + Discogs disambiguator suffix
+        //
+        // For the numeric forms we look the id up in cache→queue. For the
+        // name-only forms we use the literal name as-is, stripping any
+        // trailing "(N)" disambiguator since it's noise to the reader.
+        const NUM_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+        const NAME_RE = /\[a=([^\d\]][^\]|]*)(?:\|[^\]]*)?\]/gi;
+        const referenced = new Set();
+        if (typeof profileRaw === "string") {
+            for (const m of profileRaw.matchAll(NUM_RE)) {
+                const ridv = parseInt(m[1], 10);
+                if (Number.isFinite(ridv) && ridv > 0)
+                    referenced.add(ridv);
+            }
+        }
+        let bioNameMap = new Map();
+        if (referenced.size) {
+            const ids = Array.from(referenced);
+            const r = await getPool().query(`SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])
+            AND COALESCE(c.name, q.name) IS NOT NULL`, [ids]);
+            for (const rr of r.rows)
+                bioNameMap.set(rr.discogs_id, rr.name);
+        }
+        const stripDisambig = (n) => n.replace(/\s*\(\d+\)\s*$/, "").trim();
+        const resolveBio = (s) => {
+            if (!s)
+                return "";
+            let out = s.replace(NUM_RE, (_m, idStr) => {
+                const rid = parseInt(idStr, 10);
+                return bioNameMap.get(rid) || `Artist ${rid}`;
+            });
+            out = out.replace(NAME_RE, (_m, nm) => stripDisambig(nm));
+            out = out.replace(/\[r(\d+)\]/gi, (_m, rid) => `(release ${rid})`);
+            out = out.replace(/\[m(\d+)\]/gi, (_m, mid) => `(master ${mid})`);
+            out = out.replace(/\[l(?:=)?(\d+)(?:\|[^\]]*)?\]/gi, (_m, lid) => `(label ${lid})`);
+            out = out.replace(/\[\/?[biu]\]/gi, "");
+            out = out.replace(/\[url=[^\]]*\]/gi, "");
+            out = out.replace(/\[\/url\]/gi, "");
+            return out.trim();
+        };
+        // Releases where this artist is a primary credit. The previous
+        // query did a full scan with jsonb_array_elements; this rewrite
+        // uses GIN-indexed jsonb containment (@>) on data->'artists' and
+        // key-exists (?) on data->'genres' for sub-millisecond lookups
+        // even on a fat release_cache.
+        const artistFilter = JSON.stringify([{ id }]);
+        const relR = await getPool().query(`SELECT rc.discogs_id, rc.type, rc.data
+         FROM release_cache rc
+        WHERE rc.type IN ('release', 'master')
+          AND rc.data->'artists' @> $1::jsonb
+          AND rc.data->'genres' ? 'Blues'
+        ORDER BY (rc.data->>'year') NULLS LAST
+        LIMIT 60`, [artistFilter]);
+        const releases = relR.rows.map(r => {
+            const d = r.data || {};
+            const t = Array.isArray(d.images) && d.images[0]
+                ? (d.images[0].uri150 || d.images[0].uri || null)
+                : null;
+            let credit = Array.isArray(d.artists)
+                ? d.artists.map((a) => a?.name).filter(Boolean).join(", ")
+                : "";
+            if (!credit && typeof d.artists_sort === "string")
+                credit = d.artists_sort.trim();
+            return {
+                id: r.discogs_id, type: r.type,
+                title: d.title || `Release ${r.discogs_id}`,
+                year: d.year || null,
+                thumb: t,
+                primary_artists: credit,
+            };
+        });
+        // Connections from all_blues_links. Show the partner name + every
+        // kind we have on the pair. Canonicalize direction so we don't
+        // surface a duplicate "Bessie Smith ← Robert Johnson" alongside
+        // "Bessie Smith → Robert Johnson".
+        const cR = await getPool().query(`SELECT CASE WHEN l.src_id = $1 THEN l.dst_id ELSE l.src_id END AS partner_id,
+              l.kind,
+              COUNT(DISTINCT CASE WHEN array_length(l.release_ids,1) IS NULL THEN NULL
+                                  ELSE l.release_ids END) AS dummy
+         FROM all_blues_links l
+        WHERE (l.src_id = $1 OR l.dst_id = $1)
+        GROUP BY partner_id, l.kind`, [id]);
+        const partnerIds = Array.from(new Set(cR.rows.map(r => r.partner_id)));
+        let partnerNames = new Map();
+        if (partnerIds.length) {
+            const r = await getPool().query(`SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])`, [partnerIds]);
+            for (const rr of r.rows)
+                partnerNames.set(rr.discogs_id, rr.name);
+        }
+        // Group kinds by partner so the UI can render one row per
+        // connection with all its kind chips.
+        const byPartner = new Map();
+        for (const row of cR.rows) {
+            const pid = row.partner_id;
+            const k = row.kind;
+            const existing = byPartner.get(pid);
+            if (existing) {
+                if (!existing.kinds.includes(k))
+                    existing.kinds.push(k);
+            }
+            else {
+                byPartner.set(pid, {
+                    partner_id: pid,
+                    partner_name: partnerNames.get(pid) || `Artist ${pid}`,
+                    kinds: [k],
+                });
+            }
+        }
+        const connections = Array.from(byPartner.values())
+            .sort((a, b) => a.partner_name.localeCompare(b.partner_name));
+        res.json({
+            artist: {
+                id,
+                name: row.name || `Artist ${id}`,
+                seed_year: row.seed_year,
+                thumb,
+                discogs_url: `https://www.discogs.com/artist/${id}`,
+                profile: resolveBio(typeof profileRaw === "string" ? profileRaw : ""),
+            },
+            releases,
+            connections,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Edge detail: everything we know about the connection between two
+// artists. Returns both endpoints' names + thumbnails, every edge
+// kind between them (in both directions), the prose excerpt that
+// surfaced each, and the cached release/master metadata for every
+// shared release_id. Used by the clickable-edge popup on the All
+// Blues graph. PUBLIC, same as the graph endpoint.
+app.get("/api/all-blues/edge", async (req, res) => {
+    try {
+        const src = parseInt(String(req.query.src ?? ""), 10);
+        const dst = parseInt(String(req.query.dst ?? ""), 10);
+        if (!Number.isFinite(src) || !Number.isFinite(dst) || src <= 0 || dst <= 0 || src === dst) {
+            res.status(400).json({
+                error: "src and dst must be distinct positive integers",
+                got: { src: String(req.query.src ?? ""), dst: String(req.query.dst ?? "") },
+            });
+            return;
+        }
+        // Both directions — the graph is undirected for UI purposes, but
+        // edges in DB are directed (src has the profile/notes referencing
+        // dst). Show all of them.
+        const edgesR = await getPool().query(`SELECT src_id, dst_id, kind, excerpt, release_ids
+         FROM all_blues_links
+        WHERE (src_id = $1 AND dst_id = $2) OR (src_id = $2 AND dst_id = $1)
+        ORDER BY kind`, [src, dst]);
+        const edges = edgesR.rows;
+        // Collect every release_id referenced across all edges
+        const releaseIds = new Set();
+        for (const e of edges) {
+            if (Array.isArray(e.release_ids)) {
+                for (const id of e.release_ids)
+                    if (Number.isFinite(id))
+                        releaseIds.add(id);
+            }
+        }
+        // Same fallback as the graph endpoint — prefer the canonical name
+        // from discogs_artist_cache (populated by the rate-limited fetch
+        // phase), fall back to the queue.name harvested from release_cache
+        // at collect time. The cache row also carries the data JSON which
+        // gives us a thumbnail; queue rows don't (no thumbnail until
+        // fetch runs).
+        const artistsR = await getPool().query(`SELECT q.discogs_id,
+              COALESCE(c.name, q.name) AS name,
+              c.data AS data
+         FROM all_blues_artist_queue q
+         LEFT JOIN discogs_artist_cache c USING (discogs_id)
+        WHERE q.discogs_id = ANY($1::int[])`, [[src, dst]]);
+        const artistMap = new Map();
+        for (const a of artistsR.rows)
+            artistMap.set(a.discogs_id, a);
+        const artistCard = (id) => {
+            const a = artistMap.get(id);
+            const data = a?.data || {};
+            const thumb = Array.isArray(data.images) && data.images[0]
+                ? (data.images[0].uri150 || data.images[0].uri || null)
+                : null;
+            return {
+                id,
+                name: a?.name || `Artist ${id}`,
+                thumb,
+                discogs_url: `https://www.discogs.com/artist/${id}`,
+                profile_excerpt: typeof data.profile === "string" ? data.profile.slice(0, 240) : null,
+            };
+        };
+        // Release lookup: pull the cached payload for every release_id and
+        // boil it down to the bits the card needs.
+        let releases = [];
+        if (releaseIds.size) {
+            const ids = [...releaseIds];
+            const relR = await getPool().query(`SELECT discogs_id, type, data FROM release_cache
+          WHERE discogs_id = ANY($1::int[])
+          ORDER BY (data->>'year') NULLS LAST`, [ids]);
+            releases = relR.rows.map(r => {
+                const d = r.data || {};
+                const thumb = Array.isArray(d.images) && d.images[0]
+                    ? (d.images[0].uri150 || d.images[0].uri || null)
+                    : null;
+                // Artist credit: walk every Discogs-supplied form so an alias
+                // release (where the artist is the pseudonym name) always
+                // surfaces — that's the whole point of an alias edge: which
+                // name was this release credited under? Order:
+                //   1. data.artists[].name — the structured primary credit
+                //   2. data.artists_sort — a string version Discogs returns
+                //      even when the artists array is sparse
+                //   3. extraartists fallback — sometimes the credit moves here
+                //      for compilations / VA tag
+                let primaries = Array.isArray(d.artists)
+                    ? d.artists.map((a) => a?.name).filter(Boolean).join(", ")
+                    : "";
+                if (!primaries && typeof d.artists_sort === "string" && d.artists_sort.trim()) {
+                    primaries = d.artists_sort.trim();
+                }
+                if (!primaries && Array.isArray(d.extraartists)) {
+                    primaries = d.extraartists.map((a) => a?.name).filter(Boolean).slice(0, 3).join(", ");
+                }
+                return {
+                    id: r.discogs_id,
+                    type: r.type,
+                    title: d.title || `Release ${r.discogs_id}`,
+                    year: d.year || null,
+                    thumb,
+                    primary_artists: primaries,
+                };
+            });
+        }
+        // Hydrate [aNNNNN] artist refs inside excerpts. Discogs profile
+        // and liner-notes prose is full of BBCode-style refs like
+        // "associated with [a307403]" — unresolved, the user sees ids
+        // instead of names in the popup. Collect every referenced id
+        // across all edges' excerpts, look them up in one round trip
+        // (cache → queue fallback, same as everywhere else), then
+        // substitute. We also strip [b]/[i]/[u] formatting tags so the
+        // excerpt reads naturally, and rewrite [r…]/[m…]/[l…] refs to
+        // a short label so they don't look like random tokens.
+        // Two ref forms (see the artist endpoint above for the full set):
+        //   NUM_RE   — numeric ids ([a123], [a=123], [a123|Display])
+        //   NAME_RE  — literal name only ([a=Display], [a=Name (3)])
+        const NUM_RE = /\[a(?:=)?(\d+)(?:\|[^\]]*)?\]/gi;
+        const NAME_RE = /\[a=([^\d\]][^\]|]*)(?:\|[^\]]*)?\]/gi;
+        const referencedIds = new Set();
+        for (const e of edges) {
+            if (typeof e.excerpt !== "string")
+                continue;
+            for (const hit of e.excerpt.matchAll(NUM_RE)) {
+                const id = parseInt(hit[1], 10);
+                if (Number.isFinite(id) && id > 0)
+                    referencedIds.add(id);
+            }
+        }
+        let excerptNameMap = new Map();
+        if (referencedIds.size) {
+            const idsArr = Array.from(referencedIds);
+            const nameQ = await getPool().query(`SELECT q.discogs_id, COALESCE(c.name, q.name) AS name
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])
+            AND COALESCE(c.name, q.name) IS NOT NULL`, [idsArr]);
+            for (const row of nameQ.rows)
+                excerptNameMap.set(row.discogs_id, row.name);
+        }
+        const stripDisambig = (n) => n.replace(/\s*\(\d+\)\s*$/, "").trim();
+        const resolveExcerpt = (raw) => {
+            if (typeof raw !== "string" || !raw)
+                return raw ?? null;
+            let s = raw;
+            // Numeric artist refs → looked-up name (or "Artist N" fallback)
+            s = s.replace(NUM_RE, (_m, idStr) => {
+                const id = parseInt(idStr, 10);
+                return excerptNameMap.get(id) || `Artist ${id}`;
+            });
+            // Literal-name artist refs → the name itself, sans " (N)" suffix
+            s = s.replace(NAME_RE, (_m, nm) => stripDisambig(nm));
+            // Release / master / label refs → short label
+            s = s.replace(/\[r(\d+)\]/gi, (_m, id) => `(release ${id})`);
+            s = s.replace(/\[m(\d+)\]/gi, (_m, id) => `(master ${id})`);
+            s = s.replace(/\[l(?:=)?(\d+)(?:\|[^\]]*)?\]/gi, (_m, id) => `(label ${id})`);
+            // Drop formatting tags entirely — the prose reads better
+            // without [b]…[/b] / [i]…[/i] / [u]…[/u] / [url=…]…[/url]
+            s = s.replace(/\[\/?[biu]\]/gi, "");
+            s = s.replace(/\[url=[^\]]*\]/gi, "");
+            s = s.replace(/\[\/url\]/gi, "");
+            // Collapse the whitespace the substitutions can leave behind.
+            return s.replace(/\s+/g, " ").trim();
+        };
+        res.json({
+            src: artistCard(src),
+            dst: artistCard(dst),
+            edges: edges.map(e => ({
+                src_id: e.src_id, dst_id: e.dst_id, kind: e.kind,
+                excerpt: resolveExcerpt(e.excerpt),
+                release_ids: e.release_ids || [],
+            })),
+            releases,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+const _graphCache = new Map();
+const _GRAPH_CACHE_TTL_MS = 5 * 60 * 1000;
+const _GRAPH_CACHE_MAX = 50;
+function _graphCacheKey(params) {
+    return `${params.kinds}|${params.minDegree}|${params.fromYear}|${params.toYear}`;
+}
+function _graphCacheClear() {
+    _graphCache.clear();
+}
+function _graphCachePut(key, data) {
+    _graphCache.set(key, { data, expires: Date.now() + _GRAPH_CACHE_TTL_MS });
+    // Simple LRU eviction — drop oldest entries until under the cap.
+    while (_graphCache.size > _GRAPH_CACHE_MAX) {
+        const oldest = _graphCache.keys().next().value;
+        if (oldest == null)
+            break;
+        _graphCache.delete(oldest);
+    }
+}
+globalThis._sdGraphCacheClear = _graphCacheClear;
+app.get("/api/all-blues/graph", async (req, res) => {
+    try {
+        const kinds = String(req.query.kinds ?? "").trim();
+        const allowed = new Set(["family", "spouse", "mentor", "band", "alias", "mention", "traveled"]);
+        const kindList = kinds ? kinds.split(",").map(s => s.trim()).filter(k => allowed.has(k)) : null;
+        const minDegree = parseInt(String(req.query.minDegree ?? "1"), 10) || 1;
+        // Optional year-range filter: only show artists whose seed_year
+        // (earliest cached blues release) falls in [fromYear, toYear].
+        // Edges only render between two surviving artists. Defaults are
+        // wide-open (1900-2100) so an unfiltered request behaves as
+        // before. NaN inputs collapse to the wide bounds.
+        const fromYearRaw = parseInt(String(req.query.fromYear ?? ""), 10);
+        const toYearRaw = parseInt(String(req.query.toYear ?? ""), 10);
+        const fromYear = Number.isFinite(fromYearRaw) ? fromYearRaw : 1900;
+        const toYear = Number.isFinite(toYearRaw) ? toYearRaw : 2100;
+        // ── Cache lookup ───────────────────────────────────────────
+        // Same query params → same response. Sub-millisecond hit on a
+        // populated network. Worker calls _sdGraphCacheClear on each run
+        // completion so the cache stays fresh as edges land.
+        const cacheKey = _graphCacheKey({
+            kinds: kindList ? kindList.slice().sort().join(",") : "",
+            minDegree, fromYear, toYear,
+        });
+        const hit = _graphCache.get(cacheKey);
+        if (hit && hit.expires > Date.now()) {
+            res.setHeader("X-Constellations-Cache", "HIT");
+            res.json(hit.data);
+            return;
+        }
+        // Canonicalize direction (LEAST/GREATEST) then aggregate every
+        // kind on that pair into a single array. The frontend renders the
+        // edge as a banded gradient — one color stripe per kind — so a
+        // pair with [family, band] shows orange + green on the same line
+        // without needing two overlapping edges. The detail popup still
+        // queries the raw table so click gives every kind individually.
+        // Endpoint-must-be-in-year-range filter is folded into the
+        // existing seed_year gate. NULL seed_year is excluded the same
+        // way (legacy non-blues rows or never-collected seeds).
+        // Discogs placeholder entities that aren't real artists:
+        //   194    = Various Artists (compilation credit)
+        //   118760 = Unknown Artist
+        // Both end up as the highest-degree "hubs" in the network because
+        // they appear on every comp/credit, but they say nothing meaningful
+        // about real-artist relationships. Exclude on both endpoints.
+        const params = [fromYear, toYear];
+        let edgeSql = `
+      SELECT LEAST(l.src_id, l.dst_id)    AS src_id,
+             GREATEST(l.src_id, l.dst_id) AS dst_id,
+             array_agg(DISTINCT l.kind)   AS kinds
+        FROM all_blues_links l
+       WHERE l.src_id NOT IN (194, 118760)
+         AND l.dst_id NOT IN (194, 118760)
+         AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
+                      WHERE q.discogs_id = l.src_id
+                        AND q.seed_year BETWEEN $1 AND $2)
+         AND EXISTS (SELECT 1 FROM all_blues_artist_queue q
+                      WHERE q.discogs_id = l.dst_id
+                        AND q.seed_year BETWEEN $1 AND $2)
+    `;
+        if (kindList && kindList.length) {
+            params.push(kindList);
+            edgeSql += ` AND l.kind = ANY($${params.length}::text[])`;
+        }
+        edgeSql += `
+      GROUP BY LEAST(l.src_id, l.dst_id), GREATEST(l.src_id, l.dst_id)
+    `;
+        const edgesR = await getPool().query(edgeSql, params);
+        const edges = edgesR.rows;
+        const nodeIds = new Set();
+        for (const e of edges) {
+            nodeIds.add(e.src_id);
+            nodeIds.add(e.dst_id);
+        }
+        // Filter by degree
+        // Name + position lookup combined: prefer the canonical name from
+        // discogs_artist_cache, fall back to the harvested release_cache
+        // name on the queue row. Position columns come straight from the
+        // queue and are NULL until an admin has saved a fcose run.
+        const resolveNodeData = async (ids) => {
+            const map = new Map();
+            if (!ids.length)
+                return map;
+            const r = await getPool().query(`SELECT q.discogs_id,
+                COALESCE(c.name, q.name) AS name,
+                q.pos_x, q.pos_y,
+                q.seed_year
+           FROM all_blues_artist_queue q
+           LEFT JOIN discogs_artist_cache c USING (discogs_id)
+          WHERE q.discogs_id = ANY($1::int[])`, [ids]);
+            for (const row of r.rows) {
+                map.set(row.discogs_id, {
+                    name: row.name || `Artist ${row.discogs_id}`,
+                    pos_x: row.pos_x, pos_y: row.pos_y,
+                    seed_year: row.seed_year,
+                });
+            }
+            return map;
+        };
+        // Sort each edge's kinds by priority (spouse > family > mentor >
+        // band > alias > mention) so the gradient bands always appear in
+        // the same order regardless of insert order.
+        const KIND_PRIORITY = {
+            spouse: 1, family: 2, mentor: 3, band: 4, alias: 5, traveled: 6, mention: 7,
+        };
+        for (const e of edges) {
+            if (Array.isArray(e.kinds)) {
+                e.kinds.sort((a, b) => (KIND_PRIORITY[a] ?? 99) - (KIND_PRIORITY[b] ?? 99));
+            }
+        }
+        if (minDegree > 1) {
+            const deg = new Map();
+            for (const e of edges) {
+                deg.set(e.src_id, (deg.get(e.src_id) ?? 0) + 1);
+                deg.set(e.dst_id, (deg.get(e.dst_id) ?? 0) + 1);
+            }
+            const kept = new Set();
+            for (const [id, d] of deg)
+                if (d >= minDegree)
+                    kept.add(id);
+            const filteredEdges = edges.filter(e => kept.has(e.src_id) && kept.has(e.dst_id));
+            const ids = Array.from(kept);
+            const dataMap = await resolveNodeData(ids);
+            const nodes = ids.map(id => {
+                const d = dataMap.get(id);
+                return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
+            });
+            const payload = { nodes, edges: filteredEdges };
+            _graphCachePut(cacheKey, payload);
+            res.setHeader("X-Constellations-Cache", "MISS");
+            res.json(payload);
+            return;
+        }
+        const ids = Array.from(nodeIds);
+        const dataMap = await resolveNodeData(ids);
+        const nodes = ids.map(id => {
+            const d = dataMap.get(id);
+            return { id, name: d?.name || `Artist ${id}`, x: d?.pos_x ?? null, y: d?.pos_y ?? null, seed_year: d?.seed_year ?? null };
+        });
+        const payload = { nodes, edges };
+        _graphCachePut(cacheKey, payload);
+        res.setHeader("X-Constellations-Cache", "MISS");
+        res.json(payload);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
 });
 // Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
 // Idempotent — re-running just refreshes the Wikidata-sourced fields and
@@ -10085,6 +11476,33 @@ app.get("/api/admin/blues/enrich-discogs-full/status", async (req, res) => {
         return;
     res.json(_bluesDiscogsFullJob);
 });
+// POST /api/admin/blues/discogs-preview-by-id?id=NNN
+// Preview a Discogs artist by id WITHOUT requiring a saved blues_artists
+// row. Used by the "Fetch from Discogs" button in the new-artist editor
+// — the form supplies the id, server returns the patch to populate it.
+app.post("/api/admin/blues/discogs-preview-by-id", async (req, res) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId)
+        return;
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
+        return;
+    }
+    const did = parseInt(String(req.query.id ?? ""), 10);
+    if (!Number.isFinite(did) || did <= 0) {
+        res.status(400).json({ error: "bad id" });
+        return;
+    }
+    try {
+        const out = await previewDiscogsArtistById(client, did);
+        res.json({ ok: true, ...out });
+    }
+    catch (err) {
+        console.error("[blues discogs-preview-by-id]", err);
+        res.status(502).json({ error: err?.message ?? String(err) });
+    }
+});
 // POST /api/admin/blues/:id/discogs-preview?force=0|1
 // Compute the patch that Refresh from Discogs WOULD apply, but DON'T
 // write it. The editor uses this to populate its open form so the
@@ -10105,8 +11523,9 @@ app.post("/api/admin/blues/:id(\\d+)/discogs-preview", async (req, res) => {
         return;
     }
     const force = req.query.force === "1" || req.query.force === "true";
+    const autoFind = req.query.autoFind === "1" || req.query.autoFind === "true";
     try {
-        const out = await previewBluesArtistFromDiscogs(client, id, force);
+        const out = await previewBluesArtistFromDiscogs(client, id, force, { autoFind });
         res.json({ ok: true, ...out });
     }
     catch (err) {
@@ -10141,6 +11560,229 @@ app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
     catch (err) {
         console.error("[blues enrich-yt]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Blues Words (Calt-style lexicon) ─────────────────────────────────
+// Public search/list — used by the Blues Archive Lexicon tab.
+app.get("/api/blues-words", async (req, res) => {
+    try {
+        const q = String(req.query.q ?? "").slice(0, 200);
+        const letter = String(req.query.letter ?? "").slice(0, 1);
+        const limit = parseInt(String(req.query.limit ?? "100"), 10);
+        const offset = parseInt(String(req.query.offset ?? "0"), 10);
+        const out = await listBluesWords({ q, letter, limit, offset });
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-words list]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get("/api/blues-words/letter-counts", async (_req, res) => {
+    try {
+        res.json(await getBluesWordLetterCounts());
+    }
+    catch (err) {
+        console.error("[blues-words letters]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// Admin ingest: accepts a parsed JSON array (as produced by
+// scripts/parse-blueswords.py) and upserts each entry. Citations are
+// fully replaced per headword.
+app.post("/api/admin/blues-words/ingest", express.json({ limit: "8mb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const entries = req.body?.entries;
+    if (!Array.isArray(entries)) {
+        res.status(400).json({ error: "body.entries must be an array" });
+        return;
+    }
+    const norm = entries.map((e) => ({
+        headword: String(e?.headword ?? "").trim().toLowerCase(),
+        definition: typeof e?.definition === "string" ? e.definition : "",
+        source_volume: typeof e?.source_volume === "string" ? e.source_volume : null,
+        source_pages: Array.isArray(e?.source_pages)
+            ? e.source_pages.map((n) => parseInt(String(n), 10)).filter((n) => Number.isFinite(n))
+            : null,
+        citations: Array.isArray(e?.citations) ? e.citations.map((c, i) => ({
+            position: Number.isFinite(c?.position) ? c.position : i + 1,
+            quote: typeof c?.quote === "string" ? c.quote : null,
+            artist: typeof c?.artist === "string" ? c.artist : null,
+            song_title: typeof c?.song_title === "string" ? c.song_title : (typeof c?.song === "string" ? c.song : null),
+            year: Number.isFinite(c?.year) ? c.year : (typeof c?.year === "string" ? (parseInt(c.year, 10) || null) : null),
+        })) : [],
+    })).filter((e) => e.headword);
+    try {
+        const r = await ingestBluesWords(norm);
+        res.json({ ok: true, ...r });
+    }
+    catch (err) {
+        console.error("[blues-words ingest]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// Full-form save from the admin editor: optionally renames the
+// headword, and fully replaces definition + citations.
+app.put("/api/admin/blues-words/:headword", express.json({ limit: "500kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const original = String(req.params.headword || "").trim().toLowerCase();
+    if (!original) {
+        res.status(400).json({ error: "headword required" });
+        return;
+    }
+    const headword = String(req.body?.headword || "").trim().toLowerCase();
+    if (!headword) {
+        res.status(400).json({ error: "new headword required" });
+        return;
+    }
+    const definition = typeof req.body?.definition === "string" ? req.body.definition : "";
+    const source_volume = typeof req.body?.source_volume === "string" ? req.body.source_volume : null;
+    const source_pages = Array.isArray(req.body?.source_pages)
+        ? req.body.source_pages.map((n) => parseInt(String(n), 10)).filter((n) => Number.isFinite(n))
+        : null;
+    const citations = Array.isArray(req.body?.citations)
+        ? req.body.citations.map((c, i) => ({
+            position: Number.isFinite(c?.position) ? c.position : i + 1,
+            quote: typeof c?.quote === "string" ? c.quote : null,
+            artist: typeof c?.artist === "string" ? c.artist : null,
+            song_title: typeof c?.song_title === "string" ? c.song_title : (typeof c?.song === "string" ? c.song : null),
+            year: Number.isFinite(c?.year) ? c.year : (typeof c?.year === "string" ? (parseInt(c.year, 10) || null) : null),
+        }))
+        : [];
+    try {
+        const r = await saveBluesWordEntry(original, { headword, definition, source_volume, source_pages, citations });
+        if (!r) {
+            res.status(404).json({ error: "not found" });
+            return;
+        }
+        res.json({ ok: true, ...r });
+    }
+    catch (err) {
+        const msg = String(err?.message ?? err);
+        if (/already exists/.test(msg)) {
+            res.status(409).json({ error: msg });
+            return;
+        }
+        console.error("[blues-words save]", err);
+        res.status(500).json({ error: msg });
+    }
+});
+app.patch("/api/admin/blues-words/:headword", express.json({ limit: "200kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const headword = String(req.params.headword || "").trim().toLowerCase();
+    if (!headword) {
+        res.status(400).json({ error: "headword required" });
+        return;
+    }
+    const patch = {};
+    if (typeof req.body?.definition === "string")
+        patch.definition = req.body.definition;
+    if (typeof req.body?.source_volume === "string")
+        patch.source_volume = req.body.source_volume;
+    if (Array.isArray(req.body?.source_pages)) {
+        patch.source_pages = req.body.source_pages.map((n) => parseInt(String(n), 10)).filter((n) => Number.isFinite(n));
+    }
+    try {
+        const ok = await updateBluesWord(headword, patch);
+        if (!ok) {
+            res.status(404).json({ error: "not found" });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        console.error("[blues-words patch]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// Seed from the bundled src/data/blueswords-*.json files. Idempotent —
+// re-running upserts existing headwords with the same content. Returns
+// counts per file.
+app.post("/api/admin/blues-words/seed-bundled", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const url = await import("url");
+        const here = path.dirname(url.fileURLToPath(import.meta.url));
+        const candidates = [
+            path.join(here, "..", "src", "data"),
+            path.join(here, "..", "..", "src", "data"),
+            path.join(process.cwd(), "src", "data"),
+        ];
+        let dir = "";
+        for (const c of candidates) {
+            if (fs.existsSync(c)) {
+                dir = c;
+                break;
+            }
+        }
+        if (!dir) {
+            res.status(500).json({ error: "src/data dir not found" });
+            return;
+        }
+        const files = fs.readdirSync(dir).filter(f => /^blueswords-.*\.json$/i.test(f));
+        if (!files.length) {
+            res.json({ ok: true, files: [] });
+            return;
+        }
+        const out = [];
+        for (const f of files) {
+            const raw = fs.readFileSync(path.join(dir, f), "utf8");
+            let arr = [];
+            try {
+                arr = JSON.parse(raw);
+            }
+            catch {
+                out.push({ file: f, error: "bad json" });
+                continue;
+            }
+            const norm = (Array.isArray(arr) ? arr : []).map((e, i) => ({
+                headword: String(e?.headword ?? "").trim().toLowerCase(),
+                definition: typeof e?.definition === "string" ? e.definition : "",
+                source_volume: typeof e?.source_volume === "string" ? e.source_volume : null,
+                source_pages: Array.isArray(e?.source_pages) ? e.source_pages.filter((n) => Number.isFinite(n)) : null,
+                citations: Array.isArray(e?.citations) ? e.citations.map((c, j) => ({
+                    position: Number.isFinite(c?.position) ? c.position : j + 1,
+                    quote: typeof c?.quote === "string" ? c.quote : null,
+                    artist: typeof c?.artist === "string" ? c.artist : null,
+                    song_title: typeof c?.song_title === "string" ? c.song_title : (typeof c?.song === "string" ? c.song : null),
+                    year: Number.isFinite(c?.year) ? c.year : null,
+                })) : [],
+            })).filter((e) => e.headword);
+            const r = await ingestBluesWords(norm);
+            out.push({ file: f, ...r });
+        }
+        res.json({ ok: true, files: out });
+    }
+    catch (err) {
+        console.error("[blues-words seed-bundled]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.delete("/api/admin/blues-words/:headword", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const headword = String(req.params.headword || "").trim().toLowerCase();
+    if (!headword) {
+        res.status(400).json({ error: "headword required" });
+        return;
+    }
+    try {
+        const ok = await deleteBluesWord(headword);
+        if (!ok) {
+            res.status(404).json({ error: "not found" });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        console.error("[blues-words delete]", err);
+        res.status(500).json({ error: String(err) });
     }
 });
 // ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
@@ -10290,6 +11932,15 @@ function _lyricsExtractArtist(wikitext, title) {
             return candidate;
     }
     return null;
+}
+// Fingerprint a lyric body so a re-upload of the same plaintext can be
+// short-circuited on rescrape. Normalisation is intentionally light:
+// CRLF→LF and trailing-whitespace trim only. Case + punctuation are
+// preserved so a real edit (typo fix, missing line, different stanza
+// order) produces a different hash and DOES come through.
+function _lyricsBodyHash(plaintext) {
+    const norm = String(plaintext ?? "").replace(/\r\n?/g, "\n").trimEnd();
+    return crypto.createHash("sha256").update(norm, "utf8").digest("hex");
 }
 function _lyricsWikitextToPlain(wt) {
     if (!wt)
@@ -10601,6 +12252,7 @@ async function _lyricsRefreshRecentRun(opts) {
         const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
         const bannedTitles = await getBannedLyricTitleSet().catch(() => new Set());
         const bannedArtists = await getBannedLyricArtistSet().catch(() => new Set());
+        const bannedBodyHashes = await getBannedLyricBodyHashSet().catch(() => new Set());
         const titles = await _lyricsCollectRecentChanges(opts);
         if (!_lyricsScrapeState.running) {
             _lyricsScrapeState.phase = "done";
@@ -10644,6 +12296,14 @@ async function _lyricsRefreshRecentRun(opts) {
                         await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
                         continue;
                     }
+                    // Body-hash ban: skip if this page's normalized plaintext
+                    // matches a previously deleted lyric's fingerprint. Doesn't
+                    // block re-upload of a different version of the same song.
+                    if (bannedBodyHashes.size && bannedBodyHashes.has(_lyricsBodyHash(plaintext))) {
+                        _lyricsScrapeState.pagesSkipped++;
+                        await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+                        continue;
+                    }
                     await upsertLyric({
                         pageTitle: title,
                         pageUrl: fetched.url,
@@ -10675,6 +12335,17 @@ async function _lyricsRefreshRecentRun(opts) {
         }
         _lyricsScrapeState.phase = "done";
         _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} ${opts.includeEdits ? "fetched" : "added"}, ${_lyricsScrapeState.pagesSkipped} skipped, ${_lyricsScrapeState.pagesFailed} failed.`;
+        // Stamp only on a clean finish. If the user hit Stop mid-run, we
+        // don't want the next click to think we covered everything since
+        // last stamp.
+        if (opts.stampLastAt) {
+            try {
+                await setAppSetting("lyrics_scrape_last_at", new Date().toISOString());
+            }
+            catch (e) {
+                console.warn("[lyrics] stamp lyrics_scrape_last_at failed:", e);
+            }
+        }
     }
     catch (e) {
         _lyricsScrapeState.phase = "error";
@@ -10789,6 +12460,7 @@ async function _lyricsScrapeRun() {
         // wikitext to know who the artist is).
         const bannedTitles = await getBannedLyricTitleSet().catch(() => new Set());
         const bannedArtists = await getBannedLyricArtistSet().catch(() => new Set());
+        const bannedBodyHashes = await getBannedLyricBodyHashSet().catch(() => new Set());
         const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
         // Stop request during discovery — don't drop into the fetch loop
         // (which would re-enter for whatever partial page list we have).
@@ -10838,6 +12510,16 @@ async function _lyricsScrapeRun() {
                     // counted as skipped (not scraped), so the curator's prior
                     // "remove + ban this artist" decision sticks.
                     if (artist && bannedArtists.has(String(artist).toLowerCase().trim())) {
+                        _lyricsScrapeState.pagesSkipped++;
+                        await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+                        continue;
+                    }
+                    // Body-hash ban: skip when this page's normalized plaintext
+                    // matches a previously deleted lyric's fingerprint. A real
+                    // edit on the wiki produces a different hash and gets
+                    // through — exactly the behaviour the popup's "Delete +
+                    // block this exact text" button is meant to enable.
+                    if (bannedBodyHashes.size && bannedBodyHashes.has(_lyricsBodyHash(plaintext))) {
                         _lyricsScrapeState.pagesSkipped++;
                         await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
                         continue;
@@ -10928,6 +12610,508 @@ app.post("/api/admin/lyrics/scrape/recent", express.json({ limit: "1kb" }), asyn
         .catch((e) => console.error("[lyrics] recent-changes threw:", e));
     res.json({ ok: true, started: true, daysBack, includeEdits });
 });
+// POST /api/admin/lyrics/scrape/since-last — incremental refresh whose
+// window is "since the last time YOU clicked this button" (stored in
+// app_settings as lyrics_scrape_last_at). First run with no stamp
+// falls back to the recentchanges API's 180d max. On clean finish the
+// worker stamps a fresh timestamp so the next click only walks what's
+// been added since.
+app.post("/api/admin/lyrics/scrape/since-last", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_lyricsScrapeState.running) {
+        res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+        return;
+    }
+    let lastAt = null;
+    try {
+        const raw = await getAppSetting("lyrics_scrape_last_at");
+        if (raw) {
+            const t = new Date(raw);
+            if (!Number.isNaN(t.getTime()))
+                lastAt = t;
+        }
+    }
+    catch (e) {
+        console.warn("[lyrics] read lyrics_scrape_last_at failed:", e);
+    }
+    // recentchanges accepts up to 180 days. Pad +1d so we never miss
+    // anything added in the same UTC day as the last stamp.
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const daysBack = lastAt
+        ? Math.max(1, Math.min(180, Math.ceil((Date.now() - lastAt.getTime()) / MS_PER_DAY) + 1))
+        : 180;
+    _lyricsRefreshRecentRun({ daysBack, includeEdits: false, stampLastAt: true })
+        .catch((e) => console.error("[lyrics] since-last run threw:", e));
+    res.json({
+        ok: true,
+        started: true,
+        daysBack,
+        lastAt: lastAt ? lastAt.toISOString() : null,
+    });
+});
+// GET /api/admin/lyrics/scrape/since-last — read just the stamp so the
+// admin UI can show "Last fetched: ..." next to the button without
+// triggering a job.
+app.get("/api/admin/lyrics/scrape/since-last", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const raw = await getAppSetting("lyrics_scrape_last_at");
+        res.json({ lastAt: raw ?? null });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── YT-match review worker (v1) ──────────────────────────────────────
+// Background worker that walks the earliest-year Blues masters in the
+// release cache and proposes YouTube videos for tracks lacking a
+// listenable match. Every candidate goes into track_yt_review_queue
+// for human review — v1 has no auto-accept. Throttled at 1 search
+// every _YT_REVIEW_THROTTLE_MS so a full pass burns its quota
+// gracefully and doesn't compete with regular user search activity.
+let _ytReviewRunning = false;
+let _ytReviewStopRequested = false;
+const _YT_REVIEW_THROTTLE_MS = 8_000;
+const _YT_REVIEW_RATE_LIMIT_BACKOFF_MS = 60_000;
+// Worker-only cap, distinct from the project-wide soft cap. 9,000
+// searches/day leaves ~1,000 (100k units) for manual admin / user
+// searches so the worker can't starve you out. Persists across worker
+// runs within the same UTC day; reset alongside the project counter.
+const _YT_REVIEW_DAILY_BUDGET = 90;
+let _ytReviewSearchesResetAt = (() => {
+    const d = new Date();
+    d.setUTCHours(24, 0, 0, 0);
+    return d.getTime();
+})();
+function _ytReviewMaybeReset() {
+    const now = Date.now();
+    if (now >= _ytReviewSearchesResetAt) {
+        _ytReviewSearchesToday = 0;
+        const d = new Date();
+        d.setUTCHours(24, 0, 0, 0);
+        _ytReviewSearchesResetAt = d.getTime();
+    }
+}
+// Normalise + score a candidate title against the (artist, track)
+// pair. Cheap word-bag overlap — title must mention BOTH artist and
+// track for a worker-quality score. Returns [0..1].
+// Aggressive title normaliser shared by the album-mode auto-matcher.
+// Collapses smart quotes/dashes to ASCII, then strips ALL non-
+// alphanumeric characters so punctuation differences don't kill a
+// match. Keep in sync with _ytNormTitle in web/youtube.js — when one
+// changes, change both.
+function _ytNormTitleTS(s) {
+    return String(s || "")
+        .toLowerCase()
+        .replace(/[‘’′ʼ‵]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/[–—−]/g, "-")
+        .replace(/[^a-z0-9\s]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+// Port of web/youtube.js _albumAutoMatchTrack — given a YouTube video
+// title and a list of album tracks, return the track whose title is a
+// case-insensitive substring of the video title, preferring the
+// longest match (more-specific). Returns null when nothing matches.
+// Sharing this single algorithm between the popup and the worker
+// means the worker's queue is consistent with what a curator would
+// stage by hand.
+function _ytAlbumAutoMatch(videoTitle, tracks) {
+    const v = _ytNormTitleTS(videoTitle);
+    if (!v || !Array.isArray(tracks) || !tracks.length)
+        return null;
+    let best = null;
+    let bestScore = 0;
+    for (const t of tracks) {
+        const tt = _ytNormTitleTS(t.title);
+        if (!tt || tt.length < 3)
+            continue;
+        if (v.includes(tt)) {
+            if (tt.length > bestScore) {
+                best = t;
+                bestScore = tt.length;
+            }
+        }
+    }
+    return best;
+}
+function _ytReviewScoreTitle(candTitle, artist, track) {
+    const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    const c = norm(candTitle);
+    const a = norm(artist);
+    const t = norm(track);
+    if (!c || !t)
+        return 0;
+    const artistOk = a ? c.includes(a) : true;
+    const trackOk = c.includes(t);
+    if (!trackOk)
+        return 0;
+    if (!artistOk)
+        return 0.4;
+    return 1.0;
+}
+async function _ytReviewSearch(q) {
+    const cacheKey = `q:${q}`;
+    try {
+        const cached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000);
+        if (cached)
+            return { ok: true, body: cached, cached: true };
+    }
+    catch { }
+    if (!_youtubeApiKey)
+        return { ok: false, reason: "no_api_key" };
+    _ytQuotaMaybeReset();
+    _ytReviewMaybeReset();
+    if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS)
+        return { ok: false, reason: "project_cap" };
+    if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET)
+        return { ok: false, reason: "worker_cap" };
+    const params = [
+        "part=snippet",
+        "type=video",
+        "maxResults=50",
+        `q=${encodeURIComponent(q)}`,
+        `key=${encodeURIComponent(_youtubeApiKey)}`,
+    ];
+    const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            let errSummary = "";
+            try {
+                const txt = await resp.text();
+                const j = JSON.parse(txt);
+                errSummary = j?.error?.errors?.[0]?.reason || j?.error?.message || txt.slice(0, 200);
+            }
+            catch { }
+            console.warn(`[yt-review] search failed: HTTP ${resp.status} for q=${q}${errSummary ? ` — ${errSummary}` : ""}`);
+            return { ok: false, reason: `http_${resp.status}${errSummary ? `: ${errSummary}` : ""}` };
+        }
+        const body = await resp.json();
+        _bumpYtQuotaPersisted(1, 100);
+        try {
+            await setYoutubeSearchCache(cacheKey, body);
+        }
+        catch { }
+        return { ok: true, body, cached: false };
+    }
+    catch (e) {
+        const msg = e?.message ?? String(e);
+        console.warn(`[yt-review] search threw for q=${q}:`, msg);
+        return { ok: false, reason: `throw: ${msg}` };
+    }
+}
+async function _ytReviewExistingOverrideMap(masterId) {
+    try {
+        const overrides = await getTrackYtOverrides(String(masterId), null);
+        return new Set(overrides.map(o => String(o.track_position)));
+    }
+    catch {
+        return new Set();
+    }
+}
+async function _runYtReviewWorker() {
+    if (_ytReviewRunning)
+        return;
+    _ytReviewRunning = true;
+    _ytReviewStopRequested = false;
+    await updateReviewState({ running: true, last_error: null, message: "Walking Blues masters by year…" });
+    let searchesThisRun = 0;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+    try {
+        while (!_ytReviewStopRequested) {
+            _ytReviewMaybeReset();
+            _ytQuotaMaybeReset();
+            if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET) {
+                await updateReviewState({ message: `Worker daily search cap reached (${_YT_REVIEW_DAILY_BUDGET}). Resumes after UTC midnight.`, running: false });
+                break;
+            }
+            if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) {
+                await updateReviewState({ message: `Project daily quota cap reached. Resumes after UTC midnight.`, running: false });
+                break;
+            }
+            const state = await getReviewState();
+            const cursorYear = state?.cursor_year ?? null;
+            const cursorMasterId = state?.cursor_master_id ?? null;
+            const master = await getNextBluesMasterAfter(cursorYear, cursorMasterId);
+            if (!master) {
+                await updateReviewState({ message: "Reached end of Blues masters — nothing more to walk.", running: false });
+                break;
+            }
+            const masterId = Number(master.master_id);
+            const data = master.data ?? {};
+            const year = master.year ?? null;
+            const tracklist = Array.isArray(data.tracklist) ? data.tracklist : [];
+            const cover = String(data.images?.[0]?.uri ?? data.images?.[0]?.uri150 ?? data.thumb ?? "");
+            const masterArtist = Array.isArray(data.artists) && data.artists[0]?.name ? String(data.artists[0].name) : "";
+            const existingOverrides = await _ytReviewExistingOverrideMap(masterId);
+            // Filter the tracklist to the tracks we still need to consider —
+            // skip ones with an existing override OR a prior search log row
+            // (v1.1 album-search runs only once per master per cursor pass).
+            const masterTitle = String(data.title ?? "").trim();
+            const eligibleTracks = [];
+            for (const tr of tracklist) {
+                const pos = String(tr?.position ?? "").trim();
+                const tTitle = String(tr?.title ?? "").trim();
+                if (!pos || !tTitle)
+                    continue;
+                if (existingOverrides.has(pos))
+                    continue;
+                if (await isTrackAlreadySearched(masterId, pos))
+                    continue;
+                const tArtist = Array.isArray(tr.artists) && tr.artists[0]?.name
+                    ? String(tr.artists[0].name)
+                    : masterArtist;
+                eligibleTracks.push({ position: pos, title: tTitle, artist: tArtist });
+            }
+            if (!eligibleTracks.length) {
+                // Nothing left to consider on this master — advance cursor.
+                await updateReviewState({ cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null });
+                continue;
+            }
+            // ONE search per master: "<artist> <title>" lifts the popup's
+            // album-mode query shape. Fallback to just artist when the
+            // master has no title in the cache.
+            const q = (masterTitle ? `${masterArtist} ${masterTitle}` : masterArtist).trim() || eligibleTracks[0].title;
+            await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — ${masterTitle || "(no title)"}` });
+            const result = await _ytReviewSearch(q);
+            if (!result.ok) {
+                // Caps are re-checked at top of loop, so these should be rare
+                // here — but surface the actual reason in last_error so the
+                // admin can see WHY it stopped without digging into logs.
+                if (result.reason === "project_cap" || result.reason === "worker_cap") {
+                    await updateReviewState({ message: `Stopping: ${result.reason === "worker_cap" ? "worker" : "project"} daily cap reached.`, running: false });
+                    break;
+                }
+                if (result.reason === "no_api_key") {
+                    await updateReviewState({ message: `Stopping: YouTube API key missing.`, last_error: result.reason, running: false });
+                    break;
+                }
+                // YouTube rate-limit (429 rateLimitExceeded) means "slow down",
+                // not "you're broken". Don't count it as a hard error — wait
+                // longer and retry without incrementing the consecutive-error
+                // counter that would stop the worker.
+                const isRateLimited = /rateLimitExceeded|http_429/i.test(result.reason);
+                if (!isRateLimited) {
+                    consecutiveErrors++;
+                    await bumpReviewCounter("total_errors", 1);
+                }
+                await logReviewError(masterId, q, result.reason).catch(() => { });
+                await updateReviewState({
+                    message: isRateLimited
+                        ? `Rate-limited by YouTube; backing off ${_YT_REVIEW_RATE_LIMIT_BACKOFF_MS / 1000}s on master ${masterId}.`
+                        : `Skipping master ${masterId}: ${result.reason} on "${q}" (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}).`,
+                    last_error: result.reason,
+                    cursor_year: isRateLimited ? cursorYear : year,
+                    cursor_master_id: isRateLimited ? cursorMasterId : masterId,
+                    cursor_track_pos: null,
+                });
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    await updateReviewState({ message: `Stopping after ${MAX_CONSECUTIVE_ERRORS} consecutive errors. Last: ${result.reason}.`, running: false });
+                    break;
+                }
+                await new Promise(r => setTimeout(r, isRateLimited ? _YT_REVIEW_RATE_LIMIT_BACKOFF_MS : _YT_REVIEW_THROTTLE_MS));
+                continue;
+            }
+            consecutiveErrors = 0;
+            const { body } = result;
+            searchesThisRun++;
+            await bumpReviewCounter("total_searched", 1);
+            const items = Array.isArray(body?.items) ? body.items : [];
+            // Run every result through the popup's auto-matcher and group
+            // matches by track position. Each (track, video) pair becomes
+            // one review-queue row; the UNIQUE index already de-dupes
+            // re-runs of the same query.
+            const matchesByTrack = new Map();
+            for (const it of items) {
+                const vid = String(it?.id?.videoId || "");
+                if (!vid)
+                    continue;
+                const sn = it.snippet || {};
+                const m = _ytAlbumAutoMatch(String(sn.title || ""), eligibleTracks);
+                if (!m)
+                    continue;
+                const arr = matchesByTrack.get(m.position) || [];
+                arr.push({ videoId: vid, sn });
+                matchesByTrack.set(m.position, arr);
+            }
+            let queuedThisMaster = 0;
+            for (const tr of eligibleTracks) {
+                const hits = matchesByTrack.get(tr.position) || [];
+                for (const h of hits) {
+                    const titleScore = _ytReviewScoreTitle(String(h.sn.title || ""), tr.artist, tr.title);
+                    const ins = await insertReviewCandidate({
+                        masterId, trackPosition: tr.position, trackTitle: tr.title, trackArtist: tr.artist,
+                        masterYear: year, masterCoverUrl: cover || null,
+                        candidateVideoId: h.videoId,
+                        candidateTitle: String(h.sn.title || ""),
+                        candidateChannelTitle: String(h.sn.channelTitle || ""),
+                        candidateChannelId: String(h.sn.channelId || ""),
+                        candidateThumbnailUrl: String(h.sn.thumbnails?.high?.url || h.sn.thumbnails?.default?.url || ""),
+                        candidatePublishedAt: h.sn.publishedAt || null,
+                        titleScore,
+                        durationOk: null,
+                    });
+                    if (ins) {
+                        queuedThisMaster++;
+                        await bumpReviewCounter("total_queued", 1);
+                    }
+                }
+                // Always log the searched row so the next pass skips this
+                // (master, track) even if the album-level search produced
+                // zero hits for it. clearEmptySearchedRows lets the admin
+                // selectively trigger a retry later.
+                await logTrackSearched(masterId, tr.position, hits.length, "album");
+            }
+            if (queuedThisMaster === 0)
+                await bumpReviewCounter("total_skipped", 1);
+            await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
+            // Advance cursor past this master regardless of how many tracks
+            // were searched — resumability matters more than completeness.
+            await updateReviewState({
+                cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null,
+            });
+        }
+    }
+    catch (err) {
+        await updateReviewState({ last_error: err?.message ?? String(err), message: `Crashed: ${err?.message ?? err}` });
+        await bumpReviewCounter("total_errors", 1);
+        console.error("[yt-review] worker crashed:", err);
+    }
+    finally {
+        _ytReviewRunning = false;
+        _ytReviewStopRequested = false;
+        await updateReviewState({ running: false });
+    }
+}
+app.post("/api/admin/yt-review/start", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_ytReviewRunning) {
+        res.status(409).json({ error: "already_running" });
+        return;
+    }
+    _runYtReviewWorker().catch((e) => console.error("[yt-review] background threw:", e));
+    res.json({ ok: true, started: true });
+});
+app.post("/api/admin/yt-review/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    _ytReviewStopRequested = true;
+    await updateReviewState({ message: "Stop requested — winding down at next safe point." }).catch(() => { });
+    res.json({ ok: true, wasRunning: _ytReviewRunning });
+});
+app.get("/api/admin/yt-review/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const [state, counts] = await Promise.all([
+        getReviewState().catch(() => null),
+        getReviewQueueCounts().catch(() => ({ pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 })),
+    ]);
+    _ytReviewMaybeReset();
+    _ytQuotaMaybeReset();
+    res.json({
+        state,
+        counts,
+        running: _ytReviewRunning,
+        dailyBudget: _YT_REVIEW_DAILY_BUDGET,
+        searchesToday: _ytReviewSearchesToday,
+        projectUnitsToday: _ytQuotaUnitsToday,
+        projectUnitsCap: _YT_DAILY_SOFT_CAP_UNITS,
+        throttleMs: _YT_REVIEW_THROTTLE_MS,
+    });
+});
+app.get("/api/admin/yt-review/queue", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const status = String(req.query.status ?? "pending").trim() || "pending";
+    const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const out = await listReviewQueue({ status, limit, offset });
+    res.json(out);
+});
+app.post("/api/admin/yt-review/rescan-empties", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const masterId = req.body?.masterId != null ? Number(req.body.masterId) : null;
+    try {
+        const n = await clearEmptySearchedRows(Number.isFinite(masterId) ? masterId : null);
+        res.json({ ok: true, cleared: n });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (req, res) => {
+    const adminUserId = await requireAdmin(req, res);
+    if (!adminUserId)
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    const action = String(req.body?.action ?? "").trim();
+    if (!Number.isFinite(id) || !["approve", "reject", "skip"].includes(action)) {
+        res.status(400).json({ error: "bad_request" });
+        return;
+    }
+    try {
+        const out = await reviewQueueDecide(id, action, adminUserId);
+        if (!out.ok) {
+            res.status(404).json({ error: "not_found_or_already_decided" });
+            return;
+        }
+        if (action === "approve" && out.videoId && out.masterId && out.trackPosition) {
+            await suggestTrackYtOverride({
+                releaseId: out.masterId,
+                releaseType: "master",
+                trackPosition: out.trackPosition,
+                trackTitle: out.trackTitle ?? null,
+                videoId: out.videoId,
+                videoTitle: null,
+                submittedBy: adminUserId,
+            });
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/yt-review/errors", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+        const rows = await listReviewErrors(limit);
+        res.json({ rows });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/yt-review/delete-approval", express.json({ limit: "4kb" }), async (req, res) => {
+    const adminUserId = await requireAdmin(req, res);
+    if (!adminUserId)
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    if (!Number.isFinite(id)) {
+        res.status(400).json({ error: "bad_request" });
+        return;
+    }
+    try {
+        const out = await reviewQueueDeleteApproval(id, adminUserId);
+        if (!out.ok) {
+            res.status(404).json({ error: "not_found_or_not_approved" });
+            return;
+        }
+        res.json({ ok: true, masterId: out.masterId, trackPosition: out.trackPosition });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // POST /api/admin/lyrics/scrape/precheck — discovery-only pre-scrape.
 // Fires _lyricsPreScrapeRun in the background; status is shared with
 // the regular scrape (jobKind="pre-scrape"). Result lives in
@@ -11015,7 +13199,8 @@ app.post("/api/admin/lyrics", express.json({ limit: "200kb" }), async (req, res)
 });
 // GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&sort=&order=&limit=&offset=
 app.get("/api/admin/lyrics", async (req, res) => {
-    if (!await requireAdmin(req, res))
+    const adminUserId = await requireAdmin(req, res);
+    if (!adminUserId)
         return;
     try {
         const q = String(req.query.q ?? "").trim().slice(0, 200);
@@ -11025,6 +13210,9 @@ app.get("/api/admin/lyrics", async (req, res) => {
         const unpinned = req.query.unpinned === "1" || req.query.unpinned === "true";
         const empty = req.query.empty === "1" || req.query.empty === "true";
         const noArtist = req.query.noArtist === "1" || req.query.noArtist === "true";
+        const pinned = req.query.pinned === "1" || req.query.pinned === "true";
+        const favorites = req.query.favorites === "1" || req.query.favorites === "true";
+        const titlePunct = req.query.titlePunct === "1" || req.query.titlePunct === "true";
         // Sort column (whitelisted server-side) + direction. Anything else
         // is ignored / falls back to the default in listLyrics.
         const sort = String(req.query.sort ?? "").trim().slice(0, 30);
@@ -11039,6 +13227,10 @@ app.get("/api/admin/lyrics", async (req, res) => {
             unpinnedOnly: unpinned,
             emptyOnly: empty,
             noArtistOnly: noArtist,
+            pinnedOnly: pinned,
+            favoritesOnly: favorites,
+            favoriteUserId: favorites ? adminUserId : null,
+            titleHasPunct: titlePunct,
             sort: sort || undefined,
             order,
             limit, offset,
@@ -11306,7 +13498,7 @@ app.get("/api/admin/lyrics/:id", async (req, res) => {
 // "(unspecified)" round-trips. page_title cannot be cleared — an
 // empty title would orphan the row from its source-host UNIQUE
 // constraint — so blank/whitespace titles are rejected with 400.
-app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, res) => {
+app.patch("/api/admin/lyrics/:id", express.json({ limit: "256kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     try {
@@ -11344,6 +13536,19 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
             const v = req.body.first_release_year;
             const n = Number(v);
             patch.first_release_year = (v === null || v === "" || v === undefined || !Number.isFinite(n)) ? null : Math.max(1850, Math.min(2100, n));
+        }
+        if ("plaintext" in (req.body ?? {})) {
+            // Curator-supplied lyric body. Normalize CRLF → LF and cap at
+            // 200k chars (well above the longest real lyric, low enough to
+            // stop pathological pastes from blowing up the row).
+            const raw = req.body.plaintext;
+            if (raw === null || raw === undefined) {
+                patch.plaintext = null;
+            }
+            else {
+                const s = String(raw).replace(/\r\n?/g, "\n").slice(0, 200_000);
+                patch.plaintext = s === "" ? null : s;
+            }
         }
         const row = await updateLyricFields(id, patch);
         if (!row) {
@@ -11452,6 +13657,40 @@ app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+// POST /api/blues-archive/prune-recent-24h — deletes every blues_artists
+// row added in the last 24 hours. Cleanup for the (removed) no-year pad
+// button; user confirmed they haven't manually added an artist in over
+// a week, so date_added is a precise pad-insert signal.
+app.post("/api/blues-archive/prune-recent-24h", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await pruneBluesArtistsRecent24h();
+        console.log(`[blues-archive] prune-recent-24h: removed=${r.removed}`);
+        res.json({ ok: true, ...r });
+    }
+    catch (err) {
+        console.error("[blues-archive prune-recent-24h]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/blues-archive/pad/strict-pre-1950 — re-pad with strict-Blues
+// artists whose earliest master is in or before 1950. Inserts are tagged
+// enrichment_status.source = "strict_pad_pre1950" so future cleanup
+// can target them precisely.
+app.post("/api/blues-archive/pad/strict-pre-1950", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await padBluesArtistsStrictPre1950();
+        console.log(`[blues-archive] pad/strict-pre-1950: scanned=${r.scanned}, inserted=${r.inserted}, refreshed=${r.refreshed}`);
+        res.json({ ok: true, ...r });
+    }
+    catch (err) {
+        console.error("[blues-archive pad/strict-pre-1950]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // POST /api/blues-archive/purge-lyric-imports — removes blues_artists
 // rows that were inserted by the lyrics-import job AND have no other
 // data attached (no Discogs / Wikidata / MusicBrainz IDs, no releases,
@@ -11506,11 +13745,19 @@ app.get("/api/blues-archive/artists", async (req, res) => {
             .find(c => c === rawCat) || undefined;
         const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
         const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+        const noWiki = req.query.no_wiki === "1" || req.query.no_wiki === "true";
+        const noDiscogsId = req.query.no_discogs === "1" || req.query.no_discogs === "true";
+        const hasStrict = req.query.has_strict === "1" || req.query.has_strict === "true";
+        const noStrict = req.query.no_strict === "1" || req.query.no_strict === "true";
         res.json(await listBluesArchive({
             search: q || undefined,
             sort: sort || undefined,
             order,
             category,
+            noWiki,
+            noDiscogsId,
+            hasStrict,
+            noStrict,
             limit, offset,
         }));
     }
@@ -11552,6 +13799,507 @@ app.get("/api/blues-archive/releases", async (req, res) => {
     catch (err) {
         console.error("[blues-archive releases list]", err);
         res.status(500).json({ error: String(err) });
+    }
+});
+// ── MusicBrainz proxy + cache ──────────────────────────────────────
+// Admin-only at the moment. All upstream MB calls go through the
+// rate-limited client + cache table so a search that's already been
+// run is satisfied locally without burning the 1 req/s budget.
+//
+// /api/musicbrainz/search  → entity-type-aware search (artist /
+//   release / release-group / recording / work / label)
+// /api/musicbrainz/:type/:mbid → lookup a single MB entity
+//   (relationships + media + tags included for richness)
+{
+    // crypto + module imports inlined via the file's top-level import
+    // block. We use sha256 to fingerprint search-query+filter combos so
+    // the same search is collapsed onto one cache row.
+    const _MB_ALLOWED = new Set([
+        "artist", "release", "release-group", "recording", "work", "label",
+    ]);
+    // Admin or demo-allowlist user gate, mirroring requireGutenbergAccess.
+    // MB proxy is server-cached so widening past admin is cheap.
+    async function requireMusicbrainzAccess(req, res) {
+        const userId = await getClerkUserId(req);
+        if (!userId) {
+            res.status(401).json({ error: "auth_required" });
+            return null;
+        }
+        if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+            res.status(403).json({ error: "forbidden" });
+            return null;
+        }
+        return userId;
+    }
+    app.get("/api/musicbrainz/search", async (req, res) => {
+        if (!await requireMusicbrainzAccess(req, res))
+            return;
+        try {
+            // Entity selector lives on `entity=`; `type=` is reserved for a
+            // *Lucene filter* (e.g. release type "Album"). The previous build
+            // overloaded `type=` and leaked the entity name into the filter
+            // map, producing queries like `muddy AND type:artist` — MB's
+            // artist index has no such `type` value (it expects person /
+            // group / orchestra), so every artist search came back empty.
+            // Old `type=` is still honoured as a fallback so any in-flight
+            // client cached during the broken window still works.
+            const entity = String(req.query.entity ?? req.query.type ?? "artist").trim().toLowerCase();
+            if (!_MB_ALLOWED.has(entity)) {
+                res.status(400).json({ error: "entity must be one of: " + Array.from(_MB_ALLOWED).join(", ") });
+                return;
+            }
+            // Free-form q + a handful of structured fields. Anything else is
+            // dropped at the build step so a curious caller can't poke at MB's
+            // long Lucene field list through this proxy. `type` only goes
+            // into the filter map when it doesn't match the entity name —
+            // that keeps the legacy callers working without re-introducing
+            // the artist-search collapse.
+            const filters = {};
+            for (const k of ["q", "artist", "release", "recording", "label", "country", "date", "year", "tag", "type"]) {
+                const v = String(req.query[k] ?? "").trim();
+                if (!v)
+                    continue;
+                if (k === "type" && v.toLowerCase() === entity)
+                    continue;
+                filters[k] = v;
+            }
+            const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? "25"), 10) || 25));
+            const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+            const lucene = mbBuildLuceneQuery(filters);
+            if (!lucene) {
+                res.status(400).json({ error: "at least one filter required" });
+                return;
+            }
+            // Cache key: entity + sha256(lucene + limit + offset). Hash so
+            // the text column stays a fixed width regardless of query length.
+            const hash = crypto.createHash("sha256")
+                .update(`${entity}|${lucene}|${limit}|${offset}`)
+                .digest("hex");
+            const cached = await mbCacheGet(`search:${entity}`, hash);
+            if (cached) {
+                res.json({ source: "cache", query: lucene, ...cached });
+                return;
+            }
+            const data = await mbFetch(`/${entity}`, {
+                query: lucene,
+                limit,
+                offset,
+            });
+            await mbCacheSet(`search:${entity}`, hash, data);
+            res.json({ source: "upstream", query: lucene, ...data });
+        }
+        catch (err) {
+            console.error("[musicbrainz search]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    // GET /api/musicbrainz/wiki?title=X | ?qid=Qxxxx — proxied Wikipedia
+    // article fetch with caching in the musicbrainz_cache table
+    // (entity_type = "wiki"). On cache miss we delegate to the existing
+    // /api/wikipedia/lookup?full=1 logic by calling the public Wikipedia
+    // API directly — same code path the wiki view uses but the response
+    // is stored alongside MB rows so re-opening the same artist's bio
+    // is free. Admin-gated to match the rest of the MB surface.
+    //
+    // QID path: many MB artists carry only a `wikidata` URL relation
+    // (no direct `wikipedia` relation). We resolve the QID to the
+    // English Wikipedia article title via the Wikidata `wbgetentities`
+    // sitelinks API, then proceed with the same Parse-API fetch as the
+    // title path. Cache key for QID lookups is "qid:Q…" so repeat opens
+    // skip the Wikidata round-trip too.
+    app.get("/api/musicbrainz/wiki", async (req, res) => {
+        if (!await requireMusicbrainzAccess(req, res))
+            return;
+        try {
+            const titleRaw = String(req.query.title ?? "").trim();
+            const qidRaw = String(req.query.qid ?? "").trim();
+            if (!titleRaw && !qidRaw) {
+                res.status(400).json({ error: "title or qid required" });
+                return;
+            }
+            const wikiHeaders = {
+                "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+                "Accept": "application/json",
+            };
+            // Cache by qid when present so QID-driven lookups don't depend
+            // on having a title in hand.
+            let cacheKey;
+            let queryDisplay;
+            // v2 prefix marks the post-sanitization-pass schema so older
+            // cached HTML (which still carried infoboxes / navboxes / refs)
+            // is bypassed on first read and re-fetched against the new
+            // pipeline.
+            if (qidRaw) {
+                if (!/^Q\d+$/i.test(qidRaw)) {
+                    res.status(400).json({ error: "bad qid" });
+                    return;
+                }
+                cacheKey = `v3:qid:${qidRaw.toUpperCase()}`;
+                queryDisplay = qidRaw;
+            }
+            else {
+                cacheKey = `v3:${titleRaw.toLowerCase()}`;
+                queryDisplay = titleRaw;
+            }
+            const cached = await mbCacheGet("wiki", cacheKey);
+            if (cached) {
+                res.json({ source: "cache", ...cached });
+                return;
+            }
+            // QID path: ask Wikidata for the entity's enwiki sitelink. If
+            // there's no English Wikipedia article linked from this QID we
+            // cache the empty result so we don't re-hit Wikidata for that
+            // QID again.
+            let resolvedTitle = null;
+            if (qidRaw) {
+                const wdUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${encodeURIComponent(qidRaw.toUpperCase())}&props=sitelinks&sitefilter=enwiki&format=json`;
+                const wr = await fetch(wdUrl, { headers: wikiHeaders });
+                if (!wr.ok) {
+                    res.status(502).json({ error: "Wikidata lookup failed", status: wr.status });
+                    return;
+                }
+                const wdata = await wr.json();
+                const entity = wdata?.entities?.[qidRaw.toUpperCase()];
+                resolvedTitle = entity?.sitelinks?.enwiki?.title ?? null;
+                if (!resolvedTitle) {
+                    const empty = { found: false, queried: queryDisplay, via: "wikidata" };
+                    await mbCacheSet("wiki", cacheKey, empty);
+                    res.json({ source: "upstream", ...empty });
+                    return;
+                }
+            }
+            else {
+                const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&search=${encodeURIComponent(titleRaw)}`;
+                const sr = await fetch(searchUrl, { headers: wikiHeaders });
+                if (!sr.ok) {
+                    res.status(502).json({ error: "Wikipedia search failed", status: sr.status });
+                    return;
+                }
+                const sdata = await sr.json();
+                resolvedTitle = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
+            }
+            const title = resolvedTitle;
+            if (!title) {
+                const empty = { found: false, queried: queryDisplay };
+                await mbCacheSet("wiki", cacheKey, empty);
+                res.json({ source: "upstream", ...empty });
+                return;
+            }
+            const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&disabletoc=1&page=${encodeURIComponent(title)}`;
+            const thumbUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
+            const [pr, tr] = await Promise.all([
+                fetch(parseUrl, { headers: wikiHeaders }),
+                fetch(thumbUrl, { headers: wikiHeaders }).catch(() => null),
+            ]);
+            if (!pr.ok) {
+                res.status(502).json({ error: "Wikipedia parse failed", status: pr.status });
+                return;
+            }
+            const pdata = await pr.json();
+            const rawHtml = pdata?.parse?.text?.["*"] ?? "";
+            // Sanitization + readability pass. We strip the chrome that
+            // makes raw Wikipedia HTML unreadable inside a small popup:
+            // infoboxes / navboxes / sidebars / metadata banners, [edit]
+            // spans, reference superscripts, hatnotes, audio boxes, and the
+            // tail sections (References / See also / External links /
+            // Bibliography / Further reading / Notes) which depend on
+            // structures we've removed anyway. Internal /wiki/ links are
+            // rewritten to absolute https://en.wikipedia.org URLs with
+            // target=_blank so they open Wikipedia in a new tab instead of
+            // 404'ing inside the popup.
+            const stripTagBlock = (s, openRe) => {
+                // Greedy-but-balanced removal of <tag …>…</tag> for the same
+                // tag name as matched by openRe (first capture = tag name).
+                // We avoid a full HTML parser by walking the string from each
+                // open match and counting nested tag opens/closes.
+                let out = "";
+                let i = 0;
+                while (i < s.length) {
+                    openRe.lastIndex = i;
+                    const m = openRe.exec(s);
+                    if (!m) {
+                        out += s.slice(i);
+                        break;
+                    }
+                    out += s.slice(i, m.index);
+                    const tag = m[1].toLowerCase();
+                    let depth = 1;
+                    let j = openRe.lastIndex;
+                    const openTag = new RegExp(`<${tag}\\b`, "gi");
+                    const closeTag = new RegExp(`</${tag}\\s*>`, "gi");
+                    while (depth > 0 && j < s.length) {
+                        openTag.lastIndex = j;
+                        closeTag.lastIndex = j;
+                        const o = openTag.exec(s);
+                        const c = closeTag.exec(s);
+                        if (!c) {
+                            j = s.length;
+                            break;
+                        }
+                        if (o && o.index < c.index) {
+                            depth++;
+                            j = openTag.lastIndex;
+                        }
+                        else {
+                            depth--;
+                            j = closeTag.lastIndex;
+                        }
+                    }
+                    i = j;
+                }
+                return out;
+            };
+            let html = String(rawHtml)
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+                .replace(/<link\b[^>]*>/gi, "");
+            // Drop infobox / navbox / sidebar / metadata / ambox tables —
+            // the "class contains X" check matches Wikipedia's compound
+            // class lists ("infobox vcard", "navbox authority-control" etc).
+            html = stripTagBlock(html, /<(table)\b[^>]*class="[^"]*(?:infobox|navbox|sidebar|vertical-navbox|metadata|ambox|mbox-small|toccolours|wikitable plainrowheaders|succession)[^"]*"[^>]*>/gi);
+            // Drop hatnotes, edit-section spans, reference superscripts,
+            // gallery, references list, sister-site boxes — but keep
+            // <div class="thumb">…</div> (image thumbnails with captions)
+            // which is what gives the bio its actual pictures.
+            html = stripTagBlock(html, /<(div)\b[^>]*class="[^"]*(?:hatnote|navbox|reflist|references|gallery|mw-references-wrap|sistersitebox|mw-stack|side-box|notice|asbox|metadata)[^"]*"[^>]*>/gi);
+            html = stripTagBlock(html, /<(span)\b[^>]*class="[^"]*mw-editsection[^"]*"[^>]*>/gi);
+            html = stripTagBlock(html, /<(sup)\b[^>]*class="[^"]*(?:reference|noprint)[^"]*"[^>]*>/gi);
+            html = stripTagBlock(html, /<(ol)\b[^>]*class="[^"]*references[^"]*"[^>]*>/gi);
+            // Cut everything from the first References / See also / External
+            // links / Notes / Bibliography / Further reading heading down —
+            // these sections depend on reference + navbox machinery we've
+            // already removed.
+            const cutHeadings = [
+                "References", "See_also", "External_links", "Notes",
+                "Bibliography", "Further_reading", "Discography", "Sources",
+            ];
+            for (const id of cutHeadings) {
+                const re = new RegExp(`<h[1-6][^>]*>\\s*<span[^>]*id="${id}"`, "i");
+                const m = html.match(re);
+                if (m) {
+                    // Back up to the start of the heading tag.
+                    const idx = html.indexOf("<", html.lastIndexOf("<h", m.index));
+                    html = html.slice(0, idx >= 0 ? idx : m.index);
+                }
+            }
+            // Rewrite internal /wiki/X links to absolute URLs that open in
+            // a new tab, and neutralise any remaining JS-flavoured links /
+            // inline event handlers.
+            html = html
+                .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+                .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+                .replace(/href\s*=\s*"javascript:[^"]*"/gi, 'href="#"')
+                .replace(/href\s*=\s*'javascript:[^']*'/gi, "href='#'")
+                .replace(/<a\b([^>]*?)href="\/wiki\/([^"#?]+)([^"]*)"([^>]*)>/gi, (_m, pre, page, rest, post) => `<a${pre}href="https://en.wikipedia.org/wiki/${page}${rest}" target="_blank" rel="noopener"${post}>`);
+            const finalTitle = pdata?.parse?.title ?? title;
+            let thumbnail = null;
+            try {
+                if (tr) {
+                    const tj = await tr.json();
+                    const pages = tj?.query?.pages;
+                    if (pages) {
+                        const first = Object.values(pages)[0];
+                        thumbnail = first?.thumbnail?.source ?? null;
+                    }
+                }
+            }
+            catch { }
+            const payload = {
+                found: true,
+                title: finalTitle,
+                html,
+                thumbnail,
+                url: `https://en.wikipedia.org/wiki/${encodeURIComponent(finalTitle.replace(/ /g, "_"))}`,
+            };
+            await mbCacheSet("wiki", cacheKey, payload);
+            res.json({ source: "upstream", ...payload });
+        }
+        catch (err) {
+            console.error("[musicbrainz wiki]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    // ── Saves ──────────────────────────────────────────────────────
+    // Per-admin ★ bookmarks for the MB Saved tab. List returns
+    // newest-first; the id-list endpoint hands back the compact
+    // "type:mbid" key set the client uses to decorate row stars.
+    app.get("/api/musicbrainz/saves", async (req, res) => {
+        const userId = await requireMusicbrainzAccess(req, res);
+        if (!userId)
+            return;
+        try {
+            const entityType = String(req.query.type ?? "").trim() || undefined;
+            const rows = await listMbSaves(userId, entityType);
+            res.json({ rows });
+        }
+        catch (err) {
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    app.get("/api/musicbrainz/saves/ids", async (req, res) => {
+        const userId = await requireMusicbrainzAccess(req, res);
+        if (!userId)
+            return;
+        try {
+            res.json({ ids: await listMbSaveIds(userId) });
+        }
+        catch (err) {
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    app.post("/api/musicbrainz/saves", express.json({ limit: "32kb" }), async (req, res) => {
+        const userId = await requireMusicbrainzAccess(req, res);
+        if (!userId)
+            return;
+        try {
+            const entityType = String(req.body?.entity_type ?? "").trim();
+            const mbid = String(req.body?.mbid ?? "").trim();
+            const name = String(req.body?.name ?? "").trim();
+            const meta = req.body?.meta && typeof req.body.meta === "object" ? req.body.meta : null;
+            if (!entityType || !mbid || !name) {
+                res.status(400).json({ error: "entity_type, mbid, name required" });
+                return;
+            }
+            const added = await addMbSave(userId, entityType, mbid, name, meta);
+            res.json({ ok: true, added });
+        }
+        catch (err) {
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    app.delete("/api/musicbrainz/saves/:type/:mbid", async (req, res) => {
+        const userId = await requireMusicbrainzAccess(req, res);
+        if (!userId)
+            return;
+        try {
+            const removed = await removeMbSave(userId, String(req.params.type), String(req.params.mbid));
+            res.json({ ok: true, removed });
+        }
+        catch (err) {
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+    app.get("/api/musicbrainz/:type/:mbid", async (req, res) => {
+        if (!await requireMusicbrainzAccess(req, res))
+            return;
+        try {
+            const type = String(req.params.type ?? "").toLowerCase();
+            const mbid = String(req.params.mbid ?? "");
+            if (!_MB_ALLOWED.has(type)) {
+                res.status(400).json({ error: "bad type" });
+                return;
+            }
+            // MBIDs are 36-char UUID strings; loose validation guards against
+            // accidental path-injection. MB accepts both upper and lower hex.
+            if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(mbid)) {
+                res.status(400).json({ error: "bad mbid" });
+                return;
+            }
+            // inc= is the include list; we hard-code a useful default per
+            // entity type so the response carries linked-entity payloads
+            // (artist → release-groups + tags; release → recordings + labels +
+            // media; recording → artists + releases + tags). Callers can
+            // override via ?inc= but we never let arbitrary strings through —
+            // only a whitelist of MB-documented include keywords.
+            const incRaw = String(req.query.inc ?? "").trim();
+            const incDefaults = {
+                "artist": "url-rels+release-groups+tags+aliases+ratings",
+                "release": "artist-credits+labels+recordings+release-groups+media+tags+url-rels",
+                "release-group": "artists+releases+tags+ratings+url-rels",
+                "recording": "artists+releases+tags+url-rels",
+                "work": "artist-rels+recording-rels+tags",
+                "label": "url-rels+tags+aliases",
+            };
+            let inc = incDefaults[type];
+            if (incRaw) {
+                const allowed = new Set([
+                    "url-rels", "artist-rels", "recording-rels", "release-rels", "release-group-rels",
+                    "release-groups", "releases", "recordings", "labels", "media",
+                    "tags", "ratings", "aliases", "artists", "artist-credits",
+                ]);
+                const requested = incRaw.split(/[+,\s]+/).filter(Boolean);
+                const safe = requested.filter(k => allowed.has(k));
+                if (safe.length)
+                    inc = safe.join("+");
+            }
+            const cacheKey = inc ? `${mbid}|${inc}` : mbid;
+            const cached = await mbCacheGet(type, cacheKey);
+            if (cached) {
+                res.json({ source: "cache", ...cached });
+                return;
+            }
+            const data = await mbFetch(`/${type}/${mbid}`, { inc });
+            await mbCacheSet(type, cacheKey, data);
+            res.json({ source: "upstream", ...data });
+        }
+        catch (err) {
+            console.error("[musicbrainz lookup]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+    });
+}
+// GET /api/blues-archive/releases/export.csv — flat CSV dump of every
+// release stored across all blues_artists.discogs_releases JSONB
+// arrays. Mirrors the artists / lyrics CSV style: UTF-8 BOM, Excel-
+// friendly quoting, formula-injection guard.
+app.get("/api/blues-archive/releases/export.csv", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const result = await listBluesArchiveReleases({ limit: 500000, offset: 0 });
+        const cols = ["artist_id", "artist_name", "id", "type", "title", "year", "role", "label", "format"];
+        const csvCell = (v) => {
+            if (v == null)
+                return "";
+            if (Array.isArray(v) || typeof v === "object")
+                v = JSON.stringify(v);
+            const s = String(v);
+            if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+                return `"${s.replace(/"/g, '""')}"`;
+            }
+            return s;
+        };
+        const header = cols.join(",");
+        const body = (result.rows || []).map((row) => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+        const csv = "﻿" + header + "\n" + body + "\n";
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-releases-${new Date().toISOString().slice(0, 10)}.csv"`);
+        res.send(csv);
+    }
+    catch (err) {
+        console.error("[blues-archive releases export.csv]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/blues-archive/tunings/export.csv — CSV dump of the static
+// tunings grid (#, artist, title, position, pitch, notes).
+app.get("/api/blues-archive/tunings/export.csv", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const result = await listBluesTunings({ limit: 100000, offset: 0 });
+        const cols = ["row_num", "artist", "title", "position", "pitch", "notes"];
+        const csvCell = (v) => {
+            if (v == null)
+                return "";
+            if (Array.isArray(v) || typeof v === "object")
+                v = JSON.stringify(v);
+            const s = String(v);
+            if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+                return `"${s.replace(/"/g, '""')}"`;
+            }
+            return s;
+        };
+        const header = cols.join(",");
+        const body = (result.rows || []).map((row) => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+        const csv = "﻿" + header + "\n" + body + "\n";
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-tunings-${new Date().toISOString().slice(0, 10)}.csv"`);
+        res.send(csv);
+    }
+    catch (err) {
+        console.error("[blues-archive tunings export.csv]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
 // POST /api/blues-archive/merge body { fromId, intoId }
@@ -12075,20 +14823,71 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
                 resolvedArchiveArtistIds.push(v.id);
             const archiveArtistIds = Array.from(new Set(resolvedArchiveArtistIds));
             // Path 1+2: pinned matches by Discogs release/master id.
+            // The pinning is the curator's vouch that "this lyric belongs to
+            // this release", so a strict LOWER(TRIM(page_title)) equality is
+            // too brittle — YouTube titles often differ by a parenthetical,
+            // punctuation, or "feat. X" suffix that the lyric's page_title
+            // doesn't carry. Fetch all lyrics pinned to the release/master,
+            // then fuzzy-match titles in JS: strip parens / punctuation /
+            // common noise tokens and accept exact-or-containment matches.
             if ((Number.isFinite(releaseId) && releaseId > 0) || (Number.isFinite(masterId) && masterId > 0)) {
                 const r = await getPool().query(`SELECT id, page_title, artist, artist_id,
                   discogs_release_id, discogs_master_id
              FROM blues_lyrics
-            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
-              AND (
-                ($2::bigint IS NOT NULL AND discogs_release_id = $2::bigint)
-                OR
-                ($3::bigint IS NOT NULL AND discogs_master_id  = $3::bigint)
-              )`, [titlesLc, Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
+            WHERE ($1::bigint IS NOT NULL AND discogs_release_id = $1::bigint)
+               OR ($2::bigint IS NOT NULL AND discogs_master_id  = $2::bigint)`, [Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
                     Number.isFinite(masterId) && masterId > 0 ? masterId : null]);
+                const normTitle = (s) => String(s || "")
+                    .toLowerCase()
+                    // Drop parentheticals + bracketed asides ("(Take 2)", "[Live]").
+                    .replace(/\([^)]*\)/g, " ")
+                    .replace(/\[[^\]]*\]/g, " ")
+                    // Drop "feat. X" / "ft. X" tails — common YT addition.
+                    .replace(/\b(feat|ft)\.?\s.+$/i, " ")
+                    // Strip non-alphanumeric noise; collapse whitespace.
+                    .replace(/[^a-z0-9 ]+/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+                const submittedNormToLc = trackTitles.map(t => ({
+                    raw: t.trim().toLowerCase(),
+                    norm: normTitle(t),
+                }));
+                // Jaccard similarity over normalized word tokens — robust against
+                // single-character substitutions ("Is" mis-OCR'd as "Ls"),
+                // word-order swaps, and minor word-count diffs. Threshold of
+                // 0.6 admits ~one differing word in a seven-word title without
+                // collapsing to false positives for unrelated tracks.
+                const jaccardWords = (a, b) => {
+                    const A = new Set(a.split(" ").filter(Boolean));
+                    const B = new Set(b.split(" ").filter(Boolean));
+                    if (!A.size || !B.size)
+                        return 0;
+                    let inter = 0;
+                    for (const w of A)
+                        if (B.has(w))
+                            inter++;
+                    return inter / (A.size + B.size - inter);
+                };
                 for (const row of r.rows) {
-                    const k = String(row.page_title).trim().toLowerCase();
-                    out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+                    const rowNorm = normTitle(row.page_title);
+                    if (!rowNorm)
+                        continue;
+                    for (const { raw, norm } of submittedNormToLc) {
+                        if (!norm)
+                            continue;
+                        const minLen = 4;
+                        const isMatch = norm === rowNorm ||
+                            (rowNorm.length >= minLen && norm.includes(rowNorm)) ||
+                            (norm.length >= minLen && rowNorm.includes(norm)) ||
+                            jaccardWords(norm, rowNorm) >= 0.6;
+                        if (isMatch) {
+                            // Key by the submitted title so the client's lookup by
+                            // sent-title finds the hit. First match wins; later
+                            // paths (artist match etc.) only fill empty slots.
+                            out.tracks[raw] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+                            break;
+                        }
+                    }
                 }
             }
             // Path 3: artist_id match (canonical post-FK).
@@ -12125,6 +14924,27 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
                     const k = String(row.page_title).trim().toLowerCase();
                     if (!out.tracks[k])
                         out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+                }
+            }
+            // Tunings: match the static blues_tunings_grid (CSV-seeded) by
+            // (artist, title). Indexed only when artist context is present —
+            // a track titled "Stop Breaking Down" could be either Robert
+            // Johnson's or Sonny Boy's, and the position/pitch differ. Key
+            // is lowercase title to mirror the tracks map.
+            out.tunings = {};
+            if (artistNames.length) {
+                const namesLc = artistNames.map(n => n.trim().toLowerCase());
+                const r = await getPool().query(`SELECT id, artist, title, position, pitch, notes
+             FROM blues_tunings_grid
+            WHERE LOWER(TRIM(title))  = ANY($1::text[])
+              AND LOWER(TRIM(artist)) = ANY($2::text[])`, [titlesLc, namesLc]);
+                for (const row of r.rows) {
+                    const k = String(row.title).trim().toLowerCase();
+                    if (!out.tunings[k])
+                        out.tunings[k] = {
+                            id: row.id, artist: row.artist, title: row.title,
+                            position: row.position, pitch: row.pitch, notes: row.notes,
+                        };
                 }
             }
         }
@@ -14077,5 +16897,67 @@ app.listen(PORT, "0.0.0.0", async () => {
         catch (e) {
             console.error("[startup] cache-warm init failed:", e);
         }
+        // Warm the cache-warm-runs stats cache out of band so the first
+        // admin who opens the panel after deploy doesn't pay for the
+        // ~10s CTE in the foreground. Delayed a few seconds to let the
+        // DB schema settle. Errors are swallowed — next foreground call
+        // will retry.
+        setTimeout(() => { _kickCwStatsBackgroundRefresh(); }, 5000);
+        try {
+            initAllBluesModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] all-blues init failed:", e);
+        }
+        // Rehydrate today's YT quota counters from the DB so a redeploy
+        // doesn't make us forget how much we've already spent. UTC date
+        // rollover inside getReviewQuotaToday zeroes the row if it's a new
+        // day; otherwise we restore the running totals into the in-memory
+        // gate variables.
+        try {
+            const q = await getReviewQuotaToday();
+            _ytReviewSearchesToday = q.workerSearches;
+            _ytQuotaUnitsToday = q.projectUnits;
+            if (q.workerSearches || q.projectUnits) {
+                console.log(`[startup] yt-quota rehydrated: worker=${q.workerSearches} project=${q.projectUnits}u`);
+            }
+        }
+        catch (e) {
+            console.error("[startup] yt-quota rehydrate failed:", e);
+        }
+        // If the YT review worker was running when the previous process
+        // died (Railway redeploy, crash, etc.), resume it. The persisted
+        // `running` flag in track_yt_review_state is our only signal —
+        // _ytReviewRunning is per-process and always false at boot.
+        setTimeout(async () => {
+            try {
+                const state = await getReviewState();
+                if (state?.running) {
+                    console.log("[startup] yt-review worker was running at last shutdown — resuming");
+                    _runYtReviewWorker().catch((e) => console.error("[yt-review] resume threw:", e));
+                }
+            }
+            catch (e) {
+                console.error("[startup] yt-review resume check failed:", e);
+            }
+        }, 8000);
+        // Catalog-tab pool refresher: rebuilds each mode's pool of ~500
+        // candidates every 2h. First tick fires 60s after boot so the
+        // initial DB schema is settled. Errors are logged and absorbed
+        // so a single mode failure doesn't take down the cycle.
+        const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000;
+        const FEED_POOL_MODES = ["feed", "rare", "dig", "active", "played"];
+        const tick = async () => {
+            for (const mode of FEED_POOL_MODES) {
+                try {
+                    await refreshFeedPool(mode);
+                }
+                catch (e) {
+                    console.error(`[feed-pool refresh ${mode}]`, e);
+                }
+            }
+        };
+        setTimeout(() => { tick().catch(() => { }); }, 60_000);
+        setInterval(() => { tick().catch(() => { }); }, REFRESH_INTERVAL_MS);
     }
 });

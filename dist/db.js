@@ -348,6 +348,91 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS yt_video_unavailable_status_idx ON youtube_video_unavailable (status)`);
+    // ── YT-match review queue (admin tab, v1) ──────────────────────────
+    // Background worker walks earliest-year Blues masters and proposes
+    // YouTube videos for tracks that have no override yet. v1 puts
+    // every candidate into this queue for human review — no auto-accept.
+    // Approving copies the row into track_youtube_overrides; rejecting
+    // leaves a tombstone so the same video isn't re-proposed next run.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_queue (
+      id                          SERIAL PRIMARY KEY,
+      master_id                   BIGINT NOT NULL,
+      track_position              TEXT NOT NULL,
+      track_title                 TEXT NOT NULL,
+      track_artist                TEXT,
+      master_year                 INTEGER,
+      master_cover_url            TEXT,
+      candidate_video_id          TEXT NOT NULL,
+      candidate_title             TEXT,
+      candidate_channel_title     TEXT,
+      candidate_channel_id        TEXT,
+      candidate_duration_seconds  INTEGER,
+      candidate_thumbnail_url     TEXT,
+      candidate_published_at      TIMESTAMPTZ,
+      title_score                 REAL,
+      duration_ok                 BOOLEAN,
+      status                      TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending','approved','rejected','skipped','superseded')),
+      reviewed_at                 TIMESTAMPTZ,
+      reviewed_by                 TEXT,
+      created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_status_idx ON track_yt_review_queue (status, created_at)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_master_idx ON track_yt_review_queue (master_id, track_position)`);
+    await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS track_yt_review_queue_uniq_idx ON track_yt_review_queue (master_id, track_position, candidate_video_id)`);
+    // Single-row state for the YT-review worker. id is pinned to 1 so
+    // upserts and reads stay trivial.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_state (
+      id                INT PRIMARY KEY DEFAULT 1,
+      running           BOOLEAN NOT NULL DEFAULT false,
+      cursor_year       INT,
+      cursor_master_id  BIGINT,
+      cursor_track_pos  TEXT,
+      total_searched    INT NOT NULL DEFAULT 0,
+      total_queued      INT NOT NULL DEFAULT 0,
+      total_skipped     INT NOT NULL DEFAULT 0,
+      total_errors      INT NOT NULL DEFAULT 0,
+      last_run_at       TIMESTAMPTZ,
+      last_error        TEXT,
+      message           TEXT
+    )
+  `);
+    await getPool().query(`INSERT INTO track_yt_review_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+    await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_date TEXT`);
+    await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_worker_searches INT NOT NULL DEFAULT 0`);
+    await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_project_units INT NOT NULL DEFAULT 0`);
+    // Per (master, track) search log so the worker can skip what it
+    // already tried, and the admin can later trigger "retry tracks
+    // that got 0 candidates" without re-walking every other track.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_searched (
+      master_id        BIGINT NOT NULL,
+      track_position   TEXT NOT NULL,
+      last_searched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      candidate_count  INT NOT NULL DEFAULT 0,
+      source           TEXT NOT NULL DEFAULT 'album',
+      PRIMARY KEY (master_id, track_position)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_at_idx ON track_yt_review_searched (last_searched_at)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_searched_empty_idx ON track_yt_review_searched (candidate_count) WHERE candidate_count = 0`);
+    // Persisted worker error log. One row per upstream failure so the
+    // admin can drill into the Errors tile and see the exact reason
+    // (HTTP 403 quotaExceeded, throw: ECONNRESET, etc.) without having
+    // to dig through Railway logs.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_yt_review_errors (
+      id          SERIAL PRIMARY KEY,
+      ts          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      master_id   BIGINT,
+      query       TEXT,
+      reason      TEXT NOT NULL
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_errors_ts_idx ON track_yt_review_errors (ts DESC)`);
     // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
     // The in-memory _ytSearchCache in search-api.ts gets wiped on every
     // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -496,6 +581,45 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_personal_suggestions_user_idx ON user_personal_suggestions (clerk_user_id, generated_at DESC)`);
+    // ── Per-user taste profile (Feed soft bias) ──────────────────────────
+    // Cached top genres + styles per user, derived from their collection.
+    // Used by the Feed sampler to nudge (not filter) toward cards matching
+    // the user's existing taste. Recomputed lazily when computed_at is
+    // older than 24h; collection edits don't force an immediate refresh.
+    //
+    // genre_scores / style_scores are JSONB maps from name → normalized
+    // weight in [0, 1] (sum ≤ 1 per map). Feed uses them as a per-card
+    // multiplier so a card matching your #1 genre gets a bigger boost
+    // than one matching #10. top_genres / top_styles arrays are kept
+    // for backwards compatibility with the flat-bias query path.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_taste_profile (
+      clerk_user_id TEXT PRIMARY KEY,
+      top_genres    TEXT[] NOT NULL DEFAULT '{}',
+      top_styles    TEXT[] NOT NULL DEFAULT '{}',
+      computed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS genre_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
+    await getPool().query(`ALTER TABLE user_taste_profile ADD COLUMN IF NOT EXISTS style_scores JSONB NOT NULL DEFAULT '{}'::jsonb`);
+    // ── Catalog-tab pool cache (Feed/Rare/Dig/Active/Played) ─────────────
+    // Heavy SQL (TABLESAMPLE+scoring, multi-genre EXISTS, GROUP BY across
+    // all users) takes seconds per request. The pool worker runs each
+    // mode's full query every ~2h and writes the top N (id, type, score)
+    // tuples here; per-request the endpoint just samples this small
+    // table. Score is the weight the per-request sampler reads for the
+    // -LN(R)/score reservoir (raw open count, want count, etc.).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS feed_cache_pool (
+      mode         TEXT        NOT NULL,
+      discogs_id   INTEGER     NOT NULL,
+      entity_type  TEXT        NOT NULL,
+      score        REAL        NOT NULL DEFAULT 1.0,
+      refreshed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (mode, discogs_id, entity_type)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS feed_cache_pool_mode_idx ON feed_cache_pool (mode, refreshed_at DESC)`);
     // ── Site-wide app settings (admin-controlled) ────────────────────────────
     // Simple key/value store for global config (theme, feature flags, etc.).
     // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -677,6 +801,52 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+    // GIN indexes for the Constellations artist popup + collect SQL.
+    // Without these, looking up every release credited to a given
+    // discogs_id was a full table scan that expanded each row's
+    // artists JSONB array. With the gin indexes we can use jsonb
+    // containment (@>) and key-exists (?) which both leverage the
+    // index for sub-millisecond lookups. Safe to add — idempotent
+    // and only affects query plans, not data.
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_artists_gin ON release_cache USING gin ((data->'artists'))`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_extra_gin ON release_cache USING gin ((data->'extraartists'))`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_genres_gin ON release_cache USING gin ((data->'genres'))`);
+    // ── MusicBrainz cache ──────────────────────────────────────────────
+    // Mirrors the release_cache shape, but keyed by (entity_type, key).
+    // For entity lookups, `key` is the MBID. For search responses, it's
+    // a sha256 of the query+params so identical searches collapse onto
+    // one row. JSONB blob holds the upstream MB response verbatim.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS musicbrainz_cache (
+      entity_type TEXT NOT NULL,
+      key         TEXT NOT NULL,
+      data        JSONB NOT NULL,
+      cached_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(entity_type, key)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_type_key_idx ON musicbrainz_cache (entity_type, key)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_cached_at_idx ON musicbrainz_cache (cached_at DESC)`);
+    // ── MusicBrainz saves (per-user ★ bookmarks for the Saved tab) ────
+    // entity_type is the MB type (artist / release / release-group /
+    // recording / work / label); mbid is the canonical UUID. `meta`
+    // carries a small snapshot (name, sort-name, disambiguation,
+    // country, life-span / date) so the Saved list can render rows
+    // without hitting the cache on first paint.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS musicbrainz_saves (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      entity_type     TEXT NOT NULL,
+      mbid            TEXT NOT NULL,
+      name            TEXT NOT NULL,
+      meta            JSONB,
+      saved_at        TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(clerk_user_id, entity_type, mbid)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_saves_user_idx ON musicbrainz_saves (clerk_user_id, saved_at DESC)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_saves_user_type_idx ON musicbrainz_saves (clerk_user_id, entity_type, saved_at DESC)`);
     // seen_at: NULL = pre-warmed-only (cache-warm job pulled it but no
     // human has opened the modal yet). Set to NOW() on the first user
     // click. Feed queries filter WHERE seen_at IS NOT NULL so warmed-
@@ -897,6 +1067,19 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS external_urls JSONB DEFAULT '[]'::jsonb
   `);
+    // Count of cached MASTERS in release_cache where genres = ['Blues']
+    // (exactly one genre, that genre is Blues) AND the artist appears as
+    // a primary credit. Used to distinguish "this artist has an actual
+    // blues album in our cache" from "this artist was added manually /
+    // from lyrics / etc.".
+    await getPool().query(`
+    ALTER TABLE blues_artists
+    ADD COLUMN IF NOT EXISTS seed_strict_count INT NOT NULL DEFAULT 0
+  `);
+    // Idempotent cleanup: remove Discogs placeholder artists that aren't
+    // real people (Various=194, Unknown Artist=355). The strict-Blues pad
+    // also excludes these going forward.
+    await getPool().query(`DELETE FROM blues_artists WHERE discogs_id IN (194, 355)`);
     // ── Blues lyrics (scraped from weeniecampbell.com wiki, admin-only) ───
     // Source: weeniecampbell.com/wiki, Category:Lyrics (and subcategories).
     // page_title is the canonical wiki page title (unique per source host).
@@ -976,20 +1159,42 @@ export async function initDb() {
     // PK enforces single row per combo.
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS cache_warm_runs (
-      genre_key       TEXT NOT NULL,
-      style_key       TEXT NOT NULL DEFAULT '',
-      current_year    INT,
-      current_page    INT NOT NULL DEFAULT 1,
-      total_searched  INT NOT NULL DEFAULT 0,
-      total_cached    INT NOT NULL DEFAULT 0,
-      total_skipped   INT NOT NULL DEFAULT 0,
-      total_errors    INT NOT NULL DEFAULT 0,
-      last_run_at     TIMESTAMPTZ,
-      last_cached_at  TIMESTAMPTZ,
-      recent_cached   JSONB NOT NULL DEFAULT '[]'::jsonb,
-      recent_errors   JSONB NOT NULL DEFAULT '[]'::jsonb,
+      genre_key            TEXT NOT NULL,
+      style_key            TEXT NOT NULL DEFAULT '',
+      current_year         INT,
+      current_page         INT NOT NULL DEFAULT 1,
+      total_searched       INT NOT NULL DEFAULT 0,
+      total_cached         INT NOT NULL DEFAULT 0,
+      total_skipped        INT NOT NULL DEFAULT 0,
+      total_errors         INT NOT NULL DEFAULT 0,
+      last_run_at          TIMESTAMPTZ,
+      last_cached_at       TIMESTAMPTZ,
+      no_year_last_run_at  TIMESTAMPTZ,
+      no_year_pages_seen   INT NOT NULL DEFAULT 0,
+      recent_cached        JSONB NOT NULL DEFAULT '[]'::jsonb,
+      recent_errors        JSONB NOT NULL DEFAULT '[]'::jsonb,
       PRIMARY KEY (genre_key, style_key)
     )
+  `);
+    // Migration for already-deployed envs that pre-date the no-year sweep
+    // tracking. Independent from current_year / current_page so the dated
+    // and no-year cursors don't clobber each other.
+    await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_last_run_at TIMESTAMPTZ`);
+    await getPool().query(`ALTER TABLE cache_warm_runs ADD COLUMN IF NOT EXISTS no_year_pages_seen INT NOT NULL DEFAULT 0`);
+    // One-time backfill: the pre-indicator no-year worker would land
+    // its cursor at current_year=1 / current_page=1 (cursorYear=0 →
+    // Math.min(year, endYear+1) → 1 after the first empty-page advance).
+    // Stamp the no-year indicator for those rows and clear the bogus
+    // dated cursor so the per-combo grid stops reading "1·p1" as a
+    // dated position. Idempotent via the IS NULL gate on
+    // no_year_last_run_at — runs once per row, never again.
+    await getPool().query(`
+    UPDATE cache_warm_runs
+       SET no_year_last_run_at = COALESCE(last_run_at, NOW()),
+           current_year        = NULL,
+           current_page        = 1
+     WHERE current_year = 1
+       AND no_year_last_run_at IS NULL
   `);
     // ── Genre cache-warm cron state ──────────────────────────────────
     // One row per Discogs genre in the rotation. The nightly worker
@@ -1087,6 +1292,172 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
+    // Allow multiple kinds per pair (Family AND Band, etc). PK widens
+    // from (lo, hi) to (lo, hi, kind). Idempotent: only swaps when the
+    // current PK is the old narrow shape. Existing rows survive — the
+    // values are unique on (lo,hi,kind) by definition once we drop the
+    // narrower constraint.
+    await getPool().query(`
+    DO $$
+    DECLARE
+      pk_cols text;
+    BEGIN
+      SELECT string_agg(att.attname, ',' ORDER BY att.attnum)
+        INTO pk_cols
+        FROM pg_constraint con
+        JOIN pg_class      cls ON cls.oid = con.conrelid
+        JOIN pg_attribute  att ON att.attrelid = cls.oid
+                              AND att.attnum = ANY(con.conkey)
+       WHERE cls.relname = 'blues_artist_links'
+         AND con.contype = 'p';
+      IF pk_cols = 'lo_id,hi_id' THEN
+        ALTER TABLE blues_artist_links DROP CONSTRAINT blues_artist_links_pkey;
+        ALTER TABLE blues_artist_links ADD PRIMARY KEY (lo_id, hi_id, kind);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'blues_artist_links PK widening skipped: %', SQLERRM;
+    END $$;
+  `);
+    // Expand the kind CHECK to include the broader relationship types
+    // used by the Connections tab. We look up EVERY CHECK constraint on
+    // the table whose definition references `kind` and drop them all —
+    // the inline CHECK in CREATE TABLE gets an auto-generated name on
+    // older deploys that doesn't necessarily match our preferred name,
+    // so a blind DROP IF EXISTS on one name would leave the legacy
+    // constraint in place alongside the new permissive one (and CHECK
+    // constraints AND together — the strict one wins, blocking every
+    // new kind from inserting). Idempotent and safe to run on every boot.
+    await getPool().query(`
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'blues_artist_links'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE blues_artist_links DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+      ALTER TABLE blues_artist_links ADD CONSTRAINT blues_artist_links_kind_check
+        CHECK (kind IN ('pseudonym', 'band', 'spouse', 'traveled', 'mentor', 'family'));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'blues_artist_links kind CHECK migration skipped: %', SQLERRM;
+    END $$;
+  `);
+    // ── All Blues: artist-profile cache + inferred link graph ─────────
+    // Independent of blues_artists / blues_artist_links. Populated by a
+    // background worker that walks release_cache (1900-1970), collects
+    // every Discogs artist ID it sees, then fetches each artist's
+    // /artists/:id profile and parses [aNNNNN] mentions out of the
+    // profile prose. Edge kind is inferred from nearby keywords
+    // (family / spouse / mentor / band / alias / mention).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_artist_cache (
+      discogs_id INTEGER PRIMARY KEY,
+      name       TEXT,
+      profile    TEXT,
+      data       JSONB NOT NULL,
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS discogs_artist_cache_cached_at_idx ON discogs_artist_cache (cached_at DESC)`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_links (
+      src_id     INTEGER NOT NULL,
+      dst_id     INTEGER NOT NULL,
+      kind       TEXT    NOT NULL DEFAULT 'mention',
+      excerpt    TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (src_id, dst_id, kind),
+      CHECK (src_id <> dst_id),
+      CHECK (kind IN ('family', 'spouse', 'mentor', 'band', 'alias', 'mention'))
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_links_dst_idx ON all_blues_links (dst_id)`);
+    // release_ids: which release/master IDs surfaced this edge (release-
+    // notes phase only — profile-prose mentions have no associated release
+    // and stay as empty arrays). Each insert appends + dedupes so an edge
+    // accumulates every blues release where the pair was credited together.
+    await getPool().query(`ALTER TABLE all_blues_links ADD COLUMN IF NOT EXISTS release_ids INT[] NOT NULL DEFAULT '{}'`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_artist_queue (
+      discogs_id INTEGER PRIMARY KEY,
+      status     TEXT NOT NULL DEFAULT 'pending',
+      added_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      fetched_at TIMESTAMPTZ,
+      error      TEXT
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_status_idx ON all_blues_artist_queue (status)`);
+    // seed_year: earliest year of a Blues-genre release in release_cache
+    // that referenced this artist as a primary. Drives the worker's
+    // oldest-first ordering and acts as a "this is a real blues seed"
+    // flag — mention-follow targets without a seed_year are excluded
+    // from the graph so the network stays inside the blues universe.
+    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS seed_year INT`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_seed_year_idx ON all_blues_artist_queue (seed_year)`);
+    // name: harvested at collect time from release_cache.data.artists[]
+    // so the graph has labels the moment the worker finishes collect,
+    // without waiting for the rate-limited Discogs profile fetch phase.
+    // Overwritten by the actual fetched profile name on conflict — until
+    // then this is what the public network view shows.
+    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS name TEXT`);
+    // Cached graph positions: admin runs fcose once in the browser,
+    // posts the resulting x/y per node back, and everyone gets a
+    // "preset" layout next load = instant. New seeds added by later
+    // worker runs get NULL positions and trigger an fcose re-fit only
+    // on demand (admin button); public viewers always use whatever's
+    // cached, falling back to (0,0) for unpositioned nodes.
+    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_x DOUBLE PRECISION`);
+    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_y DOUBLE PRECISION`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS all_blues_warm_state (
+      id              INT PRIMARY KEY DEFAULT 1,
+      running         BOOLEAN NOT NULL DEFAULT false,
+      phase           TEXT NOT NULL DEFAULT 'idle',
+      from_year       INT NOT NULL DEFAULT 1900,
+      to_year         INT NOT NULL DEFAULT 1970,
+      started_at      TIMESTAMPTZ,
+      last_tick_at    TIMESTAMPTZ,
+      artists_queued  INT NOT NULL DEFAULT 0,
+      artists_fetched INT NOT NULL DEFAULT 0,
+      artists_errored INT NOT NULL DEFAULT 0,
+      links_inserted  INT NOT NULL DEFAULT 0,
+      last_error      TEXT,
+      CHECK (id = 1)
+    )
+  `);
+    await getPool().query(`INSERT INTO all_blues_warm_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+    // Migration: extend the all_blues_links kind CHECK to include
+    // 'traveled' so we can import the matching kind from the manually
+    // curated blues_artist_links table. Same idempotent pattern as the
+    // blues_artist_links CHECK widening above — find every CHECK on
+    // all_blues_links that references "kind", drop it, then re-add the
+    // permissive one. Safe to re-run on every boot.
+    await getPool().query(`
+    DO $$
+    DECLARE r record;
+    BEGIN
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'all_blues_links'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE all_blues_links DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+      ALTER TABLE all_blues_links ADD CONSTRAINT all_blues_links_kind_check
+        CHECK (kind IN ('family','spouse','mentor','band','alias','mention','traveled'));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'all_blues_links kind CHECK migration skipped: %', SQLERRM;
+    END $$;
+  `);
     // ── Scrape ban list ──────────────────────────────────────────────
     // When the curator deletes an artist (or a single lyric) they can
     // mark it BANNED so the wiki rescrape doesn't immediately put it
@@ -1110,6 +1481,33 @@ export async function initDb() {
   `);
     await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_bans_uniq_idx
        ON blues_lyrics_bans (kind, LOWER(TRIM(value)))`);
+    // Allow 'body_hash' as a third ban kind — fingerprints the exact
+    // plaintext of a deleted lyric so a re-upload of the same body gets
+    // skipped on rescrape, while a real edit (different text, same
+    // title) comes through. Same pattern as the blues_artist_links
+    // migration: drop every existing CHECK that references `kind`, then
+    // add the permissive one.
+    await getPool().query(`
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      FOR r IN
+        SELECT con.conname
+          FROM pg_constraint con
+          JOIN pg_class    cls ON cls.oid = con.conrelid
+         WHERE cls.relname = 'blues_lyrics_bans'
+           AND con.contype = 'c'
+           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
+      LOOP
+        EXECUTE format('ALTER TABLE blues_lyrics_bans DROP CONSTRAINT %I', r.conname);
+      END LOOP;
+      ALTER TABLE blues_lyrics_bans ADD CONSTRAINT blues_lyrics_bans_kind_check
+        CHECK (kind IN ('title', 'artist', 'body_hash'));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'blues_lyrics_bans kind CHECK migration skipped: %', SQLERRM;
+    END $$;
+  `);
     // ── Tunings grid (read-only) ───────────────────────────────────────
     // Per-track tuning + pitch table seeded from src/data/tunings.csv
     // (Weeniecampbell "keys and positions" research) the first time
@@ -1255,6 +1653,65 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_source TEXT`);
     await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_checked_at TIMESTAMPTZ`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_first_release_year_idx ON blues_lyrics (first_release_year)`);
+    // ── One-time scrub: strip the weeniecampbell.com footer ("Go to
+    // [the] original forum thread") and any trailing junk that follows.
+    // Regex tolerates a missing "the", flexible inter-word whitespace,
+    // and optional trailing punctuation. (?is) = case-insensitive + dot
+    // matches newlines, so the match consumes through end-of-text. \s*
+    // before the marker also takes a trailing blank line so the cleaned
+    // body doesn't end in whitespace. Idempotent — after the first run
+    // no rows match the WHERE clause, so subsequent boots no-op.
+    await getPool().query(`
+    UPDATE blues_lyrics
+       SET plaintext = regexp_replace(plaintext, '(?is)\\s*Go\\s+to\\s+(the\\s+)?original\\s+for[ua]m\\s+thread.*$', '')
+     WHERE plaintext ~* 'original\\s+for[ua]m\\s+thread'
+  `);
+    // ── Blues Words lexicon (Stephen Calt-style dictionary) ─────────────
+    // Headword → definition + one or more song-lyric citations. Seeded
+    // by scripts/parse-blueswords.py → scripts/blueswords-*.json, ingested
+    // via /api/admin/blues-words/ingest. Per-headword updated_at lets the
+    // admin edit OCR-noisy entries inline. Citations have a stable
+    // position so the admin UI can preserve ordering across edits.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_words (
+      headword       TEXT PRIMARY KEY,
+      definition     TEXT NOT NULL DEFAULT '',
+      source_volume  TEXT,
+      source_pages   INTEGER[],
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_words_letter_idx ON blues_words (LEFT(LOWER(headword), 1))`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_word_citations (
+      id          SERIAL PRIMARY KEY,
+      headword    TEXT NOT NULL REFERENCES blues_words(headword) ON DELETE CASCADE,
+      position    INTEGER NOT NULL DEFAULT 1,
+      quote       TEXT,
+      artist      TEXT,
+      song_title  TEXT,
+      year        INTEGER,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_word_citations_headword_idx ON blues_word_citations (headword, position)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_word_citations_artist_idx ON blues_word_citations (LOWER(artist))`);
+    // One-time wipe: the initial blues_words ingest came from an OCR
+    // pass that produced too much noise to be useful. Schema is kept so
+    // a fresh ingest from cleaner scans can refill the tables later;
+    // app_settings flag keeps this from re-wiping a future re-import.
+    try {
+        const wiped = await getAppSetting("blues_words_wiped_2026_06_23");
+        if (!wiped) {
+            await getPool().query(`TRUNCATE blues_word_citations, blues_words CASCADE`);
+            await setAppSetting("blues_words_wiped_2026_06_23", new Date().toISOString());
+            console.log("[migrate] wiped blues_words + blues_word_citations (one-time, OCR ingest was unreliable)");
+        }
+    }
+    catch (err) {
+        console.warn("[migrate] blues_words wipe failed:", err);
+    }
     // ── Lyric favorites + Setlists (admin curator tools) ─────────────────
     // Per-user favorites: (clerk_user_id, lyric_id) PK so a single user
     // can't double-favorite the same lyric. ON DELETE CASCADE on the
@@ -1630,9 +2087,20 @@ export async function listBluesTunings(opts = {}) {
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const sortCol = _TUNINGS_SORT_COLS[String(opts.sort ?? "")] || "artist";
     const order = opts.order === "desc" ? "DESC" : "ASC";
+    // Title sort uses a derived "display title": for collaborative-session
+    // rows the title column is blank and the real track name is stashed in
+    // notes as "With <collaborator>:: <track>" — same logic the client
+    // applies for display. Without this, every blank-title row sorts to
+    // the top of the page in title-asc order even though their VISIBLE
+    // titles are anything but "" — which is what the user saw.
+    const titleExpr = `COALESCE(NULLIF(title, ''),
+    CASE WHEN notes ~ '::' THEN trim(regexp_replace(notes, '^.*?::\\s*', ''))
+         ELSE notes END,
+    '')`;
+    const sortExpr = sortCol === "title" ? titleExpr : sortCol;
     const orderSql = sortCol === "artist"
-        ? `ORDER BY artist ${order}, title ASC`
-        : `ORDER BY ${sortCol} ${order} NULLS LAST, artist ASC, title ASC`;
+        ? `ORDER BY artist ${order}, ${titleExpr} ASC`
+        : `ORDER BY ${sortExpr} ${order} NULLS LAST, artist ASC, ${titleExpr} ASC`;
     const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_tunings_grid ${whereSql}`, params);
     const total = totalR.rows[0]?.n ?? 0;
     const limit = Math.max(1, Math.min(500, opts.limit ?? 200));
@@ -1726,6 +2194,15 @@ export async function getBannedLyricTitleSet() {
 }
 export async function getBannedLyricArtistSet() {
     const r = await getPool().query(`SELECT LOWER(TRIM(value)) AS value FROM blues_lyrics_bans WHERE kind = 'artist'`);
+    return new Set(r.rows.map((row) => String(row.value)));
+}
+// Body-hash bans — fingerprint the exact plaintext of a deleted
+// lyric so a re-upload of the same body gets skipped on rescrape
+// without blocking real edits (a single character change produces a
+// different hash). Values are SHA-256 hex digests; the lookup is
+// case-sensitive (hex is normalized lowercase at write-time).
+export async function getBannedLyricBodyHashSet() {
+    const r = await getPool().query(`SELECT LOWER(TRIM(value)) AS value FROM blues_lyrics_bans WHERE kind = 'body_hash'`);
     return new Set(r.rows.map((row) => String(row.value)));
 }
 export async function deleteBluesArtistAndLyrics(id, opts = {}) {
@@ -2155,6 +2632,254 @@ export async function getBluesStats() {
         lastUpdate: r.rows[0]?.last_update ?? null,
     };
 }
+// Upsert a batch of entries; for each headword, REPLACES its citation
+// list with the supplied ones (re-ingesting a volume is the expected
+// path). Returns counts. Uses UNNEST batch inserts so a 100+ entry
+// volume lands in 3 queries instead of 500+.
+export async function ingestBluesWords(entries) {
+    if (!entries.length)
+        return { upserted: 0, citations: 0 };
+    const norm = entries
+        .map(e => ({
+        ...e,
+        headword: String(e.headword || "").trim().toLowerCase(),
+    }))
+        .filter(e => e.headword);
+    if (!norm.length)
+        return { upserted: 0, citations: 0 };
+    // Build a JSONB payload — handles the int[] source_pages column
+    // cleanly (UNNEST can't carry nested arrays as per-row values).
+    const wordsPayload = norm.map(e => ({
+        headword: e.headword,
+        definition: String(e.definition ?? ""),
+        source_volume: e.source_volume ?? null,
+        source_pages: (e.source_pages && e.source_pages.length) ? e.source_pages : null,
+    }));
+    const citsPayload = [];
+    for (const e of norm) {
+        const list = (e.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
+        list.forEach((c, i) => {
+            citsPayload.push({
+                headword: e.headword,
+                position: c.position ?? i + 1,
+                quote: c.quote ?? null,
+                artist: c.artist ?? null,
+                song_title: c.song_title ?? null,
+                year: Number.isFinite(c.year) ? c.year : null,
+            });
+        });
+    }
+    const heads = norm.map(e => e.headword);
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(`INSERT INTO blues_words (headword, definition, source_volume, source_pages, updated_at)
+         SELECT x.headword, x.definition, x.source_volume, x.source_pages, NOW()
+           FROM jsonb_to_recordset($1::jsonb) AS x(
+             headword      text,
+             definition    text,
+             source_volume text,
+             source_pages  int[]
+           )
+        ON CONFLICT (headword) DO UPDATE SET
+          definition    = EXCLUDED.definition,
+          source_volume = COALESCE(EXCLUDED.source_volume, blues_words.source_volume),
+          source_pages  = COALESCE(EXCLUDED.source_pages, blues_words.source_pages),
+          updated_at    = NOW()`, [JSON.stringify(wordsPayload)]);
+        await client.query(`DELETE FROM blues_word_citations WHERE headword = ANY($1::text[])`, [heads]);
+        if (citsPayload.length) {
+            await client.query(`INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
+           SELECT x.headword, x.position, x.quote, x.artist, x.song_title, x.year
+             FROM jsonb_to_recordset($1::jsonb) AS x(
+               headword   text,
+               position   int,
+               quote      text,
+               artist     text,
+               song_title text,
+               year       int
+             )`, [JSON.stringify(citsPayload)]);
+        }
+        await client.query("COMMIT");
+    }
+    catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+    return { upserted: norm.length, citations: citsPayload.length };
+}
+// Public list/search. q matches headword + definition + citation quote/artist/song_title.
+// letter filters by first letter of headword. Returns entries with citations nested.
+export async function listBluesWords(opts = {}) {
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const where = [];
+    const args = [];
+    const q = (opts.q ?? "").trim();
+    if (q) {
+        args.push(`%${q.toLowerCase()}%`);
+        const p = `$${args.length}`;
+        where.push(`(LOWER(w.headword) LIKE ${p} OR LOWER(w.definition) LIKE ${p}
+        OR EXISTS (SELECT 1 FROM blues_word_citations c
+                    WHERE c.headword = w.headword
+                      AND (LOWER(c.quote) LIKE ${p}
+                           OR LOWER(c.artist) LIKE ${p}
+                           OR LOWER(c.song_title) LIKE ${p})))`);
+    }
+    const letter = (opts.letter ?? "").trim().toLowerCase();
+    if (letter && /^[a-z]$/.test(letter)) {
+        args.push(letter);
+        where.push(`LEFT(LOWER(w.headword), 1) = $${args.length}`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_words w ${whereSql}`, args);
+    const total = totalR.rows[0]?.n ?? 0;
+    args.push(limit);
+    args.push(offset);
+    const rowsR = await getPool().query(`SELECT w.headword, w.definition, w.source_volume, w.source_pages, w.updated_at,
+            COALESCE(
+              (SELECT json_agg(
+                 json_build_object(
+                   'position', c.position,
+                   'quote',    c.quote,
+                   'artist',   c.artist,
+                   'song',     c.song_title,
+                   'year',     c.year
+                 ) ORDER BY c.position
+               )
+               FROM blues_word_citations c
+               WHERE c.headword = w.headword),
+              '[]'::json
+            ) AS citations
+       FROM blues_words w
+       ${whereSql}
+       ORDER BY w.headword ASC
+       LIMIT $${args.length - 1} OFFSET $${args.length}`, args);
+    return { rows: rowsR.rows, total };
+}
+export async function getBluesWordLetterCounts() {
+    const r = await getPool().query(`SELECT LEFT(LOWER(headword), 1) AS letter, COUNT(*)::int AS n
+       FROM blues_words
+       GROUP BY 1
+       ORDER BY 1`);
+    const out = {};
+    for (const row of r.rows)
+        out[row.letter] = row.n;
+    return out;
+}
+export async function updateBluesWord(headword, patch) {
+    const sets = [];
+    const args = [];
+    if (patch.definition !== undefined) {
+        args.push(patch.definition);
+        sets.push(`definition = $${args.length}`);
+    }
+    if (patch.source_volume !== undefined) {
+        args.push(patch.source_volume);
+        sets.push(`source_volume = $${args.length}`);
+    }
+    if (patch.source_pages !== undefined) {
+        args.push(patch.source_pages);
+        sets.push(`source_pages = $${args.length}`);
+    }
+    if (!sets.length)
+        return false;
+    args.push(headword.toLowerCase());
+    const r = await getPool().query(`UPDATE blues_words SET ${sets.join(", ")}, updated_at = NOW()
+      WHERE headword = $${args.length}`, args);
+    return (r.rowCount ?? 0) > 0;
+}
+// Full save from the admin editor: optionally renames the headword,
+// replaces definition/source fields, and replaces the citation list.
+// Returns the (possibly new) headword on success.
+export async function saveBluesWordEntry(originalHeadword, patch) {
+    const oldHead = String(originalHeadword || "").trim().toLowerCase();
+    const newHead = String(patch.headword || "").trim().toLowerCase();
+    if (!oldHead || !newHead)
+        return null;
+    const renamed = oldHead !== newHead;
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        // Make sure the old row exists; if not, bail (use ingest for new).
+        const existsR = await client.query(`SELECT 1 FROM blues_words WHERE headword = $1`, [oldHead]);
+        if (!existsR.rowCount) {
+            await client.query("ROLLBACK");
+            return null;
+        }
+        if (renamed) {
+            // Block accidental overwrite of a different existing entry.
+            const collideR = await client.query(`SELECT 1 FROM blues_words WHERE headword = $1`, [newHead]);
+            if (collideR.rowCount) {
+                await client.query("ROLLBACK");
+                throw new Error(`Headword "${newHead}" already exists`);
+            }
+            // INSERT new row with patch fields, repoint citations, drop old.
+            await client.query(`INSERT INTO blues_words (headword, definition, source_volume, source_pages, created_at, updated_at)
+         SELECT $1, $2, $3, $4, created_at, NOW()
+           FROM blues_words WHERE headword = $5`, [
+                newHead,
+                patch.definition ?? "",
+                patch.source_volume ?? null,
+                patch.source_pages && patch.source_pages.length ? patch.source_pages : null,
+                oldHead,
+            ]);
+            await client.query(`UPDATE blues_word_citations SET headword = $1 WHERE headword = $2`, [newHead, oldHead]);
+            await client.query(`DELETE FROM blues_words WHERE headword = $1`, [oldHead]);
+        }
+        else {
+            await client.query(`UPDATE blues_words
+            SET definition    = $2,
+                source_volume = $3,
+                source_pages  = $4,
+                updated_at    = NOW()
+          WHERE headword = $1`, [
+                newHead,
+                patch.definition ?? "",
+                patch.source_volume ?? null,
+                patch.source_pages && patch.source_pages.length ? patch.source_pages : null,
+            ]);
+        }
+        // Full replace of citation list
+        await client.query(`DELETE FROM blues_word_citations WHERE headword = $1`, [newHead]);
+        const cits = (patch.citations ?? []).filter(c => c && (c.artist || c.song_title || c.quote));
+        if (cits.length) {
+            const payload = cits.map((c, i) => ({
+                headword: newHead,
+                position: c.position ?? i + 1,
+                quote: c.quote ?? null,
+                artist: c.artist ?? null,
+                song_title: c.song_title ?? null,
+                year: Number.isFinite(c.year) ? c.year : null,
+            }));
+            await client.query(`INSERT INTO blues_word_citations (headword, position, quote, artist, song_title, year)
+           SELECT x.headword, x.position, x.quote, x.artist, x.song_title, x.year
+             FROM jsonb_to_recordset($1::jsonb) AS x(
+               headword text, position int, quote text, artist text, song_title text, year int
+             )`, [JSON.stringify(payload)]);
+        }
+        await client.query("COMMIT");
+        return { headword: newHead, renamed };
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
+export async function deleteBluesWord(headword) {
+    const r = await getPool().query(`DELETE FROM blues_words WHERE headword = $1`, [headword.toLowerCase()]);
+    return (r.rowCount ?? 0) > 0;
+}
 // ── Invite-only purge: nuke all per-user data for non-admin clerk_user_ids ──
 //
 // Used when SeaDisco is locked down to a single admin (or invite-only mode).
@@ -2329,7 +3054,7 @@ export async function hibernateInactiveUsers() {
     const r = await getPool().query(`UPDATE user_tokens
      SET hibernated_at = NOW()
      WHERE hibernated_at IS NULL
-       AND last_active_at < NOW() - INTERVAL '6 months'
+       AND last_active_at < NOW() - INTERVAL '90 days'
      RETURNING clerk_user_id`);
     return r.rowCount ?? 0;
 }
@@ -4174,6 +4899,58 @@ export async function getCachedRelease(discogsId, type, maxAgeSeconds) {
  *  from a user click (or any path where surfacing in the feed is
  *  appropriate). Pass `warmOnly: true` for the cache-warm job so
  *  the row stays out of the feed until a user actually opens it. */
+// ── MusicBrainz cache helpers ──────────────────────────────────────
+// (Mirror cacheRelease / getCacheEnrichmentBatch but for MB rows.)
+export async function mbCacheGet(entityType, key) {
+    try {
+        const r = await getPool().query(`SELECT data FROM musicbrainz_cache WHERE entity_type = $1 AND key = $2 LIMIT 1`, [entityType, key]);
+        return r.rows[0]?.data ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+export async function mbCacheSet(entityType, key, data) {
+    await getPool().query(`INSERT INTO musicbrainz_cache (entity_type, key, data, cached_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (entity_type, key)
+     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`, [entityType, key, JSON.stringify(data)]);
+}
+// MB Saves CRUD — per-user star/bookmark list for the MB view's
+// Saved tab. listMbSaves returns rows newest-first; filter by
+// entity_type optionally so the UI can group/segment without a
+// client-side filter pass.
+export async function listMbSaves(clerkUserId, entityType) {
+    const params = [clerkUserId];
+    let where = "clerk_user_id = $1";
+    if (entityType) {
+        params.push(entityType);
+        where += ` AND entity_type = $${params.length}`;
+    }
+    const r = await getPool().query(`SELECT id, entity_type, mbid, name, meta, saved_at
+       FROM musicbrainz_saves
+      WHERE ${where}
+      ORDER BY saved_at DESC`, params);
+    return r.rows;
+}
+export async function listMbSaveIds(clerkUserId) {
+    // Compact key list ("artist:<mbid>") for the client's "am I
+    // already saved?" lookup. The UI uses a Set so star state
+    // renders synchronously on a fresh search render.
+    const r = await getPool().query(`SELECT entity_type, mbid FROM musicbrainz_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map((row) => `${row.entity_type}:${row.mbid}`);
+}
+export async function addMbSave(clerkUserId, entityType, mbid, name, meta) {
+    const r = await getPool().query(`INSERT INTO musicbrainz_saves (clerk_user_id, entity_type, mbid, name, meta)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (clerk_user_id, entity_type, mbid) DO NOTHING
+     RETURNING id`, [clerkUserId, entityType, mbid, name, meta ? JSON.stringify(meta) : null]);
+    return (r.rowCount ?? 0) > 0;
+}
+export async function removeMbSave(clerkUserId, entityType, mbid) {
+    const r = await getPool().query(`DELETE FROM musicbrainz_saves WHERE clerk_user_id = $1 AND entity_type = $2 AND mbid = $3`, [clerkUserId, entityType, mbid]);
+    return (r.rowCount ?? 0) > 0;
+}
 export async function cacheRelease(discogsId, type, data, opts) {
     const warmOnly = !!opts?.warmOnly;
     if (warmOnly) {
@@ -4576,6 +5353,204 @@ export async function suggestTrackYtOverridesBatch(items) {
         client.release();
     }
 }
+// ── YT review queue helpers (v1: human-reviewed background matcher) ──
+export async function insertReviewCandidate(args) {
+    const r = await getPool().query(`INSERT INTO track_yt_review_queue
+       (master_id, track_position, track_title, track_artist, master_year, master_cover_url,
+        candidate_video_id, candidate_title, candidate_channel_title, candidate_channel_id,
+        candidate_duration_seconds, candidate_thumbnail_url, candidate_published_at,
+        title_score, duration_ok)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ON CONFLICT (master_id, track_position, candidate_video_id) DO NOTHING
+     RETURNING id`, [
+        Number(args.masterId), args.trackPosition, args.trackTitle, args.trackArtist ?? null,
+        args.masterYear ?? null, args.masterCoverUrl ?? null,
+        args.candidateVideoId, args.candidateTitle ?? null, args.candidateChannelTitle ?? null,
+        args.candidateChannelId ?? null, args.candidateDurationSeconds ?? null,
+        args.candidateThumbnailUrl ?? null,
+        args.candidatePublishedAt ?? null,
+        args.titleScore ?? null, args.durationOk ?? null,
+    ]);
+    return (r.rowCount ?? 0) > 0;
+}
+// Mark a (master, track) pair as searched (regardless of outcome) so
+// the next worker pass skips it. candidate_count tracks how many
+// videos auto-matched to this track from the album-level search.
+export async function logTrackSearched(masterId, trackPosition, candidateCount, source = "album") {
+    await getPool().query(`INSERT INTO track_yt_review_searched (master_id, track_position, candidate_count, source)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (master_id, track_position)
+     DO UPDATE SET last_searched_at = NOW(), candidate_count = EXCLUDED.candidate_count, source = EXCLUDED.source`, [Number(masterId), trackPosition, Math.max(0, candidateCount | 0), source]);
+}
+export async function isTrackAlreadySearched(masterId, trackPosition) {
+    const r = await getPool().query(`SELECT 1 FROM track_yt_review_searched WHERE master_id = $1 AND track_position = $2 LIMIT 1`, [Number(masterId), trackPosition]);
+    return (r.rowCount ?? 0) > 0;
+}
+// Clear searched-log rows that yielded 0 candidates so the worker
+// will retry them on its next pass. Optional master_id scopes the
+// clear to a single album.
+export async function clearEmptySearchedRows(masterId) {
+    const r = masterId == null
+        ? await getPool().query(`DELETE FROM track_yt_review_searched WHERE candidate_count = 0`)
+        : await getPool().query(`DELETE FROM track_yt_review_searched WHERE candidate_count = 0 AND master_id = $1`, [Number(masterId)]);
+    return r.rowCount ?? 0;
+}
+// Has this (master, track) ever been considered? Used by the worker to
+// skip tracks that already have a pending OR resolved (approved /
+// rejected / skipped) candidate so a single track only enqueues once.
+export async function reviewQueueHasEntry(masterId, trackPosition) {
+    const r = await getPool().query(`SELECT 1 FROM track_yt_review_queue WHERE master_id = $1 AND track_position = $2 LIMIT 1`, [Number(masterId), trackPosition]);
+    return (r.rowCount ?? 0) > 0;
+}
+export async function listReviewQueue(opts = {}) {
+    const status = opts.status || "pending";
+    const limit = Math.max(1, Math.min(200, opts.limit ?? 50));
+    const offset = Math.max(0, opts.offset ?? 0);
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM track_yt_review_queue WHERE status = $1`, [status]);
+    const r = await getPool().query(`SELECT * FROM track_yt_review_queue
+      WHERE status = $1
+      ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC,
+               title_score DESC NULLS LAST, id ASC
+      LIMIT $2 OFFSET $3`, [status, limit, offset]);
+    return { rows: r.rows, total: totalR.rows[0]?.n ?? 0 };
+}
+export async function getReviewQueueCounts() {
+    const r = await getPool().query(`SELECT status, COUNT(DISTINCT (master_id, track_position))::int AS n
+       FROM track_yt_review_queue
+      GROUP BY status`);
+    const out = { pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 };
+    for (const row of r.rows) {
+        const s = String(row.status);
+        if (s in out)
+            out[s] = Number(row.n);
+        out.total += Number(row.n);
+    }
+    return out;
+}
+export async function reviewQueueDecide(id, action, reviewer) {
+    const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "skipped";
+    const upd = await getPool().query(`UPDATE track_yt_review_queue
+        SET status = $2, reviewed_at = NOW(), reviewed_by = $3
+      WHERE id = $1 AND status = 'pending'
+    RETURNING master_id, track_position, track_title, candidate_video_id, candidate_title`, [id, status, reviewer]);
+    if ((upd.rowCount ?? 0) === 0)
+        return { ok: false };
+    const row = upd.rows[0];
+    // Approve also marks any OTHER pending candidates for the same
+    // (master, track) as 'superseded' so the queue collapses to one
+    // resolved row per track.
+    if (action === "approve") {
+        await getPool().query(`UPDATE track_yt_review_queue
+          SET status = 'superseded', reviewed_at = NOW(), reviewed_by = $3
+        WHERE master_id = $1 AND track_position = $2 AND id <> $4 AND status = 'pending'`, [Number(row.master_id), String(row.track_position), reviewer, id]);
+    }
+    return {
+        ok: true,
+        videoId: row.candidate_video_id,
+        masterId: Number(row.master_id),
+        trackPosition: String(row.track_position),
+        trackTitle: String(row.track_title || ""),
+    };
+}
+export async function reviewQueueDeleteApproval(id, reviewer) {
+    const row = (await getPool().query(`SELECT master_id, track_position, status FROM track_yt_review_queue WHERE id = $1`, [id])).rows[0];
+    if (!row || row.status !== "approved")
+        return { ok: false };
+    const masterId = Number(row.master_id);
+    const trackPosition = String(row.track_position);
+    await deleteTrackYtOverride(masterId, "master", trackPosition);
+    await getPool().query(`UPDATE track_yt_review_queue
+        SET status = 'rejected', reviewed_at = NOW(), reviewed_by = $2
+      WHERE id = $1`, [id, reviewer]);
+    return { ok: true, masterId, trackPosition };
+}
+export async function getReviewState() {
+    const r = await getPool().query(`SELECT * FROM track_yt_review_state WHERE id = 1`);
+    return r.rows[0] ?? null;
+}
+export async function updateReviewState(patch) {
+    const allowed = new Set([
+        "running", "cursor_year", "cursor_master_id", "cursor_track_pos",
+        "total_searched", "total_queued", "total_skipped", "total_errors",
+        "last_run_at", "last_error", "message",
+    ]);
+    const cols = [];
+    const vals = [];
+    for (const [k, v] of Object.entries(patch)) {
+        if (!allowed.has(k))
+            continue;
+        cols.push(k);
+        vals.push(v);
+    }
+    if (!cols.length)
+        return;
+    const setSql = cols.map((c, i) => `${c} = $${i + 1}`).join(", ");
+    await getPool().query(`UPDATE track_yt_review_state SET ${setSql} WHERE id = 1`, vals);
+}
+export async function logReviewError(masterId, query, reason) {
+    await getPool().query(`INSERT INTO track_yt_review_errors (master_id, query, reason) VALUES ($1, $2, $3)`, [masterId, query, reason.slice(0, 500)]);
+}
+export async function listReviewErrors(limit = 100) {
+    const r = await getPool().query(`SELECT id, ts, master_id, query, reason
+       FROM track_yt_review_errors
+      ORDER BY ts DESC
+      LIMIT $1`, [Math.max(1, Math.min(500, limit))]);
+    return r.rows;
+}
+export async function bumpReviewCounter(field, by = 1) {
+    await getPool().query(`UPDATE track_yt_review_state SET ${field} = ${field} + $1, last_run_at = NOW() WHERE id = 1`, [by]);
+}
+// Persisted daily-quota counters. quota_date is the UTC YYYY-MM-DD the
+// counters apply to; if today's UTC date differs, the counters reset.
+// Reads return the post-reset values so callers can gate on them.
+function _utcDateString(d = new Date()) {
+    return d.toISOString().slice(0, 10);
+}
+export async function getReviewQuotaToday() {
+    const today = _utcDateString();
+    const r = await getPool().query(`SELECT quota_date, quota_worker_searches AS w, quota_project_units AS p
+       FROM track_yt_review_state WHERE id = 1`);
+    const row = r.rows[0];
+    if (!row || row.quota_date !== today) {
+        await getPool().query(`UPDATE track_yt_review_state
+          SET quota_date = $1, quota_worker_searches = 0, quota_project_units = 0
+        WHERE id = 1`, [today]);
+        return { workerSearches: 0, projectUnits: 0 };
+    }
+    return { workerSearches: Number(row.w) || 0, projectUnits: Number(row.p) || 0 };
+}
+export async function bumpReviewQuota(workerSearches, projectUnits) {
+    const today = _utcDateString();
+    await getPool().query(`UPDATE track_yt_review_state
+        SET quota_date = $1,
+            quota_worker_searches = CASE WHEN quota_date = $1 THEN quota_worker_searches + $2 ELSE $2 END,
+            quota_project_units   = CASE WHEN quota_date = $1 THEN quota_project_units   + $3 ELSE $3 END
+      WHERE id = 1`, [today, workerSearches, projectUnits]);
+}
+// Finds the next earliest STRICT-Blues master (year ASC) past the
+// cursor. "Strict" = genres array is exactly ['Blues'] (length 1) —
+// a master tagged ['Blues','Rock'] is skipped. No-year masters are
+// also skipped for now per the v1.1 spec; revisit when the dated
+// catalog is exhausted. Returns null when no more matches exist past
+// the cursor.
+export async function getNextBluesMasterAfter(cursorYear, cursorMasterId) {
+    const r = await getPool().query(`SELECT rc.discogs_id AS master_id,
+            (rc.data->>'year')::int AS year,
+            rc.data
+       FROM release_cache rc
+      WHERE rc.type = 'master'
+        AND jsonb_typeof(rc.data->'genres') = 'array'
+        AND jsonb_array_length(rc.data->'genres') = 1
+        AND rc.data->'genres' ? 'Blues'
+        AND rc.data->>'year' ~ '^[0-9]+$'
+        AND (rc.data->>'year')::int > 0
+        AND (rc.data->>'year')::int >= COALESCE($1, 0)
+        AND ((rc.data->>'year')::int > COALESCE($1, 0)
+             OR rc.discogs_id > COALESCE($2, 0))
+      ORDER BY (rc.data->>'year')::int ASC, rc.discogs_id ASC
+      LIMIT 1`, [cursorYear, cursorMasterId]);
+    return r.rows[0] ?? null;
+}
 // Admin: delete a single override (called from the album popup or the
 // admin tab). Returns true if a row was removed.
 export async function deleteTrackYtOverride(releaseId, releaseType, trackPosition) {
@@ -4717,18 +5692,364 @@ export async function getMostContributedAlbums(limit = 48, order = "most") {
         return [];
     }
 }
+// Active-tab sampler. Returns vinyl releases ranked by how many
+// times anyone on the site has opened them in the last 90 days.
+// Same exponential-weighted reservoir pattern as Feed so the same
+// top-3 don't dominate every page — higher open counts surface
+// more often but every counted row remains reachable.
+export async function getFeedActiveAlbums(limit = 48, excludeIds) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const excludeIdsArr = exclude.map(e => Number(e.id));
+        const excludeTypeArr = exclude.map(e => String(e.type));
+        const params = [cap];
+        let excludeClause = "";
+        if (exclude.length) {
+            params.push(excludeIdsArr);
+            const idIdx = params.length;
+            params.push(excludeTypeArr);
+            const tyIdx = params.length;
+            excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+        }
+        const sql = `
+      WITH counts AS (
+        SELECT urv.discogs_id, urv.entity_type, COUNT(*)::int AS n
+          FROM user_recent_views urv
+         WHERE urv.opened_at >= NOW() - INTERVAL '90 days'
+         GROUP BY urv.discogs_id, urv.entity_type
+      )
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM counts c
+        JOIN release_cache rc
+          ON rc.discogs_id = c.discogs_id
+         AND rc.type       = c.entity_type
+       WHERE rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         ${excludeClause}
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+       LIMIT $1`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch (e) {
+        console.error("[getFeedActiveAlbums]", e?.message ?? e);
+        return [];
+    }
+}
+// Played-tab sampler. Like Active but driven by user_play_events
+// (source='yt') instead of opens. Rewards vinyl whose YouTube
+// playback gets triggered most often — a different signal from
+// "clicked on" since plenty of cards get opened without anyone
+// actually listening.
+export async function getFeedPlayedAlbums(limit = 48, excludeIds) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const excludeIdsArr = exclude.map(e => Number(e.id));
+        const excludeTypeArr = exclude.map(e => String(e.type));
+        const params = [cap];
+        let excludeClause = "";
+        if (exclude.length) {
+            params.push(excludeIdsArr);
+            const idIdx = params.length;
+            params.push(excludeTypeArr);
+            const tyIdx = params.length;
+            excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+        }
+        const sql = `
+      WITH counts AS (
+        SELECT upe.release_id AS discogs_id,
+               COALESCE(upe.release_type, 'release') AS entity_type,
+               COUNT(*)::int AS n
+          FROM user_play_events upe
+         WHERE upe.source = 'yt'
+           AND upe.release_id IS NOT NULL
+           AND upe.created_at >= NOW() - INTERVAL '90 days'
+         GROUP BY upe.release_id, COALESCE(upe.release_type, 'release')
+      )
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM counts c
+        JOIN release_cache rc
+          ON rc.discogs_id = c.discogs_id
+         AND rc.type       = c.entity_type
+       WHERE rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         ${excludeClause}
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+       LIMIT $1`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch (e) {
+        console.error("[getFeedPlayedAlbums]", e?.message ?? e);
+        return [];
+    }
+}
+// Dig-tab sampler. Returns vinyl releases that NO ONE on the site
+// has opened yet — i.e. zero rows in user_recent_views for the
+// (discogs_id, entity_type) pair. Pure long-tail discovery: by
+// definition these cards have never surfaced in anyone's Recent.
+// Same TABLESAMPLE strategy as Feed so the anti-join doesn't have
+// to scan the entire release_cache.
+export async function getFeedDigAlbums(limit = 48, excludeIds) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const excludeIdsArr = exclude.map(e => Number(e.id));
+        const excludeTypeArr = exclude.map(e => String(e.type));
+        const params = [cap];
+        let excludeClause = "";
+        if (exclude.length) {
+            params.push(excludeIdsArr);
+            const idIdx = params.length;
+            params.push(excludeTypeArr);
+            const tyIdx = params.length;
+            excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+        }
+        const sql = `
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM release_cache rc TABLESAMPLE SYSTEM (10)
+       WHERE rc.type IN ('master','release')
+         AND rc.seen_at IS NOT NULL
+         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+         AND NOT EXISTS (
+           SELECT 1
+             FROM user_recent_views urv
+            WHERE urv.discogs_id  = rc.discogs_id
+              AND urv.entity_type = rc.type
+         )
+         ${excludeClause}
+       ORDER BY RANDOM()
+       LIMIT $1`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch (e) {
+        console.error("[getFeedDigAlbums]", e?.message ?? e);
+        return [];
+    }
+}
+// Rare-tab sampler. Returns releases that satisfy ALL three:
+//   - have <= 3   (basically nobody owns it)
+//   - want >= 20  (but lots of people want it)
+//   - year falls inside the "first two decades" window of at least
+//     one of the release's genres. Windows are hardcoded below from
+//     conventional genre-origin dates.
+//
+// When `genre` is supplied, the query restricts strictly to that
+// genre and applies only its year window — so a "Blues" filter only
+// returns Blues records from 1900-1925, with no other genres mixed
+// in.
+//
+// ORDER BY is a want-weighted reservoir sample, not pure random:
+// `-LN(R) / GREATEST(LN(1+want), 1)`. Higher-want rows tend to
+// surface first while still leaving every match reachable.
+const RARE_GENRE_WINDOWS = {
+    "Blues": [1900, 1925],
+    "Folk, World, & Country": [1900, 1925],
+    "Jazz": [1917, 1937],
+    "Classical": [1900, 1920],
+    "Stage & Screen": [1900, 1925],
+    "Latin": [1930, 1955],
+    "Rock": [1955, 1975],
+    "Pop": [1950, 1970],
+    "Reggae": [1960, 1980],
+    "Funk / Soul": [1960, 1980],
+    "Brass & Military": [1900, 1925],
+    "Electronic": [1970, 1990],
+    "Hip Hop": [1979, 1999],
+};
+export async function getFeedRareAlbums(limit = 48, excludeIds, genre) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const excludeIdsArr = exclude.map(e => Number(e.id));
+        const excludeTypeArr = exclude.map(e => String(e.type));
+        const params = [cap];
+        let excludeClause = "";
+        if (exclude.length) {
+            params.push(excludeIdsArr);
+            const idIdx = params.length;
+            params.push(excludeTypeArr);
+            const tyIdx = params.length;
+            excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+        }
+        // Strict-genre path: when the caller picks a specific genre, the
+        // query is much simpler — filter strictly on that genre + its
+        // single year window, no per-row EXISTS over multi-genre joins.
+        const strictWindow = genre ? RARE_GENRE_WINDOWS[genre] : null;
+        if (genre && strictWindow) {
+            params.push(genre);
+            const gIdx = params.length;
+            const sql = `
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+          FROM release_cache rc
+         WHERE rc.type IN ('master','release')
+           AND rc.seen_at IS NOT NULL
+           AND rc.data->'genres' ? $${gIdx}
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+           AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN ${strictWindow[0]} AND ${strictWindow[1]}
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) < 10
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) > 20
+           AND COALESCE(NULLIF(rc.data->>'num_for_sale','')::int, 0) = 0
+           ${excludeClause}
+         ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
+           LN(1 + COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0)),
+           1
+         )
+         LIMIT $1`;
+            const r = await getPool().query(sql, params);
+            return r.rows;
+        }
+        // GIN index on (data->'genres') lets Postgres use ?| to narrow
+        // candidates BEFORE we touch community.have / community.want /
+        // year. The year_int cap is a coarse pre-filter (1900-1999 spans
+        // every per-genre window), letting the EXISTS check work on a
+        // tiny set.
+        const sql = `
+      WITH genre_window(genre, from_year, to_year) AS (
+        VALUES
+          ('Blues',                   1900, 1925),
+          ('Folk, World, & Country',  1900, 1925),
+          ('Jazz',                    1917, 1937),
+          ('Classical',               1900, 1920),
+          ('Stage & Screen',          1900, 1925),
+          ('Latin',                   1930, 1955),
+          ('Rock',                    1955, 1975),
+          ('Pop',                     1950, 1970),
+          ('Reggae',                  1960, 1980),
+          ('Funk / Soul',             1960, 1980),
+          ('Brass & Military',        1900, 1925),
+          ('Electronic',              1970, 1990),
+          ('Hip Hop',                 1979, 1999)
+      ),
+      candidates AS (
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
+               COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year_int,
+               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int
+          FROM release_cache rc
+         WHERE rc.type IN ('master','release')
+           AND rc.seen_at IS NOT NULL
+           AND rc.data->'genres' ?| ARRAY[
+               'Blues','Folk, World, & Country','Jazz','Classical',
+               'Stage & Screen','Latin','Rock','Pop','Reggae',
+               'Funk / Soul','Brass & Military','Electronic','Hip Hop'
+             ]
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+           AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) BETWEEN 1900 AND 1999
+           AND COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) < 10
+           AND COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) > 20
+           AND COALESCE(NULLIF(rc.data->>'num_for_sale','')::int, 0) = 0
+           ${excludeClause}
+         LIMIT 5000
+      )
+      SELECT c.id, c.type, c.data, c.cached_at
+        FROM candidates c
+       WHERE EXISTS (
+         SELECT 1
+           FROM jsonb_array_elements_text(c.data->'genres') AS g(name)
+           JOIN genre_window gw ON gw.genre = g.name
+          WHERE c.year_int BETWEEN gw.from_year AND gw.to_year
+       )
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.want_int), 1)
+       LIMIT $1`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch (e) {
+        console.error("[getFeedRareAlbums]", e?.message ?? e);
+        return [];
+    }
+}
+// Per-user taste profile, fetched-or-computed. Returns the cached row
+// when it's <24h old; otherwise re-aggregates from user_collection
+// (top 10 genres + top 20 styles by collection count) and upserts.
+// Anons / users with empty profiles get null — callers should treat
+// that as "no bias."
+//
+// Each map is normalized so the sum is 1.0 (or 0 when the user has
+// no collection). The Feed sampler reads these weights directly so
+// stronger preferences get a bigger boost than weak ones.
+export async function getOrComputeUserTasteProfile(clerkUserId) {
+    if (!clerkUserId)
+        return null;
+    const pool = getPool();
+    try {
+        const existing = await pool.query(`SELECT top_genres, top_styles, genre_scores, style_scores, computed_at
+         FROM user_taste_profile
+        WHERE clerk_user_id = $1`, [clerkUserId]);
+        const row = existing.rows[0];
+        const fresh = row && (Date.now() - new Date(row.computed_at).getTime()) < 24 * 3600 * 1000;
+        const hasScores = row && row.genre_scores && Object.keys(row.genre_scores).length > 0;
+        if (fresh && hasScores) {
+            return {
+                topGenres: row.top_genres || [],
+                topStyles: row.top_styles || [],
+                genreScores: row.genre_scores || {},
+                styleScores: row.style_scores || {},
+            };
+        }
+        // Recompute from collection. Both queries use jsonb_array_elements_text
+        // over data->'genres' / 'styles' — the same shape used elsewhere
+        // (see getCollectionFacets in db.ts).
+        const g = await pool.query(`SELECT g, COUNT(*)::int AS n
+         FROM user_collection, jsonb_array_elements_text(data->'genres') AS g
+        WHERE clerk_user_id = $1
+        GROUP BY g
+        ORDER BY n DESC
+        LIMIT 10`, [clerkUserId]);
+        const s = await pool.query(`SELECT s, COUNT(*)::int AS n
+         FROM user_collection, jsonb_array_elements_text(data->'styles') AS s
+        WHERE clerk_user_id = $1
+        GROUP BY s
+        ORDER BY n DESC
+        LIMIT 20`, [clerkUserId]);
+        const gRows = g.rows.filter(r => r.g);
+        const sRows = s.rows.filter(r => r.s);
+        const gTotal = gRows.reduce((acc, r) => acc + Number(r.n || 0), 0);
+        const sTotal = sRows.reduce((acc, r) => acc + Number(r.n || 0), 0);
+        const topGenres = gRows.map(r => String(r.g));
+        const topStyles = sRows.map(r => String(r.s));
+        const genreScores = {};
+        const styleScores = {};
+        if (gTotal > 0)
+            for (const r of gRows)
+                genreScores[String(r.g)] = Number(r.n) / gTotal;
+        if (sTotal > 0)
+            for (const r of sRows)
+                styleScores[String(r.s)] = Number(r.n) / sTotal;
+        await pool.query(`INSERT INTO user_taste_profile (clerk_user_id, top_genres, top_styles, genre_scores, style_scores, computed_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, NOW())
+       ON CONFLICT (clerk_user_id) DO UPDATE
+         SET top_genres   = EXCLUDED.top_genres,
+             top_styles   = EXCLUDED.top_styles,
+             genre_scores = EXCLUDED.genre_scores,
+             style_scores = EXCLUDED.style_scores,
+             computed_at  = NOW()`, [clerkUserId, topGenres, topStyles, JSON.stringify(genreScores), JSON.stringify(styleScores)]);
+        return { topGenres, topStyles, genreScores, styleScores };
+    }
+    catch (e) {
+        console.error("[getOrComputeUserTasteProfile]", e?.message ?? e);
+        return null;
+    }
+}
 // Random sample of cached albums for the public Feed strip — anon
 // visitors see this as their home view (signed-in users get it as the
 // "Feed" tab in the Recent/Suggestions/Submitted/Feed strip). All
 // rows already paid for via the release_cache; no upstream Discogs
 // hit. Defaults to masters (richer card data, broader scope) but
 // callers can opt for either via `type`.
-export async function getFeedRandomAlbums(limit = 48, type = "any", excludeIds) {
+//
+// `tasteProfile` is an optional soft bias: when supplied with
+// genre/style scores (normalized to sum 1 per map), each card's score
+// is multiplied by `1 + 1.0×(sum of matched genre weights) +
+// 0.5×(sum of matched style weights)` — so a card matching your #1
+// genre gets a bigger boost than one matching your #10. Anons or
+// users with empty profiles pass null and the sampler runs unbiased.
+export async function getFeedRandomAlbums(limit = 48, type = "any", excludeIds, tasteProfile) {
     try {
         const cap = Math.max(1, Math.min(200, limit));
-        // Exclusion filter — used by Load More so already-shown rows
-        // don't repeat in the next page. Encoded as parallel arrays of
-        // (discogs_id, type) so we can NOT (id, type) IN (...) match.
         const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
         const excludeIdsArr = exclude.map(e => Number(e.id));
         const excludeTypeArr = exclude.map(e => String(e.type));
@@ -4736,40 +6057,230 @@ export async function getFeedRandomAlbums(limit = 48, type = "any", excludeIds) 
         let where = "";
         if (type !== "any") {
             params.push(type);
-            where += `WHERE type = $${params.length} `;
+            where += `WHERE rc.type = $${params.length} `;
         }
         else {
-            // "any" means "any album", NOT every row in release_cache. The
-            // table also stores master-versions (pressing-list payloads) and
-            // artist (artist profile cache) which are infrastructure caches,
-            // not displayable albums — surfacing them as feed cards produces
-            // empty placeholders like "master-versions 645422 / NO IMAGE".
-            // Restrict to the two real album types.
-            where += `WHERE type IN ('master','release') `;
+            where += `WHERE rc.type IN ('master','release') `;
         }
-        // Hide pre-warmed-but-unviewed rows. The overnight cache-warm job
-        // pulls thousands of suggested albums into release_cache; without
-        // this filter they'd flood the public feed even though no human
-        // has interacted with them. seen_at stamps on first user click,
-        // so the feed only surfaces albums someone actually engaged with.
-        where += "AND seen_at IS NOT NULL ";
+        where += "AND rc.seen_at IS NOT NULL ";
         if (exclude.length) {
             params.push(excludeIdsArr);
             const idIdx = params.length;
             params.push(excludeTypeArr);
             const tyIdx = params.length;
-            where += where ? "AND " : "WHERE ";
-            where += `NOT (discogs_id = ANY($${idIdx}::int[]) AND type = ANY($${tyIdx}::text[])) `;
+            where += `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[])) `;
         }
-        const sql = `SELECT discogs_id AS id, type, data, cached_at
-                   FROM release_cache
-                   ${where}
-                  ORDER BY RANDOM() LIMIT $1`;
+        // Soft taste bias — when the caller passed a profile with score
+        // maps, push them as JSONB params. The scored CTE multiplies each
+        // card's score by 1 + 1.0×(sum of matched genre weights) +
+        // 0.5×(sum of matched style weights) so stronger preferences get
+        // a bigger boost. Empty objects disable the bias without changing
+        // the query plan.
+        const gScores = tasteProfile?.genreScores ?? {};
+        const sScores = tasteProfile?.styleScores ?? {};
+        params.push(JSON.stringify(gScores));
+        const gjIdx = params.length;
+        params.push(JSON.stringify(sScores));
+        const sjIdx = params.length;
+        // ── Weighted-random feed sample ───────────────────────────────
+        // Each candidate gets a composite score from four normalized
+        // signals; the final ORDER BY is an exponential-weighted reservoir
+        // sample (`-LN(R) / score`) so high-score rows surface more often
+        // without being deterministic. Every row remains reachable.
+        //
+        //   yt_score       — Discogs videos[] count / tracklist length,
+        //                    clamped to [0,1].
+        //   scarcity_score — log-scaled community.want / GREATEST(have, 1).
+        //                    High when lots of collectors want the record
+        //                    but few own it ("rare and desired"). Replaces
+        //                    raw want_score because raw want is dominated
+        //                    by very popular (and very COMMON) releases.
+        //   sale_score     — log-scaled num_for_sale from price_cache.
+        //                    Joined only for release rows. Small weight —
+        //                    Feed isn't a marketplace surface.
+        //
+        // Weights 0.35 yt / 0.55 scarcity / 0.10 sale, multiplied by a
+        // 1.5× taste bonus when the card's genres/styles overlap the
+        // user's profile (no overlap or empty profile = ×1.0).
+        //
+        // Perf: scoring the entire release_cache + reservoir-sorting it
+        // hits statement_timeout once the cache grows past a few hundred
+        // thousand rows. TABLESAMPLE SYSTEM(5) cuts the candidate pool to
+        // ~5% of pages BEFORE the JSON extractions and LNs run, so the
+        // scoring/sort phase only handles a small subset. Each request
+        // re-samples (no `REPEATABLE`), so callers still see fresh cards.
+        // The cost is that any single response only covers a slice of the
+        // cache — Load More re-samples to fill in more.
+        const sql = `
+      WITH raw AS (
+        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
+               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int,
+               COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_int,
+               COALESCE(pc.num_for_sale, 0) AS sale_int,
+               rc.data->'tracklist' AS tl,
+               rc.data->'videos'    AS vd,
+               rc.data->'genres'    AS gs,
+               rc.data->'styles'    AS sts
+          FROM release_cache rc TABLESAMPLE SYSTEM (5)
+          LEFT JOIN price_cache pc
+            ON pc.discogs_release_id = rc.discogs_id
+           AND rc.type = 'release'
+          ${where}
+           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+      ),
+      scored AS (
+        SELECT id, type, data, cached_at,
+               CASE
+                 WHEN jsonb_typeof(tl) = 'array' AND jsonb_array_length(tl) > 0
+                 THEN LEAST(
+                   1.0,
+                   COALESCE(jsonb_array_length(NULLIF(vd,'null'::jsonb)), 0)::float
+                     / NULLIF(jsonb_array_length(tl), 0)::float
+                 )
+                 ELSE 0
+               END AS yt_score,
+               LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
+               LN(1 + sale_int) AS sale_score,
+               CASE
+                 WHEN $${gjIdx}::jsonb = '{}'::jsonb
+                  AND $${sjIdx}::jsonb = '{}'::jsonb
+                 THEN 1.0
+                 ELSE 1.0
+                      + 1.0 * COALESCE((
+                          SELECT SUM(($${gjIdx}::jsonb->>gname.value)::float)
+                            FROM jsonb_array_elements_text(
+                              CASE WHEN jsonb_typeof(gs) = 'array' THEN gs ELSE '[]'::jsonb END
+                            ) AS gname(value)
+                           WHERE $${gjIdx}::jsonb ? gname.value
+                        ), 0)
+                      + 0.5 * COALESCE((
+                          SELECT SUM(($${sjIdx}::jsonb->>sname.value)::float)
+                            FROM jsonb_array_elements_text(
+                              CASE WHEN jsonb_typeof(sts) = 'array' THEN sts ELSE '[]'::jsonb END
+                            ) AS sname(value)
+                           WHERE $${sjIdx}::jsonb ? sname.value
+                        ), 0)
+               END AS taste_mult
+          FROM raw
+      )
+      SELECT id, type, data, cached_at
+        FROM scored
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(
+         taste_mult * (
+           0.35 * yt_score
+         + 0.55 * (scarcity_score / 3.0)
+         + 0.10 * (sale_score / 5.0)
+         ),
+         0.05
+       )
+       LIMIT $1`;
         const r = await getPool().query(sql, params);
         return r.rows;
     }
-    catch {
+    catch (e) {
+        console.error("[getFeedRandomAlbums]", e?.message ?? e);
         return [];
+    }
+}
+const _FEED_POOL_TARGET = 500;
+// Read the cached pool for `mode` and return up to `limit` cards.
+// excludeIds suppresses cards the client already showed. The JOIN to
+// release_cache hydrates the snapshot the endpoint needs.
+export async function getFeedPoolItems(mode, limit = 48, excludeIds) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const params = [mode, cap];
+        let excludeClause = "";
+        if (exclude.length) {
+            params.push(exclude.map(e => Number(e.id)));
+            const idIdx = params.length;
+            params.push(exclude.map(e => String(e.type)));
+            const tyIdx = params.length;
+            excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+        }
+        const sql = `
+      SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
+        FROM feed_cache_pool fcp
+        JOIN release_cache rc
+          ON rc.discogs_id = fcp.discogs_id
+         AND rc.type       = fcp.entity_type
+       WHERE fcp.mode = $1
+         AND rc.seen_at IS NOT NULL
+         ${excludeClause}
+       ORDER BY RANDOM()
+       LIMIT $2`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch (e) {
+        console.error("[getFeedPoolItems]", e?.message ?? e);
+        return [];
+    }
+}
+// Returns the refresh age of each pool. Used by the scheduler so it
+// can decide whether a particular mode is stale.
+export async function getFeedPoolFreshness() {
+    const out = {};
+    try {
+        const r = await getPool().query(`SELECT mode, COUNT(*)::int AS n, MAX(refreshed_at) AS refreshed_at
+         FROM feed_cache_pool GROUP BY mode`);
+        for (const row of r.rows) {
+            out[row.mode] = { count: Number(row.n) || 0, refreshedAt: row.refreshed_at ?? null };
+        }
+    }
+    catch (e) {
+        console.error("[getFeedPoolFreshness]", e?.message ?? e);
+    }
+    return out;
+}
+// Run the slow per-mode query at POOL_TARGET size and replace the
+// stored pool for that mode. Called by the scheduler every ~2h and
+// also on-demand from the admin button. Wraps in a transaction so
+// readers never see a half-populated mode.
+export async function refreshFeedPool(mode) {
+    let rows = [];
+    switch (mode) {
+        case "feed":
+            rows = await getFeedRandomAlbums(_FEED_POOL_TARGET, "any", []);
+            break;
+        case "rare":
+            rows = await getFeedRareAlbums(_FEED_POOL_TARGET, [], null);
+            break;
+        case "dig":
+            rows = await getFeedDigAlbums(_FEED_POOL_TARGET, []);
+            break;
+        case "active":
+            rows = await getFeedActiveAlbums(_FEED_POOL_TARGET, []);
+            break;
+        case "played":
+            rows = await getFeedPlayedAlbums(_FEED_POOL_TARGET, []);
+            break;
+    }
+    const ids = rows.map(r => Number(r.id)).filter(Number.isFinite);
+    const types = rows.map(r => String(r.type));
+    if (!ids.length)
+        return { inserted: 0 };
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(`DELETE FROM feed_cache_pool WHERE mode = $1`, [mode]);
+        await client.query(`INSERT INTO feed_cache_pool (mode, discogs_id, entity_type, score, refreshed_at)
+         SELECT $1, x.id, x.ty, 1.0, NOW()
+           FROM unnest($2::int[], $3::text[]) AS x(id, ty)
+       ON CONFLICT (mode, discogs_id, entity_type) DO UPDATE
+         SET score = EXCLUDED.score, refreshed_at = NOW()`, [mode, ids, types]);
+        await client.query("COMMIT");
+        console.log(`[refreshFeedPool] ${mode}: ${ids.length} rows`);
+        return { inserted: ids.length };
+    }
+    catch (e) {
+        await client.query("ROLLBACK");
+        console.error(`[refreshFeedPool] ${mode}:`, e?.message ?? e);
+        return { inserted: 0 };
+    }
+    finally {
+        client.release();
     }
 }
 // Batched lookup of track_youtube_overrides for a list of
@@ -4825,7 +6336,41 @@ export async function getCacheEnrichmentBatch(pairs) {
         WHERE (discogs_id, type) IN (
           SELECT * FROM unnest($1::int[], $2::text[])
         )`, [ids, types]);
-        return r.rows;
+        const hits = r.rows;
+        // Cross-type fallback: for any (id, 'master') pair we missed on,
+        // try to find ANY cached release whose data->>'master_id' matches
+        // the master id, and surface its tracklist/images under the master
+        // key. Better than returning empty — wide-card mode shows real
+        // track titles instead of a sparse card — at the cost of the
+        // tracks being from one specific pressing rather than the
+        // canonical master. Released a release_cache row tagged as the
+        // requested master so the client cache-key logic still works.
+        const hitKeys = new Set(hits.map(h => `${h.type}:${h.id}`));
+        const missedMasterIds = capped
+            .filter(p => p.type === "master" && !hitKeys.has(`master:${p.id}`))
+            .map(p => Number(p.id));
+        if (missedMasterIds.length) {
+            try {
+                // DISTINCT ON picks one representative release per master
+                // (lowest discogs_id = oldest cached row, deterministic).
+                const fb = await getPool().query(`SELECT DISTINCT ON ((data->>'master_id')::bigint)
+                  (data->>'master_id')::bigint AS master_id,
+                  data
+             FROM release_cache
+            WHERE type = 'release'
+              AND (data->>'master_id') IS NOT NULL
+              AND (data->>'master_id')::bigint = ANY($1::bigint[])
+            ORDER BY (data->>'master_id')::bigint, discogs_id ASC`, [missedMasterIds]);
+                for (const row of fb.rows) {
+                    const mid = Number(row.master_id);
+                    if (!Number.isFinite(mid) || mid <= 0)
+                        continue;
+                    hits.push({ id: mid, type: "master", data: row.data });
+                }
+            }
+            catch { /* fallback is best-effort */ }
+        }
+        return hits;
     }
     catch {
         return [];
@@ -5313,9 +6858,9 @@ export async function getUserBehaviorStats() {
       UNION SELECT clerk_user_id FROM user_play_events
       UNION SELECT clerk_user_id FROM user_search_events
     ), all_users AS (
-      SELECT clerk_user_id, discogs_username, last_active_at FROM user_tokens
+      SELECT clerk_user_id, discogs_username, last_active_at, created_at FROM user_tokens
       UNION
-      SELECT DISTINCT a.clerk_user_id, NULL::text, NULL::timestamptz
+      SELECT DISTINCT a.clerk_user_id, NULL::text, NULL::timestamptz, NULL::timestamptz
         FROM activity_users a
        WHERE NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.clerk_user_id = a.clerk_user_id)
     )
@@ -5330,7 +6875,8 @@ export async function getUserBehaviorStats() {
            COALESCE(pe.n_30d, 0)   AS player_plays_30d,
            COALESCE(se.n_total, 0) AS searches_total,
            COALESCE(se.n_30d, 0)   AS searches_30d,
-           u.last_active_at        AS last_active
+           u.last_active_at        AS last_active,
+           u.created_at            AS signed_up_at
       FROM all_users u
       LEFT JOIN (SELECT clerk_user_id, COUNT(*)::int AS n FROM user_favorites GROUP BY clerk_user_id) f
              ON f.clerk_user_id = u.clerk_user_id
@@ -5909,6 +7455,16 @@ export async function listLyrics(opts) {
     if (opts.noArtistOnly) {
         where.push(`(artist IS NULL OR LENGTH(TRIM(artist)) = 0)`);
     }
+    if (opts.pinnedOnly) {
+        where.push(`(discogs_release_id IS NOT NULL OR discogs_master_id IS NOT NULL)`);
+    }
+    if (opts.titleHasPunct) {
+        where.push(`(page_title LIKE '%-%' OR page_title LIKE '%(%')`);
+    }
+    if (opts.favoritesOnly && opts.favoriteUserId) {
+        params.push(opts.favoriteUserId);
+        where.push(`id IN (SELECT lyric_id FROM blues_lyric_favorites WHERE clerk_user_id = $${params.length})`);
+    }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
     const offset = Math.max(0, opts.offset ?? 0);
@@ -5959,6 +7515,95 @@ export async function getLyricCount() {
 // Powers the admin Discovery sub-view that combines blues_artists,
 // blues_lyrics, and the JSONB releases array into a single per-artist
 // page. Matching of lyrics → artist is case-insensitive on name.
+// Delete blues_artists rows added in the last 24 hours — cleanup for
+// the (now-removed) strict pad button which had no year filter and
+// pulled in modern artists. User confirmed they haven't manually
+// added an artist in over a week, so date_added alone is a precise
+// signal for "pad-inserted" rows. Returns { removed, names } for UI.
+export async function pruneBluesArtistsRecent24h() {
+    const r = await getPool().query(`
+    DELETE FROM blues_artists
+     WHERE date_added >= NOW() - INTERVAL '24 hours'
+    RETURNING name
+  `);
+    return {
+        removed: r.rowCount ?? 0,
+        names: (r.rows ?? []).slice(0, 50).map((row) => row.name),
+    };
+}
+// Bulk-insert blues_artists for every artist who appears as a primary
+// credit on at least one strictly-Blues master in release_cache whose
+// EARLIEST such master is in or before 1950. Tags inserts with
+// enrichment_status.source = "strict_pad_pre1950" so future cleanup
+// can target them precisely. Existing rows have their seed_strict_count
+// refreshed but their other fields are untouched.
+export async function padBluesArtistsStrictPre1950() {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(`
+      CREATE TEMP TABLE _pad_pre1950 ON COMMIT DROP AS
+      SELECT (a->>'id')::int AS aid,
+             MIN(a->>'name') AS name,
+             COUNT(*)::int   AS strict_count,
+             MIN((rc.data->>'year')::int) AS first_year
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements(
+          COALESCE(rc.data->'artists', '[]'::jsonb)
+        ) AS a
+       WHERE rc.type = 'master'
+         AND jsonb_typeof(rc.data->'genres') = 'array'
+         AND jsonb_array_length(rc.data->'genres') = 1
+         AND rc.data->'genres' ? 'Blues'
+         AND (a->>'id') ~ '^[0-9]+$'
+         AND (a->>'id')::int > 0
+         AND (a->>'id')::int NOT IN (194, 355)
+         AND rc.data->>'year' ~ '^[0-9]+$'
+         AND (rc.data->>'year')::int > 0
+       GROUP BY (a->>'id')::int
+      HAVING MIN((rc.data->>'year')::int) <= 1950
+    `);
+        const scannedR = await client.query(`SELECT COUNT(*)::int AS n FROM _pad_pre1950`);
+        const scanned = scannedR.rows[0]?.n ?? 0;
+        if (!scanned) {
+            await client.query("COMMIT");
+            return { scanned: 0, inserted: 0, refreshed: 0 };
+        }
+        const refreshedR = await client.query(`
+      UPDATE blues_artists ba
+         SET seed_strict_count = c.strict_count,
+             updated_at        = NOW()
+        FROM _pad_pre1950 c
+       WHERE ba.discogs_id = c.aid
+    `);
+        const refreshed = refreshedR.rowCount ?? 0;
+        const insertedR = await client.query(`
+      INSERT INTO blues_artists (discogs_id, name, seed_strict_count, enrichment_status)
+      SELECT c.aid,
+             LEFT(COALESCE(NULLIF(TRIM(c.name), ''), 'Artist ' || c.aid), 200),
+             c.strict_count,
+             '{"source":"strict_pad_pre1950"}'::jsonb
+        FROM _pad_pre1950 c
+       WHERE NOT EXISTS (SELECT 1 FROM blues_artists ba WHERE ba.discogs_id = c.aid)
+      ON CONFLICT (discogs_id) DO UPDATE
+        SET seed_strict_count = EXCLUDED.seed_strict_count,
+            updated_at        = NOW()
+    `);
+        const inserted = insertedR.rowCount ?? 0;
+        await client.query("COMMIT");
+        return { scanned, inserted, refreshed };
+    }
+    catch (err) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw err;
+    }
+    finally {
+        client.release();
+    }
+}
 // Walks distinct lyrics.artist values, finds those that don't already
 // exist as a blues_artists.name (case-insensitive), and inserts each
 // as a minimal new row (name only). Returns { added, total, existing }
@@ -6052,14 +7697,36 @@ const _BLUES_ARCHIVE_SORT_COLS = {
     // Has-photo: 1 when photo_url is set + non-empty, 0 otherwise.
     // Sorting DESC puts rows WITH a photo first (find-by-eye),
     // ASC puts MISSING rows first (curation queue).
+    // Count of cached masters in release_cache where genres=['Blues']
+    // exactly AND this artist is a primary credit. Populated by the
+    // pre-1950 strict pad button; DESC surfaces artists with the most
+    // strictly-Blues releases first.
+    strict_count: "a.seed_strict_count",
     has_photo: "CASE WHEN COALESCE(a.photo_url, '') <> '' THEN 1 ELSE 0 END",
+    // Has-wiki: same idea for wikipedia_suffix. ASC surfaces rows still
+    // missing a Wikipedia link so the curator can knock them out.
+    has_wiki: "CASE WHEN COALESCE(a.wikipedia_suffix, '') <> '' THEN 1 ELSE 0 END",
 };
 export async function listBluesArchive(opts = {}) {
     const params = [];
     const where = [];
     if (opts.search) {
-        params.push(`%${opts.search}%`);
-        where.push(`(a.name ILIKE $${params.length})`);
+        // Pure-digit input matches Discogs ID exactly. Free-text matches
+        // BOTH the name (fast index on lower(name)) and the notes column
+        // (linear scan, but ~1k row table — fine). A 4-digit input also
+        // ILIKE's name + notes so a numeric fragment like "1923" finds
+        // "...died 1923..." in a bio.
+        const raw = opts.search.trim();
+        params.push(`%${raw}%`);
+        const likePh = `$${params.length}`;
+        const nameOrNotes = `(a.name ILIKE ${likePh} OR a.notes ILIKE ${likePh})`;
+        if (/^\d+$/.test(raw)) {
+            params.push(parseInt(raw, 10));
+            where.push(`(${nameOrNotes} OR a.discogs_id = $${params.length})`);
+        }
+        else {
+            where.push(nameOrNotes);
+        }
     }
     // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
     // combo. Built as a correlated EXISTS so the index on
@@ -6080,6 +7747,18 @@ export async function listBluesArchive(opts = {}) {
             where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
         else if (opts.category === "empty")
             where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+    }
+    if (opts.noWiki) {
+        where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
+    }
+    if (opts.noDiscogsId) {
+        where.push(`a.discogs_id IS NULL`);
+    }
+    if (opts.hasStrict) {
+        where.push(`a.seed_strict_count > 0`);
+    }
+    if (opts.noStrict) {
+        where.push(`COALESCE(a.seed_strict_count, 0) = 0`);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
@@ -6102,6 +7781,8 @@ export async function listBluesArchive(opts = {}) {
             a.death_date,
             a.photo_url,
             a.discogs_id,
+            a.wikipedia_suffix,
+            COALESCE(a.seed_strict_count, 0) AS seed_strict_count,
             COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
             -- lyrics_count: prefer FK count (canonical) but fall back
             -- to the legacy name-match count for any unmigrated rows
@@ -6241,6 +7922,21 @@ export async function getBluesArchiveArtist(id) {
          OR (artist_id IS NULL AND LOWER(TRIM(artist)) = LOWER($2))
       GROUP BY 1
       ORDER BY n DESC, tuning ASC`, [id, a.name]);
+    // Static tunings grid (from src/data/tunings.csv) for this artist.
+    // Match by case-insensitive trimmed name. Annotate each CSV row with
+    // the matching blues_lyrics row id (if any) so the popup can flag
+    // "this CSV title isn't in our lyrics table yet" — useful curation
+    // signal: either the lyric wasn't scraped, or it's filed under a
+    // slightly different page_title that needs reconciling.
+    const gr = await getPool().query(`SELECT g.id, g.title, g.position, g.pitch, g.notes,
+            (SELECT l.id FROM blues_lyrics l
+              WHERE (l.artist_id = $1
+                     OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER($2)))
+                AND LOWER(TRIM(l.page_title)) = LOWER(TRIM(g.title))
+              LIMIT 1) AS lyric_id
+       FROM blues_tunings_grid g
+      WHERE LOWER(TRIM(g.artist)) = LOWER(TRIM($2))
+      ORDER BY g.title ASC, g.id ASC`, [id, a.name]);
     // Sort the JSONB releases array oldest→newest (NULL years last).
     const releases = Array.isArray(a.discogs_releases) ? a.discogs_releases.slice() : [];
     releases.sort((x, y) => {
@@ -6264,7 +7960,7 @@ export async function getBluesArchiveArtist(id) {
          ON b.id = CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END
       WHERE l.lo_id = $1 OR l.hi_id = $1
       ORDER BY l.kind ASC, lower(b.name) ASC`, [id]);
-    return { ...a, lyrics: lr.rows, tunings: tr.rows, releases, links: lk.rows };
+    return { ...a, lyrics: lr.rows, tunings: tr.rows, gridTunings: gr.rows, releases, links: lk.rows };
 }
 const _CACHED_BLUES_SORT = {
     year: "bc.release_year",
@@ -6376,28 +8072,210 @@ export async function listCachedBluesReleases(opts = {}) {
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
 // the PK enforces single-row-per-pair regardless of click direction.
+// Find rows worth linking to this artist — used by the editor's
+// References panel. Pulls candidates from FIVE sources, all in one
+// query so the curator sees one merged list:
+//
+//   1. aliases     — other row's `aliases` jsonb mentions this name
+//   2. collaborators — other row's `collaborators` jsonb mentions this name
+//   3. notes       — other row's `notes` text mentions this name
+//   4. shared band — both this row AND the other row list the same band
+//                    name in their collaborators (a group both played in)
+//   5. discogs members — when this row IS a band/group, surface every
+//                        Discogs-supplied member (kind='member') that
+//                        exists as a blues_artists row by name match
+//
+// Excludes the target row itself and any rows already linked to it.
+// `matched` is a string[] of source labels so the panel can show WHY
+// each row surfaced.
+export async function findBluesArtistReferences(id) {
+    const target = await getPool().query(`SELECT name, collaborators FROM blues_artists WHERE id = $1`, [id]);
+    if (!target.rows.length)
+        return [];
+    const name = (target.rows[0].name || "").trim();
+    if (!name)
+        return [];
+    const n = name.toLowerCase();
+    // Derive the two name-set parameters for sources 4 and 5.
+    //   sharedBandNames: every band/group name this row recorded a
+    //     collaborator entry for. Used to find OTHER rows that share
+    //     one of those band names → likely bandmates.
+    //   memberNames: every person this row's Discogs record listed as a
+    //     member (kind='member'). Used when THIS row is a group: those
+    //     are its line-up, surface any that exist as blues_artists rows.
+    const collabs = Array.isArray(target.rows[0].collaborators) ? target.rows[0].collaborators : [];
+    const sharedBandNames = [];
+    const memberNames = [];
+    for (const c of collabs) {
+        if (typeof c === "string") {
+            // Plain-string collaborators are ambiguous (could be a person OR
+            // a band). Treat them as potential bands for source 4 — the
+            // curator can ignore false matches. They don't drive source 5
+            // because there's no member/group distinction.
+            sharedBandNames.push(c);
+        }
+        else if (c && typeof c === "object") {
+            const cn = String(c.name || "").trim();
+            if (!cn)
+                continue;
+            if (c.kind === "group")
+                sharedBandNames.push(cn);
+            else if (c.kind === "member")
+                memberNames.push(cn);
+            else
+                sharedBandNames.push(cn);
+        }
+    }
+    const sharedBandsLc = [...new Set(sharedBandNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
+    const membersLc = [...new Set(memberNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
+    const r = await getPool().query(`WITH t AS (SELECT $2::text AS n),
+          shared_bands AS (SELECT unnest($3::text[]) AS bn),
+          members AS (SELECT unnest($4::text[]) AS mn)
+     SELECT
+       a.id, a.name,
+       EXISTS (
+         SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
+         WHERE lower(trim(v)) = (SELECT n FROM t)
+       ) AS in_aliases,
+       EXISTS (
+         SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+         WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
+       ) AS in_collabs,
+       (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0) AS in_notes,
+       -- Shared band names this row has in common with the target.
+       -- Aggregated into an array so the UI can show "shared band: X, Y".
+       (
+         SELECT array_agg(DISTINCT sb.bn)
+           FROM shared_bands sb
+          WHERE EXISTS (
+            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
+          )
+       ) AS shared_bands,
+       -- This row IS one of the bands the target lists in collaborators.
+       -- (Tampa Red has "Hokum Boys" in collaborators; this row's name
+       -- is "Hokum Boys" → surface so user can link as band.)
+       (
+         SELECT sb.bn FROM shared_bands sb
+          WHERE lower(trim(a.name)) = sb.bn
+          LIMIT 1
+       ) AS is_band,
+       -- This row matches a Discogs 'member' name on the target (the
+       -- target is a group; this row is one of its members).
+       EXISTS (
+         SELECT 1 FROM members m
+          WHERE lower(trim(a.name)) = m.mn
+       ) AS via_member
+       FROM blues_artists a
+      WHERE a.id <> $1
+        AND NOT EXISTS (
+          SELECT 1 FROM blues_artist_links l
+           WHERE (l.lo_id = $1 AND l.hi_id = a.id)
+              OR (l.lo_id = a.id AND l.hi_id = $1)
+        )
+        AND (
+          EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
+            WHERE lower(trim(v)) = (SELECT n FROM t)
+          )
+          OR EXISTS (
+            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
+            WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
+          )
+          OR (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0)
+          OR EXISTS (
+            SELECT 1
+              FROM shared_bands sb
+              JOIN jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v ON true
+             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
+          )
+          OR EXISTS (
+            SELECT 1 FROM shared_bands sb WHERE lower(trim(a.name)) = sb.bn
+          )
+          OR EXISTS (
+            SELECT 1 FROM members m WHERE lower(trim(a.name)) = m.mn
+          )
+        )
+      ORDER BY lower(a.name) ASC
+      LIMIT 100`, [id, n, sharedBandsLc, membersLc]);
+    return r.rows.map(row => {
+        const matched = [];
+        if (row.in_aliases)
+            matched.push("aliases");
+        if (row.in_collabs)
+            matched.push("collaborators");
+        if (row.in_notes)
+            matched.push("notes");
+        if (row.shared_bands && row.shared_bands.length) {
+            // Keep the band names short — first 2 + ellipsis if more.
+            const list = row.shared_bands.slice(0, 2).join(", ");
+            const more = row.shared_bands.length > 2 ? ` (+${row.shared_bands.length - 2})` : "";
+            matched.push(`shared band: ${list}${more}`);
+        }
+        if (row.is_band)
+            matched.push(`is the band "${row.is_band}"`);
+        if (row.via_member)
+            matched.push("Discogs member");
+        return { id: row.id, name: row.name, matched };
+    });
+}
+export const BLUES_ARTIST_LINK_KINDS = [
+    "pseudonym", "band", "spouse", "traveled", "mentor", "family",
+];
 export async function addBluesArtistLink(aId, bId, kind) {
     if (!Number.isFinite(aId) || !Number.isFinite(bId) || aId === bId) {
         throw new Error("Invalid artist ids");
     }
-    if (kind !== "pseudonym" && kind !== "band") {
+    if (!BLUES_ARTIST_LINK_KINDS.includes(kind)) {
         throw new Error("Invalid kind");
     }
     const lo = Math.min(aId, bId);
     const hi = Math.max(aId, bId);
-    // ON CONFLICT updates the kind — lets the user re-categorise an
-    // existing link (e.g. pseudonym → band) without having to delete +
-    // re-add it.
+    // PK is (lo, hi, kind) so multiple kinds per pair coexist (Family +
+    // Band, etc). ON CONFLICT DO NOTHING makes this idempotent — clicking
+    // Band twice on the same pair is a no-op rather than an error.
     await getPool().query(`INSERT INTO blues_artist_links (lo_id, hi_id, kind)
      VALUES ($1, $2, $3)
-     ON CONFLICT (lo_id, hi_id) DO UPDATE SET kind = EXCLUDED.kind`, [lo, hi, kind]);
+     ON CONFLICT (lo_id, hi_id, kind) DO NOTHING`, [lo, hi, kind]);
 }
-export async function removeBluesArtistLink(aId, bId) {
+// Snapshot of the entire connection graph for the Connections viz.
+// Nodes carry just the bits the client needs to draw (id, name, photo)
+// and a `degree` field so the viz can size nodes by connectedness.
+// Isolated artists (zero links) are excluded — they'd add noise to the
+// graph without informing any relationship.
+export async function listBluesConnectionsGraph() {
+    const er = await getPool().query(`SELECT lo_id, hi_id, kind FROM blues_artist_links ORDER BY lo_id, hi_id`);
+    const edges = er.rows;
+    if (!edges.length)
+        return { nodes: [], edges: [] };
+    const ids = new Set();
+    for (const e of edges) {
+        ids.add(e.lo_id);
+        ids.add(e.hi_id);
+    }
+    const nr = await getPool().query(`SELECT a.id, a.name, a.photo_url,
+            (SELECT COUNT(*)::int FROM blues_artist_links l
+              WHERE l.lo_id = a.id OR l.hi_id = a.id) AS degree
+       FROM blues_artists a
+      WHERE a.id = ANY($1::int[])
+      ORDER BY lower(a.name) ASC`, [[...ids]]);
+    return { nodes: nr.rows, edges };
+}
+export async function removeBluesArtistLink(aId, bId, kind) {
     if (!Number.isFinite(aId) || !Number.isFinite(bId))
         return;
     const lo = Math.min(aId, bId);
     const hi = Math.max(aId, bId);
-    await getPool().query(`DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`, [lo, hi]);
+    if (kind) {
+        // Scoped delete — pulls just one of multiple kinds on the same pair.
+        // Caller's responsibility to ensure `kind` is a valid value; the
+        // CHECK constraint on the table catches anything else.
+        await getPool().query(`DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2 AND kind = $3`, [lo, hi, kind]);
+    }
+    else {
+        // No kind → wipe every link between the pair.
+        await getPool().query(`DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`, [lo, hi]);
+    }
 }
 export async function listBluesArtistLinks(aId) {
     const r = await getPool().query(`SELECT
@@ -6536,6 +8414,7 @@ export async function upsertCacheWarmRun(genreKey, styleKey, patch) {
         "current_year", "current_page",
         "total_searched", "total_cached", "total_skipped", "total_errors",
         "last_run_at", "last_cached_at",
+        "no_year_last_run_at", "no_year_pages_seen",
         "recent_cached", "recent_errors",
     ]);
     const cols = [];
@@ -6573,6 +8452,14 @@ export async function recordCacheWarmRunSkip(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs SET total_skipped = total_skipped + 1
       WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
 }
+// Bulk variant — one UPDATE for a whole page's worth of cache hits
+// instead of N round-trips. No-op when n <= 0.
+export async function bumpCacheWarmRunSkip(genreKey, styleKey, n) {
+    if (!Number.isFinite(n) || n <= 0)
+        return;
+    await getPool().query(`UPDATE cache_warm_runs SET total_skipped = total_skipped + $3
+      WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", n]);
+}
 export async function recordCacheWarmRunSearched(genreKey, styleKey, n) {
     await getPool().query(`UPDATE cache_warm_runs SET total_searched = total_searched + $3
       WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", n]);
@@ -6607,6 +8494,16 @@ export async function deleteCacheWarmRun(genreKey, styleKey) {
 export async function isReleaseCached(discogsId, type = "release") {
     const r = await getPool().query(`SELECT 1 FROM release_cache WHERE discogs_id = $1 AND type = $2 LIMIT 1`, [discogsId, type]);
     return (r.rowCount ?? 0) > 0;
+}
+// Batch variant — one query for up to several hundred ids. Returns a
+// Set of the ids that are already cached so callers can fast-path
+// cache hits without N round-trips. Used by the cache-warm worker to
+// skip throttling on a full page of already-cached releases.
+export async function getCachedReleaseIds(ids, type = "release") {
+    if (!ids.length)
+        return new Set();
+    const r = await getPool().query(`SELECT discogs_id FROM release_cache WHERE type = $1 AND discogs_id = ANY($2::int[])`, [type, ids]);
+    return new Set((r.rows ?? []).map((row) => Number(row.discogs_id)));
 }
 // Patch a single blues_lyrics row's tuning + artist fields. Both are
 // optional — only the keys you pass get updated. Returns the row
@@ -6683,6 +8580,15 @@ export async function updateLyricFields(id, patch) {
             // hand-entered vs derived. Resolver respects this — won't
             // overwrite manual entries unless force=1.
             sets.push(`first_release_year = $${params.length}, first_release_source = 'manual', first_release_checked_at = NOW()`);
+        }
+    }
+    if ("plaintext" in patch) {
+        if (patch.plaintext == null) {
+            sets.push(`plaintext = NULL`);
+        }
+        else {
+            params.push(String(patch.plaintext));
+            sets.push(`plaintext = $${params.length}`);
         }
     }
     if (!sets.length)
