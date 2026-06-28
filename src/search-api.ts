@@ -8267,31 +8267,18 @@ function _buildReleaseCacheWhere(q: any): { sql: string; args: any[] } {
     args.push(type);
     where.push(`rc.type = $${args.length}`);
   }
-  // Use the same row-by-row jsonb_array_elements_text pattern the
-  // cache-warm stats CTE uses — `@> '["Blues"]'::jsonb` was returning
-  // 0 rows in practice even when the stats grid clearly knew Blues
-  // rows existed. The jsonb_typeof guard tolerates rows whose
-  // data.genres is missing or stored as a non-array (some old cache
-  // entries were object-wrapped) without throwing.
+  // `@>` containment uses the GIN index on data->'genres' (see initDb).
+  // Earlier 0-row failure on Blues turned out to be the `format=csv`
+  // param collision, not @> itself, so we're back to the indexed form.
   const genre = String(q.genre || "").trim();
   if (genre) {
-    args.push(genre);
-    where.push(`EXISTS (
-      SELECT 1 FROM jsonb_array_elements_text(
-        CASE WHEN jsonb_typeof(rc.data->'genres') = 'array'
-             THEN rc.data->'genres' ELSE '[]'::jsonb END
-      ) AS g(value) WHERE g.value = $${args.length}
-    )`);
+    args.push(JSON.stringify([genre]));
+    where.push(`rc.data->'genres' @> $${args.length}::jsonb`);
   }
   const style = String(q.style || "").trim();
   if (style) {
-    args.push(style);
-    where.push(`EXISTS (
-      SELECT 1 FROM jsonb_array_elements_text(
-        CASE WHEN jsonb_typeof(rc.data->'styles') = 'array'
-             THEN rc.data->'styles' ELSE '[]'::jsonb END
-      ) AS s(value) WHERE s.value = $${args.length}
-    )`);
+    args.push(JSON.stringify([style]));
+    where.push(`rc.data->'styles' @> $${args.length}::jsonb`);
   }
   const yearFrom = parseInt(String(q.year_from ?? ""), 10);
   if (Number.isFinite(yearFrom)) {
@@ -8391,14 +8378,32 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
   // CSV header + BOM for Excel
   if (format === "csv") res.write("﻿" + CSV_COLS.join(",") + "\n");
   if (format === "json") res.write("[\n");
-  const CHUNK = 2000;
+  // CSV needs only ~12 small fields per row, so project them
+  // server-side instead of pulling the full ~30KB master JSONB
+  // blob for every row. JSON / NDJSON still need the full data
+  // column (that's the point of those formats), so they use the
+  // wider SELECT. The narrow path drops PG→Node transfer from
+  // hundreds of MB to single-digit MB for a 50k-row export.
+  const CHUNK = 5000;
+  const SELECT_FULL = `rc.discogs_id, rc.type, rc.cached_at, rc.data`;
+  const SELECT_CSV  = `rc.discogs_id, rc.type, rc.cached_at,
+    rc.data->>'title'   AS title,
+    rc.data->>'year'    AS year,
+    rc.data->>'country' AS country,
+    rc.data->'artists'  AS artists_j,
+    rc.data->'formats'  AS formats_j,
+    rc.data->'genres'   AS genres_j,
+    rc.data->'styles'   AS styles_j,
+    rc.data->'videos'   AS videos_j,
+    rc.data->'community' AS community_j`;
+  const selectCols = format === "csv" ? SELECT_CSV : SELECT_FULL;
   let written = 0;
   let firstJson = true;
   try {
     for (let offset = 0; offset < limit; offset += CHUNK) {
       const take = Math.min(CHUNK, limit - offset);
       const argsWithPaging = args.concat([take, offset]);
-      const sqlText = `SELECT rc.discogs_id, rc.type, rc.cached_at, rc.data
+      const sqlText = `SELECT ${selectCols}
            FROM release_cache rc
            ${whereSql}
            ${orderSql}
@@ -8407,33 +8412,37 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
       if (offset === 0) console.log(`[release-cache export] first-chunk rows=${r.rows.length} args=${JSON.stringify(argsWithPaging)}`);
       if (!r.rows.length) break;
       for (const row of r.rows) {
-        const d = row.data || {};
         if (format === "csv") {
+          const artists = Array.isArray(row.artists_j) ? row.artists_j.map((a: any) => a?.name).filter(Boolean).join(" / ") : null;
+          const formats = Array.isArray(row.formats_j) ? row.formats_j.map((f: any) => f?.name).filter(Boolean).join(" | ") : null;
+          const genres  = Array.isArray(row.genres_j)  ? row.genres_j.join(" | ") : null;
+          const styles  = Array.isArray(row.styles_j)  ? row.styles_j.join(" | ") : null;
+          const videoCount = Array.isArray(row.videos_j) ? row.videos_j.length : 0;
           const flat = [
             row.discogs_id,
             row.type,
-            d.title,
-            Array.isArray(d.artists) ? d.artists.map((a: any) => a?.name).filter(Boolean).join(" / ") : null,
-            d.year,
-            d.country,
-            Array.isArray(d.formats) ? d.formats.map((f: any) => f?.name).filter(Boolean).join(" | ") : null,
-            Array.isArray(d.genres) ? d.genres.join(" | ") : null,
-            Array.isArray(d.styles) ? d.styles.join(" | ") : null,
-            Array.isArray(d.videos) ? d.videos.length : 0,
-            d?.community?.want ?? null,
-            d?.community?.have ?? null,
+            row.title,
+            artists,
+            row.year,
+            row.country,
+            formats,
+            genres,
+            styles,
+            videoCount,
+            row.community_j?.want ?? null,
+            row.community_j?.have ?? null,
             row.cached_at?.toISOString?.() ?? row.cached_at,
           ];
           res.write(flat.map(_csvEscape).join(",") + "\n");
         } else if (format === "ndjson") {
           res.write(JSON.stringify({
-            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: row.data ?? {},
           }) + "\n");
         } else {
           if (!firstJson) res.write(",\n");
           firstJson = false;
           res.write(JSON.stringify({
-            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: d,
+            discogs_id: row.discogs_id, type: row.type, cached_at: row.cached_at, data: row.data ?? {},
           }));
         }
         written++;
