@@ -214,6 +214,7 @@
                   <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option>
                 </select>
                 <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
+                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every release_cache row matching these filters. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
                 <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>
             </div>
@@ -1604,6 +1605,52 @@ async function rcxDownload() {
   }
 }
 window.rcxDownload = rcxDownload;
+
+// Delete every release_cache row matching the current filter form.
+// Two-step confirm: hit /preview to get the count, then a typed
+// confirmation for anything > 1000 rows so a careless click can't
+// wipe a whole genre. Refuses entirely when no filter is set.
+async function rcxDelete() {
+  const status = document.getElementById("rcx-status");
+  const params = _rcxBuildParams();
+  // Drop pagination-only params; they don't affect the WHERE.
+  for (const k of ["sort", "order", "limit"]) params.delete(k);
+  if ([...params.keys()].length === 0) {
+    if (status) status.textContent = "Set at least one filter — refusing to wipe the entire cache.";
+    return;
+  }
+  if (status) status.textContent = "Counting…";
+  let count = 0;
+  try {
+    const pr = await apiFetch("/api/admin/release-cache/preview?" + params.toString());
+    const pj = await pr.json().catch(() => ({}));
+    if (!pr.ok) { if (status) status.textContent = `Preview failed: ${pj.error || pr.status}`; return; }
+    count = Number(pj.count ?? 0);
+  } catch (e) { if (status) status.textContent = `Preview failed: ${e}`; return; }
+  if (!count) { if (status) status.textContent = "0 rows match — nothing to delete."; return; }
+  const summary = [...params.entries()].map(([k, v]) => `${k}=${v}`).join(", ");
+  if (!confirm(`Delete ${count.toLocaleString()} release_cache row${count === 1 ? "" : "s"} matching:\n${summary}\n\nThis cannot be undone.`)) {
+    if (status) status.textContent = "Cancelled.";
+    return;
+  }
+  if (count > 1000) {
+    const typed = prompt(`Type "delete ${count}" to confirm:`);
+    if (typed !== `delete ${count}`) { if (status) status.textContent = "Confirmation didn't match — cancelled."; return; }
+  }
+  if (status) status.textContent = "Deleting…";
+  try {
+    const body = Object.fromEntries(params.entries());
+    const r = await apiFetch("/api/admin/release-cache/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
+    if (status) status.textContent = `Deleted ${Number(j.deleted ?? 0).toLocaleString()} row${j.deleted === 1 ? "" : "s"}.`;
+  } catch (e) { if (status) status.textContent = `Failed: ${e}`; }
+}
+window.rcxDelete = rcxDelete;
 
 function _baxBuildParams() {
   const q = new URLSearchParams();
