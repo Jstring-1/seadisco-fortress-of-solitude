@@ -6,11 +6,11 @@
 // each missing one into release_cache. Persists cursor + counters
 // in cache_warm_runs so a restart resumes from where it left off.
 //
-// Rate limit: 1.1s between Discogs calls (Discogs's authed 60/min).
+// Rate limit: 1.0s between Discogs calls (Discogs's authed 60/min).
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 import { DiscogsClient } from "./discogs-client.js";
-import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSkip, recordCacheWarmRunSearched, recordCacheWarmRunError, isReleaseCached, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, } from "./db.js";
+import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, bumpCacheWarmRunSkip, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, } from "./db.js";
 // Persisted intent so a Railway restart can auto-resume the run.
 // Set when startCacheWarmRun fires, cleared by Stop or natural
 // completion. Crashes do NOT clear it — boot-resume picks up where
@@ -40,7 +40,7 @@ async function _readActiveRun() {
     }
 }
 const PER_PAGE = 100;
-const REQ_INTERVAL_MS = 1100;
+const REQ_INTERVAL_MS = 1000;
 // In-memory state only — survives process lifetime, resets on
 // Railway restart. Mid-run restarts leave cursor in the DB so the
 // admin can re-click Start with the same params and pick up.
@@ -189,17 +189,34 @@ export async function startCacheWarmRun(opts) {
     // this combo from the persisted cursor. Cleared by Stop, natural
     // completion, or Force-clear.
     await _writeActiveRun({ genreKey, styleKey, fromYear: opts.fromYear, toYear: opts.toYear });
-    await upsertCacheWarmRun(genreKey, styleKey, {
-        current_year: cursorYear,
-        current_page: cursorPage,
-        last_run_at: new Date(),
-    });
+    // No-year sweeps (fromYear=0 toYear=0) must not touch the dated
+    // cursor — the two sweep histories are kept independent so the
+    // "no-year done" indicator and the dated resume point survive each
+    // other.
+    if (opts.fromYear === 0 && opts.toYear === 0) {
+        await upsertCacheWarmRun(genreKey, styleKey, { last_run_at: new Date() });
+    }
+    else {
+        await upsertCacheWarmRun(genreKey, styleKey, {
+            current_year: cursorYear,
+            current_page: cursorPage,
+            last_run_at: new Date(),
+        });
+    }
     // Fire-and-forget: caller doesn't wait. Worker tears down state on exit.
-    console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}`);
+    console.log(`[cache-warm] kicking worker for ${key}, cursor=${cursorYear}/p${cursorPage}, range=${cursorYear}-${toYear}${opts.alsoNoYear ? " + no-year follow-up" : ""}`);
     (async () => {
         try {
             await _runWorker(client, genreKey, styleKey, cursorYear, cursorPage, toYear);
             console.log(`[cache-warm] worker for ${key} exited cleanly`);
+            // Chained no-year follow-up: only fires when the dated sweep
+            // exited cleanly (not stopped). One click on "▶ 1900-1970" then
+            // covers both the dated walk AND the long-tail no-year releases.
+            if (opts.alsoNoYear && !_stopRequested) {
+                console.log(`[cache-warm] chaining no-year sweep for ${key}`);
+                await _runWorker(client, genreKey, styleKey, 0, 1, 0);
+                console.log(`[cache-warm] no-year follow-up for ${key} exited cleanly`);
+            }
             // Natural exit = clear the resume intent. Crashes leave it
             // set so the next boot will retry.
             await _clearActiveRun();
@@ -234,12 +251,28 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
         if (year > endYear)
             break;
         let searchRes;
+        // year === 0 is the "no-year sweep" mode — omit the year filter
+        // so Discogs returns releases that have no year set. Year-filtered
+        // sweeps (e.g. 1900-1970) skip these, so this catches the long
+        // tail. Worker still walks pages within this single pseudo-year
+        // then breaks once endYear (also 0) is exceeded.
+        const noYearMode = year === 0;
         try {
-            searchRes = await _withRetry(`search ${genreKey}/${styleKey || "*"} ${year} p${page}`, () => client.search("", {
-                type: "release",
+            searchRes = await _withRetry(`search ${genreKey}/${styleKey || "*"} ${noYearMode ? "no-year" : year} p${page}`, () => 
+            // Sweep MASTERS rather than individual releases. Each master
+            // already aggregates pressings, year, primary artist, tracklist,
+            // and cover — so for the app's wide-card / search / feed views
+            // it's the unit we actually want cached. Sweeping releases
+            // instead would pay the Discogs throttle for every pressing of
+            // the same album (potentially dozens). Orphan releases — ones
+            // with no parent master — are not surfaced by this search and
+            // would need a separate type=release pass filtered to
+            // master_id == null. Tracked as a possible future button.
+            client.search("", {
+                type: "master",
                 genre: genreKey,
                 style: styleKey || undefined,
-                year: String(year),
+                year: noYearMode ? undefined : String(year),
                 page,
                 perPage: PER_PAGE,
             }));
@@ -255,30 +288,58 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
             // Empty year — advance.
             year += 1;
             page = 1;
-            await upsertCacheWarmRun(genreKey, styleKey, {
-                current_year: year, current_page: page, last_run_at: new Date(),
-            });
+            if (noYearMode) {
+                // No-year sweep finished a page set: stamp no_year_last_run_at
+                // and leave the dated cursor (current_year / current_page)
+                // untouched so a subsequent dated run resumes where it left off.
+                await upsertCacheWarmRun(genreKey, styleKey, {
+                    no_year_last_run_at: new Date(), last_run_at: new Date(),
+                });
+            }
+            else {
+                await upsertCacheWarmRun(genreKey, styleKey, {
+                    current_year: year, current_page: page, last_run_at: new Date(),
+                });
+            }
             continue;
         }
+        // One batch cache-check + one bulk skip-counter bump per page
+        // instead of N round-trips. Re-runs over already-cached genres
+        // used to spend ~2 DB calls per result (SELECT + UPDATE) on every
+        // hit; this collapses each page's 100 hits to 2 queries total.
+        const pageIds = [];
+        for (const r of results) {
+            const id = Number(r?.id);
+            if (Number.isFinite(id) && id > 0)
+                pageIds.push(id);
+        }
+        let cachedIds;
+        try {
+            cachedIds = await getCachedReleaseIds(pageIds, "master");
+        }
+        catch {
+            cachedIds = new Set();
+        }
+        const skipsThisPage = pageIds.filter(id => cachedIds.has(id)).length;
+        if (skipsThisPage > 0)
+            await bumpCacheWarmRunSkip(genreKey, styleKey, skipsThisPage);
         for (const r of results) {
             if (_stopRequested)
                 break;
             const id = Number(r?.id);
             if (!Number.isFinite(id) || id <= 0)
                 continue;
-            if (await isReleaseCached(id, "release")) {
-                await recordCacheWarmRunSkip(genreKey, styleKey);
+            if (cachedIds.has(id))
                 continue;
-            }
             try {
                 await _sleep(REQ_INTERVAL_MS);
-                const full = await _withRetry(`release ${id}`, () => client.getRelease(id));
-                await cacheRelease(id, "release", full);
+                const full = await _withRetry(`master ${id}`, () => client.getMasterRelease(id));
+                await cacheRelease(id, "master", full);
                 const title = String(full?.title ?? r?.title ?? "(untitled)");
                 await recordCacheWarmRunHit(genreKey, styleKey, title, id);
             }
             catch (err) {
-                await recordCacheWarmRunError(genreKey, styleKey, `release ${id}: ${err?.message ?? String(err)}`);
+                await recordCacheWarmRunError(genreKey, styleKey, `master ${id}: ${err?.message ?? String(err)}`);
                 await _sleep(REQ_INTERVAL_MS);
             }
         }
@@ -299,10 +360,21 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
         else {
             page = nextPage;
         }
-        await upsertCacheWarmRun(genreKey, styleKey, {
-            current_year: Math.min(year, endYear + 1),
-            current_page: page,
-            last_run_at: new Date(),
-        });
+        if (noYearMode) {
+            // Stamp the no-year fields and bump pages-seen; leave the dated
+            // cursor alone so the two sweep histories don't clobber each other.
+            await upsertCacheWarmRun(genreKey, styleKey, {
+                no_year_last_run_at: new Date(),
+                no_year_pages_seen: page,
+                last_run_at: new Date(),
+            });
+        }
+        else {
+            await upsertCacheWarmRun(genreKey, styleKey, {
+                current_year: Math.min(year, endYear + 1),
+                current_page: page,
+                last_run_at: new Date(),
+            });
+        }
     }
 }

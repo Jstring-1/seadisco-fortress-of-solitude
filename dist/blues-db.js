@@ -887,14 +887,54 @@ async function _enrichOneFromDiscogsArtist(client, row, opts = {}) {
  *  populate its open form so the curator can review + save (or
  *  edit) rather than committing blindly. force flag affects which
  *  fields are eligible (photo/notes/releases). */
-export async function previewBluesArtistFromDiscogs(client, id, force) {
+// Preview a Discogs artist by id alone — no blues_artists row required.
+// Used by the editor's "Fetch from Discogs" button when adding a NEW
+// artist who hasn't been saved yet: type name + discogs_id, click
+// Fetch, see the full Discogs record poured into the form, then Save.
+// Synthesises a blank row so _enrichOneFromDiscogsArtist's diff logic
+// treats every Discogs-derived field as new (force:true also avoids
+// the "only fill blanks" gate).
+export async function previewDiscogsArtistById(client, discogsId) {
+    if (!Number.isFinite(discogsId) || discogsId <= 0) {
+        throw new Error("Invalid Discogs id");
+    }
+    const row = { discogs_id: discogsId, name: "" };
+    const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force: true });
+    // The diff in _enrichOneFromDiscogsArtist would normally drop
+    // discogs_id since the synthetic row already has it; re-add so the
+    // form populates the field for the user.
+    patch.discogs_id = discogsId;
+    return { patch };
+}
+export async function previewBluesArtistFromDiscogs(client, id, force, opts = {}) {
     const row = await getBluesArtist(id);
     if (!row)
         throw new Error("artist not found");
-    if (!row.discogs_id)
-        throw new Error("row has no discogs_id");
+    let foundDiscogsId;
+    // Newly-added artists arrive with just a name. If the caller opts in,
+    // search Discogs by name and take the top result. The id gets folded
+    // into the returned patch so the form populates it alongside every
+    // other Discogs-derived field — the curator can still edit/cancel
+    // before saving, so this isn't a silent commit.
+    if (!row.discogs_id) {
+        if (!opts.autoFind)
+            throw new Error("row has no discogs_id");
+        if (!row.name)
+            throw new Error("row has no name to search by");
+        const top = await _searchDiscogsArtist(client, row.name);
+        if (!top)
+            throw new Error(`no Discogs match for "${row.name}"`);
+        row.discogs_id = top;
+        foundDiscogsId = top;
+    }
     const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force });
-    return { patch, row };
+    // When we auto-found the id, ensure it lands in the preview patch
+    // even if _enrichOneFromDiscogsArtist's diff logic dropped it as
+    // "unchanged" relative to the in-memory row we just mutated.
+    if (foundDiscogsId !== undefined && !("discogs_id" in patch)) {
+        patch.discogs_id = foundDiscogsId;
+    }
+    return { patch, row, foundDiscogsId };
 }
 /** Walk every row that has a discogs_id and pull the full artist
  *  record. Rate-limited 1.1s/req. ~3-5 min for 200 rows. */
