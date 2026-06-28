@@ -9038,8 +9038,8 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
             : "application/json; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-${date}.${ext}"`);
     const CSV_COLS = [
-        "discogs_id", "type", "title", "artist", "year", "country", "formats",
-        "genres", "styles", "video_count", "want", "have", "cached_at",
+        "discogs_id", "type", "title", "artist", "year", "country", "label", "catno",
+        "formats", "genres", "styles", "video_count", "want", "have", "cached_at",
     ];
     // CSV header + BOM for Excel
     if (format === "csv")
@@ -9067,6 +9067,7 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     COALESCE(NULLIF(NULLIF(rc.data->>'year','0'), ''), NULLIF(mr.data->>'year','0')) AS year,
     COALESCE(NULLIF(rc.data->>'country', ''), mr.data->>'country') AS country,
     COALESCE(rc.data->'artists',  mr.data->'artists')  AS artists_j,
+    COALESCE(rc.data->'labels',   mr.data->'labels')   AS labels_j,
     COALESCE(rc.data->'formats',  mr.data->'formats')  AS formats_j,
     COALESCE(rc.data->'genres',   mr.data->'genres')   AS genres_j,
     COALESCE(rc.data->'styles',   mr.data->'styles')   AS styles_j,
@@ -9098,6 +9099,8 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
             for (const row of r.rows) {
                 if (format === "csv") {
                     const artists = Array.isArray(row.artists_j) ? row.artists_j.map((a) => a?.name).filter(Boolean).join(" / ") : null;
+                    const labels = Array.isArray(row.labels_j) ? row.labels_j.map((l) => l?.name).filter(Boolean).join(" | ") : null;
+                    const catno = Array.isArray(row.labels_j) ? row.labels_j.map((l) => l?.catno).filter(Boolean).join(" | ") : null;
                     const formats = Array.isArray(row.formats_j) ? row.formats_j.map((f) => f?.name).filter(Boolean).join(" | ") : null;
                     const genres = Array.isArray(row.genres_j) ? row.genres_j.join(" | ") : null;
                     const styles = Array.isArray(row.styles_j) ? row.styles_j.join(" | ") : null;
@@ -9109,6 +9112,8 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
                         artists,
                         row.year,
                         row.country,
+                        labels,
+                        catno,
                         formats,
                         genres,
                         styles,
