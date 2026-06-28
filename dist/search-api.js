@@ -8935,16 +8935,24 @@ function _buildReleaseCacheWhere(q) {
     return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
 }
 function _releaseCacheOrderBy(q) {
-    const sort = String(q.sort || "cached_at").toLowerCase();
-    const dir = String(q.order || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+    // Default changed: year ASC then artist ASC so an exported file
+    // reads as a chronological catalog with stable per-year grouping
+    // by artist. Sort by cached_at / title / discogs_id still works
+    // when the form explicitly picks one of them.
+    const sort = String(q.sort || "year").toLowerCase();
+    const dir = String(q.order || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
     const map = {
         cached_at: "rc.cached_at",
         year: "COALESCE(NULLIF(rc.data->>'year','')::int, 0)",
         title: "LOWER(COALESCE(rc.data->>'title',''))",
         discogs_id: "rc.discogs_id",
+        artist: "LOWER(COALESCE(rc.data->'artists'->0->>'name',''))",
     };
-    const col = map[sort] || map.cached_at;
-    return ` ORDER BY ${col} ${dir} `;
+    const col = map[sort] || map.year;
+    // Tie-breaker so rows in the same year (or same cached_at second)
+    // cluster by artist, then by id for full determinism.
+    const ARTIST_COL = map.artist;
+    return ` ORDER BY ${col} ${dir}, ${ARTIST_COL} ASC, rc.discogs_id ASC `;
 }
 function _csvEscape(v) {
     if (v == null)
