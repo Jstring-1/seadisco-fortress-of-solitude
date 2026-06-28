@@ -8267,15 +8267,31 @@ function _buildReleaseCacheWhere(q: any): { sql: string; args: any[] } {
     args.push(type);
     where.push(`rc.type = $${args.length}`);
   }
+  // Use the same row-by-row jsonb_array_elements_text pattern the
+  // cache-warm stats CTE uses — `@> '["Blues"]'::jsonb` was returning
+  // 0 rows in practice even when the stats grid clearly knew Blues
+  // rows existed. The jsonb_typeof guard tolerates rows whose
+  // data.genres is missing or stored as a non-array (some old cache
+  // entries were object-wrapped) without throwing.
   const genre = String(q.genre || "").trim();
   if (genre) {
-    args.push(JSON.stringify([genre]));
-    where.push(`rc.data->'genres' @> $${args.length}::jsonb`);
+    args.push(genre);
+    where.push(`EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(rc.data->'genres') = 'array'
+             THEN rc.data->'genres' ELSE '[]'::jsonb END
+      ) AS g(value) WHERE g.value = $${args.length}
+    )`);
   }
   const style = String(q.style || "").trim();
   if (style) {
-    args.push(JSON.stringify([style]));
-    where.push(`rc.data->'styles' @> $${args.length}::jsonb`);
+    args.push(style);
+    where.push(`EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(
+        CASE WHEN jsonb_typeof(rc.data->'styles') = 'array'
+             THEN rc.data->'styles' ELSE '[]'::jsonb END
+      ) AS s(value) WHERE s.value = $${args.length}
+    )`);
   }
   const yearFrom = parseInt(String(q.year_from ?? ""), 10);
   if (Number.isFinite(yearFrom)) {
