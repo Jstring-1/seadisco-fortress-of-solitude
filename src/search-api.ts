@@ -8411,8 +8411,12 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     : "application/json; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-${date}.${ext}"`);
   const CSV_COLS = [
-    "discogs_id", "type", "title", "artist", "year", "country", "label", "catno",
-    "formats", "genres", "styles", "video_count", "want", "have", "cached_at",
+    "discogs_id", "type", "master_id", "main_release",
+    "title", "artist", "year", "released", "country", "label", "catno",
+    "formats", "genres", "styles",
+    "tracklist_count", "video_count",
+    "lowest_price", "num_for_sale", "want", "have", "data_quality",
+    "notes", "cached_at",
   ];
   // CSV header + BOM for Excel
   if (format === "csv") res.write("﻿" + CSV_COLS.join(",") + "\n");
@@ -8434,16 +8438,26 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
   // the fallback kick in when Discogs stamped year=0 for an old
   // master whose recording date is uncertain.
   const SELECT_CSV  = `rc.discogs_id, rc.type, rc.cached_at,
+    CASE WHEN rc.type = 'master' THEN rc.discogs_id
+         ELSE NULLIF(rc.data->>'master_id','')::bigint END AS master_id,
+    CASE WHEN rc.type = 'master' THEN NULLIF(rc.data->>'main_release','')::bigint
+         ELSE NULL END AS main_release,
     COALESCE(NULLIF(rc.data->>'title',   ''), mr.data->>'title')   AS title,
     COALESCE(NULLIF(NULLIF(rc.data->>'year','0'), ''), NULLIF(mr.data->>'year','0')) AS year,
+    COALESCE(NULLIF(rc.data->>'released',''), mr.data->>'released') AS released,
     COALESCE(NULLIF(rc.data->>'country', ''), mr.data->>'country') AS country,
     COALESCE(rc.data->'artists',  mr.data->'artists')  AS artists_j,
     COALESCE(rc.data->'labels',   mr.data->'labels')   AS labels_j,
     COALESCE(rc.data->'formats',  mr.data->'formats')  AS formats_j,
     COALESCE(rc.data->'genres',   mr.data->'genres')   AS genres_j,
     COALESCE(rc.data->'styles',   mr.data->'styles')   AS styles_j,
+    COALESCE(rc.data->'tracklist',mr.data->'tracklist')AS tracklist_j,
     COALESCE(rc.data->'videos',   mr.data->'videos')   AS videos_j,
-    COALESCE(rc.data->'community',mr.data->'community')AS community_j`;
+    COALESCE(rc.data->'community',mr.data->'community')AS community_j,
+    rc.data->>'lowest_price' AS lowest_price,
+    rc.data->>'num_for_sale' AS num_for_sale,
+    rc.data->>'data_quality' AS data_quality,
+    COALESCE(NULLIF(rc.data->>'notes',''), mr.data->>'notes') AS notes`;
   const CSV_JOIN = `LEFT JOIN release_cache mr
        ON rc.type = 'master'
       AND mr.type = 'release'
@@ -8473,22 +8487,31 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
           const formats = Array.isArray(row.formats_j) ? row.formats_j.map((f: any) => f?.name).filter(Boolean).join(" | ") : null;
           const genres  = Array.isArray(row.genres_j)  ? row.genres_j.join(" | ") : null;
           const styles  = Array.isArray(row.styles_j)  ? row.styles_j.join(" | ") : null;
+          const tracklistCount = Array.isArray(row.tracklist_j) ? row.tracklist_j.length : 0;
           const videoCount = Array.isArray(row.videos_j) ? row.videos_j.length : 0;
           const flat = [
             row.discogs_id,
             row.type,
+            row.master_id,
+            row.main_release,
             row.title,
             artists,
             row.year,
+            row.released,
             row.country,
             labels,
             catno,
             formats,
             genres,
             styles,
+            tracklistCount,
             videoCount,
+            row.lowest_price,
+            row.num_for_sale,
             row.community_j?.want ?? null,
             row.community_j?.have ?? null,
+            row.data_quality,
+            row.notes,
             row.cached_at?.toISOString?.() ?? row.cached_at,
           ];
           res.write(flat.map(_csvEscape).join(",") + "\n");
