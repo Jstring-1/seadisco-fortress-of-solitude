@@ -1405,7 +1405,8 @@ async function loadCacheWarm(opts) {
                 <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}${nyPill}</td>
                 <td style="text-align:right;white-space:nowrap">
                   <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues('${safeG}','${safeS}')" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it">↗</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo('${safeG}','${safeS}', ${r.in_cache || 0})" title="Delete every release_cache row for this (genre, style) combo. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
                 </td>
               </tr>`;
             }).join("")}</tbody>
@@ -1435,6 +1436,33 @@ function _cwLoadIntoForm(genre, style) {
   _cwSyncStyleList();
 }
 window._cwLoadIntoForm = _cwLoadIntoForm;
+
+// Per-row delete from the grid. Reuses the export's delete endpoint
+// so the same filter pipeline applies. Requires a typed-N confirm
+// above 1000 rows so the bigger ⌫ in a popular genre can't fire on
+// a misclick. Refreshes the grid on success.
+async function _cwDeleteCombo(genre, style, expectedCount) {
+  if (!genre) return;
+  const label = style ? `${genre} / ${style}` : `${genre} (all styles)`;
+  if (!confirm(`Delete ${Number(expectedCount || 0).toLocaleString()} release_cache row${expectedCount === 1 ? "" : "s"} for ${label}? This cannot be undone.`)) return;
+  if (expectedCount > 1000) {
+    const typed = prompt(`Type "delete ${expectedCount}" to confirm:`);
+    if (typed !== `delete ${expectedCount}`) { alert("Confirmation didn't match — cancelled."); return; }
+  }
+  try {
+    const body = { genre };
+    if (style) body.style = style;
+    const r = await apiFetch("/api/admin/release-cache/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Delete failed: ${j.error || r.status}`); return; }
+    if (typeof loadCacheWarm === "function") { try { loadCacheWarm(); } catch {} }
+  } catch (e) { alert(`Delete failed: ${e}`); }
+}
+window._cwDeleteCombo = _cwDeleteCombo;
 async function cacheWarmStartFromForm(resetCursor) {
   const genreKey = document.getElementById("cw-form-genre")?.value || "";
   const styleKey = document.getElementById("cw-form-style")?.value || "";
