@@ -8386,17 +8386,30 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
   // hundreds of MB to single-digit MB for a 50k-row export.
   const CHUNK = 5000;
   const SELECT_FULL = `rc.discogs_id, rc.type, rc.cached_at, rc.data`;
+  // For CSV, enrich master rows from their cached main_release when
+  // present — masters legitimately lack country / formats /
+  // community.want/have (those are pressing-specific on Discogs), so
+  // without this join the CSV looks half-empty for any master row.
+  // For release rows, the join is a no-op (rc.type != 'master') and
+  // we just project the row's own fields. NULLIF on year='0' lets
+  // the fallback kick in when Discogs stamped year=0 for an old
+  // master whose recording date is uncertain.
   const SELECT_CSV  = `rc.discogs_id, rc.type, rc.cached_at,
-    rc.data->>'title'   AS title,
-    rc.data->>'year'    AS year,
-    rc.data->>'country' AS country,
-    rc.data->'artists'  AS artists_j,
-    rc.data->'formats'  AS formats_j,
-    rc.data->'genres'   AS genres_j,
-    rc.data->'styles'   AS styles_j,
-    rc.data->'videos'   AS videos_j,
-    rc.data->'community' AS community_j`;
+    COALESCE(NULLIF(rc.data->>'title',   ''), mr.data->>'title')   AS title,
+    COALESCE(NULLIF(NULLIF(rc.data->>'year','0'), ''), NULLIF(mr.data->>'year','0')) AS year,
+    COALESCE(NULLIF(rc.data->>'country', ''), mr.data->>'country') AS country,
+    COALESCE(rc.data->'artists',  mr.data->'artists')  AS artists_j,
+    COALESCE(rc.data->'formats',  mr.data->'formats')  AS formats_j,
+    COALESCE(rc.data->'genres',   mr.data->'genres')   AS genres_j,
+    COALESCE(rc.data->'styles',   mr.data->'styles')   AS styles_j,
+    COALESCE(rc.data->'videos',   mr.data->'videos')   AS videos_j,
+    COALESCE(rc.data->'community',mr.data->'community')AS community_j`;
+  const CSV_JOIN = `LEFT JOIN release_cache mr
+       ON rc.type = 'master'
+      AND mr.type = 'release'
+      AND mr.discogs_id = NULLIF(rc.data->>'main_release','')::int`;
   const selectCols = format === "csv" ? SELECT_CSV : SELECT_FULL;
+  const joinSql    = format === "csv" ? CSV_JOIN   : "";
   let written = 0;
   let firstJson = true;
   try {
@@ -8405,6 +8418,7 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
       const argsWithPaging = args.concat([take, offset]);
       const sqlText = `SELECT ${selectCols}
            FROM release_cache rc
+           ${joinSql}
            ${whereSql}
            ${orderSql}
            LIMIT $${argsWithPaging.length - 1} OFFSET $${argsWithPaging.length}`;
