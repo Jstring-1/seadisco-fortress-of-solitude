@@ -1648,6 +1648,10 @@ async function rcxDelete() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
     if (status) status.textContent = `Deleted ${Number(j.deleted ?? 0).toLocaleString()} row${j.deleted === 1 ? "" : "s"}.`;
+    // Refresh the cache-warm grid so the totals reflect the delete —
+    // the server already invalidated its memoized stats cache, so
+    // this fetch recomputes fresh.
+    if (typeof loadCacheWarm === "function") { try { loadCacheWarm(); } catch {} }
   } catch (e) { if (status) status.textContent = `Failed: ${e}`; }
 }
 window.rcxDelete = rcxDelete;
