@@ -8364,7 +8364,12 @@ app.get("/api/admin/release-cache/preview", async (req, res) => {
 
 app.get("/api/admin/release-cache/export", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const format = String(req.query.format || "csv").toLowerCase();
+  // Read the OUTPUT format from `out` rather than `format` — the
+  // form's "Format contains" filter (Vinyl/CD/etc.) also uses
+  // `format`, and the collision was making every download silently
+  // apply `formats CONTAINS "csv"` which matches 0 rows. Keep
+  // legacy ?format= as a fallback for any external caller.
+  const format = String(req.query.out || req.query.format || "csv").toLowerCase();
   if (!["csv", "json", "ndjson"].includes(format)) {
     res.status(400).json({ error: "format must be csv | json | ndjson" }); return;
   }

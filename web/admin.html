@@ -1571,7 +1571,11 @@ async function rcxDownload() {
   const status = document.getElementById("rcx-status");
   const format = document.getElementById("rcx-format-out")?.value || "csv";
   const params = _rcxBuildParams();
-  params.set("format", format);
+  // OUTPUT format goes under `out` — the form's "Format contains"
+  // filter (Vinyl/CD/etc.) also uses `format`, so this collision
+  // was silently turning every download into `formats CONTAINS "csv"`
+  // and matching 0 rows.
+  params.set("out", format);
   if (status) status.textContent = "Preparing download…";
   // Streamed responses need the auth token in the URL too — easiest
   // path is to fetch with apiFetch, get a Blob, then create an object
