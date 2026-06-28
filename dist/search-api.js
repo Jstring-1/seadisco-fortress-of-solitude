@@ -10122,16 +10122,32 @@ const CW_STATS_TTL_MS = 5 * 60 * 1000;
 const CW_STATS_STALE_MS = 60 * 60 * 1000;
 let _cwStatsCache = null;
 let _cwStatsInflight = null;
-function _invalidateCwStats() { _cwStatsCache = null; }
+// Monotonic timestamp bumped on every invalidate. A compute started
+// before this timestamp can't trust its own result (rows were
+// added/deleted while it was running), so it discards instead of
+// caching. Without this, a delete that races with an in-flight
+// recompute would overwrite the cache with pre-delete numbers and
+// the grid would stay stale until the next manual TTL expiry.
+let _cwStatsLastInvalidatedAt = 0;
+function _invalidateCwStats() {
+    _cwStatsCache = null;
+    // Abandon the in-flight — let it finish silently but the next
+    // status call will start a fresh compute.
+    _cwStatsInflight = null;
+    _cwStatsLastInvalidatedAt = Date.now();
+}
 // Fire-and-forget background recompute used by the SWR path. Returns
 // silently on failure — the next foreground call retries.
 function _kickCwStatsBackgroundRefresh() {
     if (_cwStatsInflight)
         return;
+    const startedAt = Date.now();
     _cwStatsInflight = (async () => {
         try {
             const out = await _computeCwStats();
-            _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            if (startedAt >= _cwStatsLastInvalidatedAt) {
+                _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            }
             return out;
         }
         catch (err) {
@@ -10264,10 +10280,13 @@ async function _getCwStats() {
     // promise instead of kicking a second concurrent CTE scan.
     if (_cwStatsInflight)
         return _cwStatsInflight;
+    const startedAt = Date.now();
     _cwStatsInflight = (async () => {
         try {
             const out = await _computeCwStats();
-            _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            if (startedAt >= _cwStatsLastInvalidatedAt) {
+                _cwStatsCache = { at: Date.now(), rows: out.rows, release_cache_total: out.release_cache_total };
+            }
             return out;
         }
         finally {
