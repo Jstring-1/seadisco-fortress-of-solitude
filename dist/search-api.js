@@ -8977,6 +8977,35 @@ app.get("/api/admin/release-cache/preview", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// POST /api/admin/release-cache/delete — destructive. Reuses the same
+// _buildReleaseCacheWhere as preview/export so the form's filters
+// translate identically. Refuses a wide-open DELETE (no filters) so
+// a stray click can't nuke the whole cache; the caller must pass at
+// least one filter. The client double-confirms via the row count
+// from /preview.
+app.post("/api/admin/release-cache/delete", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        // Build from body so the filter payload survives a POST cleanly.
+        const { sql: whereSql, args } = _buildReleaseCacheWhere(req.body || {});
+        if (!whereSql) {
+            res.status(400).json({ error: "At least one filter required — refusing to DELETE the entire cache." });
+            return;
+        }
+        const r = await getPool().query(`DELETE FROM release_cache rc ${whereSql}`, args);
+        const deleted = r.rowCount ?? 0;
+        console.log(`[release-cache delete] ${deleted} rows whereSql=${whereSql} args=${JSON.stringify(args)}`);
+        // Invalidate the cache-warm stats cache so the per-combo grid
+        // reflects the new totals on its next refresh, not 5 min later.
+        _invalidateCwStats();
+        res.json({ deleted });
+    }
+    catch (err) {
+        console.error("[release-cache delete]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 app.get("/api/admin/release-cache/export", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
