@@ -1415,7 +1415,7 @@ async function loadCacheWarm(opts) {
 
     if (_cwPollTimer) { clearTimeout(_cwPollTimer); _cwPollTimer = null; }
     if (running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
-      _cwPollTimer = setTimeout(loadCacheWarm, 5000);
+      _cwPollTimer = setTimeout(loadCacheWarm, 20000);
     }
   } catch (e) {
     el.innerHTML = `<span style="color:#e88">Load failed: ${(e && e.message) || e}</span>`;
