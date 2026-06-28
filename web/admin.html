@@ -160,10 +160,27 @@
                   <input id="rcx-format" type="text" placeholder="Vinyl, CD…" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                 </label>
                 <label>Genre
-                  <input id="rcx-genre" type="text" placeholder="Blues" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <select id="rcx-genre" onchange="_rcxSyncStyleList()" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <option value="">(any)</option>
+                    <option value="Blues">Blues</option>
+                    <option value="Folk, World, &amp; Country">Folk, World, &amp; Country</option>
+                    <option value="Jazz">Jazz</option>
+                    <option value="Reggae">Reggae</option>
+                    <option value="Latin">Latin</option>
+                    <option value="Rock">Rock</option>
+                    <option value="Electronic">Electronic</option>
+                    <option value="Funk / Soul">Funk / Soul</option>
+                    <option value="Hip Hop">Hip Hop</option>
+                    <option value="Pop">Pop</option>
+                    <option value="Classical">Classical</option>
+                    <option value="Stage &amp; Screen">Stage &amp; Screen</option>
+                    <option value="Brass &amp; Military">Brass &amp; Military</option>
+                    <option value="Children's">Children's</option>
+                    <option value="Non-Music">Non-Music</option>
+                  </select>
                 </label>
                 <label>Style
-                  <input id="rcx-style" type="text" placeholder="Country Blues" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-style" type="text" list="cw-styles-Blues" placeholder="(any of genre)" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                 </label>
                 <label>Year from
                   <input id="rcx-year-from" type="number" placeholder="1900" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
@@ -1512,6 +1529,17 @@ async function lexiconUploadJson(event) {
 window.lexiconUploadJson = lexiconUploadJson;
 
 // ── Cache exports ────────────────────────────────────────────────────
+// Swap the Style input's datalist to the chosen genre's bucket so
+// autocomplete suggests valid Discogs style names for that genre only.
+function _rcxSyncStyleList() {
+  const g = document.getElementById("rcx-genre")?.value || "";
+  const def = _CW_GENRES.find(x => x.key === g);
+  const styleEl = document.getElementById("rcx-style");
+  if (!styleEl) return;
+  styleEl.setAttribute("list", def ? `cw-styles-${def.list}` : "cw-styles-Blues");
+}
+window._rcxSyncStyleList = _rcxSyncStyleList;
+
 function _rcxBuildParams() {
   const q = new URLSearchParams();
   const add = (k, v) => { if (v !== "" && v != null) q.set(k, v); };
