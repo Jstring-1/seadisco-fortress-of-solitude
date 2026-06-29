@@ -368,6 +368,24 @@ function _youtubeRowHtml(it) {
     displayTitle = _albumHighlightMatches(safeTitle, remaining);
     displayDesc  = _albumHighlightMatches(safeDesc,  remaining);
   }
+  // Mark rows as "likely match" so they get a colored glow in the
+  // popup. Two trigger paths:
+  //   1. Album mode — _albumAutoMatchTrack found a remaining missing
+  //      track whose title is a substring of this video's title.
+  //   2. Per-track Suggest mode — the searched track title appears
+  //      as a substring of this video's title.
+  let isLikelyMatch = false;
+  if (window._sdSuggestAlbumContext) {
+    const ctx2 = window._sdSuggestAlbumContext;
+    const staged2 = window._sdSuggestStaged || {};
+    const remaining2 = (ctx2.tracks || []).filter(t => !staged2[t.position]);
+    isLikelyMatch = !!_albumAutoMatchTrack(it.title || "", remaining2);
+  } else if (window._sdSuggestForTrack) {
+    const wantTt = _ytNormTitle(window._sdSuggestForTrack.trackTitle || "");
+    const vTt = _ytNormTitle(it.title || "");
+    if (wantTt && wantTt.length >= 3 && vTt.includes(wantTt)) isLikelyMatch = true;
+  }
+  const matchClass = isLikelyMatch ? " is-yt-match" : "";
   const thumb = it.thumbnail || `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
   const isSaved = !!_ytSavedIds?.has(id);
   const saveBtn = `<button type="button" class="archive-btn yt-save-btn${isSaved ? " is-saved" : ""}" onclick="_youtubeToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>`;
@@ -423,7 +441,7 @@ function _youtubeRowHtml(it) {
   const durStr = String(it.durationFormatted || "").trim();
   const durOverlay = durStr ? `<span class="yt-row-duration">${escHtml(durStr)}</span>` : "";
   return `
-    <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
+    <div class="yt-row archive-row${matchClass}" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
       <span class="yt-row-thumb-wrap">
         <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
         ${durOverlay}
