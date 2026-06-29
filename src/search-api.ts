@@ -5252,7 +5252,9 @@ app.get("/api/chronam/search", async (req, res) => {
   };
   const sb = Object.prototype.hasOwnProperty.call(sortMap, sortRaw) ? sortMap[sortRaw] : "";
 
-  const key = `q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}|sb=${sb}`;
+  // v2 — busts pre-fix cached entries where a single-bound year filter
+  // was silently dropped and unrestricted results got stored.
+  const key = `v2|q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}|sb=${sb}`;
   const cached = _chronamCacheGet(key);
   if (cached) { res.json({ ...cached, _cache: "memory" }); return; }
 
