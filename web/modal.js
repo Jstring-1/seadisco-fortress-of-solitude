@@ -3567,6 +3567,14 @@ function _trackYtRefreshHeadingPlayableCount(root) {
 }
 window._trackYtRefreshHeadingPlayableCount = _trackYtRefreshHeadingPlayableCount;
 
+// Noise terms appended to every auto-built YT search query. Keeps AI
+// covers, AI voices, Suno/Udio output, and "how to" tutorials out of
+// the top results.
+function _ytNoiseFilter() {
+  return `-"ai cover" -"ai voice" -"ai generated" -suno -udio -"made with ai" -"how to"`;
+}
+window._ytNoiseFilter = _ytNoiseFilter;
+
 // Click handler for the per-row 🎵 suggest affordance. Stashes the
 // track context on window so youtube.js's popup can pick it up + show
 // "✓ Suggest" buttons on each result, then opens the popup with a
@@ -3644,8 +3652,13 @@ function _trackYtOpenSuggest(el) {
     // the popup target id (#album-info or #version-info).
     targetId: popupRoot?.id || "album-info",
   };
-  const q = [trackArtist ? `"${trackArtist}"` : "", trackTitle ? `"${trackTitle}"` : "", trackAlbum]
-    .filter(Boolean).join(" ");
+  const _ytArtistOk = trackArtist && !/^\s*various(\s+artists)?\s*$/i.test(trackArtist);
+  const q = [
+    _ytArtistOk ? `"${trackArtist}"` : "",
+    trackTitle ? `"${trackTitle}"` : "",
+    trackAlbum,
+    _ytNoiseFilter(),
+  ].filter(Boolean).join(" ");
   // autoSearch:false — open the popup with the query prefilled but
   // don't burn 100 quota units. The admin can press Search to fire
   // the real lookup or jump straight to the paste-URL form for
@@ -3793,9 +3806,11 @@ async function _trackYtOpenAlbumSuggest(el) {
   // The release title goes in unquoted (per request) since strict-
   // phrase matching on long album titles drops too many candidates.
   const ytArtist = String(albumArtist || "").replace(/\s*\(\d+\)\s*$/, "").trim();
+  const _ytArtistOk = ytArtist && !/^\s*various(\s+artists)?\s*$/i.test(ytArtist);
   const q = [
-    ytArtist ? `"${ytArtist}"` : "",
+    _ytArtistOk ? `"${ytArtist}"` : "",
     albumTitle ? albumTitle : "",
+    _ytNoiseFilter(),
   ].filter(Boolean).join(" ");
   // autoSearch:false — same rationale as _trackYtOpenSuggest. Admin
   // can press Search to fire the album-wide lookup or stage tracks
@@ -4827,9 +4842,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // artist/title fresh from the popup DOM at click time).
   const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
   // Keep this in sync with _trackYtOpenAlbumSuggest's query.
+  const _albumArtistOk = _albumFirstArtist && !/^\s*various(\s+artists)?\s*$/i.test(_albumFirstArtist);
   const _ytAlbumQ = [
-    _albumFirstArtist ? `"${_albumFirstArtist}"` : "",
+    _albumArtistOk ? `"${_albumFirstArtist}"` : "",
     title ? `"${title}"` : "",
+    _ytNoiseFilter(),
   ].filter(Boolean).join(" ");
   // Surface the missing-tracks link for every signed-in user while
   // the YT auto-search is suspended — the popup itself opens the
