@@ -4249,7 +4249,7 @@ app.get("/api/gutenberg/search", async (req, res) => {
         if (q) p.set("search", q);
         if (lang) p.set("languages", lang);
         p.set("topic", t);
-        return loggedFetch("gutendex", `https://gutendex.com/books?${p.toString()}`, {
+        return loggedFetch("gutendex", `https://gutendex.com/books/?${p.toString()}`, {
           context: `search-preset:${t}`,
           signal: AbortSignal.timeout(15000),
         })
@@ -4317,7 +4317,7 @@ app.get("/api/gutenberg/search", async (req, res) => {
   if (page > 1) params.set("page", String(page));
   if (lang) params.set("languages", lang);
   if (topicRaw) params.set("topic", topicRaw);
-  const url = `https://gutendex.com/books?${params.toString()}`;
+  const url = `https://gutendex.com/books/?${params.toString()}`;
   const t0 = Date.now();
   try {
     // 15-s timeout on single-topic / no-topic searches too. Gutendex
@@ -4329,7 +4329,9 @@ app.get("/api/gutenberg/search", async (req, res) => {
     });
     console.log(`[gutenberg/search] q="${q}" topic="${topicRaw}" page=${page} upstream=${Date.now() - t0}ms status=${r.status}`);
     if (!r.ok) {
-      res.status(502).json({ error: "upstream", status: r.status });
+      const body = await r.text().catch(() => "");
+      console.error(`[gutenberg/search] upstream non-OK status=${r.status} body="${body.slice(0, 240)}"`);
+      res.status(502).json({ error: "upstream", status: r.status, body: body.slice(0, 240) });
       return;
     }
     const j = await r.json() as any;
