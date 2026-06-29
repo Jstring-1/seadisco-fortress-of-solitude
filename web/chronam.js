@@ -145,7 +145,7 @@ async function runChronAmSearch(q, opts) {
     const displayQuery = String(query).replace(/^"(.+)"$/, "$1");
     const draw = () => {
       const s = Math.round((Date.now() - start) / 1000);
-      target.innerHTML = `<div class="loc-empty">Searching loc.gov for "${escHtml(displayQuery)}"… <span style="color:var(--muted);font-size:0.85rem">${s}s elapsed · loc.gov can take 10–20s on first hit</span></div>`;
+      target.innerHTML = `<div class="loc-empty">Searching Historic Newspapers for "${escHtml(displayQuery)}"… <span style="color:var(--muted);font-size:0.85rem">${s}s elapsed · may take 10–20s on first hit</span></div>`;
     };
     draw();
     loadingTimer = setInterval(draw, 1000);
