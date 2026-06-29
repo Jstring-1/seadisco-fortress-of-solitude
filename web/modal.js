@@ -3787,14 +3787,6 @@ async function _trackYtOpenAlbumSuggest(el) {
   };
   // Clear the per-track context so the popup knows it's in album mode.
   window._sdSuggestForTrack = null;
-  // Append "-live" to filter out live recordings, UNLESS the album
-  // title itself contains "live" (in which case the excluded
-  // keyword would gut the actual results). Always exclude
-  // "-karaoke" — karaoke uploads almost never carry that word in
-  // legitimate album titles, and they're noise. Previously we also
-  // tailed with the literal word "album" to bias toward full-album
-  // uploads, but it stifled too many otherwise-valid results.
-  const _albumTitleHasLive = /\blive\b/i.test(albumTitle || "");
   // Strip Discogs's " (N)" disambiguator from the artist name — it's
   // a catalog convention, not how a YouTuber would title an upload.
   // Quotes still wrap the artist so multi-word names stay phrasal.
@@ -3804,8 +3796,6 @@ async function _trackYtOpenAlbumSuggest(el) {
   const q = [
     ytArtist ? `"${ytArtist}"` : "",
     albumTitle ? albumTitle : "",
-    _albumTitleHasLive ? "" : "-live",
-    "-karaoke",
   ].filter(Boolean).join(" ");
   // autoSearch:false — same rationale as _trackYtOpenSuggest. Admin
   // can press Search to fire the album-wide lookup or stage tracks
@@ -4836,19 +4826,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // knows what to look up; the click handler ignores it (still pulls
   // artist/title fresh from the popup DOM at click time).
   const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
-  // Keep this in sync with _trackYtOpenAlbumSuggest's query. We
-  // append "-live" to filter out live-recording uploads UNLESS the
-  // album itself is a live record (its title carries the word
-  // "live"), in which case excluding it would strip the very thing
-  // we're searching for. Always exclude "-karaoke". The trailing
-  // "album" hint was dropped — it was suppressing too many
-  // otherwise-valid results.
-  const _albumTitleHasLive = /\blive\b/i.test(title || "");
+  // Keep this in sync with _trackYtOpenAlbumSuggest's query.
   const _ytAlbumQ = [
     _albumFirstArtist ? `"${_albumFirstArtist}"` : "",
     title ? `"${title}"` : "",
-    _albumTitleHasLive ? "" : "-live",
-    "-karaoke",
   ].filter(Boolean).join(" ");
   // Surface the missing-tracks link for every signed-in user while
   // the YT auto-search is suspended — the popup itself opens the

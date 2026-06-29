@@ -10784,6 +10784,11 @@ a:focus-visible {
   align-items: flex-start;
   padding: 0.55rem 0.7rem;
 }
+.yt-row.is-yt-match {
+  background: rgba(120, 220, 140, 0.08);
+  box-shadow: 0 0 0 1px rgba(120, 220, 140, 0.55), 0 0 14px rgba(120, 220, 140, 0.35);
+  border-radius: 6px;
+}
 .yt-row-thumb-wrap {
   position: relative;
   flex-shrink: 0;
