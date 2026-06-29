@@ -5612,8 +5612,15 @@ app.get("/api/chronam/search", async (req, res) => {
     u.searchParams.set("q", q);
     u.searchParams.set("sp", String(page));
     u.searchParams.set("c", "20");
-    if (date1 && date2)
-        u.searchParams.set("dates", `${date1}/${date2}`);
+    // loc.gov wants a YYYY/YYYY range. If the user only filled one bound,
+    // pad the other with a sentinel that covers the full Chronicling
+    // America span so the single-bound filter still narrows results
+    // instead of being silently dropped.
+    if (date1 || date2) {
+        const d1 = date1 || "1690";
+        const d2 = date2 || "2099";
+        u.searchParams.set("dates", `${d1}/${d2}`);
+    }
     if (state)
         u.searchParams.set("location_state", state);
     if (sb)
