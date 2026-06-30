@@ -9038,20 +9038,8 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// ── Per-label catno sort rules ────────────────────────────────────
-// Some labels distinguish format variants in the catno itself (e.g.
-// Excello's 7-inch singles are catalogued as "45-2001", "45-2002"
-// alongside their bare-numeric LPs and 78s). String-sorting those
-// raw values clusters every 7-inch at the top of the catalog,
-// breaking the chronological reading order. The map below names the
-// SQL transforms to apply to the catno BEFORE it's used as a sort
-// key. Display catno stays raw — only the ORDER BY changes.
-//
-// Add a new label by appending an entry here; the carousel picks it
-// up automatically on next request. Format:
-//   stripPrefixes: regex alternation of leading tokens to drop
 const LABEL_CATNO_RULES = {
-    "Excello": { stripPrefixes: ["45-"] },
+    "Excello": { stripPrefixes: ["45-"], sortByCatnoOnly: true },
 };
 function _labelCatnoSortExpr(label) {
     const base = `COALESCE(rc.data->'labels'->0->>'catno', '')`;
@@ -9067,6 +9055,14 @@ function _labelCatnoSortExpr(label) {
     // ^(…) is anchored so we only strip the leading token, never an
     // occurrence in the middle of a longer catno.
     return `REGEXP_REPLACE(${base}, '^(${escaped})', '')`;
+}
+function _labelOrderBy(label) {
+    const rule = LABEL_CATNO_RULES[label];
+    const catnoExpr = _labelCatnoSortExpr(label);
+    if (rule?.sortByCatnoOnly) {
+        return `ORDER BY ${catnoExpr} ASC, rc.discogs_id ASC`;
+    }
+    return `ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC, ${catnoExpr} ASC, rc.discogs_id ASC`;
 }
 // GET /api/admin/labels/releases?label=X&page=1&per_page=60
 //   &type=release|master|both&year_from=&year_to=
@@ -9147,9 +9143,7 @@ app.get("/api/admin/labels/releases", async (req, res) => {
             COALESCE(rc.data->>'notes', '') AS notes
            FROM release_cache rc
            ${whereSql}
-           ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC,
-                    ${_labelCatnoSortExpr(label)} ASC,
-                    rc.discogs_id ASC
+           ${_labelOrderBy(label)}
            LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`, args),
             getPool().query(`SELECT COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year, COUNT(*)::int AS n
            FROM release_cache rc
