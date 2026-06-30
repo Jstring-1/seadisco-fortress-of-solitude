@@ -1403,6 +1403,10 @@ e.g.  miles davis | coltrane
         <button type="button" id="ba-tunings-clear" class="archive-btn" onclick="_baTuningsClearFilters()" style="display:none" title="Clear all tuning filters">Clear filters</button>
         <span id="ba-tunings-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
+      <!-- Bulk action bar — appears when 1+ rows are selected. Lets
+           the curator mass-set position or mass-delete in one round-trip.
+           Populated by _baTuningsRenderBulkBar. -->
+      <div id="ba-tunings-bulkbar" style="display:none;margin-bottom:0.6rem;padding:0.5rem 0.7rem;background:rgba(120,220,140,0.07);border:1px solid rgba(120,220,140,0.4);border-radius:6px;font-size:0.82rem"></div>
       <div id="ba-tunings-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="ba-tunings-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>

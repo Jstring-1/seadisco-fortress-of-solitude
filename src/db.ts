@@ -2244,6 +2244,53 @@ export async function listBluesTunings(opts: {
   );
   return { rows: rowsR.rows, total };
 }
+/** Bulk-set the `position` column on a set of blues_tunings_grid
+ *  rows. Empty / null position clears the column. Returns the rows
+ *  actually updated. */
+export async function bulkUpdateTuningPosition(
+  ids: number[],
+  position: string | null,
+): Promise<number> {
+  const cleanIds = Array.from(new Set((ids || [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n > 0)));
+  if (!cleanIds.length) return 0;
+  const normalized = (typeof position === "string" ? position.trim().slice(0, 80) : null);
+  const r = await getPool().query(
+    `UPDATE blues_tunings_grid SET position = $1 WHERE id = ANY($2::int[])`,
+    [normalized || null, cleanIds],
+  );
+  return r.rowCount ?? 0;
+}
+
+/** Bulk-delete blues_tunings_grid rows. */
+export async function bulkDeleteTunings(ids: number[]): Promise<number> {
+  const cleanIds = Array.from(new Set((ids || [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n > 0)));
+  if (!cleanIds.length) return 0;
+  const r = await getPool().query(
+    `DELETE FROM blues_tunings_grid WHERE id = ANY($1::int[])`,
+    [cleanIds],
+  );
+  return r.rowCount ?? 0;
+}
+
+/** Just the ids matching the current tunings filter (same shape as
+ *  listBluesTunings). Capped at 10k for the bulk editor's "Select all
+ *  matching" link. */
+export async function listBluesTuningIdsMatching(opts: {
+  q?: string;
+  artist?: string;
+  position?: string;
+  pitch?: string;
+}): Promise<{ ids: number[]; capped: boolean }> {
+  const CAP = 10000;
+  const out = await listBluesTunings({ ...opts, limit: CAP + 1, offset: 0 });
+  const ids = (out.rows || []).slice(0, CAP).map((r) => Number(r.id));
+  return { ids, capped: (out.rows?.length ?? 0) > CAP };
+}
+
 export async function getBluesTuningsFacets(): Promise<{
   artists: string[]; positions: string[]; pitches: string[];
 }> {
