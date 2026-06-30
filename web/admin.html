@@ -1588,6 +1588,7 @@ function _renderLabelDir() {
       <input id="labeldir-search" type="search" placeholder="Filter labels…" value="${_eHtml(_labelDirQuery)}"
              oninput="_labelDirOnSearch(event)"
              style="flex:1;min-width:180px;padding:0.3rem 0.5rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+      <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     <div style="overflow-x:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
@@ -1721,6 +1722,18 @@ async function _labelDirSaveIdManual(labelName) {
 async function _labelDirClearId(labelName) {
   if (!confirm(`Clear Discogs ID on "${labelName}"?`)) return;
   await _labelDirSaveId(labelName, null);
+}
+
+async function _labelDirCleanNames() {
+  if (!confirm("Strip HTML and collapse whitespace on every dirty label_name? Merges rows that collide after cleaning.")) return;
+  try {
+    const r = await apiFetch("/api/admin/external-discography/clean-label-names", { method: "POST" });
+    if (!r.ok) { alert(`Clean failed: ${r.status}`); return; }
+    const j = await r.json();
+    const summary = (j.renames || []).slice(0, 8).map(x => `  • "${x.from}" → "${x.to}" (${x.rows} rows)`).join("\n");
+    alert(`Renamed ${j.renamed} rows · merged ${j.mergedDuplicates} duplicates.\n\n${summary || "(no changes)"}`);
+    loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
 }
 
 // ── Year backfill ───────────────────────────────────────────────
