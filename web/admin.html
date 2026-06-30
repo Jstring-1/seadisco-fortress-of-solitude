@@ -1263,24 +1263,31 @@ async function loadCacheWarmCatno() {
       const isActive = running && active === s.key;
       const range = `${s.lo}–${s.hi}`;
       const phase = String(s.phase || "catno");
-      let cursor;
-      let progressPct;
+      let cursorTxt;
+      let progressPct = 0;
       if (phase === "label_sweep") {
         const page = Number.isFinite(Number(s.label_sweep_page)) ? Number(s.label_sweep_page) : 1;
-        cursor = `label-sweep p${page}`;
+        cursorTxt = `label-sweep p${page}`;
         progressPct = 100;
-      } else if (phase === "done") {
-        cursor = "done";
+      } else if (phase === "label_sweep_done") {
+        cursorTxt = "label sweep done";
+        progressPct = 100;
+      } else if (phase === "catno_done") {
+        cursorTxt = "catno walk done";
         progressPct = 100;
       } else {
-        cursor = s.current_catno != null ? `catno ${s.current_catno}` : "not started";
+        cursorTxt = s.current_catno != null ? `catno ${s.current_catno}` : "not started";
         progressPct = s.current_catno != null && s.hi > s.lo
           ? Math.min(100, Math.max(0, Math.round(((s.current_catno - s.lo) / (s.hi - s.lo)) * 100)))
           : 0;
       }
-      const startBtn = !running
-        ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)">Start</button>
-           <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and start fresh">Restart</button>`
+      const sweepPageTxt = Number.isFinite(Number(s.label_sweep_page)) && Number(s.label_sweep_page) > 1
+        ? ` (resume p${s.label_sweep_page})` : "";
+      const buttons = !running
+        ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)" title="Walk the configured catno range">Catno walk</button>
+           <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and re-walk the catno range">Restart catno</button>
+           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', false)" title="Paginated /search?label= sweep. Catches releases with catnos outside the range or none at all.${sweepPageTxt}">Sweep label</button>
+           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', true)" title="Reset label-sweep page to 1 and re-sweep">Restart sweep</button>`
         : isActive
           ? `<button class="admin-btn" onclick="_cwcStop()">Stop</button>`
           : `<span style="color:var(--muted);font-size:0.78rem">(another series is running)</span>`;
@@ -1289,12 +1296,12 @@ async function loadCacheWarmCatno() {
           <td style="padding:0.4rem 0.5rem"><strong>${esc(s.label)}</strong>${s.prefix ? ` <code style="font-size:0.7rem">${esc(s.prefix)}</code>` : ""}
             <div style="font-size:0.72rem;color:var(--muted);max-width:32ch">${esc(s.notes || "")}</div>
           </td>
-          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${range}<div style="font-size:0.72rem;color:var(--muted)">year ≤ ${s.yearMax}</div></td>
-          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${cursor}<div style="background:rgba(255,255,255,0.06);height:4px;width:80px;border-radius:2px;margin-top:0.3rem;overflow:hidden"><div style="background:var(--accent);height:100%;width:${progressPct}%"></div></div></td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${range}</td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${cursorTxt}<div style="background:rgba(255,255,255,0.06);height:4px;width:80px;border-radius:2px;margin-top:0.3rem;overflow:hidden"><div style="background:var(--accent);height:100%;width:${progressPct}%"></div></div></td>
           <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_cached)}</td>
           <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_skipped)}</td>
           <td style="padding:0.4rem 0.5rem;text-align:right">${s.total_errors ? `<span style="color:#e88">${fmt(s.total_errors)}</span>` : "0"}</td>
-          <td style="padding:0.4rem 0.5rem;white-space:nowrap;display:flex;gap:0.3rem;align-items:center">${startBtn}<button class="admin-btn" onclick="_cwcReset('${esc(s.key)}')" title="Zero out counters + cursor for this series">Reset</button></td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap;display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">${buttons}<button class="admin-btn" onclick="_cwcReset('${esc(s.key)}')" title="Zero out counters + cursor for this series">Reset</button></td>
         </tr>`;
     }).join("");
     const recentBlock = (() => {
@@ -1339,6 +1346,17 @@ async function _cwcStart(seriesKey, resetCursor) {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(j?.error || `Start failed: HTTP ${r.status}`); return; }
+    loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+async function _cwcSweepLabel(seriesKey, resetCursor) {
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/start-label-sweep", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seriesKey, resetCursor: !!resetCursor }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(j?.error || `Label sweep start failed: HTTP ${r.status}`); return; }
     loadCacheWarmCatno();
   } catch (err) { alert(String(err)); }
 }
