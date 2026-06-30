@@ -3320,7 +3320,7 @@ async function _baLoadTuningsFacets() {
   try {
     const r = await apiFetch("/api/blues-archive/tunings/facets");
     if (!r.ok) return;
-    const { artists = [], positions = [], pitches = [] } = await r.json();
+    const { artists = [], positions = [] } = await r.json();
     const fill = (id, label, vals) => {
       const sel = document.getElementById(id);
       if (!sel) return;
@@ -3329,7 +3329,6 @@ async function _baLoadTuningsFacets() {
     };
     fill("ba-tunings-artist",   "All artists",   artists);
     fill("ba-tunings-position", "All positions", positions);
-    fill("ba-tunings-pitch",    "All pitches",   pitches);
     _baTuningsFacetsLoaded = true;
   } catch { /* non-fatal */ }
 }
@@ -3343,18 +3342,16 @@ async function _baLoadTuningsGrid() {
   const q        = (document.getElementById("ba-tunings-search")?.value   || "").trim();
   const artist   = (document.getElementById("ba-tunings-artist")?.value   || "").trim();
   const position = (document.getElementById("ba-tunings-position")?.value || "").trim();
-  const pitch    = (document.getElementById("ba-tunings-pitch")?.value    || "").trim();
   const params = new URLSearchParams();
   if (q)        params.set("q",        q);
   if (artist)   params.set("artist",   artist);
   if (position) params.set("position", position);
-  if (pitch)    params.set("pitch",    pitch);
   params.set("sort",   _baTuningsSort.key);
   params.set("order",  _baTuningsSort.dir);
   params.set("limit",  String(_BA_TUNINGS_LIMIT));
   params.set("offset", String(_baTuningsPage * _BA_TUNINGS_LIMIT));
   const clearBtn = document.getElementById("ba-tunings-clear");
-  if (clearBtn) clearBtn.style.display = (q || artist || position || pitch) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || artist || position) ? "" : "none";
   rowsEl.classList.add("ba-loading");
   try {
     const r = await apiFetch(`/api/blues-archive/tunings?${params}`);
@@ -3403,10 +3400,8 @@ async function _baLoadTuningsGrid() {
           : "";
         return `<tr>
           <td style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(artist)}">${escHtml(artist)}</td>
-          <td style="color:var(--muted);text-align:right;padding-right:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(String(r.track || ""))}</td>
           <td style="color:var(--text);overflow:hidden;text-overflow:ellipsis" title="${escHtml(displayTitle)}">${searchLink}${escHtml(displayTitle)}</td>
           <td style="color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(String(r.position || ""))}">${escHtml(String(r.position || ""))}</td>
-          <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(String(r.pitch || ""))}</td>
           <td style="color:var(--muted);font-size:0.78rem;overflow:hidden" title="${escHtml(displayNotes)}">${escHtml(displayNotes)}</td>
           <td style="text-align:right;white-space:nowrap"><a href="#" onclick="event.preventDefault();_baDeleteTuning(${r.id}, ${JSON.stringify(displayTitle).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")})" title="Delete this tuning row" style="color:#e88;text-decoration:none;font-weight:600;padding:0.1rem 0.4rem">×</a></td>
         </tr>`;
@@ -3415,19 +3410,15 @@ async function _baLoadTuningsGrid() {
         <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
           <colgroup>
             <col style="width:18%">
-            <col style="width:56px">
-            <col style="width:30%">
-            <col style="width:100px">
-            <col style="width:64px">
+            <col style="width:36%">
+            <col style="width:120px">
             <col>
             <col style="width:32px">
           </colgroup>
           <thead><tr>
             ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
-            ${_baSortTh("Track",    "track",    S, "_baSortTunings", "text-align:right;padding-right:0.6rem")}
             ${_baSortTh("Title",    "title",    S, "_baSortTunings")}
             ${_baSortTh("Position", "position", S, "_baSortTunings")}
-            ${_baSortTh("Pitch",    "pitch",    S, "_baSortTunings")}
             <th>Notes</th>
             <th></th>
           </tr></thead>
@@ -3481,9 +3472,7 @@ function _baOpenTuningAdd() {
       <form id="ba-tuning-add-form" onsubmit="event.preventDefault();_baSubmitTuningAdd()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem;font-size:0.86rem">
         <label style="grid-column:1/-1">Artist <input name="artist" required style="width:100%" placeholder="e.g. Charley Patton"></label>
         <label style="grid-column:1/-1">Title <input name="title" required style="width:100%" placeholder="e.g. Pony Blues"></label>
-        <label>Track # <input name="track" placeholder="e.g. 3 or 3-12"></label>
-        <label>Position <input name="position" placeholder="e.g. Open G"></label>
-        <label>Pitch <input name="pitch" placeholder="e.g. A"></label>
+        <label style="grid-column:1/-1">Position <input name="position" placeholder="e.g. Open G"></label>
         <label style="grid-column:1/-1">Notes <textarea name="notes" rows="3" style="width:100%" placeholder="Optional"></textarea></label>
         <div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
           <button type="button" class="archive-btn" onclick="document.getElementById('ba-tuning-add-overlay')?.remove()">Cancel</button>
@@ -3564,11 +3553,9 @@ function _baTuningsClearFilters() {
   const s = document.getElementById("ba-tunings-search");
   const a = document.getElementById("ba-tunings-artist");
   const p = document.getElementById("ba-tunings-position");
-  const ch = document.getElementById("ba-tunings-pitch");
   if (s) s.value = "";
   if (a) a.value = "";
   if (p) p.value = "";
-  if (ch) ch.value = "";
   _baTuningsPage = 0;
   _baLoadTuningsGrid();
 }
