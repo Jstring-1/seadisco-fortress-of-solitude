@@ -1562,16 +1562,32 @@ let _labelDirSearchOpen = null;        // label_name currently expanded
 let _labelDirSearchResults = null;     // {[label_name]: [...candidates]}
 let _labelDirSearchLoading = false;
 let _labelDirQueryTimer = null;
+let _labelDirSortKey = "external_count";
+let _labelDirSortDir = "desc";
+let _labelDirActiveSweepKey = null;    // cache_warm_catno_runs.series_key currently running
 
 async function loadLabelDirectory() {
   const el = document.getElementById("labeldir-content");
   if (!el) return;
   try {
     const url = `/api/admin/label-directory?limit=2000${_labelDirQuery ? `&q=${encodeURIComponent(_labelDirQuery)}` : ""}`;
-    const r = await apiFetch(url);
+    // Fetch directory + catno-worker status in parallel so we know
+    // whether to surface a "running" badge on a row instead of the
+    // ▶ Sweep button.
+    const [r, statusR] = await Promise.all([
+      apiFetch(url),
+      apiFetch("/api/admin/cache-warm-catno/status").catch(() => null),
+    ]);
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
     const j = await r.json();
     _labelDirRows = j.rows || [];
+    _labelDirActiveSweepKey = null;
+    if (statusR?.ok) {
+      const sj = await statusR.json().catch(() => null);
+      // Status payload: { series, running, active }. `active` is the
+      // series_key of the in-flight run (curated or adhoc:N).
+      _labelDirActiveSweepKey = sj?.running ? (sj?.active || null) : null;
+    }
     _renderLabelDir();
   } catch (err) {
     el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
@@ -1595,21 +1611,60 @@ function _renderLabelDir() {
       <table style="width:100%;font-size:0.8rem;border-collapse:collapse">
         <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
           <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
-            <th style="padding:0.35rem 0.5rem">Label</th>
-            <th style="padding:0.35rem 0.5rem;text-align:right">Pad rows</th>
-            <th style="padding:0.35rem 0.5rem;text-align:right">Cache R</th>
-            <th style="padding:0.35rem 0.5rem;text-align:right">Cache M</th>
+            ${_labelDirHeader("label_name",     "Label",     "left")}
+            ${_labelDirHeader("external_count", "Pad rows",  "right")}
+            ${_labelDirHeader("cache_releases", "Cache R",   "right")}
+            ${_labelDirHeader("cache_masters",  "Cache M",   "right")}
             <th style="padding:0.35rem 0.5rem">Sources</th>
-            <th style="padding:0.35rem 0.5rem">Discogs ID</th>
+            ${_labelDirHeader("label_id",       "Discogs ID","left")}
             <th style="padding:0.35rem 0.5rem"></th>
           </tr>
         </thead>
         <tbody>
-          ${_labelDirRows.map(r => _labelDirRowHtml(r)).join("")}
+          ${_labelDirSortedRows().map(r => _labelDirRowHtml(r)).join("")}
         </tbody>
       </table>
     </div>
   `;
+}
+
+function _labelDirHeader(key, label, align) {
+  const active = _labelDirSortKey === key;
+  const arrow  = active ? (_labelDirSortDir === "asc" ? " ▲" : " ▼") : "";
+  return `<th onclick="_labelDirToggleSort('${key}')"
+              style="padding:0.35rem 0.5rem;text-align:${align};cursor:pointer;user-select:none;${active ? "color:var(--text)" : ""}">
+            ${label}${arrow}
+          </th>`;
+}
+
+function _labelDirSortedRows() {
+  const rows = _labelDirRows.slice();
+  const key = _labelDirSortKey;
+  const dir = _labelDirSortDir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    // Nulls go to the bottom regardless of sort direction.
+    const aNull = av == null;
+    const bNull = bv == null;
+    if (aNull && bNull) return 0;
+    if (aNull) return 1;
+    if (bNull) return -1;
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), undefined, { sensitivity: "base" }) * dir;
+  });
+  return rows;
+}
+
+function _labelDirToggleSort(key) {
+  if (_labelDirSortKey === key) {
+    _labelDirSortDir = _labelDirSortDir === "asc" ? "desc" : "asc";
+  } else {
+    _labelDirSortKey = key;
+    // Numeric columns default to desc; text columns default to asc.
+    _labelDirSortDir = (key === "label_name" || key === "sources") ? "asc" : "desc";
+  }
+  _renderLabelDir();
 }
 
 function _labelDirRowHtml(r) {
@@ -1653,12 +1708,34 @@ function _labelDirRowHtml(r) {
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;color:var(--muted);font-size:0.72rem">${sources}</td>
       <td style="padding:0.3rem 0.5rem">${idCell}</td>
-      <td style="padding:0.3rem 0.5rem;text-align:right">
+      <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
+        ${_labelDirSweepCell(r)}
         <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem">🔍 Search</button>
       </td>
     </tr>
     ${searchBlock}
   `;
+}
+
+function _labelDirSweepCell(r) {
+  if (!r.label_id) return "";
+  const myKey   = `adhoc:${r.label_id}`;
+  const someoneRunning = !!_labelDirActiveSweepKey;
+  const meRunning      = _labelDirActiveSweepKey === myKey;
+  if (meRunning) {
+    return `<span style="font-size:0.72rem;color:#9e8;background:#264;padding:0.1rem 0.4rem;border-radius:3px;margin-right:0.3rem" title="Sweep in progress — view in Catalog-number crawls">running…</span>`;
+  }
+  // Curated catno-series keys (e.g. excello:2000-2400) overlap by labelId
+  // too — let the curator still kick the ad-hoc path if needed, but
+  // disable while ANY worker is active so we don't race.
+  const dis = someoneRunning ? "disabled" : "";
+  const title = someoneRunning
+    ? `Another sweep is running (${_labelDirActiveSweepKey}). Wait or stop it first.`
+    : `Sweep every release Discogs has tagged with label_id ${r.label_id} into the cache.`;
+  return `<button class="admin-btn" type="button" ${dis}
+            onclick="_labelDirStartSweep(${r.label_id}, '${_jsEsc(r.label_name)}')"
+            title="${_eHtml(title)}"
+            style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-right:0.3rem">▶ Sweep</button>`;
 }
 
 function _jsEsc(s) {
@@ -1722,6 +1799,21 @@ async function _labelDirSaveIdManual(labelName) {
 async function _labelDirClearId(labelName) {
   if (!confirm(`Clear Discogs ID on "${labelName}"?`)) return;
   await _labelDirSaveId(labelName, null);
+}
+
+async function _labelDirStartSweep(labelId, labelName) {
+  if (!confirm(`Start a /labels/${labelId}/releases sweep for "${labelName}"?\n\nThis walks every release Discogs has tagged with that label_id and fetches+caches any that aren't in the cache yet. Progress is visible in the Catalog-number crawls panel below.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/start-sweep", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ labelId, labelName }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadLabelDirectory();
+    // Also kick the catno panel so the user can scroll down and watch.
+    if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
 }
 
 async function _labelDirCleanNames() {

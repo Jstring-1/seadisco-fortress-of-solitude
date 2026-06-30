@@ -54,13 +54,46 @@ let _stopRequested = false;
 let _adminClerkIdForWorker = null;
 export function initCacheWarmCatnoModule(adminClerkId) {
     _adminClerkIdForWorker = adminClerkId || null;
-    setTimeout(() => {
-        _readActiveRun().then(active => {
-            if (!active || _runningKey)
+    setTimeout(async () => {
+        if (_runningKey)
+            return;
+        try {
+            const active = await _readActiveRun();
+            if (!active)
                 return;
-            console.log(`[cache-warm-catno] boot-resume: ${active}`);
-            startCacheWarmCatnoRun(active).catch(err => console.error("[cache-warm-catno] boot-resume failed:", err));
-        }).catch(() => { });
+            console.log(`[cache-warm-catno] boot-resume candidate: ${active}`);
+            const row = await getCacheWarmCatnoRun(active);
+            const phase = String(row?.phase ?? "catno");
+            // Done states don't resume.
+            if (phase === "catno_done" || phase === "label_sweep_done") {
+                console.log(`[cache-warm-catno] boot-resume skipped — phase ${phase}`);
+                await _clearActiveRun();
+                return;
+            }
+            // Ad-hoc keys came from the Label directory's per-row sweep. The
+            // labelId is in the key suffix; the row carries the label name.
+            if (active.startsWith("adhoc:")) {
+                const labelId = Number(active.slice("adhoc:".length));
+                const labelName = String(row?.label ?? "");
+                if (!Number.isFinite(labelId) || !labelName) {
+                    console.warn(`[cache-warm-catno] adhoc boot-resume malformed (${active}); clearing`);
+                    await _clearActiveRun();
+                    return;
+                }
+                await startAdHocLabelSweep(labelId, labelName).catch(err => console.error("[cache-warm-catno] adhoc boot-resume failed:", err));
+                return;
+            }
+            // Curated seeds — dispatch by phase.
+            if (phase === "label_sweep") {
+                await startLabelSweepRun(active).catch(err => console.error("[cache-warm-catno] label-sweep boot-resume failed:", err));
+            }
+            else {
+                await startCacheWarmCatnoRun(active).catch(err => console.error("[cache-warm-catno] catno boot-resume failed:", err));
+            }
+        }
+        catch (err) {
+            console.error("[cache-warm-catno] boot-resume check failed:", err);
+        }
     }, 5000);
 }
 export function isCacheWarmCatnoRunning() {
@@ -265,6 +298,72 @@ export async function startLabelSweepRun(seriesKey, opts = {}) {
         }
     })().catch(err => console.error(`[cache-warm-catno] label-sweep IIFE rejected:`, err));
     return { ok: true };
+}
+// Ad-hoc label sweep launched from the Labels admin grid. Same
+// `_runLabelSweepPhase` as the curated `startLabelSweepRun`, but the
+// CatnoSeries is built inline from (labelId, labelName) — no seed
+// entry needed. State lives under `series_key = adhoc:{labelId}` so
+// boot-resume can reconstruct everything from the row + key.
+export async function startAdHocLabelSweep(labelId, labelName, opts = {}) {
+    if (!Number.isFinite(labelId) || labelId <= 0)
+        return { ok: false, error: "labelId required" };
+    const safeName = String(labelName ?? "").trim();
+    if (!safeName)
+        return { ok: false, error: "labelName required" };
+    if (_runningKey)
+        return { ok: false, error: `Another catno run is in progress: ${_runningKey}` };
+    const client = await _adminClient();
+    if (!client)
+        return { ok: false, error: "Admin Discogs OAuth not connected (or DISCOGS_CONSUMER_KEY/SECRET missing)" };
+    const key = `adhoc:${labelId}`;
+    const ephemeral = {
+        key,
+        label: safeName,
+        labelId,
+        lo: 0, hi: 0,
+        yearMax: 9999,
+        notes: "Ad-hoc sweep from Label directory",
+    };
+    _runningKey = key;
+    _stopRequested = false;
+    await upsertCacheWarmCatnoRun(key, {
+        label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
+    });
+    const row = await getCacheWarmCatnoRun(key);
+    let sweepPage = (opts.resetCursor || !row?.label_sweep_page) ? 1 : Number(row.label_sweep_page);
+    if (!Number.isFinite(sweepPage) || sweepPage < 1)
+        sweepPage = 1;
+    await upsertCacheWarmCatnoRun(key, {
+        label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
+    }, { phase: "label_sweep", label_sweep_page: sweepPage, last_run_at: new Date() });
+    await _writeActiveRun(key);
+    console.log(`[cache-warm-catno] ad-hoc sweep ${key} (${safeName}) from page=${sweepPage}`);
+    (async () => {
+        try {
+            await _runLabelSweepPhase(client, ephemeral, sweepPage);
+            if (!_stopRequested) {
+                await upsertCacheWarmCatnoRun(key, {
+                    label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
+                }, { phase: "label_sweep_done", last_run_at: new Date() });
+            }
+            console.log(`[cache-warm-catno] ad-hoc sweep ${key} exited cleanly`);
+            await _clearActiveRun();
+        }
+        catch (err) {
+            console.error(`[cache-warm-catno] ad-hoc sweep ${key} crashed:`, err?.stack || err);
+            try {
+                await recordCacheWarmCatnoRunError(key, `crash: ${err?.message ?? String(err)}`);
+            }
+            catch (e2) {
+                console.error(`[cache-warm-catno] failed to record crash:`, e2);
+            }
+        }
+        finally {
+            _runningKey = null;
+            _stopRequested = false;
+        }
+    })().catch(err => console.error(`[cache-warm-catno] ad-hoc sweep IIFE rejected:`, err));
+    return { ok: true, seriesKey: key };
 }
 // ── Shared candidate processor ────────────────────────────────────
 // Filter the search payload to results that actually carry the label
