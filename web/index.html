@@ -1397,7 +1397,6 @@ e.g.  miles davis | coltrane
         <input id="ba-tunings-search"   type="search" placeholder="Search title, artist, position, notes…" style="flex:1;min-width:240px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baTuningsDebouncedSearch()">
         <select id="ba-tunings-artist"   onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All artists</option></select>
         <select id="ba-tunings-position" onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All positions</option></select>
-        <select id="ba-tunings-pitch"    onchange="_baTuningsApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem"><option value="">All pitches</option></select>
         <button type="button" class="archive-btn archive-btn-suggest" onclick="_baOpenTuningAdd()" title="Add a new tuning row">+ Add tuning</button>
         <button type="button" class="archive-btn" onclick="_baLoadTuningsGrid()" title="Re-fetch the tunings grid from the server">↻ Refresh</button>
         <button type="button" id="blues-export-tunings-btn" class="archive-btn" onclick="_baExportTuningsCsv()" title="Download the tunings grid as a CSV (artist, title, position, pitch, notes). UTF-8 with BOM.">Export CSV</button>
