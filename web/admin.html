@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260630.ef39d3b" />
+  <link rel="stylesheet" href="/style.css?v=260630.13ceb7f" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260630.ef39d3b"></script>
-<script defer src="/shared.js?v=260630.ef39d3b"></script>
+<script defer src="/utils.js?v=260630.13ceb7f"></script>
+<script defer src="/shared.js?v=260630.13ceb7f"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -558,8 +558,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260630.ef39d3b"></script>
-<script defer src="/blues-admin.js?v=260630.ef39d3b"></script>
+<script defer src="/modal.js?v=260630.13ceb7f"></script>
+<script defer src="/blues-admin.js?v=260630.13ceb7f"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1564,6 +1564,7 @@ let _labelDirSearchLoading = false;
 let _labelDirQueryTimer = null;
 let _labelDirSortKey = "external_count";
 let _labelDirSortDir = "desc";
+let _labelDirUnassignedOnly = false;
 let _labelDirActiveSweepKey = null;    // cache_warm_catno_runs.series_key currently running
 let _labelDirMergeOpen = null;          // label_name of the row whose merge popover is open
 let _labelDirMergeQuery = "";           // filter text inside the merge popover
@@ -1611,6 +1612,10 @@ function _renderLabelDir() {
       <input id="labeldir-search" type="search" placeholder="Filter labels…" value="${_eHtml(_labelDirQuery)}"
              oninput="_labelDirOnSearch(event)"
              style="flex:1;min-width:180px;padding:0.3rem 0.5rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+      <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted);white-space:nowrap;cursor:pointer">
+        <input type="checkbox" ${_labelDirUnassignedOnly ? "checked" : ""} onchange="_labelDirToggleUnassigned(event)">
+        Unassigned only
+      </label>
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
@@ -1631,7 +1636,7 @@ function _renderLabelDir() {
             ${_labelDirHeader("external_count", "Pad rows",  "right")}
             ${_labelDirHeader("cache_releases", "Cache R",   "right")}
             ${_labelDirHeader("cache_masters",  "Cache M",   "right")}
-            <th style="padding:0.35rem 0.5rem">Sources</th>
+            ${_labelDirHeader("sources",        "Sources",   "left")}
             ${_labelDirHeader("label_id",       "Discogs ID","left")}
             <th style="padding:0.35rem 0.5rem"></th>
           </tr>
@@ -1740,18 +1745,25 @@ function _labelDirHeader(key, label, align) {
 }
 
 function _labelDirSortedRows() {
-  const rows = _labelDirRows.slice();
+  let rows = _labelDirRows.slice();
+  if (_labelDirUnassignedOnly) rows = rows.filter(r => !r.label_id);
   const key = _labelDirSortKey;
   const dir = _labelDirSortDir === "asc" ? 1 : -1;
+  const sortValue = (row) => {
+    const v = row[key];
+    if (Array.isArray(v)) return v.join(", ");   // Sources column
+    return v;
+  };
   rows.sort((a, b) => {
-    const av = a[key];
-    const bv = b[key];
-    // Nulls go to the bottom regardless of sort direction.
-    const aNull = av == null;
-    const bNull = bv == null;
-    if (aNull && bNull) return 0;
-    if (aNull) return 1;
-    if (bNull) return -1;
+    const av = sortValue(a);
+    const bv = sortValue(b);
+    // Treat null AND empty string as "missing" so unassigned rows
+    // (which is what the user is usually triaging) sort to the bottom.
+    const aMissing = av == null || av === "";
+    const bMissing = bv == null || bv === "";
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
     if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
     return String(av).localeCompare(String(bv), undefined, { sensitivity: "base" }) * dir;
   });
@@ -1839,6 +1851,11 @@ function _labelDirOnSearch(ev) {
   _labelDirQuery = String(ev.target.value || "").trim();
   clearTimeout(_labelDirQueryTimer);
   _labelDirQueryTimer = setTimeout(() => loadLabelDirectory(), 250);
+}
+
+function _labelDirToggleUnassigned(ev) {
+  _labelDirUnassignedOnly = !!ev.target.checked;
+  _renderLabelDir();
 }
 
 async function _labelDirSearch(labelName) {
