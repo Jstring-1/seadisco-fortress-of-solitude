@@ -780,6 +780,10 @@ e.g.  miles davis | coltrane
          relationships from cached Discogs profiles. -->
     <span id="extras-tab-all-blues-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-all-blues" class="rr-tab rr-tab-restricted" onclick="switchView('all-blues')" title="All Blues — network view of cached artist relationships (admin only)" style="display:none">All Blues</span>
+    <!-- Labels tab — admin-only chronological browse of cached
+         releases grouped by record label (release_cache only). -->
+    <span id="extras-tab-labels-sep" class="rr-tab-sep" style="display:none">/</span>
+    <span id="extras-tab-labels" class="rr-tab rr-tab-restricted" onclick="switchView('labels')" title="Labels — chronological browse of cached label catalogs (admin only)" style="display:none">Labels</span>
     <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
@@ -1093,6 +1097,22 @@ e.g.  miles davis | coltrane
     </div>
     <div id="mb-saved-results" class="musicbrainz-results-list"><div class="loc-empty">Loading saves…</div></div>
   </div>
+</div>
+
+<!-- Labels view: admin-only chronological browse of the release
+     cache, grouped by record label. Loaded lazily by
+     switchView('labels'). Source is release_cache only. -->
+<div id="labels-view" class="content-narrow" style="display:none">
+  <div style="margin:0.6rem 0 0.5rem">
+    <div style="font-size:1.15rem;font-weight:600">Labels</div>
+    <div style="color:var(--muted);font-size:0.82rem;margin-top:0.15rem">Browse cached releases grouped by record label, sorted chronologically by year then catalog number.</div>
+  </div>
+  <!-- Sticky controls bar — label picker + year range + type +
+       in-range pagination. Renders the year-jump strip below. -->
+  <div id="labels-controls" style="position:sticky;top:0;background:var(--bg);z-index:5;padding:0.4rem 0;border-bottom:1px solid var(--border);margin-bottom:0.6rem"></div>
+  <div id="labels-year-anchors" style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.6rem;font-size:0.78rem"></div>
+  <div id="labels-results"><div class="loc-empty">Pick a label to start.</div></div>
+  <div id="labels-pagination" style="display:flex;gap:0.5rem;justify-content:center;margin:1rem 0 2rem"></div>
 </div>
 
 <!-- All Blues view: public network of inferred relationships across
