@@ -1958,6 +1958,10 @@ const _BA_LYRICS_LIMIT = 100;
 let _baLyricsTotal = 0;
 let _baLyricsSearchTimer = null;
 let _baLyricsTuning = "";
+let _baLyricsTuningLike = "";       // ILIKE substring filter on the tuning column
+let _baLyricsTuningLikeTimer = null; // debounce timer for the tuning-text input
+const _baLyricsSelectedIds = new Set(); // bulk-editor selection (lyric ids)
+let _baLyricsSelectedCapped = false;    // true if "Select all matching" hit the 10k cap
 let _baLyricsUnmatched = false;
 let _baLyricsUnpinned = false;
 let _baLyricsEmpty = false;
@@ -2039,6 +2043,19 @@ function _baLyricsApplyTuning() {
   _baLoadLyrics();
 }
 window._baLyricsApplyTuning = _baLyricsApplyTuning;
+
+// Free-text substring filter on the `tuning` column. Debounced so a
+// keystroke storm doesn't fan out into a request per character — same
+// 280 ms cadence as the main search input.
+function _baLyricsDebouncedTuningLike() {
+  clearTimeout(_baLyricsTuningLikeTimer);
+  _baLyricsTuningLikeTimer = setTimeout(() => {
+    _baLyricsTuningLike = (document.getElementById("blues-archive-lyrics-tuning-like")?.value || "").trim();
+    _baLyricsPage = 0;
+    _baLoadLyrics();
+  }, 280);
+}
+window._baLyricsDebouncedTuningLike = _baLyricsDebouncedTuningLike;
 
 function _baLyricsApplyUnmatched() {
   _baLyricsUnmatched = !!document.getElementById("blues-archive-lyrics-unmatched")?.checked;
@@ -2558,6 +2575,7 @@ window._baShowFavorites = _baShowFavorites;
 function _baLyricsClearFilters() {
   const search    = document.getElementById("blues-archive-lyrics-search");
   const tuningSel = document.getElementById("blues-archive-lyrics-tuning");
+  const tuningLike = document.getElementById("blues-archive-lyrics-tuning-like");
   const unmatched = document.getElementById("blues-archive-lyrics-unmatched");
   const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
   const empty     = document.getElementById("blues-archive-lyrics-empty");
@@ -2566,6 +2584,7 @@ function _baLyricsClearFilters() {
   const favorites = document.getElementById("blues-archive-lyrics-favorites");
   if (search)    search.value = "";
   if (tuningSel) tuningSel.value = "";
+  if (tuningLike) tuningLike.value = "";
   if (unmatched) unmatched.checked = false;
   if (unpinned)  unpinned.checked  = false;
   if (empty)     empty.checked     = false;
@@ -2573,6 +2592,7 @@ function _baLyricsClearFilters() {
   if (pinned)    pinned.checked    = false;
   if (favorites) favorites.checked = false;
   _baLyricsTuning    = "";
+  _baLyricsTuningLike = "";
   _baLyricsUnmatched = false;
   _baLyricsUnpinned  = false;
   _baLyricsEmpty     = false;
@@ -2623,6 +2643,9 @@ async function _baLoadTunings() {
     sel.innerHTML = `<option value="">All tunings</option>` +
       tunings.map(t => `<option value="${escHtml(t.tuning)}">${escHtml(t.tuning)} (${t.n})</option>`).join("");
     if (current) sel.value = current;
+    // Stash the list of distinct tuning strings so the bulk-edit bar's
+    // <datalist> can suggest them as canonical values to apply.
+    window._baLyricsTuningsList = tunings.map(t => t.tuning).filter(Boolean);
     _baLyricsTuningsLoaded = true;
   } catch { /* non-fatal */ }
 }
@@ -2633,8 +2656,9 @@ async function _baLoadLyrics() {
   if (!rowsEl) return;
   const q = (document.getElementById("blues-archive-lyrics-search")?.value || "").trim();
   const params = new URLSearchParams();
-  if (q)                 params.set("q", q);
-  if (_baLyricsTuning)   params.set("tuning", _baLyricsTuning);
+  if (q)                  params.set("q", q);
+  if (_baLyricsTuning)    params.set("tuning", _baLyricsTuning);
+  if (_baLyricsTuningLike) params.set("tuningLike", _baLyricsTuningLike);
   if (_baLyricsUnmatched) params.set("unmatched", "1");
   if (_baLyricsUnpinned)  params.set("unpinned",  "1");
   if (_baLyricsEmpty)     params.set("empty",     "1");
@@ -2645,7 +2669,7 @@ async function _baLoadLyrics() {
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites || _baLyricsTitlePunct) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsTuningLike || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites || _baLyricsTitlePunct) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current
@@ -2781,7 +2805,9 @@ function _baLyricRowHtml(l) {
   const favStar = _baLyricFavStar(l);
   const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
+  const selectedAttr = _baLyricsSelectedIds.has(Number(l.id)) ? " checked" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
+    <td style="text-align:center"><input type="checkbox" class="ba-lyric-cb" data-lyric-cb="${l.id}"${selectedAttr} onclick="event.stopPropagation();_baLyricsToggleRow(${l.id}, this.checked)"></td>
     <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
@@ -2849,9 +2875,16 @@ function _baRenderLyricsTable() {
     return;
   }
   const S = _baLyricsListSort;
+  // Select-all-on-page state: header checkbox is "checked" only when
+  // every visible row is in the selection set, "indeterminate" when
+  // some-but-not-all are, and clear otherwise.
+  const pageIds = rows.map(r => Number(r.id));
+  const pageSelectedCount = pageIds.filter(id => _baLyricsSelectedIds.has(id)).length;
+  const allOnPageSelected = pageIds.length > 0 && pageSelectedCount === pageIds.length;
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
       <colgroup>
+        <col style="width:30px">
         <col style="width:28%">
         <col style="width:18%">
         <col style="width:60px">
@@ -2860,6 +2893,7 @@ function _baRenderLyricsTable() {
         <col style="width:32px">
       </colgroup>
       <thead><tr>
+        <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-lyrics-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baLyricsToggleAllOnPage(this.checked)"></th>
         ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
         ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
         ${_baSortTh("Year",    "first_release_year", S, "_baSortLyricsList", "text-align:right;padding-right:0.6rem")}
@@ -2869,7 +2903,175 @@ function _baRenderLyricsTable() {
       </tr></thead>
       <tbody>${rows.map(_baLyricRowHtml).join("")}</tbody>
     </table>`;
+  // Header checkbox indeterminate state is a DOM property — can't be
+  // set via attribute, so apply it after innerHTML lands.
+  const hdrCb = document.getElementById("ba-lyrics-cb-all");
+  if (hdrCb) hdrCb.indeterminate = pageSelectedCount > 0 && !allOnPageSelected;
+  _baLyricsRenderBulkBar();
 }
+
+// ── Bulk tuning editor ────────────────────────────────────────────
+// All the wiring for the checkbox-driven bulk-edit bar lives here so
+// the table renderer stays focused on row layout. Selection is a Set
+// of lyric ids that survives pagination — the rows just rebind to it
+// every render via the data-lyric-cb attribute.
+function _baLyricsToggleRow(id, checked) {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  if (checked) _baLyricsSelectedIds.add(n);
+  else         _baLyricsSelectedIds.delete(n);
+  _baLyricsSelectedCapped = false; // any manual edit invalidates the cap flag
+  _baLyricsRenderBulkBar();
+  _baLyricsRefreshHeaderCheckbox();
+}
+window._baLyricsToggleRow = _baLyricsToggleRow;
+
+function _baLyricsToggleAllOnPage(checked) {
+  const rows = _baLyricsRowsCache || [];
+  for (const r of rows) {
+    const n = Number(r.id);
+    if (!Number.isFinite(n)) continue;
+    if (checked) _baLyricsSelectedIds.add(n);
+    else         _baLyricsSelectedIds.delete(n);
+  }
+  _baLyricsSelectedCapped = false;
+  // Re-mark the visible per-row checkboxes without rebuilding the
+  // whole table (preserves scroll position).
+  document.querySelectorAll(".ba-lyric-cb").forEach(cb => {
+    const id = Number(cb.getAttribute("data-lyric-cb"));
+    cb.checked = _baLyricsSelectedIds.has(id);
+  });
+  _baLyricsRenderBulkBar();
+  _baLyricsRefreshHeaderCheckbox();
+}
+window._baLyricsToggleAllOnPage = _baLyricsToggleAllOnPage;
+
+function _baLyricsRefreshHeaderCheckbox() {
+  const hdrCb = document.getElementById("ba-lyrics-cb-all");
+  if (!hdrCb) return;
+  const rows = _baLyricsRowsCache || [];
+  const pageIds = rows.map(r => Number(r.id));
+  const pageSelectedCount = pageIds.filter(id => _baLyricsSelectedIds.has(id)).length;
+  const allOnPage = pageIds.length > 0 && pageSelectedCount === pageIds.length;
+  hdrCb.checked = allOnPage;
+  hdrCb.indeterminate = pageSelectedCount > 0 && !allOnPage;
+}
+
+// "Select all matching the current filter" — fans out to the
+// /api/admin/lyrics/matching-ids endpoint, which returns every id
+// that hits the same WHERE clause as the listing endpoint (capped at
+// 10k). Used for mass cleanup over a tuning-text filter result.
+async function _baLyricsSelectAllMatching() {
+  const params = new URLSearchParams();
+  const q = (document.getElementById("blues-archive-lyrics-search")?.value || "").trim();
+  if (q)                   params.set("q", q);
+  if (_baLyricsTuning)     params.set("tuning", _baLyricsTuning);
+  if (_baLyricsTuningLike) params.set("tuningLike", _baLyricsTuningLike);
+  if (_baLyricsUnmatched)  params.set("unmatched", "1");
+  if (_baLyricsUnpinned)   params.set("unpinned",  "1");
+  if (_baLyricsEmpty)      params.set("empty",     "1");
+  if (_baLyricsNoArtist)   params.set("noArtist",  "1");
+  if (_baLyricsPinned)     params.set("pinned",    "1");
+  if (_baLyricsFavorites)  params.set("favorites", "1");
+  if (_baLyricsTitlePunct) params.set("titlePunct", "1");
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/matching-ids?${params}`);
+    if (!r.ok) { alert(`Select-all failed: HTTP ${r.status}`); return; }
+    const { ids = [], capped = false } = await r.json();
+    for (const id of ids) {
+      const n = Number(id);
+      if (Number.isFinite(n)) _baLyricsSelectedIds.add(n);
+    }
+    _baLyricsSelectedCapped = !!capped;
+    // Re-check visible boxes + re-render bulk bar.
+    document.querySelectorAll(".ba-lyric-cb").forEach(cb => {
+      const id = Number(cb.getAttribute("data-lyric-cb"));
+      cb.checked = _baLyricsSelectedIds.has(id);
+    });
+    _baLyricsRefreshHeaderCheckbox();
+    _baLyricsRenderBulkBar();
+  } catch (e) {
+    alert(`Select-all failed: ${String(e?.message || e)}`);
+  }
+}
+window._baLyricsSelectAllMatching = _baLyricsSelectAllMatching;
+
+function _baLyricsClearSelection() {
+  _baLyricsSelectedIds.clear();
+  _baLyricsSelectedCapped = false;
+  document.querySelectorAll(".ba-lyric-cb").forEach(cb => { cb.checked = false; });
+  _baLyricsRefreshHeaderCheckbox();
+  _baLyricsRenderBulkBar();
+}
+window._baLyricsClearSelection = _baLyricsClearSelection;
+
+function _baLyricsRenderBulkBar() {
+  const el = document.getElementById("blues-archive-lyrics-bulkbar");
+  if (!el) return;
+  const n = _baLyricsSelectedIds.size;
+  if (!n) { el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const capNote = _baLyricsSelectedCapped
+    ? ` <span style="color:#e88" title="Server capped the matching-ids response at 10k; some matches above that limit aren't in the selection.">(capped at 10k)</span>`
+    : "";
+  // Datalist of existing tunings so the curator can pick canonical
+  // values without retyping them. The dropdown <select> next to the
+  // tuning-text input already holds the full list with counts.
+  const tuningOpts = (window._baLyricsTuningsList || []).map(t => `<option value="${escHtml(t)}">`).join("");
+  el.innerHTML = `
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+      <strong>${n.toLocaleString()} selected</strong>${capNote}
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baLyricsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching</a>
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baLyricsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
+      <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+        <label style="font-weight:600">Set tuning →</label>
+        <input id="ba-lyrics-bulk-tuning" type="text" list="ba-lyrics-bulk-tuning-list" placeholder="e.g. Open D" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" onkeydown="if(event.key==='Enter'){event.preventDefault();_baLyricsBulkSetTuningFromInput()}">
+        <datalist id="ba-lyrics-bulk-tuning-list">${tuningOpts}</datalist>
+        <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuningFromInput()" title="Apply the text above to every selected row.">Apply</button>
+        <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuning(null)" title="Clear the tuning column on every selected row.">Clear tuning</button>
+      </span>
+    </div>
+  `;
+}
+window._baLyricsRenderBulkBar = _baLyricsRenderBulkBar;
+
+function _baLyricsBulkSetTuningFromInput() {
+  const inp = document.getElementById("ba-lyrics-bulk-tuning");
+  const val = (inp?.value || "").trim();
+  if (!val) { alert("Enter a tuning value (or click Clear tuning to wipe)."); return; }
+  _baLyricsBulkSetTuning(val);
+}
+window._baLyricsBulkSetTuningFromInput = _baLyricsBulkSetTuningFromInput;
+
+async function _baLyricsBulkSetTuning(value) {
+  const ids = Array.from(_baLyricsSelectedIds);
+  if (!ids.length) return;
+  const display = value == null ? "(blank — clear tuning)" : `"${value}"`;
+  if (!confirm(`Set tuning on ${ids.length.toLocaleString()} lyric${ids.length === 1 ? "" : "s"} to ${display}?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/bulk-update-tuning", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids, tuning: value }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk update failed: ${j?.error || r.status}`); return; }
+    if (typeof showToast === "function") {
+      showToast(`Updated ${(j.updated ?? 0).toLocaleString()} lyric${j.updated === 1 ? "" : "s"}`, "info");
+    }
+    _baLyricsClearSelection();
+    // Reload the list so the table reflects the new values + the
+    // tuning dropdown picks up any new value the curator just coined.
+    _baLyricsTuningsLoaded = false;
+    if (typeof _baLoadTunings === "function") _baLoadTunings();
+    _baLoadLyrics();
+  } catch (e) {
+    alert(`Bulk update failed: ${String(e?.message || e)}`);
+  }
+}
+window._baLyricsBulkSetTuning = _baLyricsBulkSetTuning;
 
 function _baRenderLyricsPager() {
   const el = document.getElementById("blues-archive-lyrics-pager");
