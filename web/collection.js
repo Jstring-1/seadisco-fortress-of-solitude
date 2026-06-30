@@ -299,7 +299,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues" || view === "labels") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -331,6 +331,8 @@ function switchView(view, skipPushState = false) {
   if (allBluesView) allBluesView.style.display = "none";
   const musicbrainzView = document.getElementById("musicbrainz-view");
   if (musicbrainzView) musicbrainzView.style.display = "none";
+  const labelsView = document.getElementById("labels-view");
+  if (labelsView) labelsView.style.display = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -529,6 +531,24 @@ function switchView(view, skipPushState = false) {
     if (typeof initAllBluesView === "function") initAllBluesView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/all-blues.js").then(() => window.initAllBluesView?.()).catch(() => {});
+    }
+  } else if (view === "labels") {
+    // Admin-only — chronological browse of cached releases grouped
+    // by record label. Server double-gates via requireAdmin on every
+    // /api/admin/labels/* path.
+    if (!_sdGateSignedInView()) return;
+    if (!window._isAdmin) {
+      if (typeof showToast === "function") showToast("Labels page is admin-only.", "info");
+      switchView("search", true);
+      return;
+    }
+    if (labelsView) labelsView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof window.initLabelsView === "function") window.initLabelsView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/labels.js").then(() => window.initLabelsView?.()).catch(() => {});
     }
   } else if (view === "musicbrainz") {
     // Admin-only — proxied MB API search with full caching. Server
@@ -743,6 +763,7 @@ function switchView(view, skipPushState = false) {
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
         musicbrainz:    document.getElementById("extras-tab-musicbrainz"),
         "all-blues":    document.getElementById("extras-tab-all-blues"),
+        labels:         document.getElementById("extras-tab-labels"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -800,18 +821,27 @@ function switchView(view, skipPushState = false) {
         if (abTab) abTab.style.display = abAccess ? "" : "none";
         if (abSep) abSep.style.display = abAccess ? "" : "none";
       };
+      // Labels: admin-only.
+      const _syncLabels = () => {
+        const lbAccess = !!window._isAdmin;
+        const lbSep = document.getElementById("extras-tab-labels-sep");
+        const lbTab = tabs["labels"];
+        if (lbTab) lbTab.style.display = lbAccess ? "" : "none";
+        if (lbSep) lbSep.style.display = lbAccess ? "" : "none";
+      };
       _syncYt();
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
       _syncMusicbrainz();
       _syncAllBlues();
+      _syncLabels();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
         // / MusicBrainz tabs pop in for admin/demo without requiring
         // a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncMusicbrainz(); _syncAllBlues(); }).catch(() => {});
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncMusicbrainz(); _syncAllBlues(); _syncLabels(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";

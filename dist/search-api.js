@@ -9038,6 +9038,96 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// GET /api/admin/labels/releases?label=X&page=1&per_page=60
+//   &type=release|master|both&year_from=&year_to=
+// Releases tied to a single label, sorted year ASC then catno ASC
+// (with a fallback alpha sort on catno so non-numeric catnos still
+// cluster sensibly). Source is release_cache only; admin-gated.
+app.get("/api/admin/labels/releases", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const label = String(req.query.label ?? "").trim().slice(0, 200);
+    if (!label) {
+        res.status(400).json({ error: "label required" });
+        return;
+    }
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+    const perPage = Math.max(1, Math.min(200, parseInt(String(req.query.per_page ?? "60"), 10) || 60));
+    const type = String(req.query.type ?? "").trim().toLowerCase();
+    const yFrom = parseInt(String(req.query.year_from ?? ""), 10);
+    const yTo = parseInt(String(req.query.year_to ?? ""), 10);
+    const args = [];
+    args.push(JSON.stringify([{ name: label }]));
+    const where = [`rc.data->'labels' @> $${args.length}::jsonb`];
+    if (type === "release" || type === "master") {
+        args.push(type);
+        where.push(`rc.type = $${args.length}`);
+    }
+    if (Number.isFinite(yFrom)) {
+        args.push(yFrom);
+        where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 0) >= $${args.length}`);
+    }
+    if (Number.isFinite(yTo)) {
+        args.push(yTo);
+        where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= $${args.length}`);
+    }
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+    try {
+        // Year-jump anchors: distinct years with row counts so the UI
+        // can render a "Jump to year" picker. Returned alongside the page
+        // results in one round-trip; cheap enough for ~1k anchors max.
+        const [pageRes, anchorsRes, countRes] = await Promise.all([
+            getPool().query(`SELECT
+            rc.discogs_id,
+            rc.type,
+            rc.data->>'title' AS title,
+            COALESCE(rc.data->'artists'->0->>'name', '') AS artist,
+            COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year,
+            COALESCE(rc.data->'labels'->0->>'catno', '') AS catno,
+            COALESCE(rc.data->>'country', '') AS country,
+            rc.data->'formats' AS formats,
+            COALESCE(rc.data->'images'->0->>'uri150', rc.data->'images'->0->>'uri', '') AS cover,
+            COALESCE(rc.data->>'thumb', '') AS thumb
+           FROM release_cache rc
+           ${whereSql}
+           ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC,
+                    COALESCE(rc.data->'labels'->0->>'catno', '') ASC,
+                    rc.discogs_id ASC
+           LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`, args),
+            getPool().query(`SELECT COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year, COUNT(*)::int AS n
+           FROM release_cache rc
+           ${whereSql}
+          GROUP BY year
+          ORDER BY year ASC`, args),
+            getPool().query(`SELECT COUNT(*)::bigint AS n FROM release_cache rc ${whereSql}`, args),
+        ]);
+        const items = pageRes.rows.map(r => ({
+            id: Number(r.discogs_id),
+            type: String(r.type || "release"),
+            title: String(r.title || ""),
+            artist: String(r.artist || ""),
+            year: Number(r.year) || null,
+            catno: String(r.catno || ""),
+            country: String(r.country || ""),
+            formats: Array.isArray(r.formats) ? r.formats : [],
+            cover: String(r.cover || r.thumb || ""),
+        }));
+        const yearAnchors = anchorsRes.rows.map(r => ({ year: Number(r.year), count: Number(r.n) }));
+        const total = Number(countRes.rows[0]?.n || 0);
+        res.json({
+            label,
+            items,
+            yearAnchors,
+            total,
+            page,
+            perPage,
+            hasMore: page * perPage < total,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 app.get("/api/admin/release-cache/preview", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
