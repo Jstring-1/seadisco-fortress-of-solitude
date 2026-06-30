@@ -1597,6 +1597,11 @@ async function loadLabelDirectory() {
 function _renderLabelDir() {
   const el = document.getElementById("labeldir-content");
   if (!el) return;
+  // Capture scroll position of the table container + page before we
+  // blow away innerHTML, so save/clear interactions don't yank the
+  // user back to the top of the grid.
+  const prevScroll = document.getElementById("labeldir-scroll")?.scrollTop ?? 0;
+  const prevPage   = window.scrollY;
   const withId    = _labelDirRows.filter(r => r.label_id).length;
   const withoutId = _labelDirRows.length - withId;
   el.innerHTML = `
@@ -1607,7 +1612,7 @@ function _renderLabelDir() {
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
-    <div style="overflow-x:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
+    <div id="labeldir-scroll" style="overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
       <table style="width:100%;font-size:0.8rem;border-collapse:collapse;table-layout:fixed">
         <colgroup>
           <col style="width:28%">
@@ -1636,6 +1641,13 @@ function _renderLabelDir() {
     </div>
     ${_labelDirPopoverHtml()}
   `;
+  // Restore scroll on next frame so the freshly-rendered DOM has
+  // measured itself before we set scrollTop.
+  requestAnimationFrame(() => {
+    const sc = document.getElementById("labeldir-scroll");
+    if (sc) sc.scrollTop = prevScroll;
+    if (Math.abs(window.scrollY - prevPage) > 4) window.scrollTo(window.scrollX, prevPage);
+  });
 }
 
 function _labelDirPopoverHtml() {
@@ -1814,13 +1826,12 @@ async function _labelDirSaveId(labelName, labelId) {
       body: JSON.stringify({ labelName, labelId }),
     });
     if (!r.ok) { alert(`Save failed: ${r.status}`); return; }
-    const j = await r.json();
     _labelDirSearchOpen = null;
-    // Patch in memory so re-render is instant, then refetch to confirm.
+    // Patch in memory — the row we changed already matches the server.
+    // Skip the full reload so the user keeps their scroll position.
     const row = _labelDirRows.find(x => x.label_name === labelName);
     if (row) row.label_id = labelId;
     _renderLabelDir();
-    loadLabelDirectory();
   } catch (err) { alert(String(err)); }
 }
 
