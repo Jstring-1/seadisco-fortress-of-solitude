@@ -9052,7 +9052,7 @@ app.get("/api/admin/labels/releases", async (req, res) => {
         return;
     }
     const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
-    const perPage = Math.max(1, Math.min(200, parseInt(String(req.query.per_page ?? "60"), 10) || 60));
+    const perPage = Math.max(1, Math.min(500, parseInt(String(req.query.per_page ?? "200"), 10) || 200));
     const type = String(req.query.type ?? "").trim().toLowerCase();
     const yFrom = parseInt(String(req.query.year_from ?? ""), 10);
     const yTo = parseInt(String(req.query.year_to ?? ""), 10);
@@ -9086,8 +9086,25 @@ app.get("/api/admin/labels/releases", async (req, res) => {
             COALESCE(rc.data->'labels'->0->>'catno', '') AS catno,
             COALESCE(rc.data->>'country', '') AS country,
             rc.data->'formats' AS formats,
-            COALESCE(rc.data->'images'->0->>'uri150', rc.data->'images'->0->>'uri', '') AS cover,
-            COALESCE(rc.data->>'thumb', '') AS thumb
+            rc.data->'labels'  AS labels,
+            COALESCE(rc.data->'images'->0->>'uri',    rc.data->'images'->0->>'uri150', '') AS cover_full,
+            COALESCE(rc.data->'images'->0->>'uri150', rc.data->'images'->0->>'uri', '')    AS cover,
+            COALESCE(rc.data->>'thumb', '') AS thumb,
+            -- Compact tracklist for the open-release card (position +
+            -- title + duration). Pulled inline so flipping is instant
+            -- — no per-card round-trip.
+            (
+              SELECT jsonb_agg(jsonb_build_object(
+                       'position', COALESCE(t->>'position',''),
+                       'title',    COALESCE(t->>'title',''),
+                       'duration', COALESCE(t->>'duration','')
+                     ) ORDER BY ord)
+                FROM jsonb_array_elements(COALESCE(rc.data->'tracklist','[]'::jsonb))
+                  WITH ORDINALITY AS x(t, ord)
+            ) AS tracklist,
+            COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) AS master_id,
+            COALESCE(rc.data->>'main_release', '') AS main_release,
+            COALESCE(rc.data->>'notes', '') AS notes
            FROM release_cache rc
            ${whereSql}
            ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC,
@@ -9110,7 +9127,13 @@ app.get("/api/admin/labels/releases", async (req, res) => {
             catno: String(r.catno || ""),
             country: String(r.country || ""),
             formats: Array.isArray(r.formats) ? r.formats : [],
-            cover: String(r.cover || r.thumb || ""),
+            labels: Array.isArray(r.labels) ? r.labels : [],
+            cover: String(r.cover_full || r.cover || r.thumb || ""),
+            coverThumb: String(r.cover || r.thumb || ""),
+            tracklist: Array.isArray(r.tracklist) ? r.tracklist : [],
+            masterId: Number(r.master_id) || null,
+            mainRelease: r.main_release ? String(r.main_release) : "",
+            notes: String(r.notes || ""),
         }));
         const yearAnchors = anchorsRes.rows.map(r => ({ year: Number(r.year), count: Number(r.n) }));
         const total = Number(countRes.rows[0]?.n || 0);
