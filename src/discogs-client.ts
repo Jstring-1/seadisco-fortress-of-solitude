@@ -105,6 +105,7 @@ export class DiscogsClient {
     format?: string;
     country?: string;
     barcode?: string;
+    catno?: string;
     sort?: string;
     sortOrder?: "asc" | "desc";
     page?: number;
@@ -122,6 +123,7 @@ export class DiscogsClient {
     if (options.format) params.format = options.format;
     if (options.country) params.country = options.country;
     if (options.barcode) params.barcode = options.barcode;
+    if (options.catno) params.catno = options.catno;
     if (options.sort) params.sort = options.sort;
     if (options.sortOrder) params.sort_order = options.sortOrder;
     params.page = String(options.page ?? 1);

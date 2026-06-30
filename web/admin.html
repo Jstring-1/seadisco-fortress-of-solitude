@@ -142,6 +142,15 @@
           <span id="cw-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        <!-- ── Catalog-number runs ─────────────────────────────────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap.
+          </div>
+          <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
@@ -578,7 +587,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); },
+    load: () => { loadCacheWarm(); loadCacheWarmCatno(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -1219,6 +1228,115 @@ function _cwSortBy(col) {
   loadCacheWarm({ fromCache: true });
 }
 window._cwSortBy = _cwSortBy;
+// ── Catalog-number worker UI ──────────────────────────────────────
+async function loadCacheWarmCatno() {
+  const el = document.getElementById("cwc-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/status");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const resp = await r.json();
+    const series = Array.isArray(resp?.series) ? resp.series : [];
+    const running = !!resp.running;
+    const active = resp.active || null;
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
+    const fmt = n => Number(n || 0).toLocaleString();
+    if (!series.length) {
+      el.innerHTML = `<div style="color:var(--muted)">No catalog series configured.</div>`;
+      return;
+    }
+    const runningPill = running
+      ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(120,220,140,0.12);color:#7ddc8c;border:1px solid rgba(120,220,140,0.5);font-size:0.7rem">running · ${esc(active || "")}</span>`
+      : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">idle</span>`;
+    const rows = series.map(s => {
+      const isActive = running && active === s.key;
+      const range = `${s.lo}–${s.hi}`;
+      const cursor = s.current_catno != null ? `at ${s.current_catno}` : "not started";
+      const progressPct = s.current_catno != null && s.hi > s.lo
+        ? Math.min(100, Math.max(0, Math.round(((s.current_catno - s.lo) / (s.hi - s.lo)) * 100)))
+        : 0;
+      const startBtn = !running
+        ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)">Start</button>
+           <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and start fresh">Restart</button>`
+        : isActive
+          ? `<button class="admin-btn" onclick="_cwcStop()">Stop</button>`
+          : `<span style="color:var(--muted);font-size:0.78rem">(another series is running)</span>`;
+      return `
+        <tr style="${isActive ? "background:rgba(120,220,140,0.06)" : ""}">
+          <td style="padding:0.4rem 0.5rem"><strong>${esc(s.label)}</strong>${s.prefix ? ` <code style="font-size:0.7rem">${esc(s.prefix)}</code>` : ""}
+            <div style="font-size:0.72rem;color:var(--muted);max-width:32ch">${esc(s.notes || "")}</div>
+          </td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${range}<div style="font-size:0.72rem;color:var(--muted)">year ≤ ${s.yearMax}</div></td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap">${cursor}<div style="background:rgba(255,255,255,0.06);height:4px;width:80px;border-radius:2px;margin-top:0.3rem;overflow:hidden"><div style="background:var(--accent);height:100%;width:${progressPct}%"></div></div></td>
+          <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_cached)}</td>
+          <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_skipped)}</td>
+          <td style="padding:0.4rem 0.5rem;text-align:right">${s.total_errors ? `<span style="color:#e88">${fmt(s.total_errors)}</span>` : "0"}</td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap;display:flex;gap:0.3rem;align-items:center">${startBtn}<button class="admin-btn" onclick="_cwcReset('${esc(s.key)}')" title="Zero out counters + cursor for this series">Reset</button></td>
+        </tr>`;
+    }).join("");
+    const recentBlock = (() => {
+      const activeSeries = active && series.find(s => s.key === active);
+      const rc = Array.isArray(activeSeries?.recent_cached) ? activeSeries.recent_cached : [];
+      if (!running || !rc.length) return "";
+      const items = rc.slice(0, 8).map(c => `<li style="margin:0">${esc(c.title || "")} <span style="color:var(--muted);font-size:0.7rem">#${c.id}</span></li>`).join("");
+      return `<div style="margin-top:0.6rem;padding:0.5rem 0.7rem;border:1px solid var(--border);border-radius:5px;background:rgba(120,220,140,0.04)"><strong style="font-size:0.78rem">Recent hits</strong><ul style="margin:0.3rem 0 0;padding-left:1.1rem;font-size:0.76rem">${items}</ul></div>`;
+    })();
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">${runningPill}</div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+        <thead><tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+          <th style="padding:0.3rem 0.5rem">Series</th>
+          <th style="padding:0.3rem 0.5rem">Range</th>
+          <th style="padding:0.3rem 0.5rem">Cursor</th>
+          <th style="padding:0.3rem 0.5rem;text-align:right">Cached</th>
+          <th style="padding:0.3rem 0.5rem;text-align:right">Skipped</th>
+          <th style="padding:0.3rem 0.5rem;text-align:right">Errors</th>
+          <th style="padding:0.3rem 0.5rem"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+      ${recentBlock}
+    `;
+    // Auto-poll while the worker is running so progress visibly moves.
+    if (running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+      clearTimeout(window._cwcPollTimer);
+      window._cwcPollTimer = setTimeout(loadCacheWarmCatno, 5000);
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${String(err).slice(0, 200)}</span>`;
+  }
+}
+async function _cwcStart(seriesKey, resetCursor) {
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seriesKey, resetCursor: !!resetCursor }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(j?.error || `Start failed: HTTP ${r.status}`); return; }
+    loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+async function _cwcStop() {
+  try {
+    await apiFetch("/api/admin/cache-warm-catno/stop", { method: "POST" });
+    loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+async function _cwcReset(seriesKey) {
+  if (!confirm(`Reset counters and cursor for ${seriesKey}?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/reset", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seriesKey }),
+    });
+    if (!r.ok) { alert(`Reset failed: HTTP ${r.status}`); return; }
+    loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+
 async function loadCacheWarm(opts) {
   const el = document.getElementById("cw-content");
   if (!el) return;

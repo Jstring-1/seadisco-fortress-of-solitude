@@ -1273,6 +1273,33 @@ export async function initDb() {
     // way through the modern era. Idempotent — no-op once the value
     // has been changed by hand or by a previous run.
     await getPool().query(`UPDATE genre_cache_warm_state SET end_year = 2100 WHERE end_year = 1960`);
+    // ── Catalog-number cache-warm runs ───────────────────────────────
+    // Sibling table to cache_warm_runs but keyed by label+catno range
+    // instead of genre/style. The catno worker (src/cache-warm-catno.ts)
+    // walks an inclusive [cat_lo, cat_hi] range for the given label,
+    // hitting Discogs's /database/search with catno=N&label=Label, and
+    // caches every matching release whose year is ≤ year_max (or has no
+    // year). Cursor (current_catno) survives restarts so the worker
+    // resumes from where it left off.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS cache_warm_catno_runs (
+      series_key       TEXT PRIMARY KEY,
+      label            TEXT NOT NULL,
+      cat_lo           INT  NOT NULL,
+      cat_hi           INT  NOT NULL,
+      year_max         INT,
+      current_catno    INT,
+      total_searched   INT NOT NULL DEFAULT 0,
+      total_cached     INT NOT NULL DEFAULT 0,
+      total_skipped    INT NOT NULL DEFAULT 0,
+      total_errors     INT NOT NULL DEFAULT 0,
+      last_run_at      TIMESTAMPTZ,
+      last_cached_at   TIMESTAMPTZ,
+      recent_cached    JSONB NOT NULL DEFAULT '[]'::jsonb,
+      recent_errors    JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
     // ── Pseudonym / band-member links between blues_artists rows ─────
     // Symmetric junction table — the same row covers both directions of
     // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
@@ -8472,6 +8499,89 @@ export async function recordCacheWarmRunError(genreKey, styleKey, msg) {
               || (recent_errors - 9)
             )
       WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || "", msg.slice(0, 500)]);
+}
+// ── Catalog-number cache-warm helpers ──────────────────────────────
+// Sibling helpers to the cache_warm_runs set above, keyed by
+// series_key (e.g. "excello:2000-2400") instead of (genre, style).
+// One row per defined catalog series; cursor + counters survive
+// restarts via the cache_warm_catno_runs table.
+export async function getCacheWarmCatnoRun(seriesKey) {
+    const r = await getPool().query(`SELECT * FROM cache_warm_catno_runs WHERE series_key = $1`, [seriesKey]);
+    return r.rows[0] || null;
+}
+export async function listCacheWarmCatnoRuns() {
+    const r = await getPool().query(`SELECT * FROM cache_warm_catno_runs ORDER BY label ASC, cat_lo ASC`);
+    return r.rows || [];
+}
+export async function upsertCacheWarmCatnoRun(seriesKey, seed, patch = {}) {
+    const allowed = new Set([
+        "current_catno",
+        "total_searched", "total_cached", "total_skipped", "total_errors",
+        "last_run_at", "last_cached_at",
+        "recent_cached", "recent_errors",
+    ]);
+    const cols = [];
+    const vals = [];
+    for (const [k, v] of Object.entries(patch)) {
+        if (!allowed.has(k))
+            continue;
+        vals.push((k === "recent_cached" || k === "recent_errors") && v != null ? JSON.stringify(v) : v);
+        cols.push(k);
+    }
+    // The base UPSERT always carries the seed fields so the row is
+    // guaranteed to exist with the configured range / year_max before
+    // any subsequent patch hits it.
+    const baseCols = ["series_key", "label", "cat_lo", "cat_hi", "year_max", ...cols];
+    const baseVals = [seriesKey, seed.label, seed.catLo, seed.catHi, seed.yearMax, ...vals];
+    const placeholders = baseCols.map((_, i) => `$${i + 1}`).join(", ");
+    const updateSet = cols.length
+        ? cols.map((c, i) => `${c} = $${i + 6}`).join(", ")
+        : `label = EXCLUDED.label, cat_lo = EXCLUDED.cat_lo, cat_hi = EXCLUDED.cat_hi, year_max = EXCLUDED.year_max`;
+    await getPool().query(`INSERT INTO cache_warm_catno_runs (${baseCols.join(", ")})
+     VALUES (${placeholders})
+     ON CONFLICT (series_key) DO UPDATE SET ${updateSet}`, baseVals);
+}
+export async function recordCacheWarmCatnoRunHit(seriesKey, title, releaseId) {
+    await getPool().query(`UPDATE cache_warm_catno_runs
+        SET total_cached   = total_cached + 1,
+            last_cached_at = NOW(),
+            recent_cached  = (
+              jsonb_build_array(jsonb_build_object('id', $3::bigint, 'title', $2::text, 'at', NOW()))
+              || (recent_cached - 9)
+            )
+      WHERE series_key = $1`, [seriesKey, title, releaseId]);
+}
+export async function bumpCacheWarmCatnoRunSkip(seriesKey, n) {
+    if (!Number.isFinite(n) || n <= 0)
+        return;
+    await getPool().query(`UPDATE cache_warm_catno_runs SET total_skipped = total_skipped + $2
+      WHERE series_key = $1`, [seriesKey, n]);
+}
+export async function recordCacheWarmCatnoRunSearched(seriesKey, n) {
+    if (!Number.isFinite(n) || n <= 0)
+        return;
+    await getPool().query(`UPDATE cache_warm_catno_runs SET total_searched = total_searched + $2
+      WHERE series_key = $1`, [seriesKey, n]);
+}
+export async function recordCacheWarmCatnoRunError(seriesKey, msg) {
+    await getPool().query(`UPDATE cache_warm_catno_runs
+        SET total_errors  = total_errors + 1,
+            recent_errors = (
+              jsonb_build_array(jsonb_build_object('msg', $2::text, 'at', NOW()))
+              || (recent_errors - 9)
+            )
+      WHERE series_key = $1`, [seriesKey, msg.slice(0, 500)]);
+}
+export async function resetCacheWarmCatnoRun(seriesKey) {
+    await getPool().query(`UPDATE cache_warm_catno_runs
+        SET current_catno   = NULL,
+            total_searched  = 0,
+            total_cached    = 0,
+            total_skipped   = 0,
+            total_errors    = 0,
+            recent_cached   = '[]'::jsonb,
+            recent_errors   = '[]'::jsonb
+      WHERE series_key = $1`, [seriesKey]);
 }
 export async function resetCacheWarmRun(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs
