@@ -9039,7 +9039,7 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
     }
 });
 const LABEL_CATNO_RULES = {
-    "Excello": { stripPrefixes: ["45-"], sortByCatnoOnly: true },
+    "Excello": { stripPrefixes: ["45-"] },
 };
 function _labelCatnoSortExpr(label) {
     const base = `COALESCE(rc.data->'labels'->0->>'catno', '')`;
