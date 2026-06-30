@@ -1262,10 +1262,22 @@ async function loadCacheWarmCatno() {
     const rows = series.map(s => {
       const isActive = running && active === s.key;
       const range = `${s.lo}–${s.hi}`;
-      const cursor = s.current_catno != null ? `at ${s.current_catno}` : "not started";
-      const progressPct = s.current_catno != null && s.hi > s.lo
-        ? Math.min(100, Math.max(0, Math.round(((s.current_catno - s.lo) / (s.hi - s.lo)) * 100)))
-        : 0;
+      const phase = String(s.phase || "catno");
+      let cursor;
+      let progressPct;
+      if (phase === "label_sweep") {
+        const page = Number.isFinite(Number(s.label_sweep_page)) ? Number(s.label_sweep_page) : 1;
+        cursor = `label-sweep p${page}`;
+        progressPct = 100;
+      } else if (phase === "done") {
+        cursor = "done";
+        progressPct = 100;
+      } else {
+        cursor = s.current_catno != null ? `catno ${s.current_catno}` : "not started";
+        progressPct = s.current_catno != null && s.hi > s.lo
+          ? Math.min(100, Math.max(0, Math.round(((s.current_catno - s.lo) / (s.hi - s.lo)) * 100)))
+          : 0;
+      }
       const startBtn = !running
         ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)">Start</button>
            <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and start fresh">Restart</button>`

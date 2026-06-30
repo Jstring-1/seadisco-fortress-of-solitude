@@ -1300,6 +1300,12 @@ export async function initDb() {
       created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+    // Two-phase walker: after the catno range exhausts, transition to a
+    // label-only search to catch releases with catnos outside the range
+    // or none at all. `phase` is 'catno' | 'label_sweep' | 'done' and
+    // `label_sweep_page` tracks the current page within the label sweep.
+    await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'catno'`);
+    await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS label_sweep_page INT`);
     // ── Pseudonym / band-member links between blues_artists rows ─────
     // Symmetric junction table — the same row covers both directions of
     // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
@@ -8555,6 +8561,7 @@ export async function listCacheWarmCatnoRuns() {
 export async function upsertCacheWarmCatnoRun(seriesKey, seed, patch = {}) {
     const allowed = new Set([
         "current_catno",
+        "phase", "label_sweep_page",
         "total_searched", "total_cached", "total_skipped", "total_errors",
         "last_run_at", "last_cached_at",
         "recent_cached", "recent_errors",
@@ -8613,13 +8620,15 @@ export async function recordCacheWarmCatnoRunError(seriesKey, msg) {
 }
 export async function resetCacheWarmCatnoRun(seriesKey) {
     await getPool().query(`UPDATE cache_warm_catno_runs
-        SET current_catno   = NULL,
-            total_searched  = 0,
-            total_cached    = 0,
-            total_skipped   = 0,
-            total_errors    = 0,
-            recent_cached   = '[]'::jsonb,
-            recent_errors   = '[]'::jsonb
+        SET current_catno    = NULL,
+            phase            = 'catno',
+            label_sweep_page = NULL,
+            total_searched   = 0,
+            total_cached     = 0,
+            total_skipped    = 0,
+            total_errors     = 0,
+            recent_cached    = '[]'::jsonb,
+            recent_errors    = '[]'::jsonb
       WHERE series_key = $1`, [seriesKey]);
 }
 export async function resetCacheWarmRun(genreKey, styleKey) {
