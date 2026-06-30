@@ -103,6 +103,8 @@ export class DiscogsClient {
             params.country = options.country;
         if (options.barcode)
             params.barcode = options.barcode;
+        if (options.catno)
+            params.catno = options.catno;
         if (options.sort)
             params.sort = options.sort;
         if (options.sortOrder)
