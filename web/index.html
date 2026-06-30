@@ -1290,6 +1290,7 @@ e.g.  miles davis | coltrane
         <select id="blues-archive-lyrics-tuning" onchange="_baLyricsApplyTuning()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
           <option value="">All tunings</option>
         </select>
+        <input id="blues-archive-lyrics-tuning-like" type="search" placeholder="Tuning contains…" title="Case-insensitive substring match against the tuning column. Use this to corral inconsistent variants ('open d', 'Open D maj', 'OPEN D') under one selection for the bulk editor." style="width:160px;padding:0.45rem 0.55rem;font-size:0.85rem" oninput="_baLyricsDebouncedTuningLike()">
         <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only lyrics whose plaintext body is empty or NULL — titles that still need text pasted in.">
           <input id="blues-archive-lyrics-empty" type="checkbox" onchange="_baLyricsApplyEmpty()">
           No text yet
@@ -1351,6 +1352,10 @@ e.g.  miles davis | coltrane
            the admin can paste artist names into Discogs from the
            inline 🔍 / ↗ shortcuts. Hidden when recentlyAdded is empty. -->
       <div id="lyrics-scrape-added" style="display:none;margin-bottom:0.8rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:6px"></div>
+      <!-- Bulk action bar — appears when 1+ rows are selected via the
+           checkbox column. Lets the curator mass-set tuning on every
+           selected row in one round-trip. Populated by _baLyricsRenderBulkBar. -->
+      <div id="blues-archive-lyrics-bulkbar" style="display:none;margin-bottom:0.6rem;padding:0.5rem 0.7rem;background:rgba(120,220,140,0.07);border:1px solid rgba(120,220,140,0.4);border-radius:6px;font-size:0.82rem"></div>
       <div id="blues-archive-lyrics-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="blues-archive-lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>

@@ -9036,6 +9036,10 @@ function expandLyricSearchVariants(q: string): string[] {
 export async function listLyrics(opts: {
   search?: string;
   tuning?: string;
+  /** Case-insensitive substring match on the `tuning` column. Distinct
+   *  from `tuning` (exact match) and used by the bulk editor to corral
+   *  inconsistent variants under one selection. */
+  tuningLike?: string;
   artist?: string;
   unmatchedOnly?: boolean;
   /** True → only return rows where BOTH discogs_release_id and
@@ -9122,6 +9126,13 @@ export async function listLyrics(opts: {
       params.push(opts.tuning);
       where.push(`tuning = $${params.length}`);
     }
+  }
+  if (opts.tuningLike) {
+    // Case-insensitive substring filter on tuning. Used by the bulk
+    // editor so the curator can corral inconsistent variants ("open
+    // d", "Open D", "OPEN D") under one selection before mass-editing.
+    params.push(`%${opts.tuningLike}%`);
+    where.push(`tuning ILIKE $${params.length}`);
   }
   if (opts.artist) {
     params.push(opts.artist);
@@ -10622,6 +10633,60 @@ export async function updateLyricFields(id: number, patch: {
     params,
   );
   return await getLyricById(id);
+}
+
+/** Bulk-set the `tuning` column on a set of blues_lyrics rows. Used by
+ *  the admin Lyrics bulk-edit bar to corral inconsistent tuning text
+ *  ("open d", "Open D maj.", "OPEN D") under one canonical value in a
+ *  single round-trip. Empty / null tuning clears the column. Returns
+ *  the number of rows actually updated. */
+export async function bulkUpdateLyricTuning(
+  ids: number[],
+  tuning: string | null,
+): Promise<number> {
+  const cleanIds = Array.from(new Set((ids || [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n > 0)));
+  if (!cleanIds.length) return 0;
+  const normalized = (typeof tuning === "string" ? tuning.trim().slice(0, 80) : null);
+  const r = await getPool().query(
+    `UPDATE blues_lyrics SET tuning = $1 WHERE id = ANY($2::int[])`,
+    [normalized || null, cleanIds],
+  );
+  return r.rowCount ?? 0;
+}
+
+/** Return just the lyric ids that match a filter (same params as
+ *  listLyrics's WHERE shape). Used by "Select all matching" so the
+ *  client can fan a single click out to every row that hits the
+ *  current filter — without paginating through them. Hard-capped at
+ *  10k ids per call so a curator-glitch can't accidentally fetch the
+ *  whole table. */
+export async function listLyricIdsMatching(opts: {
+  search?: string;
+  tuning?: string;
+  tuningLike?: string;
+  artist?: string;
+  unmatchedOnly?: boolean;
+  unpinnedOnly?: boolean;
+  emptyOnly?: boolean;
+  noArtistOnly?: boolean;
+  pinnedOnly?: boolean;
+  favoritesOnly?: boolean;
+  favoriteUserId?: string | null;
+  titleHasPunct?: boolean;
+}): Promise<{ ids: number[]; capped: boolean }> {
+  // Reuse listLyrics so the WHERE / param wiring stays in lock-step
+  // with the actual listing endpoint. Ask for the cap+1 so we know
+  // whether the result hit the limit.
+  const CAP = 10000;
+  const out = await listLyrics({
+    ...opts,
+    limit: CAP + 1,
+    offset: 0,
+  });
+  const ids = (out.rows || []).slice(0, CAP).map((r) => Number(r.id));
+  return { ids, capped: (out.rows?.length ?? 0) > CAP };
 }
 
 // Merge two blues_artists rows. `intoId` is the survivor; `fromId`
