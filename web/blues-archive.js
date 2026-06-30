@@ -2810,7 +2810,6 @@ function _baLyricRowHtml(l) {
     <td style="text-align:center"><input type="checkbox" class="ba-lyric-cb" data-lyric-cb="${l.id}"${selectedAttr} onclick="event.stopPropagation();_baLyricsToggleRow(${l.id}, this.checked)"></td>
     <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
-    <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
     <td class="ba-lyric-snippet" style="font-size:0.7rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
     <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
@@ -2885,10 +2884,9 @@ function _baRenderLyricsTable() {
     <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
       <colgroup>
         <col style="width:30px">
-        <col style="width:28%">
+        <col style="width:26%">
         <col style="width:18%">
-        <col style="width:60px">
-        <col style="width:11%">
+        <col style="width:18%">
         <col>
         <col style="width:32px">
       </colgroup>
@@ -2896,7 +2894,6 @@ function _baRenderLyricsTable() {
         <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-lyrics-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baLyricsToggleAllOnPage(this.checked)"></th>
         ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
         ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
-        ${_baSortTh("Year",    "first_release_year", S, "_baSortLyricsList", "text-align:right;padding-right:0.6rem")}
         ${_baSortTh("Tuning",  "tuning",             S, "_baSortLyricsList")}
         ${_baSortTh("Snippet", "snippet",    S, "_baSortLyricsList")}
         <th style="width:1%"></th>
@@ -3031,6 +3028,7 @@ function _baLyricsRenderBulkBar() {
         <datalist id="ba-lyrics-bulk-tuning-list">${tuningOpts}</datalist>
         <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuningFromInput()" title="Apply the text above to every selected row.">Apply</button>
         <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuning(null)" title="Clear the tuning column on every selected row.">Clear tuning</button>
+        <button type="button" class="archive-btn" onclick="_baLyricsBulkDelete()" title="Hard-delete every selected lyric row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
       </span>
     </div>
   `;
@@ -3072,6 +3070,39 @@ async function _baLyricsBulkSetTuning(value) {
   }
 }
 window._baLyricsBulkSetTuning = _baLyricsBulkSetTuning;
+
+async function _baLyricsBulkDelete() {
+  const ids = Array.from(_baLyricsSelectedIds);
+  if (!ids.length) return;
+  const n = ids.length;
+  if (!confirm(`Hard-delete ${n.toLocaleString()} lyric${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
+  // Big-batch second confirm — same pattern as the release-cache
+  // delete in admin. Stops a typo from wiping thousands of rows.
+  if (n > 50) {
+    const typed = prompt(`Type "delete ${n}" to confirm:`);
+    if (typed !== `delete ${n}`) { alert("Confirmation didn't match — cancelled."); return; }
+  }
+  try {
+    const r = await apiFetch("/api/admin/lyrics/bulk-delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk delete failed: ${j?.error || r.status}`); return; }
+    if (typeof showToast === "function") {
+      showToast(`Deleted ${(j.deleted ?? 0).toLocaleString()} lyric${j.deleted === 1 ? "" : "s"}`, "info");
+    }
+    _baLyricsClearSelection();
+    // Reload list + stats; the bulk delete may have wiped whole
+    // artists' worth of lyrics so the stats strip drifts otherwise.
+    if (typeof _baLoadStats === "function") _baLoadStats();
+    _baLoadLyrics();
+  } catch (e) {
+    alert(`Bulk delete failed: ${String(e?.message || e)}`);
+  }
+}
+window._baLyricsBulkDelete = _baLyricsBulkDelete;
 
 function _baRenderLyricsPager() {
   const el = document.getElementById("blues-archive-lyrics-pager");

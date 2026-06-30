@@ -10635,6 +10635,22 @@ export async function updateLyricFields(id: number, patch: {
   return await getLyricById(id);
 }
 
+/** Bulk-delete blues_lyrics rows. Hard delete — matches the per-row
+ *  DELETE /api/admin/lyrics/:id behaviour and the constraints on
+ *  blues_lyrics already cascade their dependent rows (favorites,
+ *  artist links) on delete. Returns the count actually removed. */
+export async function bulkDeleteLyrics(ids: number[]): Promise<number> {
+  const cleanIds = Array.from(new Set((ids || [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n > 0)));
+  if (!cleanIds.length) return 0;
+  const r = await getPool().query(
+    `DELETE FROM blues_lyrics WHERE id = ANY($1::int[])`,
+    [cleanIds],
+  );
+  return r.rowCount ?? 0;
+}
+
 /** Bulk-set the `tuning` column on a set of blues_lyrics rows. Used by
  *  the admin Lyrics bulk-edit bar to corral inconsistent tuning text
  *  ("open d", "Open D maj.", "OPEN D") under one canonical value in a
