@@ -170,9 +170,10 @@
         <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted)">Type
           <select id="labels-type" onchange="_labelsOnFiltersChange()"
             style="padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-            <option value="">both</option>
-            <option value="release" ${_state.type === "release" ? "selected" : ""}>release</option>
-            <option value="master"  ${_state.type === "master"  ? "selected" : ""}>master</option>
+            <option value=""        ${(_state.type === "" || _state.type === "masters_plus") ? "selected" : ""}>Masters+</option>
+            <option value="both"    ${_state.type === "both"    ? "selected" : ""}>both</option>
+            <option value="master"  ${_state.type === "master"  ? "selected" : ""}>masters only</option>
+            <option value="release" ${_state.type === "release" ? "selected" : ""}>releases only</option>
           </select>
         </label>
 

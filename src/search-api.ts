@@ -8434,9 +8434,18 @@ app.get("/api/admin/labels/releases", async (req, res) => {
   const args: any[] = [];
   args.push(JSON.stringify([{ name: label }]));
   const where: string[] = [`rc.data->'labels' @> $${args.length}::jsonb`];
+  // Type filter modes:
+  //   "release"  / "master"  → strict single-type
+  //   "both"                 → no type filter
+  //   ""         / "masters_plus" → default Masters+ behaviour:
+  //     masters AND releases that have no parent master (master_id
+  //     null / 0 / missing). This collapses the long pressing tail
+  //     so each title shows once.
   if (type === "release" || type === "master") {
     args.push(type);
     where.push(`rc.type = $${args.length}`);
+  } else if (type !== "both") {
+    where.push(`(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) = 0))`);
   }
   if (Number.isFinite(yFrom)) {
     args.push(yFrom);
