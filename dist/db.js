@@ -1306,6 +1306,40 @@ export async function initDb() {
     // `label_sweep_page` tracks the current page within the label sweep.
     await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'catno'`);
     await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS label_sweep_page INT`);
+    // ── External discography rows ────────────────────────────────────
+    // Canonical label-catalog data sourced from outside Discogs
+    // (curated xlsx files, fan sites like wirz.de, etc.). The labels
+    // carousel surfaces these as thin "stub" cards for catnos that
+    // release_cache has no entry for — fills the gaps without
+    // polluting release_cache with non-Discogs payloads.
+    //
+    // UNIQUE on (label_name, catno, side, source) so the same catno
+    // can be present from multiple sources (we keep both and dedupe
+    // visually by source priority on the read side).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS external_discography (
+      id           SERIAL PRIMARY KEY,
+      label_name   TEXT NOT NULL,
+      label_id     INT,
+      catno        TEXT NOT NULL,
+      catno_sort   NUMERIC,
+      side         TEXT,
+      artist       TEXT,
+      title        TEXT,
+      year         INT,
+      matrix       TEXT,
+      xref         TEXT,
+      loc          TEXT,
+      composer     TEXT,
+      notes        TEXT,
+      source       TEXT NOT NULL,
+      data         JSONB,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (label_name, catno, side, source)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_sort ON external_discography(label_name, catno_sort)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_year ON external_discography(label_name, year)`);
     // ── Pseudonym / band-member links between blues_artists rows ─────
     // Symmetric junction table — the same row covers both directions of
     // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
@@ -8630,6 +8664,98 @@ export async function resetCacheWarmCatnoRun(seriesKey) {
             recent_cached    = '[]'::jsonb,
             recent_errors    = '[]'::jsonb
       WHERE series_key = $1`, [seriesKey]);
+}
+function _deriveCatnoSort(catno) {
+    if (!catno)
+        return null;
+    const m = String(catno).match(/(\d{1,9})/);
+    if (!m)
+        return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+}
+// Batch upsert. Conflicts on (label_name, catno, side, source) update
+// every other field — handy for re-running a parser after fixing a row.
+export async function bulkInsertExternalDiscography(rows) {
+    if (!rows.length)
+        return { inserted: 0 };
+    const client = await getPool().connect();
+    let inserted = 0;
+    try {
+        await client.query("BEGIN");
+        for (const r of rows) {
+            const sort = r.catno_sort ?? _deriveCatnoSort(r.catno);
+            await client.query(`INSERT INTO external_discography
+           (label_name, label_id, catno, catno_sort, side,
+            artist, title, year, matrix, xref, loc, composer, notes,
+            source, data)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         ON CONFLICT (label_name, catno, side, source) DO UPDATE SET
+           label_id   = EXCLUDED.label_id,
+           catno_sort = EXCLUDED.catno_sort,
+           artist     = EXCLUDED.artist,
+           title      = EXCLUDED.title,
+           year       = EXCLUDED.year,
+           matrix     = EXCLUDED.matrix,
+           xref       = EXCLUDED.xref,
+           loc        = EXCLUDED.loc,
+           composer   = EXCLUDED.composer,
+           notes      = EXCLUDED.notes,
+           data       = EXCLUDED.data`, [
+                r.label_name,
+                r.label_id ?? null,
+                r.catno,
+                sort,
+                r.side ?? null,
+                r.artist ?? null,
+                r.title ?? null,
+                r.year ?? null,
+                r.matrix ?? null,
+                r.xref ?? null,
+                r.loc ?? null,
+                r.composer ?? null,
+                r.notes ?? null,
+                r.source,
+                r.data ? JSON.stringify(r.data) : null,
+            ]);
+            inserted += 1;
+        }
+        await client.query("COMMIT");
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    }
+    finally {
+        client.release();
+    }
+    return { inserted };
+}
+export async function listExternalDiscographyForLabel(opts) {
+    const args = [opts.label];
+    const where = [`label_name = $1`];
+    if (Number.isFinite(opts.yearFrom)) {
+        args.push(opts.yearFrom);
+        where.push(`COALESCE(year, 0) >= $${args.length}`);
+    }
+    if (Number.isFinite(opts.yearTo)) {
+        args.push(opts.yearTo);
+        where.push(`COALESCE(year, 9999) <= $${args.length}`);
+    }
+    const r = await getPool().query(`SELECT id, label_name, label_id, catno, catno_sort, side,
+            artist, title, year, matrix, xref, loc, composer, notes,
+            source, data
+       FROM external_discography
+      WHERE ${where.join(" AND ")}
+      ORDER BY catno_sort ASC NULLS LAST, catno ASC, side ASC NULLS FIRST`, args);
+    return r.rows;
+}
+export async function countExternalDiscographyByLabel() {
+    const r = await getPool().query(`SELECT label_name, COUNT(*)::int AS n
+       FROM external_discography
+      GROUP BY label_name
+      ORDER BY n DESC`);
+    return r.rows;
 }
 export async function resetCacheWarmRun(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs

@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, startCacheWarmCatnoRun, startLabelSweepRun, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
@@ -9064,11 +9064,42 @@ function _labelOrderBy(label) {
     }
     return `ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC, ${catnoExpr} ASC, rc.discogs_id ASC`;
 }
+// JS mirror of _labelCatnoSortExpr — strips configured prefixes so
+// the merged carousel sort matches what the DB-side query produces.
+function _stripLabelPrefixesJS(label, catno) {
+    const rule = LABEL_CATNO_RULES[label];
+    if (!rule?.stripPrefixes?.length)
+        return catno || "";
+    for (const p of rule.stripPrefixes) {
+        if ((catno || "").startsWith(p))
+            return catno.slice(p.length);
+    }
+    return catno || "";
+}
+function _catnoSortNum(label, catno) {
+    const stripped = _stripLabelPrefixesJS(label, String(catno || ""));
+    const m = stripped.match(/^(\d+)/);
+    return m ? Number(m[1]) : null;
+}
+const _LABELS_CAROUSEL_CACHE = new Map();
+const _LABELS_CAROUSEL_TTL_MS = 60_000;
+function _invalidateLabelsCarouselCache(label) {
+    if (!label) {
+        _LABELS_CAROUSEL_CACHE.clear();
+        return;
+    }
+    for (const k of _LABELS_CAROUSEL_CACHE.keys()) {
+        if (k.includes(`"label":"${label}"`))
+            _LABELS_CAROUSEL_CACHE.delete(k);
+    }
+}
 // GET /api/admin/labels/releases?label=X&page=1&per_page=60
 //   &type=release|master|both&year_from=&year_to=
 // Releases tied to a single label, sorted year ASC then catno ASC
 // (with a fallback alpha sort on catno so non-numeric catnos still
-// cluster sensibly). Source is release_cache only; admin-gated.
+// cluster sensibly). Merges release_cache rows with stub entries from
+// external_discography — external rows are suppressed when a cache row
+// covers the same catno. Admin-gated.
 app.get("/api/admin/labels/releases", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
@@ -9109,77 +9140,256 @@ app.get("/api/admin/labels/releases", async (req, res) => {
     }
     const whereSql = `WHERE ${where.join(" AND ")}`;
     try {
-        // Year-jump anchors: distinct years with row counts so the UI
-        // can render a "Jump to year" picker. Returned alongside the page
-        // results in one round-trip; cheap enough for ~1k anchors max.
-        const [pageRes, anchorsRes, countRes] = await Promise.all([
-            getPool().query(`SELECT
-            rc.discogs_id,
-            rc.type,
-            rc.data->>'title' AS title,
-            COALESCE(rc.data->'artists'->0->>'name', '') AS artist,
-            COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year,
-            COALESCE(rc.data->'labels'->0->>'catno', '') AS catno,
-            COALESCE(rc.data->>'country', '') AS country,
-            rc.data->'formats' AS formats,
-            rc.data->'labels'  AS labels,
-            COALESCE(rc.data->'images'->0->>'uri',    rc.data->'images'->0->>'uri150', '') AS cover_full,
-            COALESCE(rc.data->'images'->0->>'uri150', rc.data->'images'->0->>'uri', '')    AS cover,
-            COALESCE(rc.data->>'thumb', '') AS thumb,
-            -- Compact tracklist for the open-release card (position +
-            -- title + duration). Pulled inline so flipping is instant
-            -- — no per-card round-trip.
-            (
-              SELECT jsonb_agg(jsonb_build_object(
-                       'position', COALESCE(t->>'position',''),
-                       'title',    COALESCE(t->>'title',''),
-                       'duration', COALESCE(t->>'duration','')
-                     ) ORDER BY ord)
-                FROM jsonb_array_elements(COALESCE(rc.data->'tracklist','[]'::jsonb))
-                  WITH ORDINALITY AS x(t, ord)
-            ) AS tracklist,
-            COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) AS master_id,
-            COALESCE(rc.data->>'main_release', '') AS main_release,
-            COALESCE(rc.data->>'notes', '') AS notes
-           FROM release_cache rc
-           ${whereSql}
-           ${_labelOrderBy(label)}
-           LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`, args),
-            getPool().query(`SELECT COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year, COUNT(*)::int AS n
-           FROM release_cache rc
-           ${whereSql}
-          GROUP BY year
-          ORDER BY year ASC`, args),
-            getPool().query(`SELECT COUNT(*)::bigint AS n FROM release_cache rc ${whereSql}`, args),
-        ]);
-        const items = pageRes.rows.map(r => ({
-            id: Number(r.discogs_id),
-            type: String(r.type || "release"),
-            title: String(r.title || ""),
-            artist: String(r.artist || ""),
-            year: Number(r.year) || null,
-            catno: String(r.catno || ""),
-            country: String(r.country || ""),
-            formats: Array.isArray(r.formats) ? r.formats : [],
-            labels: Array.isArray(r.labels) ? r.labels : [],
-            cover: String(r.cover_full || r.cover || r.thumb || ""),
-            coverThumb: String(r.cover || r.thumb || ""),
-            tracklist: Array.isArray(r.tracklist) ? r.tracklist : [],
-            masterId: Number(r.master_id) || null,
-            mainRelease: r.main_release ? String(r.main_release) : "",
-            notes: String(r.notes || ""),
-        }));
-        const yearAnchors = anchorsRes.rows.map(r => ({ year: Number(r.year), count: Number(r.n) }));
-        const total = Number(countRes.rows[0]?.n || 0);
+        const cacheKey = JSON.stringify({ label, type, yFrom, yTo });
+        let cached = _LABELS_CAROUSEL_CACHE.get(cacheKey);
+        if (!cached || Date.now() - cached.ts > _LABELS_CAROUSEL_TTL_MS) {
+            // Fetch all cache rows for this label (no SQL pagination — merged
+            // pagination happens in-memory below). One label rarely exceeds a
+            // few thousand rows; the per-label TTL cache keeps repeat-page
+            // navigation cheap.
+            const [pageRes, externalRows] = await Promise.all([
+                getPool().query(`SELECT
+              rc.discogs_id,
+              rc.type,
+              rc.data->>'title' AS title,
+              COALESCE(rc.data->'artists'->0->>'name', '') AS artist,
+              COALESCE(NULLIF(rc.data->>'year','')::int, 0) AS year,
+              COALESCE(rc.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(rc.data->>'country', '') AS country,
+              rc.data->'formats' AS formats,
+              rc.data->'labels'  AS labels,
+              COALESCE(rc.data->'images'->0->>'uri',    rc.data->'images'->0->>'uri150', '') AS cover_full,
+              COALESCE(rc.data->'images'->0->>'uri150', rc.data->'images'->0->>'uri', '')    AS cover,
+              COALESCE(rc.data->>'thumb', '') AS thumb,
+              (
+                SELECT jsonb_agg(jsonb_build_object(
+                         'position', COALESCE(t->>'position',''),
+                         'title',    COALESCE(t->>'title',''),
+                         'duration', COALESCE(t->>'duration','')
+                       ) ORDER BY ord)
+                  FROM jsonb_array_elements(COALESCE(rc.data->'tracklist','[]'::jsonb))
+                    WITH ORDINALITY AS x(t, ord)
+              ) AS tracklist,
+              COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) AS master_id,
+              COALESCE(rc.data->>'main_release', '') AS main_release,
+              COALESCE(rc.data->>'notes', '') AS notes
+             FROM release_cache rc
+             ${whereSql}
+             ${_labelOrderBy(label)}`, args),
+                listExternalDiscographyForLabel({
+                    label,
+                    yearFrom: Number.isFinite(yFrom) ? yFrom : undefined,
+                    yearTo: Number.isFinite(yTo) ? yTo : undefined,
+                }),
+            ]);
+            const cacheItems = pageRes.rows.map(r => ({
+                id: Number(r.discogs_id),
+                type: String(r.type || "release"),
+                title: String(r.title || ""),
+                artist: String(r.artist || ""),
+                year: Number(r.year) || null,
+                catno: String(r.catno || ""),
+                country: String(r.country || ""),
+                formats: Array.isArray(r.formats) ? r.formats : [],
+                labels: Array.isArray(r.labels) ? r.labels : [],
+                cover: String(r.cover_full || r.cover || r.thumb || ""),
+                coverThumb: String(r.cover || r.thumb || ""),
+                tracklist: Array.isArray(r.tracklist) ? r.tracklist : [],
+                masterId: Number(r.master_id) || null,
+                mainRelease: r.main_release ? String(r.main_release) : "",
+                notes: String(r.notes || ""),
+                _source: "cache",
+            }));
+            // Build a Set of cache catno-sort numbers so we can suppress
+            // external rows whose catno already shipped on Discogs.
+            const cacheCatnoSorts = new Set();
+            for (const it of cacheItems) {
+                const n = _catnoSortNum(label, it.catno);
+                if (n != null)
+                    cacheCatnoSorts.add(n);
+            }
+            // Group external rows by catno — sides A/B of the same single
+            // become one stub card with a 2-track "tracklist". Dedupe against
+            // cache by catno_sort.
+            const grouped = new Map();
+            for (const r of externalRows) {
+                const sortKey = r.catno_sort != null ? Number(r.catno_sort) : _catnoSortNum(label, r.catno);
+                if (sortKey != null && cacheCatnoSorts.has(sortKey))
+                    continue; // covered by cache
+                const groupKey = String(r.catno || "");
+                let g = grouped.get(groupKey);
+                if (!g) {
+                    g = {
+                        id: -Number(r.id), // negative IDs distinguish externals
+                        type: "external",
+                        title: String(r.title || ""),
+                        artist: String(r.artist || ""),
+                        year: r.year != null ? Number(r.year) : null,
+                        catno: String(r.catno || ""),
+                        country: String(r.loc || ""),
+                        formats: [],
+                        labels: [],
+                        cover: "",
+                        coverThumb: "",
+                        tracklist: [],
+                        masterId: null,
+                        mainRelease: "",
+                        notes: r.notes ? String(r.notes) : "",
+                        _source: "external",
+                        _externalSource: String(r.source || ""),
+                        _externalArtists: new Set(),
+                        _catnoSort: sortKey,
+                    };
+                    grouped.set(groupKey, g);
+                }
+                if (r.artist)
+                    g._externalArtists.add(String(r.artist));
+                g.tracklist.push({
+                    position: r.side ? String(r.side) : "",
+                    title: String(r.title || ""),
+                    duration: "",
+                    _matrix: r.matrix ? String(r.matrix) : "",
+                    _composer: r.composer ? String(r.composer) : "",
+                    _artist: r.artist ? String(r.artist) : "",
+                });
+                // Prefer the earliest year if rows disagree.
+                if (r.year != null && (g.year == null || Number(r.year) < g.year))
+                    g.year = Number(r.year);
+            }
+            const externalItems = Array.from(grouped.values()).map(g => {
+                const artists = Array.from(g._externalArtists);
+                delete g._externalArtists;
+                // If both sides share an artist, use that. Otherwise show "Various"
+                // and let the tracklist break it down per side.
+                if (!g.artist)
+                    g.artist = artists.length === 1 ? artists[0] : artists.length > 1 ? "Various" : "";
+                // Title: prefer the first non-empty side title; many xlsx rows
+                // already give us a sensible per-side title.
+                if (!g.title)
+                    g.title = (g.tracklist[0]?.title || "");
+                return g;
+            });
+            // Merge + sort by (year ASC, stripped-catno ASC, id ASC) —
+            // identical to _labelOrderBy semantics for the cache rows.
+            const merged = [...cacheItems, ...externalItems];
+            merged.sort((a, b) => {
+                const yA = a.year ?? 0, yB = b.year ?? 0;
+                if (yA !== yB)
+                    return yA - yB;
+                const csA = _catnoSortNum(label, a.catno) ?? Number.MAX_SAFE_INTEGER;
+                const csB = _catnoSortNum(label, b.catno) ?? Number.MAX_SAFE_INTEGER;
+                if (csA !== csB)
+                    return csA - csB;
+                // Fallback to stripped-catno string compare for non-numeric tails.
+                const sA = _stripLabelPrefixesJS(label, a.catno);
+                const sB = _stripLabelPrefixesJS(label, b.catno);
+                if (sA !== sB)
+                    return sA < sB ? -1 : 1;
+                return (a.id || 0) - (b.id || 0);
+            });
+            // Year anchors over the merged set.
+            const yearMap = new Map();
+            for (const it of merged) {
+                const y = it.year ?? 0;
+                yearMap.set(y, (yearMap.get(y) ?? 0) + 1);
+            }
+            const yearAnchors = Array.from(yearMap.entries())
+                .map(([year, n]) => ({ year, count: n }))
+                .sort((a, b) => a.year - b.year);
+            const externalSources = Array.from(new Set(externalItems.map(it => it._externalSource).filter(Boolean)));
+            cached = {
+                ts: Date.now(),
+                items: merged,
+                yearAnchors,
+                total: merged.length,
+                cacheCount: cacheItems.length,
+                externalCount: externalItems.length,
+                externalSources,
+            };
+            _LABELS_CAROUSEL_CACHE.set(cacheKey, cached);
+        }
+        const start = (page - 1) * perPage;
+        const slice = cached.items.slice(start, start + perPage);
         res.json({
             label,
-            items,
-            yearAnchors,
-            total,
+            items: slice,
+            yearAnchors: cached.yearAnchors,
+            total: cached.total,
+            cacheCount: cached.cacheCount,
+            externalCount: cached.externalCount,
+            externalSources: cached.externalSources,
             page,
             perPage,
-            hasMore: page * perPage < total,
+            hasMore: page * perPage < cached.total,
         });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/admin/external-discography/import
+// Body: { label: "Excello", labelId?: 51225, source: "wirz.de",
+//         rows: [{ catno, side?, artist, title, year?, matrix?, ...}, ...] }
+// Batch-upserts on (label_name, catno, side, source) — re-running a
+// parser overwrites every field, so fix-and-re-ingest is safe.
+app.post("/api/admin/external-discography/import", express.json({ limit: "8mb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const label = String(body.label ?? "").trim().slice(0, 200);
+    const labelId = body.labelId != null ? Number(body.labelId) : null;
+    const source = String(body.source ?? "").trim().slice(0, 100);
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    if (!label) {
+        res.status(400).json({ error: "label required" });
+        return;
+    }
+    if (!source) {
+        res.status(400).json({ error: "source required" });
+        return;
+    }
+    if (!rows.length) {
+        res.status(400).json({ error: "rows[] empty" });
+        return;
+    }
+    if (rows.length > 50_000) {
+        res.status(400).json({ error: "rows[] too large (max 50k per request)" });
+        return;
+    }
+    try {
+        const payload = rows.map((r) => ({
+            label_name: label,
+            label_id: Number.isFinite(labelId) ? labelId : null,
+            catno: String(r.catno ?? "").trim(),
+            side: r.side != null ? String(r.side).trim() || null : null,
+            artist: r.artist != null ? String(r.artist).trim() || null : null,
+            title: r.title != null ? String(r.title).trim() || null : null,
+            year: r.year != null && Number.isFinite(Number(r.year)) ? Number(r.year) : null,
+            matrix: r.matrix != null ? String(r.matrix).trim() || null : null,
+            xref: r.xref != null ? String(r.xref).trim() || null : null,
+            loc: r.loc != null ? String(r.loc).trim() || null : null,
+            composer: r.composer != null ? String(r.composer).trim() || null : null,
+            notes: r.notes != null ? String(r.notes).trim() || null : null,
+            source,
+            data: r.data ?? null,
+        })).filter((r) => r.catno);
+        const result = await bulkInsertExternalDiscography(payload);
+        _invalidateLabelsCarouselCache(label);
+        res.json({ ok: true, accepted: payload.length, inserted: result.inserted });
+    }
+    catch (err) {
+        console.error("[external-discography/import]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/admin/external-discography/labels — summary counts so admin
+// UI can show what's been ingested.
+app.get("/api/admin/external-discography/labels", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const rows = await countExternalDiscographyByLabel();
+        res.json({ labels: rows });
     }
     catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
