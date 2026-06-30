@@ -13,6 +13,16 @@ import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesF
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import {
   initCacheWarmCatnoModule,
+} from "./cache-warm-catno.js";
+import {
+  initExternalDiscographyWorkerModule,
+  startExternalDiscographyRun,
+  requestExternalDiscographyStop,
+  getExternalDiscographyStatus,
+  isExternalDiscographyRunning,
+  parseExcelloXlsxBuffer,
+} from "./external-discography-worker.js";
+import {
   startCacheWarmCatnoRun,
   startLabelSweepRun,
   requestCacheWarmCatnoStop,
@@ -8790,6 +8800,74 @@ app.get("/api/admin/external-discography/labels", async (req, res) => {
   }
 });
 
+// ── External discography server-side worker endpoints ───────────
+// One singleflight worker for wirz / Abrams scrapes. Polite 2s delay
+// per page; cursor persists in app_settings so a Railway restart
+// resumes from the last completed seed. Admin-gated.
+
+app.get("/api/admin/external-discography-worker/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json(getExternalDiscographyStatus());
+});
+
+app.post("/api/admin/external-discography-worker/start", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const source = String((req.body || {}).source ?? "").trim().toLowerCase();
+  if (source !== "wirz" && source !== "abrams") {
+    res.status(400).json({ error: "source must be 'wirz' or 'abrams'" });
+    return;
+  }
+  const result = await startExternalDiscographyRun(source as "wirz" | "abrams");
+  if (!result.ok) { res.status(409).json(result); return; }
+  res.json(result);
+});
+
+app.post("/api/admin/external-discography-worker/stop", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (!isExternalDiscographyRunning()) {
+    res.json({ ok: true, message: "not running" });
+    return;
+  }
+  requestExternalDiscographyStop();
+  res.json({ ok: true, message: "stop requested" });
+});
+
+// POST /api/admin/external-discography/upload-xlsx
+// Body: raw .xlsx bytes (application/octet-stream).
+// Headers: x-label, x-label-id, x-source (e.g. "Excello", "51225",
+// "excello-xlsx-praguefrank"). Server parses + bulk inserts.
+app.post(
+  "/api/admin/external-discography/upload-xlsx",
+  express.raw({ type: "application/octet-stream", limit: "32mb" }),
+  async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const label  = String(req.headers["x-label"]    ?? "").trim().slice(0, 200);
+    const source = String(req.headers["x-source"]   ?? "").trim().slice(0, 100) || "xlsx-upload";
+    const labelIdRaw = String(req.headers["x-label-id"] ?? "").trim();
+    const labelId = labelIdRaw && /^\d+$/.test(labelIdRaw) ? Number(labelIdRaw) : null;
+    if (!label) { res.status(400).json({ error: "x-label header required" }); return; }
+    const buf = req.body as Buffer;
+    if (!buf || !buf.length) { res.status(400).json({ error: "empty body — POST .xlsx as application/octet-stream" }); return; }
+    try {
+      const parsed = parseExcelloXlsxBuffer(buf);
+      if (!parsed.length) { res.status(400).json({ error: "no rows parsed — wrong xlsx shape?" }); return; }
+      const payload = parsed.map(r => ({
+        ...r,
+        label_name: label,
+        label_id:   labelId,
+        source,
+        catno:      r.catno!,
+      }));
+      const result = await bulkInsertExternalDiscography(payload as any);
+      _invalidateLabelsCarouselCache(label);
+      res.json({ ok: true, parsed: parsed.length, inserted: result.inserted });
+    } catch (err: any) {
+      console.error("[external-discography/upload-xlsx]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  },
+);
+
 // POST /api/admin/external-discography/purge-covered
 // Body (optional): { label: "Excello" }
 // Deletes external rows whose (label_name, catno_sort) is already
@@ -16563,6 +16641,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initCacheWarmCatnoModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] cache-warm-catno init failed:", e);
+    }
+    try { initExternalDiscographyWorkerModule(); } catch (e) {
+      console.error("[startup] external-discography-worker init failed:", e);
     }
     // Warm the cache-warm-runs stats cache out of band so the first
     // admin who opens the panel after deploy doesn't pay for the

@@ -151,6 +151,15 @@
           </div>
           <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
+        <!-- ── External discography (non-Discogs sources) ──────────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge.
+          </div>
+          <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
@@ -598,7 +607,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheWarmCatno(); },
+    load: () => { loadCacheWarm(); loadCacheWarmCatno(); loadExternalDiscography(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -1376,6 +1385,137 @@ async function _cwcReset(seriesKey) {
     if (!r.ok) { alert(`Reset failed: HTTP ${r.status}`); return; }
     loadCacheWarmCatno();
   } catch (err) { alert(String(err)); }
+}
+
+// ── External discography (wirz.de + 78discography.com) ─────────────
+async function loadExternalDiscography() {
+  const el = document.getElementById("extdisc-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/external-discography-worker/status");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const s = await r.json();
+    const running = !!s.running;
+    const pct = s.total > 0 ? Math.round(100 * s.cursor / s.total) : 0;
+
+    const recentRows = (s.recentInserted || []).slice(0, 8).map(it =>
+      `<li>${_eHtml(it.source)} · ${_eHtml(it.label)} — ${it.rows} rows</li>`
+    ).join("");
+    const recentErrs = (s.recentErrors || []).slice(0, 8).map(it =>
+      `<li><code>${_eHtml(it.slug)}</code> — ${_eHtml(it.msg)}</li>`
+    ).join("");
+
+    el.innerHTML = `
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.6rem">
+        ${running
+          ? `<span style="background:#264;color:#9e8;padding:0.15rem 0.5rem;border-radius:3px;font-size:0.75rem">running · ${_eHtml(s.source || "")}</span>
+             <span style="color:var(--muted);font-size:0.78rem">cursor ${s.cursor}/${s.total} (${pct}%)</span>`
+          : `<span style="color:var(--muted);font-size:0.75rem">idle</span>`}
+      </div>
+
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem">
+        <button class="admin-btn" type="button" onclick="_extdiscStart('wirz')" ${running ? "disabled" : ""}>▶ Run Wirz</button>
+        <button class="admin-btn" type="button" onclick="_extdiscStart('abrams')" ${running ? "disabled" : ""}>▶ Run Abrams</button>
+        <button class="admin-btn" type="button" onclick="_extdiscStop()" ${running ? "" : "disabled"}>■ Stop</button>
+        <button class="admin-btn" type="button" onclick="_extdiscPurge()">🧹 Purge covered</button>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02);margin-bottom:0.6rem">
+        <div style="font-weight:600;font-size:0.82rem;margin-bottom:0.3rem">Upload Excello-style xlsx</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr) auto;gap:0.4rem;font-size:0.78rem;align-items:end">
+          <label>Label name
+            <input id="extdisc-xlsx-label" type="text" value="Excello" style="width:100%;padding:0.25rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <label>Discogs label ID
+            <input id="extdisc-xlsx-label-id" type="number" value="51225" style="width:100%;padding:0.25rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <label>Source tag
+            <input id="extdisc-xlsx-source" type="text" value="excello-xlsx-praguefrank" style="width:100%;padding:0.25rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <input id="extdisc-xlsx-file" type="file" accept=".xlsx" onchange="_extdiscUploadXlsx(event)" style="font-size:0.78rem">
+        </div>
+        <div id="extdisc-xlsx-status" style="margin-top:0.3rem;font-size:0.78rem;color:var(--muted)"></div>
+      </div>
+
+      ${recentRows ? `<div style="font-weight:600;font-size:0.8rem">Recent ingests</div>
+        <ul style="margin:0.2rem 0 0.6rem 1.2rem;font-size:0.78rem;color:var(--muted)">${recentRows}</ul>` : ""}
+      ${recentErrs ? `<div style="font-weight:600;font-size:0.8rem;color:#e88">Recent errors</div>
+        <ul style="margin:0.2rem 0 0 1.2rem;font-size:0.78rem;color:#caa">${recentErrs}</ul>` : ""}
+    `;
+
+    clearTimeout(window._extdiscPollTimer);
+    if (running) {
+      window._extdiscPollTimer = setTimeout(loadExternalDiscography, 5000);
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+function _eHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+async function _extdiscStart(source) {
+  try {
+    const r = await apiFetch("/api/admin/external-discography-worker/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    if (!r.ok) { alert(`Start failed: ${(await r.json()).error || r.status}`); return; }
+    loadExternalDiscography();
+  } catch (err) { alert(String(err)); }
+}
+async function _extdiscStop() {
+  try {
+    await apiFetch("/api/admin/external-discography-worker/stop", { method: "POST" });
+    loadExternalDiscography();
+  } catch (err) { alert(String(err)); }
+}
+async function _extdiscPurge() {
+  if (!confirm("Delete every external_discography row whose (label, catno) is already in release_cache?")) return;
+  try {
+    const r = await apiFetch("/api/admin/external-discography/purge-covered", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    if (!r.ok) { alert(`Purge failed: ${r.status}`); return; }
+    const j = await r.json();
+    alert(`Purged ${j.deleted} redundant rows.`);
+    loadExternalDiscography();
+  } catch (err) { alert(String(err)); }
+}
+async function _extdiscUploadXlsx(ev) {
+  const f = ev.target.files?.[0];
+  if (!f) return;
+  const statusEl = document.getElementById("extdisc-xlsx-status");
+  const label   = document.getElementById("extdisc-xlsx-label").value.trim();
+  const labelId = document.getElementById("extdisc-xlsx-label-id").value.trim();
+  const source  = document.getElementById("extdisc-xlsx-source").value.trim() || "xlsx-upload";
+  if (!label) { alert("Label name required"); return; }
+  statusEl.textContent = `Uploading ${f.name}…`;
+  try {
+    const buf = await f.arrayBuffer();
+    const r = await apiFetch("/api/admin/external-discography/upload-xlsx", {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-label":      label,
+        "x-label-id":   labelId,
+        "x-source":     source,
+      },
+      body: buf,
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      statusEl.innerHTML = `<span style="color:#e88">Upload failed: ${_eHtml(j.error || r.status)}</span>`;
+      return;
+    }
+    const j = await r.json();
+    statusEl.innerHTML = `<span style="color:#9e8">Parsed ${j.parsed} rows · inserted ${j.inserted}</span>`;
+    ev.target.value = "";
+    loadExternalDiscography();
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
 }
 
 async function loadCacheWarm(opts) {
