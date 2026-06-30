@@ -10780,28 +10780,29 @@ export async function purgeExternalDiscographyCovered(opts: { label?: string } =
     args.push(opts.label);
     labelFilter = `AND ed.label_name = $${args.length}`;
   }
-  // For each external row, check release_cache for any item whose
-  // labels[] array contains an entry with a matching name and whose
-  // catno's leading numeric component equals ed.catno_sort.
+  // Approach: materialise one row per (label_name_lc, catno_sort)
+  // pair that EXISTS in release_cache, then DELETE external rows
+  // whose pair matches. The previous correlated-EXISTS form did the
+  // jsonb_array_elements lateral scan per ed row and timed out / 500'd
+  // on production-size data (150k × 150k).
   const r = await getPool().query(
-    `WITH covered AS (
-       SELECT ed.id
-         FROM external_discography ed
-         JOIN release_cache rc
-           ON rc.data->'labels' @> jsonb_build_array(jsonb_build_object('name', ed.label_name))
-        WHERE ed.catno_sort IS NOT NULL
-          ${labelFilter}
-          AND EXISTS (
-            SELECT 1
-              FROM jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) AS lbl
-             WHERE LOWER(lbl->>'name') = LOWER(ed.label_name)
-               AND COALESCE(
-                     NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1], '')::numeric,
-                     -1
-                   ) = ed.catno_sort
-          )
+    `WITH cache_label_keys AS (
+       SELECT DISTINCT
+         LOWER(lbl->>'name')                                                    AS label_lc,
+         NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort
+       FROM release_cache rc,
+            jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
+       WHERE COALESCE(lbl->>'name','')  <> ''
+         AND COALESCE(lbl->>'catno','') <> ''
      )
-     DELETE FROM external_discography WHERE id IN (SELECT id FROM covered)`,
+     DELETE FROM external_discography ed
+      WHERE ed.catno_sort IS NOT NULL
+        ${labelFilter}
+        AND EXISTS (
+          SELECT 1 FROM cache_label_keys ck
+           WHERE ck.label_lc   = LOWER(ed.label_name)
+             AND ck.catno_sort = ed.catno_sort
+        )`,
     args,
   );
   return { deleted: r.rowCount ?? 0 };
