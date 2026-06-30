@@ -356,23 +356,36 @@
         }).join(" · ")
       : `${_esc(cur.catno || "")}`;
 
+    const isExternal = cur._source === "external";
     const cover = cur.cover
       ? `<img src="${_esc(cur.cover)}" alt="" loading="eager"
             style="width:100%;max-width:340px;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:rgba(255,255,255,0.05);box-shadow:0 4px 18px rgba(0,0,0,0.4)">`
-      : `<div style="width:340px;max-width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85rem">no image</div>`;
+      : isExternal
+        ? `<div style="width:340px;max-width:100%;aspect-ratio:1/1;background:repeating-linear-gradient(45deg,rgba(255,255,255,0.04),rgba(255,255,255,0.04) 10px,rgba(255,255,255,0.07) 10px,rgba(255,255,255,0.07) 20px);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:0.4rem;border:1px dashed rgba(255,255,255,0.18)">
+            <div style="font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase">Not in Discogs</div>
+            <div style="font-size:2rem;font-weight:700;color:var(--text)">${_esc(cur.catno || "")}</div>
+            <div style="font-size:0.7rem">${_esc(cur._externalSource || "external source")}</div>
+          </div>`
+        : `<div style="width:340px;max-width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85rem">no image</div>`;
 
     const tracks = Array.isArray(cur.tracklist) ? cur.tracklist : [];
+    const tracksLabel = isExternal ? "Sides" : "Tracks";
     const tracksBlock = tracks.length
       ? `<div style="margin-top:0.8rem;border:1px solid var(--border);border-radius:6px;overflow:hidden">
           <button type="button" onclick="_labelsToggleTracks()"
             style="width:100%;text-align:left;background:rgba(255,255,255,0.04);color:var(--text);padding:0.45rem 0.7rem;border:none;cursor:pointer;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center">
-            <span><strong>Tracks</strong> <span style="color:var(--muted)">(${tracks.length})</span></span>
+            <span><strong>${tracksLabel}</strong> <span style="color:var(--muted)">(${tracks.length})</span></span>
             <span style="color:var(--muted);font-size:0.75rem">${_state.tracksOpen ? "▲ collapse" : "▼ expand"}</span>
           </button>
           ${_state.tracksOpen ? `<div style="padding:0.4rem 0.7rem;font-size:0.82rem;max-height:300px;overflow-y:auto">
-            ${tracks.map(t => `<div style="display:flex;gap:0.6rem;padding:0.15rem 0;border-bottom:1px dashed rgba(255,255,255,0.05)">
+            ${tracks.map(t => `<div style="display:flex;gap:0.6rem;padding:0.15rem 0;border-bottom:1px dashed rgba(255,255,255,0.05);align-items:baseline">
               <span style="color:var(--muted);min-width:2.5em">${_esc(t.position || "")}</span>
-              <span style="flex:1">${_esc(t.title || "")}</span>
+              <span style="flex:1">
+                ${_esc(t.title || "")}
+                ${isExternal && t._artist && t._artist !== cur.artist ? `<span style="color:var(--muted);font-size:0.72rem"> · ${_esc(t._artist)}</span>` : ""}
+                ${isExternal && t._composer ? `<span style="color:var(--muted);font-size:0.72rem"> · (${_esc(t._composer)})</span>` : ""}
+                ${isExternal && t._matrix ? `<span style="color:var(--muted);font-size:0.7rem;margin-left:0.4rem">mx: ${_esc(t._matrix)}</span>` : ""}
+              </span>
               ${t.duration ? `<span style="color:var(--muted)">${_esc(t.duration)}</span>` : ""}
             </div>`).join("")}
           </div>` : ""}
@@ -388,7 +401,9 @@
     const peekCover = (it) => it && it.coverThumb
       ? `<img src="${_esc(it.coverThumb)}" alt="" loading="lazy"
             style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;opacity:0.55;transition:opacity 0.2s">`
-      : `<div style="width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.03);border-radius:5px;opacity:0.55"></div>`;
+      : it && it._source === "external"
+        ? `<div style="width:100%;aspect-ratio:1/1;background:repeating-linear-gradient(45deg,rgba(255,255,255,0.03),rgba(255,255,255,0.03) 6px,rgba(255,255,255,0.06) 6px,rgba(255,255,255,0.06) 12px);border-radius:5px;opacity:0.55;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.72rem">ext</div>`
+        : `<div style="width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.03);border-radius:5px;opacity:0.55"></div>`;
 
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:120px 1fr 120px;gap:0.8rem;align-items:start;padding:1rem 0.6rem;min-height:60vh">
@@ -410,15 +425,21 @@
             style="position:absolute;right:-10px;top:40%;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:50%;width:42px;height:42px;font-size:1.2rem;cursor:${nextIt || _state.hasMore ? "pointer" : "not-allowed"};opacity:${nextIt || _state.hasMore ? "1" : "0.35"};z-index:2">›</button>
 
           ${cover}
-          <div style="font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-top:0.5rem">${_esc(cur.type)} · ${_esc(cur.year || "—")}</div>
+          <div style="font-size:0.78rem;color:${isExternal ? "var(--muted)" : "var(--accent)"};text-transform:uppercase;letter-spacing:0.05em;margin-top:0.5rem">
+            ${isExternal
+              ? `<span style="background:rgba(255,255,255,0.08);padding:0.1rem 0.4rem;border-radius:3px;border:1px dashed rgba(255,255,255,0.2)">External</span> · ${_esc(cur.year || "—")}`
+              : `${_esc(cur.type)} · ${_esc(cur.year || "—")}`}
+          </div>
           <div style="font-size:1.35rem;font-weight:600;line-height:1.2">${_esc(cur.title || "(untitled)")}</div>
           <div style="font-size:1rem;color:var(--text)">${_esc(cur.artist || "")}</div>
           <div style="font-size:0.82rem;color:var(--muted)">${labelsStr}</div>
           ${formats ? `<div style="font-size:0.78rem;color:var(--muted)">${formats}${cur.country ? ` · ${_esc(cur.country)}` : ""}</div>` : (cur.country ? `<div style="font-size:0.78rem;color:var(--muted)">${_esc(cur.country)}</div>` : "")}
 
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin-top:0.5rem">
-            <button class="admin-btn" type="button" onclick="_labelsOpenRelease(${cur.id}, '${cur.type}')">Open full modal ↗</button>
-            <a class="admin-btn" href="https://www.discogs.com/${cur.type === 'master' ? 'master' : 'release'}/${cur.id}" target="_blank" rel="noopener" style="text-decoration:none">Discogs ↗</a>
+            ${isExternal
+              ? `<span style="font-size:0.75rem;color:var(--muted);font-style:italic">Source: ${_esc(cur._externalSource || "unknown")}</span>`
+              : `<button class="admin-btn" type="button" onclick="_labelsOpenRelease(${cur.id}, '${cur.type}')">Open full modal ↗</button>
+                 <a class="admin-btn" href="https://www.discogs.com/${cur.type === 'master' ? 'master' : 'release'}/${cur.id}" target="_blank" rel="noopener" style="text-decoration:none">Discogs ↗</a>`}
           </div>
 
           <div style="width:100%;max-width:520px;text-align:left">
