@@ -8936,6 +8936,21 @@ function _buildReleaseCacheWhere(q) {
         args.push(`%${country.toLowerCase()}%`);
         where.push(`LOWER(COALESCE(rc.data->>'country', '')) LIKE $${args.length}`);
     }
+    // labels: comma-separated list (or repeated query param) of label
+    // names. OR-match — any row whose data.labels[*].name equals one of
+    // the supplied names passes. Empty + invalid entries dropped.
+    const labelsRaw = Array.isArray(q.labels)
+        ? q.labels.map((s) => String(s ?? "").trim()).filter(Boolean)
+        : String(q.labels || "").split(",").map(s => s.trim()).filter(Boolean);
+    const labels = labelsRaw.slice(0, 200);
+    if (labels.length) {
+        const orClauses = [];
+        for (const name of labels) {
+            args.push(JSON.stringify([{ name }]));
+            orClauses.push(`rc.data->'labels' @> $${args.length}::jsonb`);
+        }
+        where.push(`(${orClauses.join(" OR ")})`);
+    }
     const formatContains = String(q.format || "").trim();
     if (formatContains) {
         args.push(JSON.stringify([{ name: formatContains }]));
@@ -8984,6 +8999,45 @@ function _csvEscape(v) {
         return `"${s.replace(/"/g, '""')}"`;
     return s;
 }
+// GET /api/admin/release-cache/labels?limit=300&q=
+// Returns the top label names by row count in release_cache, with
+// optional substring filter. Powers the multi-select label filter
+// on the export form. Memoized for 10 min — the underlying scan is
+// expensive (LATERAL over a few hundred thousand jsonb arrays).
+let _releaseLabelsCache = null;
+const _RELEASE_LABELS_TTL_MS = 10 * 60 * 1000;
+app.get("/api/admin/release-cache/labels", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "300"), 10) || 300));
+    const qstr = String(req.query.q ?? "").trim().toLowerCase().slice(0, 80);
+    try {
+        let rows = _releaseLabelsCache && (Date.now() - _releaseLabelsCache.at) < _RELEASE_LABELS_TTL_MS
+            ? _releaseLabelsCache.rows
+            : null;
+        if (!rows) {
+            const r = await getPool().query(`
+        SELECT name, COUNT(*)::bigint AS c
+          FROM release_cache rc,
+               LATERAL jsonb_array_elements(COALESCE(rc.data->'labels', '[]'::jsonb)) lbl,
+               LATERAL (SELECT NULLIF(TRIM(lbl->>'name'), '') AS name) x
+         WHERE x.name IS NOT NULL
+         GROUP BY name
+         ORDER BY c DESC
+         LIMIT 2000
+      `);
+            rows = r.rows.map(row => ({ name: String(row.name), count: Number(row.c) }));
+            _releaseLabelsCache = { at: Date.now(), rows };
+        }
+        const filtered = qstr
+            ? rows.filter(r => r.name.toLowerCase().includes(qstr))
+            : rows;
+        res.json({ items: filtered.slice(0, limit), total: filtered.length });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 app.get("/api/admin/release-cache/preview", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
