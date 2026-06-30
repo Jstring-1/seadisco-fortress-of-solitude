@@ -1565,6 +1565,8 @@ let _labelDirQueryTimer = null;
 let _labelDirSortKey = "external_count";
 let _labelDirSortDir = "desc";
 let _labelDirActiveSweepKey = null;    // cache_warm_catno_runs.series_key currently running
+let _labelDirMergeOpen = null;          // label_name of the row whose merge popover is open
+let _labelDirMergeQuery = "";           // filter text inside the merge popover
 
 async function loadLabelDirectory() {
   const el = document.getElementById("labeldir-content");
@@ -1640,6 +1642,7 @@ function _renderLabelDir() {
       </table>
     </div>
     ${_labelDirPopoverHtml()}
+    ${_labelDirMergePopoverHtml()}
   `;
   // Restore scroll on next frame so the freshly-rendered DOM has
   // measured itself before we set scrollTop.
@@ -1682,6 +1685,47 @@ function _labelDirPopoverHtml() {
         <input data-labeldir-manual="${_eHtml(labelName)}" type="number" placeholder="…or enter ID manually" style="flex:1;min-width:160px;padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.82rem">
         <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(labelName)}')">Save manual ID</button>
       </div>
+    </div>
+  `;
+}
+
+function _labelDirMergePopoverHtml() {
+  if (!_labelDirMergeOpen) return "";
+  const fromName = _labelDirMergeOpen;
+  const fromRow  = _labelDirRows.find(r => r.label_name === fromName);
+  const q = _labelDirMergeQuery.trim().toLowerCase();
+  // Candidates: every OTHER label, optionally filtered by substring.
+  const candidates = _labelDirRows
+    .filter(r => r.label_name !== fromName)
+    .filter(r => !q || r.label_name.toLowerCase().includes(q))
+    .slice(0, 80);
+  const listBody = candidates.length
+    ? `<div style="display:flex;flex-direction:column;gap:0.2rem;max-height:46vh;overflow-y:auto">
+        ${candidates.map(c => `<button type="button" onclick="_labelDirConfirmMerge('${_jsEsc(fromName)}', '${_jsEsc(c.label_name)}')"
+            style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;background:rgba(255,255,255,0.03);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;text-align:left">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(c.label_name)}">${_eHtml(c.label_name.length > 60 ? c.label_name.slice(0, 60) + "…" : c.label_name)}</span>
+            <span style="color:var(--muted);font-size:0.72rem;white-space:nowrap">
+              ${c.label_id ? `ID ${c.label_id} · ` : ""}pad ${c.external_count} · R ${c.cache_releases}
+            </span>
+          </button>`).join("")}
+      </div>`
+    : `<div style="color:var(--muted);padding:0.6rem 0">No matching labels.</div>`;
+  const fromMeta = fromRow
+    ? `pad ${fromRow.external_count} · cache R ${fromRow.cache_releases}${fromRow.label_id ? ` · ID ${fromRow.label_id}` : ""}`
+    : "";
+  return `
+    <div onclick="_labelDirCloseMerge()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:80"></div>
+    <div role="dialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:80vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.9rem 1rem;z-index:81;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;gap:0.5rem">
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(fromName)}">Merge "${_eHtml(fromName.length > 50 ? fromName.slice(0, 50) + "…" : fromName)}" into…</div>
+        <button class="admin-btn" type="button" onclick="_labelDirCloseMerge()" style="font-size:0.78rem">✕</button>
+      </div>
+      <div style="color:var(--muted);font-size:0.78rem;margin-bottom:0.5rem">${fromMeta}</div>
+      <input type="search" oninput="_labelDirMergeFilter(event)" autofocus
+             placeholder="Filter target labels…" value="${_eHtml(_labelDirMergeQuery)}"
+             style="margin-bottom:0.5rem;padding:0.35rem 0.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
+      ${listBody}
+      <div style="margin-top:0.4rem;color:var(--muted);font-size:0.72rem">Renames every external_discography row from the source label to the target. Catno collisions are merged: the source row wins, the colliding target row is dropped. Discogs ID propagates from the target (or source if target had none).</div>
     </div>
   `;
 }
@@ -1758,7 +1802,8 @@ function _labelDirRowHtml(r) {
       <td style="padding:0.3rem 0.5rem">${idCell}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
         ${_labelDirSweepCell(r)}
-        <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem">🔍 Search</button>
+        <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem" title="Search Discogs for this label">🔍</button>
+        <button class="admin-btn" type="button" onclick="_labelDirOpenMerge('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Merge this label into another (scraped variant → canonical Discogs name, etc.)">⇄</button>
       </td>
     </tr>
     ${searchBlock}
@@ -1860,6 +1905,40 @@ async function _labelDirStartSweep(labelId, labelName) {
     loadLabelDirectory();
     // Also kick the catno panel so the user can scroll down and watch.
     if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+
+function _labelDirOpenMerge(labelName) {
+  _labelDirMergeOpen  = labelName;
+  _labelDirMergeQuery = "";
+  _renderLabelDir();
+}
+function _labelDirCloseMerge() {
+  _labelDirMergeOpen  = null;
+  _labelDirMergeQuery = "";
+  _renderLabelDir();
+}
+function _labelDirMergeFilter(ev) {
+  _labelDirMergeQuery = String(ev.target.value || "");
+  _renderLabelDir();
+  // Refocus the input — innerHTML rewrite blew it away.
+  requestAnimationFrame(() => {
+    const inp = document.querySelector('div[role="dialog"] input[type="search"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(_labelDirMergeQuery.length, _labelDirMergeQuery.length); }
+  });
+}
+async function _labelDirConfirmMerge(fromLabel, toLabel) {
+  if (!confirm(`Merge "${fromLabel}" → "${toLabel}"?\n\nEvery external_discography row tagged with the first label will be renamed to the second. Catno collisions: source wins, the colliding target row is dropped.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/merge", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fromLabel, toLabel }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Merge failed: ${j.error || r.status}`); return; }
+    alert(`Merged. Renamed ${j.renamed} rows · dropped ${j.mergedDuplicates} duplicates · final ID ${j.finalLabelId ?? "(none)"}.`);
+    _labelDirMergeOpen = null;
+    loadLabelDirectory();   // scroll position is preserved by _renderLabelDir
   } catch (err) { alert(String(err)); }
 }
 
