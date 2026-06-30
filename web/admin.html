@@ -160,6 +160,15 @@
           </div>
           <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
+        <!-- ── Year backfill (label + catno → missing years) ─────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗓 Backfill missing years</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Looks up year for cache rows that have none, matching by (label, catno) against external discography and cache siblings. Phase 2 propagates min(version year) to year-less masters. Every change is logged — each batch can be rolled back if a source turns out wrong.
+          </div>
+          <div id="ybf-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
@@ -607,7 +616,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheWarmCatno(); loadExternalDiscography(); },
+    load: () => { loadCacheWarm(); loadCacheWarmCatno(); loadExternalDiscography(); loadYearBackfill(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -1516,6 +1525,113 @@ async function _extdiscUploadXlsx(ev) {
   } catch (err) {
     statusEl.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
+}
+
+// ── Year backfill ───────────────────────────────────────────────
+let _ybfPreview = null;
+async function loadYearBackfill() {
+  const el = document.getElementById("ybf-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/batches?limit=20");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const { batches } = await r.json();
+
+    const previewBlock = _ybfPreview
+      ? `<div style="border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem;margin:0.6rem 0;background:rgba(255,255,255,0.02)">
+          <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.3rem">Preview</div>
+          <div style="font-size:0.8rem">Phase 1 (releases): <strong>${_ybfPreview.phase1Release}</strong> · Phase 2 (masters): <strong>${_ybfPreview.phase2Master}</strong></div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem">By donor source:</div>
+          <ul style="margin:0.2rem 0 0.4rem 1.2rem;font-size:0.78rem;color:var(--muted)">
+            ${(_ybfPreview.bySource || []).map(s => `<li>${_eHtml(s.donor_source)} — ${s.n}</li>`).join("")}
+          </ul>
+          ${_ybfPreview.sample?.length ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem">Sample (first 20):</div>
+          <ul style="margin:0.2rem 0 0 1.2rem;font-size:0.75rem;color:var(--muted);max-height:160px;overflow-y:auto">
+            ${_ybfPreview.sample.map(s => `<li>${_eHtml(s.type)} <code>${s.discogs_id}</code> — ${_eHtml(s.label_name)} ${_eHtml(s.catno)} → <strong>${s.new_year}</strong> · ${_eHtml(s.donor_source)}</li>`).join("")}
+          </ul>` : ""}
+        </div>`
+      : "";
+
+    const batchesBlock = batches.length
+      ? `<table style="width:100%;font-size:0.78rem;border-collapse:collapse;margin-top:0.4rem">
+          <thead><tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+            <th style="padding:0.25rem 0.3rem">Batch</th>
+            <th style="padding:0.25rem 0.3rem">When</th>
+            <th style="padding:0.25rem 0.3rem;text-align:right">Total</th>
+            <th style="padding:0.25rem 0.3rem;text-align:right">Reverted</th>
+            <th style="padding:0.25rem 0.3rem">Top sources</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            ${batches.map(b => {
+              const dt = new Date(b.applied_at);
+              const when = isNaN(dt) ? b.applied_at : dt.toLocaleString();
+              const sources = (b.by_source || []).slice(0, 3).map(s => `${_eHtml(s.donor_source)} (${s.n})`).join(", ");
+              const fullyReverted = b.reverted >= b.total;
+              return `<tr style="border-bottom:1px dashed rgba(255,255,255,0.05)">
+                <td style="padding:0.25rem 0.3rem"><code style="font-size:0.72rem">${b.batch_id.slice(0, 8)}…</code></td>
+                <td style="padding:0.25rem 0.3rem;color:var(--muted)">${_eHtml(when)}</td>
+                <td style="padding:0.25rem 0.3rem;text-align:right">${b.total}</td>
+                <td style="padding:0.25rem 0.3rem;text-align:right;color:${b.reverted > 0 ? "#e88" : "var(--muted)"}">${b.reverted}</td>
+                <td style="padding:0.25rem 0.3rem;color:var(--muted)">${sources}</td>
+                <td style="padding:0.25rem 0.3rem;text-align:right">
+                  ${fullyReverted
+                    ? `<span style="color:var(--muted);font-size:0.72rem">rolled back</span>`
+                    : `<button class="admin-btn" type="button" onclick="_ybfRollback('${b.batch_id}')" style="font-size:0.72rem;padding:0.15rem 0.4rem">Roll back</button>`}
+                </td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>`
+      : `<div style="color:var(--muted);font-size:0.78rem;margin-top:0.4rem">No backfill batches yet.</div>`;
+
+    el.innerHTML = `
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
+        <button class="admin-btn" type="button" onclick="_ybfPreviewRun()">🔍 Preview</button>
+        <button class="admin-btn" type="button" onclick="_ybfApply()" ${_ybfPreview && (_ybfPreview.phase1Release + _ybfPreview.phase2Master) > 0 ? "" : "disabled"}>✓ Apply</button>
+        ${_ybfPreview ? `<button class="admin-btn" type="button" onclick="_ybfClearPreview()">Clear preview</button>` : ""}
+      </div>
+      ${previewBlock}
+      <div style="font-weight:600;font-size:0.82rem;margin-top:0.6rem">Recent batches</div>
+      ${batchesBlock}
+    `;
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+async function _ybfPreviewRun() {
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/preview", { method: "POST" });
+    if (!r.ok) { alert(`Preview failed: ${r.status}`); return; }
+    _ybfPreview = await r.json();
+    loadYearBackfill();
+  } catch (err) { alert(String(err)); }
+}
+function _ybfClearPreview() { _ybfPreview = null; loadYearBackfill(); }
+async function _ybfApply() {
+  const total = (_ybfPreview?.phase1Release || 0) + (_ybfPreview?.phase2Master || 0);
+  if (!confirm(`Apply year backfill — will update ${total} cache rows and log every change. Continue?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/apply", { method: "POST" });
+    if (!r.ok) { alert(`Apply failed: ${r.status}`); return; }
+    const j = await r.json();
+    alert(`Applied. Phase 1: ${j.phase1Updated}, Phase 2: ${j.phase2Updated}. Batch ${j.batchId.slice(0, 8)}…`);
+    _ybfPreview = null;
+    loadYearBackfill();
+  } catch (err) { alert(String(err)); }
+}
+async function _ybfRollback(batchId) {
+  if (!confirm(`Roll back batch ${batchId.slice(0, 8)}…? Rows whose year has drifted since we wrote them will be left alone.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/rollback", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ batchId }),
+    });
+    if (!r.ok) { alert(`Rollback failed: ${r.status}`); return; }
+    const j = await r.json();
+    alert(`Rolled back ${j.reverted} rows · drifted (skipped): ${j.drifted} · already reverted: ${j.alreadyReverted}`);
+    loadYearBackfill();
+  } catch (err) { alert(String(err)); }
 }
 
 async function loadCacheWarm(opts) {

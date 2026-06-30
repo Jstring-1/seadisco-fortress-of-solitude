@@ -1340,6 +1340,31 @@ export async function initDb() {
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_sort ON external_discography(label_name, catno_sort)`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_year ON external_discography(label_name, year)`);
+    // ── Year backfill audit log ──────────────────────────────────────
+    // Every year written to release_cache.data->>'year' by the backfill
+    // pass is logged here so the curator can roll back a whole batch if
+    // a source turns out to be wrong. batch_id groups one Apply run;
+    // rolled_back_at / rolled_back_batch_id flip when a row is reversed.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS year_backfill_log (
+      id                    SERIAL PRIMARY KEY,
+      batch_id              UUID NOT NULL,
+      discogs_id            BIGINT NOT NULL,
+      type                  TEXT NOT NULL,
+      old_year              INT,
+      new_year              INT NOT NULL,
+      donor_ref             TEXT NOT NULL,
+      donor_source          TEXT,
+      label_name            TEXT,
+      catno                 TEXT,
+      applied_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      rolled_back_at        TIMESTAMPTZ,
+      rolled_back_batch_id  UUID,
+      UNIQUE (batch_id, discogs_id, type)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS idx_year_backfill_log_batch ON year_backfill_log(batch_id)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS idx_year_backfill_log_target ON year_backfill_log(discogs_id, type)`);
     // ── Pseudonym / band-member links between blues_artists rows ─────
     // Symmetric junction table — the same row covers both directions of
     // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
@@ -8794,6 +8819,297 @@ export async function purgeExternalDiscographyCovered(opts = {}) {
      )
      DELETE FROM external_discography WHERE id IN (SELECT id FROM covered)`, args);
     return { deleted: r.rowCount ?? 0 };
+}
+// ── Year backfill (label + catno → missing year) ─────────────────
+//
+// Donor pool unions:
+//   * external_discography rows (research-grade, preferred)
+//   * release_cache rows that already have a year (Discogs siblings)
+// keyed on (LOWER(label_name), catno_sort) — the leading numeric
+// component of the catalog number, same normalisation external rows
+// already store.
+//
+// Phase 1 (release): for each unknown-year release_cache row, find a
+//   donor and assign earliest year (external beats cache; ties broken
+//   by earliest year).
+// Phase 2 (master):  for each unknown-year master, year = MIN over
+//   versions in cache. Runs AFTER phase 1 so phase-1 lifts can propagate
+//   up.
+//
+// Every change is logged to year_backfill_log keyed by batch_id so
+// rollbackYearBackfillBatch() can reverse a whole pass.
+const _YEAR_BACKFILL_DONOR_CTE = `
+  WITH donors_raw AS (
+    -- External (research) donors
+    SELECT
+      LOWER(label_name) AS label_name,
+      catno_sort,
+      year,
+      'external:' || id::text AS donor_ref,
+      source AS donor_source,
+      0 AS priority
+    FROM external_discography
+    WHERE year IS NOT NULL AND catno_sort IS NOT NULL
+
+    UNION ALL
+
+    -- Discogs cache siblings: any cache row with a known year, keyed
+    -- by its label+catno entries.
+    SELECT
+      LOWER(lbl->>'name')                                                 AS label_name,
+      NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort,
+      NULLIF(rc.data->>'year','')::int                                   AS year,
+      'release_cache:' || rc.discogs_id::text                            AS donor_ref,
+      'release_cache'                                                    AS donor_source,
+      1 AS priority
+      FROM release_cache rc,
+           jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
+     WHERE COALESCE(NULLIF(rc.data->>'year','')::int, 0) > 0
+       AND COALESCE(lbl->>'name','') <> ''
+       AND COALESCE(lbl->>'catno','') <> ''
+  ),
+  donors AS (
+    SELECT DISTINCT ON (label_name, catno_sort)
+      label_name, catno_sort, year, donor_ref, donor_source
+    FROM donors_raw
+    WHERE label_name IS NOT NULL AND catno_sort IS NOT NULL
+    ORDER BY label_name, catno_sort, priority ASC, year ASC
+  ),
+  target_label_pairs AS (
+    SELECT
+      rc.discogs_id,
+      rc.type,
+      LOWER(lbl->>'name')                                                AS label_name,
+      NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort,
+      lbl->>'name'  AS label_name_raw,
+      lbl->>'catno' AS catno_raw
+    FROM release_cache rc,
+         jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
+    WHERE COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0
+      AND COALESCE(lbl->>'name','')  <> ''
+      AND COALESCE(lbl->>'catno','') <> ''
+  ),
+  matches AS (
+    SELECT DISTINCT ON (t.discogs_id, t.type)
+      t.discogs_id, t.type,
+      d.year       AS new_year,
+      d.donor_ref,
+      d.donor_source,
+      t.label_name_raw AS label_name,
+      t.catno_raw      AS catno
+    FROM target_label_pairs t
+    JOIN donors d
+      ON d.label_name = t.label_name
+     AND d.catno_sort = t.catno_sort
+    ORDER BY t.discogs_id, t.type, d.year ASC
+  )
+`;
+export async function previewYearBackfill() {
+    const phase1Q = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
+     SELECT donor_source, COUNT(*)::int AS n FROM matches GROUP BY donor_source ORDER BY n DESC`);
+    const totalQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
+     SELECT COUNT(*)::int AS n FROM matches`);
+    const sampleQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
+     SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref
+       FROM matches ORDER BY new_year ASC, discogs_id ASC LIMIT 20`);
+    // Phase 2 estimate: masters with no year whose versions DO have years.
+    const phase2Q = await getPool().query(`SELECT COUNT(*)::int AS n
+       FROM release_cache m
+      WHERE m.type = 'master'
+        AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
+        AND EXISTS (
+          SELECT 1 FROM release_cache v
+           WHERE v.type = 'release'
+             AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) = m.discogs_id
+             AND NULLIF(v.data->>'year','')::int > 0
+        )`);
+    return {
+        phase1Release: Number(totalQ.rows[0]?.n ?? 0),
+        phase2Master: Number(phase2Q.rows[0]?.n ?? 0),
+        bySource: phase1Q.rows.map(r => ({ donor_source: String(r.donor_source), n: Number(r.n) })),
+        sample: sampleQ.rows.map(r => ({
+            discogs_id: Number(r.discogs_id),
+            type: String(r.type),
+            new_year: Number(r.new_year),
+            label_name: String(r.label_name ?? ""),
+            catno: String(r.catno ?? ""),
+            donor_source: String(r.donor_source),
+            donor_ref: String(r.donor_ref),
+        })),
+    };
+}
+export async function applyYearBackfill() {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        // Generate one batch id for this whole apply pass.
+        const batchRow = await client.query(`SELECT gen_random_uuid() AS id`);
+        const batchId = String(batchRow.rows[0].id);
+        // Phase 1: matches → log + cache update.
+        const matches = await client.query(`${_YEAR_BACKFILL_DONOR_CTE}
+       SELECT discogs_id, type, new_year, donor_ref, donor_source, label_name, catno
+         FROM matches`);
+        let phase1Updated = 0;
+        for (const m of matches.rows) {
+            // Re-read current year inside the txn so we don't overwrite a
+            // value some other process just wrote.
+            const cur = await client.query(`SELECT COALESCE(NULLIF(data->>'year','')::int, NULL) AS year
+           FROM release_cache WHERE discogs_id = $1 AND type = $2`, [m.discogs_id, m.type]);
+            const oldYear = cur.rows[0]?.year != null ? Number(cur.rows[0].year) : null;
+            if (oldYear && oldYear > 0)
+                continue; // raced — skip
+            await client.query(`INSERT INTO year_backfill_log
+           (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source, label_name, catno)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+         ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId, m.discogs_id, m.type, oldYear, m.new_year, m.donor_ref, m.donor_source, m.label_name, m.catno]);
+            await client.query(`UPDATE release_cache
+            SET data = jsonb_set(
+                         jsonb_set(data, '{year}', to_jsonb($3::int)),
+                         '{_year_backfilled_from}', to_jsonb($4::text)
+                       )
+          WHERE discogs_id = $1 AND type = $2`, [m.discogs_id, m.type, m.new_year, m.donor_ref]);
+            phase1Updated += 1;
+        }
+        // Phase 2: masters whose versions now (or already) have years.
+        const masterMatches = await client.query(`SELECT m.discogs_id,
+              MIN(NULLIF(v.data->>'year','')::int) AS new_year
+         FROM release_cache m
+         JOIN release_cache v
+           ON v.type = 'release'
+          AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) = m.discogs_id
+          AND NULLIF(v.data->>'year','')::int > 0
+        WHERE m.type = 'master'
+          AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
+        GROUP BY m.discogs_id`);
+        let phase2Updated = 0;
+        for (const m of masterMatches.rows) {
+            const newYear = Number(m.new_year);
+            if (!Number.isFinite(newYear) || newYear <= 0)
+                continue;
+            await client.query(`INSERT INTO year_backfill_log
+           (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source)
+         VALUES ($1,$2,'master',NULL,$3,'aggregate:versions','aggregate:versions')
+         ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId, m.discogs_id, newYear]);
+            await client.query(`UPDATE release_cache
+            SET data = jsonb_set(
+                         jsonb_set(data, '{year}', to_jsonb($2::int)),
+                         '{_year_backfilled_from}', to_jsonb('aggregate:versions'::text)
+                       )
+          WHERE discogs_id = $1 AND type = 'master'`, [m.discogs_id, newYear]);
+            phase2Updated += 1;
+        }
+        const sourceQ = await client.query(`SELECT donor_source, COUNT(*)::int AS n
+         FROM year_backfill_log
+        WHERE batch_id = $1
+        GROUP BY donor_source
+        ORDER BY n DESC`, [batchId]);
+        await client.query("COMMIT");
+        return {
+            batchId,
+            phase1Updated,
+            phase2Updated,
+            bySource: sourceQ.rows.map(r => ({ donor_source: String(r.donor_source), n: Number(r.n) })),
+        };
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    }
+    finally {
+        client.release();
+    }
+}
+export async function listYearBackfillBatches(limit = 20) {
+    const r = await getPool().query(`SELECT batch_id::text                              AS batch_id,
+            MIN(applied_at)                             AS applied_at,
+            COUNT(*)::int                               AS total,
+            COUNT(*) FILTER (WHERE rolled_back_at IS NOT NULL)::int AS reverted,
+            jsonb_agg(jsonb_build_object('donor_source', donor_source))
+                                                        AS sources_raw
+       FROM year_backfill_log
+      GROUP BY batch_id
+      ORDER BY MIN(applied_at) DESC
+      LIMIT $1`, [limit]);
+    return r.rows.map(row => {
+        const counts = new Map();
+        for (const s of row.sources_raw) {
+            const k = s?.donor_source ?? "(unknown)";
+            counts.set(k, (counts.get(k) ?? 0) + 1);
+        }
+        return {
+            batch_id: String(row.batch_id),
+            applied_at: row.applied_at?.toISOString?.() ?? String(row.applied_at),
+            total: Number(row.total),
+            reverted: Number(row.reverted),
+            by_source: Array.from(counts.entries())
+                .map(([donor_source, n]) => ({ donor_source, n }))
+                .sort((a, b) => b.n - a.n),
+        };
+    });
+}
+// Reverse one batch: for every log entry not yet rolled back, if the
+// cache row's current year still equals our new_year, restore old_year
+// (removing the key if old_year was null). Rows whose year has drifted
+// since we wrote it are left alone — flagged in `drifted`.
+export async function rollbackYearBackfillBatch(batchId) {
+    if (!/^[0-9a-f-]{36}$/i.test(batchId))
+        throw new Error("bad batch_id");
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        const logRows = await client.query(`SELECT id, discogs_id, type, old_year, new_year
+         FROM year_backfill_log
+        WHERE batch_id = $1
+          AND rolled_back_at IS NULL`, [batchId]);
+        let reverted = 0;
+        let drifted = 0;
+        for (const r of logRows.rows) {
+            const cur = await client.query(`SELECT NULLIF(data->>'year','')::int AS year
+           FROM release_cache WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type]);
+            const curYear = cur.rows[0]?.year != null ? Number(cur.rows[0].year) : null;
+            if (curYear !== Number(r.new_year)) {
+                drifted += 1;
+                continue;
+            }
+            if (r.old_year == null) {
+                await client.query(`UPDATE release_cache
+              SET data = (data - 'year') - '_year_backfilled_from'
+            WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type]);
+            }
+            else {
+                await client.query(`UPDATE release_cache
+              SET data = (jsonb_set(data, '{year}', to_jsonb($3::int))) - '_year_backfilled_from'
+            WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type, Number(r.old_year)]);
+            }
+            reverted += 1;
+        }
+        const rollbackBatchRow = await client.query(`SELECT gen_random_uuid() AS id`);
+        const rollbackBatchId = String(rollbackBatchRow.rows[0].id);
+        await client.query(`UPDATE year_backfill_log
+          SET rolled_back_at = NOW(),
+              rolled_back_batch_id = $2::uuid
+        WHERE batch_id = $1
+          AND rolled_back_at IS NULL`, [batchId, rollbackBatchId]);
+        // Read once-alreadyReverted count (rows in this batch that were
+        // already rolled back before this call).
+        const alreadyQ = await client.query(`SELECT COUNT(*)::int AS n FROM year_backfill_log
+        WHERE batch_id = $1 AND rolled_back_batch_id IS DISTINCT FROM $2::uuid
+          AND rolled_back_at IS NOT NULL`, [batchId, rollbackBatchId]);
+        await client.query("COMMIT");
+        return {
+            batchId,
+            reverted,
+            alreadyReverted: Number(alreadyQ.rows[0]?.n ?? 0),
+            drifted,
+        };
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    }
+    finally {
+        client.release();
+    }
 }
 export async function resetCacheWarmRun(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs
