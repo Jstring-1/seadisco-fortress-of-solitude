@@ -170,28 +170,57 @@ export async function startCacheWarmCatnoRun(seriesKey: string, opts: { resetCur
   _runningKey = series.key;
   _stopRequested = false;
 
-  // Ensure the row exists with the configured shape, then read it back
-  // to pick up the persisted cursor (if any). resetCursor wipes the
-  // cursor only; counters are reset separately via the API endpoint.
   await upsertCacheWarmCatnoRun(series.key, {
     label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
   });
   const row = await getCacheWarmCatnoRun(series.key);
-  let cursor = (opts.resetCursor || !row?.current_catno)
+
+  let phase: string = String(row?.phase ?? "catno");
+  let catnoCursor = (opts.resetCursor || !row?.current_catno)
     ? series.lo
     : Number(row.current_catno);
-  if (cursor > series.hi) cursor = series.lo;
+  if (catnoCursor > series.hi && phase === "catno") {
+    // Catno walk previously finished but phase didn't advance — bump it
+    // so we don't re-walk the same range.
+    phase = "label_sweep";
+  }
+  let sweepPage = (opts.resetCursor || !row?.label_sweep_page)
+    ? 1
+    : Number(row.label_sweep_page);
+  if (opts.resetCursor) {
+    phase = "catno";
+    catnoCursor = series.lo;
+    sweepPage = 1;
+  }
 
   await upsertCacheWarmCatnoRun(series.key, {
     label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-  }, { current_catno: cursor, last_run_at: new Date() });
+  }, { current_catno: catnoCursor, phase, label_sweep_page: sweepPage, last_run_at: new Date() });
 
   await _writeActiveRun(series.key);
 
-  console.log(`[cache-warm-catno] kicking worker for ${series.key} from catno=${cursor} (range ${series.lo}-${series.hi})`);
+  console.log(`[cache-warm-catno] kicking worker for ${series.key} phase=${phase} catno=${catnoCursor} sweep_page=${sweepPage} (range ${series.lo}-${series.hi})`);
   (async () => {
     try {
-      await _runWorker(client, series, cursor);
+      if (phase === "catno") {
+        await _runCatnoPhase(client, series, catnoCursor);
+        if (!_stopRequested) {
+          // Phase transition.
+          await upsertCacheWarmCatnoRun(series.key, {
+            label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+          }, { phase: "label_sweep", label_sweep_page: 1, last_run_at: new Date() });
+          phase = "label_sweep";
+          sweepPage = 1;
+        }
+      }
+      if (phase === "label_sweep" && !_stopRequested) {
+        await _runLabelSweepPhase(client, series, sweepPage);
+        if (!_stopRequested) {
+          await upsertCacheWarmCatnoRun(series.key, {
+            label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+          }, { phase: "done", last_run_at: new Date() });
+        }
+      }
       console.log(`[cache-warm-catno] worker for ${series.key} exited cleanly`);
       await _clearActiveRun();
     } catch (err: any) {
@@ -211,7 +240,61 @@ export async function startCacheWarmCatnoRun(seriesKey: string, opts: { resetCur
   return { ok: true };
 }
 
-async function _runWorker(
+// ── Shared candidate processor ────────────────────────────────────
+// Filter the search payload to results that actually carry the label
+// term + fall within the year cap, cache the missing ones, bump skip
+// counter for the rest. Returns the number of fresh hits cached so
+// the caller can decide when to stop a paginated phase.
+async function _processSearchResults(
+  client: DiscogsClient,
+  series: CatnoSeries,
+  results: any[],
+): Promise<number> {
+  await recordCacheWarmCatnoRunSearched(series.key, results.length);
+
+  const candidates = results.filter(r => {
+    if (!_labelMatches(r, series.label)) return false;
+    const yr = parseInt(String(r?.year ?? ""), 10);
+    if (Number.isFinite(yr) && yr > series.yearMax) return false;
+    return true;
+  });
+
+  const ids: number[] = [];
+  for (const r of candidates) {
+    const id = Number(r?.id);
+    if (Number.isFinite(id) && id > 0) ids.push(id);
+  }
+  let cachedIds: Set<number>;
+  try { cachedIds = await getCachedReleaseIds(ids, "release"); }
+  catch { cachedIds = new Set(); }
+  const skipsThisN = ids.filter(id => cachedIds.has(id)).length;
+  if (skipsThisN > 0) await bumpCacheWarmCatnoRunSkip(series.key, skipsThisN);
+
+  let fresh = 0;
+  for (const r of candidates) {
+    if (_stopRequested) break;
+    const id = Number(r?.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    if (cachedIds.has(id)) continue;
+    try {
+      await _sleep(REQ_INTERVAL_MS);
+      const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
+      const fullYear = parseInt(String(full?.year ?? ""), 10);
+      if (Number.isFinite(fullYear) && fullYear > series.yearMax) continue;
+      await cacheRelease(id, "release", full as object);
+      const title = String(full?.title ?? r?.title ?? "(untitled)");
+      await recordCacheWarmCatnoRunHit(series.key, title, id);
+      fresh++;
+    } catch (err: any) {
+      await recordCacheWarmCatnoRunError(series.key, `release ${id}: ${err?.message ?? String(err)}`);
+      await _sleep(REQ_INTERVAL_MS);
+    }
+  }
+  return fresh;
+}
+
+// ── Phase 1: walk the configured catno range ─────────────────────
+async function _runCatnoPhase(
   client: DiscogsClient,
   series: CatnoSeries,
   startCatno: number,
@@ -244,60 +327,65 @@ async function _runWorker(
     }
 
     const results: any[] = Array.isArray(searchRes?.results) ? searchRes.results : [];
-    await recordCacheWarmCatnoRunSearched(series.key, results.length);
-
-    // Filter to results that actually match the label term AND fall
-    // within the year cap (or have no year, which is common for pre-
-    // war material — those still cache because Discogs doesn't know
-    // the year, not because the release is necessarily out of scope).
-    const candidates = results.filter(r => {
-      if (!_labelMatches(r, series.label)) return false;
-      const yr = parseInt(String(r?.year ?? ""), 10);
-      if (Number.isFinite(yr) && yr > series.yearMax) return false;
-      return true;
-    });
-
-    // Skip-counter bump for already-cached IDs in one shot — same
-    // pattern as the genre/style worker.
-    const ids: number[] = [];
-    for (const r of candidates) {
-      const id = Number(r?.id);
-      if (Number.isFinite(id) && id > 0) ids.push(id);
-    }
-    let cachedIds: Set<number>;
-    try { cachedIds = await getCachedReleaseIds(ids, "release"); }
-    catch { cachedIds = new Set(); }
-    const skipsThisN = ids.filter(id => cachedIds.has(id)).length;
-    if (skipsThisN > 0) await bumpCacheWarmCatnoRunSkip(series.key, skipsThisN);
-
-    for (const r of candidates) {
-      if (_stopRequested) break;
-      const id = Number(r?.id);
-      if (!Number.isFinite(id) || id <= 0) continue;
-      if (cachedIds.has(id)) continue;
-      try {
-        await _sleep(REQ_INTERVAL_MS);
-        const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
-        // Final year guard against the full release record — search
-        // results occasionally omit `year` even when the release has
-        // one, so re-check before persisting.
-        const fullYear = parseInt(String(full?.year ?? ""), 10);
-        if (Number.isFinite(fullYear) && fullYear > series.yearMax) {
-          continue;
-        }
-        await cacheRelease(id, "release", full as object);
-        const title = String(full?.title ?? r?.title ?? "(untitled)");
-        await recordCacheWarmCatnoRunHit(series.key, title, id);
-      } catch (err: any) {
-        await recordCacheWarmCatnoRunError(series.key, `release ${id}: ${err?.message ?? String(err)}`);
-        await _sleep(REQ_INTERVAL_MS);
-      }
-    }
+    await _processSearchResults(client, series, results);
     if (_stopRequested) break;
 
     n += 1;
     await upsertCacheWarmCatnoRun(series.key, {
       label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
     }, { current_catno: n, last_run_at: new Date() });
+  }
+}
+
+// ── Phase 2: paginate the whole label ────────────────────────────
+// After the configured catno range is fully walked, sweep every
+// release Discogs has tagged with this label. Catches releases with
+// catnos outside the [lo, hi] range, releases with no catno at all,
+// and one-off variants the sequential walk would miss. Year filter
+// still applies. Discogs caps label search at 10000 results (~100
+// pages × 100 per page); the worker stops when pagination exhausts
+// or when an empty page comes back.
+const LABEL_SWEEP_PER_PAGE = 100;
+async function _runLabelSweepPhase(
+  client: DiscogsClient,
+  series: CatnoSeries,
+  startPage: number,
+): Promise<void> {
+  let page = Math.max(1, startPage);
+  while (true) {
+    if (_stopRequested) break;
+    let searchRes: any;
+    try {
+      await _sleep(REQ_INTERVAL_MS);
+      searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () =>
+        client.search("", {
+          type:    "release",
+          label:   series.label,
+          perPage: LABEL_SWEEP_PER_PAGE,
+          page,
+        }),
+      );
+    } catch (err: any) {
+      await recordCacheWarmCatnoRunError(series.key, `label-sweep p${page}: ${err?.message ?? String(err)}`);
+      // Skip the bad page so we don't loop forever on a server-side glitch.
+      page += 1;
+      await upsertCacheWarmCatnoRun(series.key, {
+        label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+      }, { label_sweep_page: page, last_run_at: new Date() });
+      continue;
+    }
+
+    const results: any[] = Array.isArray(searchRes?.results) ? searchRes.results : [];
+    if (!results.length) break;     // pagination exhausted
+    await _processSearchResults(client, series, results);
+    if (_stopRequested) break;
+
+    const totalPages = Number(searchRes?.pagination?.pages);
+    const next = page + 1;
+    page = next;
+    await upsertCacheWarmCatnoRun(series.key, {
+      label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+    }, { label_sweep_page: page, last_run_at: new Date() });
+    if (Number.isFinite(totalPages) && next > totalPages) break;
   }
 }
