@@ -1,43 +1,44 @@
-// ── Labels page (admin-only) ─────────────────────────────────────
-// Chronological browse of cached releases grouped by record label.
-// Picks a label from a server-driven dropdown (powered by the same
-// /api/admin/release-cache/labels endpoint the export-form picker
-// uses) and renders the matching release_cache rows sorted by year
-// ASC then catalog number ASC. A sticky controls bar carries the
-// label picker + year-range + type filter + pagination. The Year
-// anchors strip lets the admin jump straight to a specific year
-// within the current label.
+// ── Labels page (admin-only) — chronological carousel ────────────
+// One release on screen at a time, big "open" card with the
+// release's cover, metadata, and a collapsed tracklist. Left / right
+// arrows (and ← → keys) flip through the label's catalog in year
+// ASC + catno ASC order. Source is release_cache only — no Discogs
+// calls. Pages of 200 rows are loaded lazily; the next page is
+// prefetched as the user nears the end of the current one.
 
 (function () {
   if (window.__sdLabelsBound) return;
   window.__sdLabelsBound = true;
 
+  const PER_PAGE = 200;
+
   const _state = {
-    label:     "",
-    type:      "",         // "release" | "master" | ""
-    yearFrom:  "",
-    yearTo:    "",
-    page:      1,
-    perPage:   60,
-    items:     [],
+    label:        "",
+    type:         "",
+    yearFrom:     "",
+    yearTo:       "",
+    items:        [],          // flat list across all loaded pages
     yearAnchors: [],
-    total:     0,
-    hasMore:   false,
-    labelsAll: null,       // [{name, count}] cached from /labels endpoint
-    pickerOpen: false,
+    total:        0,
+    pagesLoaded:  0,
+    hasMore:      false,
+    index:        0,           // current carousel position within items
+    labelsAll:    null,
+    pickerOpen:   false,
+    tracksOpen:   false,
+    loading:      false,
+    inFlightPage: null,
   };
   window._sdLabelsState = _state;
 
   function _esc(s) {
     return String(s ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
   function _fmt(n) { return Number(n || 0).toLocaleString(); }
 
+  // ── Data ────────────────────────────────────────────────────────
   async function _fetchLabelsList() {
     if (_state.labelsAll) return _state.labelsAll;
     const r = await apiFetch("/api/admin/release-cache/labels?limit=2000");
@@ -47,15 +48,12 @@
     return _state.labelsAll;
   }
 
-  async function _fetchReleases() {
-    if (!_state.label) {
-      _state.items = []; _state.yearAnchors = []; _state.total = 0; _state.hasMore = false;
-      return;
-    }
+  async function _fetchPage(page) {
+    if (!_state.label) return null;
     const q = new URLSearchParams();
     q.set("label", _state.label);
-    q.set("page",  String(_state.page));
-    q.set("per_page", String(_state.perPage));
+    q.set("page",  String(page));
+    q.set("per_page", String(PER_PAGE));
     if (_state.type) q.set("type", _state.type);
     if (_state.yearFrom) q.set("year_from", _state.yearFrom);
     if (_state.yearTo)   q.set("year_to",   _state.yearTo);
@@ -64,33 +62,112 @@
       const j = await r.json().catch(() => ({}));
       throw new Error(j?.error || `HTTP ${r.status}`);
     }
-    const j = await r.json();
-    _state.items = Array.isArray(j.items) ? j.items : [];
-    _state.yearAnchors = Array.isArray(j.yearAnchors) ? j.yearAnchors : [];
-    _state.total = Number(j.total) || 0;
-    _state.hasMore = !!j.hasMore;
+    return await r.json();
   }
 
+  async function _resetAndLoad() {
+    _state.items = [];
+    _state.yearAnchors = [];
+    _state.total = 0;
+    _state.pagesLoaded = 0;
+    _state.hasMore = false;
+    _state.index = 0;
+    _state.tracksOpen = false;
+    if (!_state.label) { _render(); return; }
+    _state.loading = true;
+    _render();
+    try {
+      const j = await _fetchPage(1);
+      _state.items = Array.isArray(j.items) ? j.items : [];
+      _state.yearAnchors = Array.isArray(j.yearAnchors) ? j.yearAnchors : [];
+      _state.total = Number(j.total) || 0;
+      _state.pagesLoaded = 1;
+      _state.hasMore = !!j.hasMore;
+    } catch (e) {
+      _state.loadError = String(e);
+    } finally {
+      _state.loading = false;
+      _render();
+    }
+  }
+
+  async function _ensureLoaded(index) {
+    // Lazy-load subsequent pages so flipping past the boundary doesn't
+    // stall the carousel. We load when the user is within 20 cards of
+    // the loaded edge.
+    if (!_state.hasMore) return;
+    if (_state.inFlightPage) return;
+    if (index < _state.items.length - 20) return;
+    const next = _state.pagesLoaded + 1;
+    _state.inFlightPage = next;
+    try {
+      const j = await _fetchPage(next);
+      if (j?.items?.length) {
+        _state.items.push(...j.items);
+        _state.pagesLoaded = next;
+        _state.hasMore = !!j.hasMore;
+      } else {
+        _state.hasMore = false;
+      }
+    } catch {} finally {
+      _state.inFlightPage = null;
+    }
+  }
+
+  // ── Navigation ──────────────────────────────────────────────────
+  async function _goto(idx) {
+    if (idx < 0) idx = 0;
+    if (idx >= _state.total) idx = _state.total - 1;
+    _state.index = idx;
+    _state.tracksOpen = false;
+    _ensureLoaded(idx).then(() => _render());
+    _render();
+  }
+  window._labelsGoto = _goto;
+
+  function _prev() { _goto(Math.max(0, _state.index - 1)); }
+  function _next() { _goto(Math.min(_state.total - 1, _state.index + 1)); }
+  window._labelsPrev = _prev;
+  window._labelsNext = _next;
+
+  function _onKey(ev) {
+    const v = document.getElementById("labels-view");
+    if (!v || v.style.display === "none") return;
+    // Ignore keystrokes when typing in an input.
+    const t = ev.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    if (ev.key === "ArrowLeft")  { ev.preventDefault(); _prev(); }
+    if (ev.key === "ArrowRight") { ev.preventDefault(); _next(); }
+  }
+
+  // ── Rendering ───────────────────────────────────────────────────
   function _renderControls() {
     const el = document.getElementById("labels-controls");
     if (!el) return;
-    const labelBtn = _state.label
-      ? _state.label
-      : `(choose a label)`;
+    const labelBtnText = _state.label || "(choose a label)";
+    const yearJumpOpts = (_state.yearAnchors || [])
+      .filter(a => a.year)
+      .map(a => `<option value="${a.year}">${a.year} (${a.count})</option>`)
+      .join("");
+    const cur = _state.items[_state.index];
+    const posText = _state.total
+      ? `${(_state.index + 1).toLocaleString()} of ${_fmt(_state.total)}${cur?.year ? ` · ${cur.year}` : ""}`
+      : "";
     el.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;font-size:0.82rem">
+      <div style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;font-size:0.82rem;padding:0.4rem 0.6rem;background:var(--bg);border-bottom:1px solid var(--border)">
         <span style="position:relative">
           <button type="button" id="labels-picker-btn" onclick="_labelsTogglePicker(event)"
-            style="padding:0.35rem 0.6rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;min-width:220px;text-align:left">
-            ${_esc(labelBtn)}${_state.label ? "" : ` <span style="color:var(--muted)">▼</span>`}
+            style="padding:0.4rem 0.7rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;min-width:220px;text-align:left;font-weight:600">
+            ${_esc(labelBtnText)} <span style="color:var(--muted)">▼</span>
           </button>
-          <div id="labels-picker-panel" style="display:${_state.pickerOpen ? "flex" : "none"};position:absolute;left:0;top:100%;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:0.5rem;margin-top:0.2rem;box-shadow:0 6px 18px rgba(0,0,0,0.4);min-width:320px;max-height:380px;overflow:hidden;flex-direction:column;gap:0.4rem">
+          <div id="labels-picker-panel" style="display:${_state.pickerOpen ? "flex" : "none"};position:absolute;left:0;top:100%;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:0.5rem;margin-top:0.2rem;box-shadow:0 6px 18px rgba(0,0,0,0.5);min-width:320px;max-height:400px;overflow:hidden;flex-direction:column;gap:0.4rem">
             <input id="labels-picker-search" type="text" placeholder="Filter labels…" oninput="_labelsRenderPickerList()"
               style="padding:0.35rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
-            <div id="labels-picker-list" style="overflow-y:auto;max-height:280px;border:1px solid var(--border);border-radius:3px;padding:0.3rem 0.4rem;font-size:0.8rem">Loading…</div>
+            <div id="labels-picker-list" style="overflow-y:auto;max-height:300px;border:1px solid var(--border);border-radius:3px;padding:0.3rem 0.4rem;font-size:0.8rem">Loading…</div>
           </div>
         </span>
-        <label style="display:inline-flex;gap:0.3rem;align-items:center">Type
+
+        <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted)">Type
           <select id="labels-type" onchange="_labelsOnFiltersChange()"
             style="padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
             <option value="">both</option>
@@ -98,20 +175,38 @@
             <option value="master"  ${_state.type === "master"  ? "selected" : ""}>master</option>
           </select>
         </label>
-        <label style="display:inline-flex;gap:0.3rem;align-items:center">Year
+
+        <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted)">Year
           <input id="labels-year-from" type="number" placeholder="from" value="${_esc(_state.yearFrom)}"
             onchange="_labelsOnFiltersChange()" style="width:70px;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
           <input id="labels-year-to" type="number" placeholder="to" value="${_esc(_state.yearTo)}"
             onchange="_labelsOnFiltersChange()" style="width:70px;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          ${(_state.yearFrom || _state.yearTo) ? `<button type="button" onclick="_labelsClearYears()" style="padding:0.15rem 0.4rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:0.72rem">clear</button>` : ""}
         </label>
-        <span style="margin-left:auto;color:var(--muted);font-size:0.78rem">
-          ${_state.total ? `${_fmt(_state.total)} releases` : ""}
+
+        <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted)">Jump
+          <select id="labels-jump" onchange="_labelsJumpToYear(parseInt(this.value,10))"
+            style="padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+            <option value="">— year —</option>
+            ${yearJumpOpts}
+          </select>
+        </label>
+
+        <span style="margin-left:auto;color:var(--text);font-size:0.85rem;font-weight:600;text-align:right">
+          ${posText}
         </span>
       </div>
+
+      ${_state.total > 1 ? `
+      <div style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--border)">
+        <input type="range" id="labels-scrubber" min="0" max="${_state.total - 1}" value="${_state.index}"
+          oninput="_labelsScrubberChange(this.value)" onchange="_labelsScrubberChange(this.value)"
+          style="width:100%;cursor:pointer">
+      </div>` : ""}
     `;
+
     if (_state.pickerOpen) {
       _renderPickerList();
-      // One-shot outside-click to close.
       setTimeout(() => {
         const off = (e) => {
           const panel = document.getElementById("labels-picker-panel");
@@ -126,14 +221,14 @@
       }, 0);
     }
   }
-  window._renderLabelsControls = _renderControls;
 
-  async function _labelsTogglePicker(ev) {
+  async function _togglePicker(ev) {
     ev?.preventDefault?.(); ev?.stopPropagation?.();
     _state.pickerOpen = !_state.pickerOpen;
     _renderControls();
     if (_state.pickerOpen) {
-      try { await _fetchLabelsList(); } catch (e) {
+      try { await _fetchLabelsList(); }
+      catch (e) {
         const list = document.getElementById("labels-picker-list");
         if (list) list.innerHTML = `<span style="color:#e88">${_esc(String(e).slice(0, 200))}</span>`;
         return;
@@ -141,7 +236,7 @@
       _renderPickerList();
     }
   }
-  window._labelsTogglePicker = _labelsTogglePicker;
+  window._labelsTogglePicker = _togglePicker;
 
   function _renderPickerList() {
     const list = document.getElementById("labels-picker-list");
@@ -153,7 +248,7 @@
     const rows = filtered.slice(0, 800).map(it => {
       const selected = it.name === _state.label;
       return `<div onclick="_labelsPickLabel('${_esc(it.name)}')"
-        style="display:flex;gap:0.4rem;align-items:center;padding:0.2rem 0.3rem;cursor:pointer;border-radius:3px;${selected ? "background:rgba(120,220,140,0.12)" : ""}"
+        style="display:flex;gap:0.4rem;align-items:center;padding:0.25rem 0.3rem;cursor:pointer;border-radius:3px;${selected ? "background:rgba(120,220,140,0.12);color:#7ddc8c" : ""}"
         onmouseenter="this.style.background='rgba(255,255,255,0.06)'"
         onmouseleave="this.style.background='${selected ? "rgba(120,220,140,0.12)" : "transparent"}'">
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.name)}</span>
@@ -164,160 +259,217 @@
   }
   window._labelsRenderPickerList = _renderPickerList;
 
-  async function _labelsPickLabel(name) {
+  async function _pickLabel(name) {
     _state.label = String(name || "");
-    _state.page  = 1;
     _state.pickerOpen = false;
+    _state.yearFrom = "";
+    _state.yearTo = "";
     _renderControls();
-    await _loadAndRender();
+    await _resetAndLoad();
   }
-  window._labelsPickLabel = _labelsPickLabel;
+  window._labelsPickLabel = _pickLabel;
 
-  function _labelsOnFiltersChange() {
+  function _onFiltersChange() {
     _state.type     = document.getElementById("labels-type")?.value || "";
     _state.yearFrom = document.getElementById("labels-year-from")?.value || "";
     _state.yearTo   = document.getElementById("labels-year-to")?.value || "";
-    _state.page = 1;
-    _loadAndRender();
+    _resetAndLoad();
   }
-  window._labelsOnFiltersChange = _labelsOnFiltersChange;
+  window._labelsOnFiltersChange = _onFiltersChange;
 
-  function _renderYearAnchors() {
-    const el = document.getElementById("labels-year-anchors");
-    if (!el) return;
-    if (!_state.label || !_state.yearAnchors.length) { el.innerHTML = ""; return; }
-    const chips = _state.yearAnchors.map(a => {
-      if (!a.year) return "";
-      return `<button type="button" onclick="_labelsJumpToYear(${a.year})"
-        title="${a.count} releases in ${a.year}"
-        style="padding:0.15rem 0.45rem;background:rgba(255,255,255,0.04);color:var(--text);border:1px solid var(--border);border-radius:999px;font-size:0.74rem;cursor:pointer">
-        ${a.year} <span style="color:var(--muted)">${a.count}</span>
-      </button>`;
-    }).join("");
-    el.innerHTML = `<span style="color:var(--muted);align-self:center">Jump:</span> ${chips}`;
+  function _clearYears() {
+    _state.yearFrom = "";
+    _state.yearTo = "";
+    _resetAndLoad();
   }
+  window._labelsClearYears = _clearYears;
 
-  function _labelsJumpToYear(year) {
-    // Set year_from = year_to = clicked year, narrowing the page to
-    // releases in that year. Click an empty space (clear filters) to
-    // back out — or just clear the year inputs in the controls bar.
-    _state.yearFrom = String(year);
-    _state.yearTo   = String(year);
-    _state.page = 1;
-    // Reflect in the inputs without re-rendering the whole controls bar.
-    const fromEl = document.getElementById("labels-year-from");
-    const toEl   = document.getElementById("labels-year-to");
-    if (fromEl) fromEl.value = String(year);
-    if (toEl)   toEl.value   = String(year);
-    _loadAndRender();
+  async function _jumpToYear(year) {
+    if (!Number.isFinite(year)) return;
+    // Find the first loaded item with this year. If not loaded yet,
+    // walk pages until we hit it (cheap — anchors guarantee it exists
+    // within the current filter set).
+    const findIdx = () => _state.items.findIndex(it => it.year === year);
+    let idx = findIdx();
+    while (idx < 0 && _state.hasMore) {
+      await _ensureLoaded(_state.items.length); // pull the next page
+      idx = findIdx();
+    }
+    if (idx >= 0) _goto(idx);
+    // Reset the dropdown so it can be re-fired for the same year.
+    const sel = document.getElementById("labels-jump");
+    if (sel) sel.value = "";
   }
-  window._labelsJumpToYear = _labelsJumpToYear;
+  window._labelsJumpToYear = _jumpToYear;
 
-  function _renderResults() {
-    const el = document.getElementById("labels-results");
+  function _scrubberChange(v) {
+    const idx = Math.max(0, Math.min(_state.total - 1, parseInt(String(v), 10) || 0));
+    _goto(idx);
+  }
+  window._labelsScrubberChange = _scrubberChange;
+
+  function _toggleTracks() {
+    _state.tracksOpen = !_state.tracksOpen;
+    _renderStage();
+  }
+  window._labelsToggleTracks = _toggleTracks;
+
+  function _renderStage() {
+    const el = document.getElementById("labels-stage");
     if (!el) return;
     if (!_state.label) {
-      el.innerHTML = `<div class="loc-empty">Pick a label to start.</div>`;
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--muted);font-size:1.1rem">Pick a label to start.</div>`;
+      return;
+    }
+    if (_state.loading) {
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--muted)">Loading…</div>`;
+      return;
+    }
+    if (_state.loadError) {
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:#e88">${_esc(String(_state.loadError).slice(0, 200))}</div>`;
       return;
     }
     if (!_state.items.length) {
-      el.innerHTML = `<div class="loc-empty">No releases match.</div>`;
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--muted)">No releases match.</div>`;
       return;
     }
-    // Group rows by year for visible chronological grouping. Within
-    // each year they're already sorted by catno ASC from the server.
-    const groups = new Map();
-    for (const it of _state.items) {
-      const y = it.year || 0;
-      if (!groups.has(y)) groups.set(y, []);
-      groups.get(y).push(it);
+    const cur = _state.items[_state.index];
+    if (!cur) {
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:var(--muted)">Loading…</div>`;
+      return;
     }
-    const sectionHtml = [];
-    for (const [year, rows] of groups) {
-      sectionHtml.push(`<div style="margin:0.8rem 0 0.3rem;font-size:0.95rem;font-weight:600;color:var(--text)">${year || "—"}</div>`);
-      sectionHtml.push(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.6rem">`);
-      for (const r of rows) {
-        const formats = Array.isArray(r.formats) && r.formats.length
-          ? r.formats.map(f => f?.name).filter(Boolean).slice(0, 2).join(", ")
-          : "";
-        const cover = r.cover ? `<img src="${_esc(r.cover)}" alt="" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:4px;background:rgba(255,255,255,0.05)">`
-          : `<div style="width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.04);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.7rem">no image</div>`;
-        sectionHtml.push(`
-          <div onclick="_labelsOpenRelease(${r.id}, '${r.type}')"
-            style="border:1px solid var(--border);border-radius:6px;padding:0.45rem;background:rgba(255,255,255,0.02);cursor:pointer;display:flex;flex-direction:column;gap:0.3rem"
-            onmouseenter="this.style.borderColor='var(--accent)'"
-            onmouseleave="this.style.borderColor='var(--border)'">
-            ${cover}
-            <div style="font-size:0.74rem;color:var(--muted);display:flex;justify-content:space-between;gap:0.4rem">
-              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(r.catno)}">${_esc(r.catno || "—")}</span>
-              <span style="color:var(--accent)">${_esc(r.type)}</span>
-            </div>
-            <div style="font-size:0.82rem;font-weight:600;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${_esc(r.title || "(untitled)")}</div>
-            <div style="font-size:0.76rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.artist || "")}</div>
-            ${formats || r.country ? `<div style="font-size:0.7rem;color:var(--muted);display:flex;gap:0.4rem;justify-content:space-between"><span>${_esc(formats)}</span><span>${_esc(r.country)}</span></div>` : ""}
-          </div>`);
-      }
-      sectionHtml.push(`</div>`);
-    }
-    el.innerHTML = sectionHtml.join("");
-  }
+    const prevIt = _state.items[_state.index - 1];
+    const nextIt = _state.items[_state.index + 1];
 
-  function _renderPagination() {
-    const el = document.getElementById("labels-pagination");
-    if (!el) return;
-    if (!_state.label || _state.total <= _state.perPage) { el.innerHTML = ""; return; }
-    const totalPages = Math.max(1, Math.ceil(_state.total / _state.perPage));
-    const prevDis = _state.page <= 1 ? "disabled" : "";
-    const nextDis = !_state.hasMore ? "disabled" : "";
+    const formats = Array.isArray(cur.formats) && cur.formats.length
+      ? cur.formats.map(f => {
+          const desc = Array.isArray(f?.descriptions) && f.descriptions.length ? `, ${f.descriptions.join(", ")}` : "";
+          const qty  = f?.qty && Number(f.qty) > 1 ? `${f.qty}×` : "";
+          return `${qty}${_esc(f?.name || "")}${_esc(desc)}`;
+        }).join(" / ")
+      : "";
+    const labelsStr = Array.isArray(cur.labels) && cur.labels.length
+      ? cur.labels.map(l => {
+          const cn = l?.catno ? ` ${_esc(l.catno)}` : "";
+          return `${_esc(l?.name || "")}${cn}`;
+        }).join(" · ")
+      : `${_esc(cur.catno || "")}`;
+
+    const cover = cur.cover
+      ? `<img src="${_esc(cur.cover)}" alt="" loading="eager"
+            style="width:100%;max-width:340px;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:rgba(255,255,255,0.05);box-shadow:0 4px 18px rgba(0,0,0,0.4)">`
+      : `<div style="width:340px;max-width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85rem">no image</div>`;
+
+    const tracks = Array.isArray(cur.tracklist) ? cur.tracklist : [];
+    const tracksBlock = tracks.length
+      ? `<div style="margin-top:0.8rem;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button type="button" onclick="_labelsToggleTracks()"
+            style="width:100%;text-align:left;background:rgba(255,255,255,0.04);color:var(--text);padding:0.45rem 0.7rem;border:none;cursor:pointer;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center">
+            <span><strong>Tracks</strong> <span style="color:var(--muted)">(${tracks.length})</span></span>
+            <span style="color:var(--muted);font-size:0.75rem">${_state.tracksOpen ? "▲ collapse" : "▼ expand"}</span>
+          </button>
+          ${_state.tracksOpen ? `<div style="padding:0.4rem 0.7rem;font-size:0.82rem;max-height:300px;overflow-y:auto">
+            ${tracks.map(t => `<div style="display:flex;gap:0.6rem;padding:0.15rem 0;border-bottom:1px dashed rgba(255,255,255,0.05)">
+              <span style="color:var(--muted);min-width:2.5em">${_esc(t.position || "")}</span>
+              <span style="flex:1">${_esc(t.title || "")}</span>
+              ${t.duration ? `<span style="color:var(--muted)">${_esc(t.duration)}</span>` : ""}
+            </div>`).join("")}
+          </div>` : ""}
+        </div>`
+      : "";
+
+    const peekText = (it) => it
+      ? `<div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">${_esc(it.catno || "")}</div>
+         <div style="font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.title || "")}</div>
+         <div style="font-size:0.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.year || "")} · ${_esc(it.artist || "")}</div>`
+      : "";
+
+    const peekCover = (it) => it && it.coverThumb
+      ? `<img src="${_esc(it.coverThumb)}" alt="" loading="lazy"
+            style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;opacity:0.55;transition:opacity 0.2s">`
+      : `<div style="width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.03);border-radius:5px;opacity:0.55"></div>`;
+
     el.innerHTML = `
-      <button class="admin-btn" ${prevDis} onclick="_labelsGoto(${_state.page - 1})">← Prev</button>
-      <span style="color:var(--muted);align-self:center">Page ${_state.page} of ${totalPages}</span>
-      <button class="admin-btn" ${nextDis} onclick="_labelsGoto(${_state.page + 1})">Next →</button>
+      <div style="display:grid;grid-template-columns:120px 1fr 120px;gap:0.8rem;align-items:start;padding:1rem 0.6rem;min-height:60vh">
+        <!-- Prev peek -->
+        <div style="cursor:${prevIt ? "pointer" : "default"}" onclick="${prevIt ? "_labelsPrev()" : ""}"
+             onmouseenter="this.querySelector('img')?.style.setProperty('opacity','1')"
+             onmouseleave="this.querySelector('img')?.style.setProperty('opacity','0.55')">
+          ${peekCover(prevIt)}
+          ${peekText(prevIt)}
+        </div>
+
+        <!-- Center card -->
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:0.4rem;position:relative">
+          <button type="button" onclick="_labelsPrev()" ${prevIt ? "" : "disabled"}
+            title="Previous (←)"
+            style="position:absolute;left:-10px;top:40%;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:50%;width:42px;height:42px;font-size:1.2rem;cursor:${prevIt ? "pointer" : "not-allowed"};opacity:${prevIt ? "1" : "0.35"};z-index:2">‹</button>
+          <button type="button" onclick="_labelsNext()" ${nextIt || _state.hasMore ? "" : "disabled"}
+            title="Next (→)"
+            style="position:absolute;right:-10px;top:40%;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:50%;width:42px;height:42px;font-size:1.2rem;cursor:${nextIt || _state.hasMore ? "pointer" : "not-allowed"};opacity:${nextIt || _state.hasMore ? "1" : "0.35"};z-index:2">›</button>
+
+          ${cover}
+          <div style="font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-top:0.5rem">${_esc(cur.type)} · ${_esc(cur.year || "—")}</div>
+          <div style="font-size:1.35rem;font-weight:600;line-height:1.2">${_esc(cur.title || "(untitled)")}</div>
+          <div style="font-size:1rem;color:var(--text)">${_esc(cur.artist || "")}</div>
+          <div style="font-size:0.82rem;color:var(--muted)">${labelsStr}</div>
+          ${formats ? `<div style="font-size:0.78rem;color:var(--muted)">${formats}${cur.country ? ` · ${_esc(cur.country)}` : ""}</div>` : (cur.country ? `<div style="font-size:0.78rem;color:var(--muted)">${_esc(cur.country)}</div>` : "")}
+
+          <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin-top:0.5rem">
+            <button class="admin-btn" type="button" onclick="_labelsOpenRelease(${cur.id}, '${cur.type}')">Open full modal ↗</button>
+            <a class="admin-btn" href="https://www.discogs.com/${cur.type === 'master' ? 'master' : 'release'}/${cur.id}" target="_blank" rel="noopener" style="text-decoration:none">Discogs ↗</a>
+          </div>
+
+          <div style="width:100%;max-width:520px;text-align:left">
+            ${tracksBlock}
+            ${cur.notes ? `<details style="margin-top:0.6rem;font-size:0.8rem"><summary style="cursor:pointer;color:var(--muted)">Notes</summary><div style="margin-top:0.3rem;color:var(--muted);white-space:pre-wrap">${_esc(String(cur.notes).slice(0, 1500))}</div></details>` : ""}
+          </div>
+        </div>
+
+        <!-- Next peek -->
+        <div style="cursor:${nextIt ? "pointer" : "default"}" onclick="${nextIt ? "_labelsNext()" : ""}"
+             onmouseenter="this.querySelector('img')?.style.setProperty('opacity','1')"
+             onmouseleave="this.querySelector('img')?.style.setProperty('opacity','0.55')">
+          ${peekCover(nextIt)}
+          ${peekText(nextIt)}
+        </div>
+      </div>
     `;
   }
-  function _labelsGoto(p) {
-    if (p < 1) return;
-    _state.page = p;
-    _loadAndRender();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-  window._labelsGoto = _labelsGoto;
 
-  function _labelsOpenRelease(id, type) {
-    // Reuse the existing album modal — same path the lookup popup
-    // already takes for cached releases.
-    const url = `/?op=${encodeURIComponent(type === "master" ? "master" : "release")}:${id}`;
+  function _openRelease(id, type) {
     if (typeof window.openLookupPopup === "function") {
       window.openLookupPopup({ kind: type === "master" ? "master" : "release", id });
     } else {
-      window.open(url, "_self");
+      window.open(`/?op=${encodeURIComponent(type === "master" ? "master" : "release")}:${id}`, "_self");
     }
   }
-  window._labelsOpenRelease = _labelsOpenRelease;
+  window._labelsOpenRelease = _openRelease;
 
-  async function _loadAndRender() {
-    const resEl = document.getElementById("labels-results");
-    if (resEl && _state.label) resEl.innerHTML = `<div class="loc-empty">Loading…</div>`;
-    try {
-      await _fetchReleases();
-    } catch (e) {
-      if (resEl) resEl.innerHTML = `<div class="loc-empty" style="color:#e88">Failed: ${_esc(String(e).slice(0, 200))}</div>`;
-      return;
-    }
+  function _render() {
     _renderControls();
-    _renderYearAnchors();
-    _renderResults();
-    _renderPagination();
+    _renderStage();
   }
 
+  // ── Init ────────────────────────────────────────────────────────
   window.initLabelsView = function initLabelsView() {
     if (!window._isAdmin) return;
-    _renderControls();
-    _renderYearAnchors();
-    _renderResults();
-    _renderPagination();
-    // Lazy-load the labels list in the background so the picker is
-    // ready the moment the admin clicks the dropdown.
+    // Replace the legacy view skeleton with the carousel scaffolding
+    // on first init. Idempotent — re-init reuses existing nodes.
+    const view = document.getElementById("labels-view");
+    if (view && !view.dataset.sdLabelsCarouselReady) {
+      view.dataset.sdLabelsCarouselReady = "1";
+      view.innerHTML = `
+        <div style="margin:0.4rem 0 0.6rem">
+          <div style="font-size:1.15rem;font-weight:600">Labels</div>
+          <div style="color:var(--muted);font-size:0.78rem;margin-top:0.1rem">Flip through cached releases for a label, chronologically. ← / → arrow keys also work.</div>
+        </div>
+        <div id="labels-controls" style="position:sticky;top:0;background:var(--bg);z-index:5;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:0.5rem"></div>
+        <div id="labels-stage"></div>
+      `;
+      document.addEventListener("keydown", _onKey);
+    }
+    _render();
     _fetchLabelsList().catch(() => {});
   };
 })();
