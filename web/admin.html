@@ -1608,7 +1608,16 @@ function _renderLabelDir() {
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     <div style="overflow-x:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
-      <table style="width:100%;font-size:0.8rem;border-collapse:collapse">
+      <table style="width:100%;font-size:0.8rem;border-collapse:collapse;table-layout:fixed">
+        <colgroup>
+          <col style="width:28%">
+          <col style="width:80px">
+          <col style="width:80px">
+          <col style="width:80px">
+          <col style="width:18%">
+          <col style="width:110px">
+          <col style="width:170px">
+        </colgroup>
         <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
           <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
             ${_labelDirHeader("label_name",     "Label",     "left")}
@@ -1700,13 +1709,25 @@ function _labelDirRowHtml(r) {
         </div>
       </td></tr>`
     : "";
+  // Defensive render: strip HTML tags + collapse whitespace + truncate
+  // so a dirty-data row (e.g. label_name still has HTML chrome before
+  // Clean names has been clicked) can't wreck the table layout.
+  const cleanName = String(r.label_name || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const displayName = cleanName.length > 70 ? cleanName.slice(0, 70) + "…" : cleanName;
+  const isDirty = cleanName !== String(r.label_name || "").trim();
+  const dirtyHint = isDirty
+    ? `<span title="HTML/whitespace in source — click 🧼 Clean names to fix" style="color:#ea8;font-size:0.72rem;margin-left:0.3rem">⚠</span>`
+    : "";
   return `
     <tr style="border-bottom:1px dashed rgba(255,255,255,0.05)">
-      <td style="padding:0.3rem 0.5rem;font-weight:500">${_eHtml(r.label_name)}</td>
+      <td style="padding:0.3rem 0.5rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(cleanName)}">${_eHtml(displayName)}${dirtyHint}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.external_count.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_releases.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
-      <td style="padding:0.3rem 0.5rem;color:var(--muted);font-size:0.72rem">${sources}</td>
+      <td style="padding:0.3rem 0.5rem;color:var(--muted);font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml((r.sources || []).join(', '))}">${sources}</td>
       <td style="padding:0.3rem 0.5rem">${idCell}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
         ${_labelDirSweepCell(r)}
