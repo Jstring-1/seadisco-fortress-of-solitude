@@ -13,7 +13,7 @@ import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesF
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
 import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, requestExternalDiscographyStop, getExternalDiscographyStatus, isExternalDiscographyRunning, parseExcelloXlsxBuffer, } from "./external-discography-worker.js";
-import { startCacheWarmCatnoRun, startLabelSweepRun, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
+import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9526,6 +9526,39 @@ app.get("/api/admin/label-directory", async (req, res) => {
     }
     catch (err) {
         console.error("[label-directory list]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Kick off the catno-worker's label-sweep phase for an arbitrary
+// label_id directly from the directory grid. Reuses the same
+// singleflight + persistence as the curated catno sweeps; status is
+// visible in the Catalog-number crawls panel under series_key
+// `adhoc:{labelId}`.
+app.post("/api/admin/label-directory/start-sweep", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const labelId = Number(body.labelId);
+    const labelName = String(body.labelName ?? "").trim();
+    const resetCursor = !!body.resetCursor;
+    if (!Number.isFinite(labelId) || labelId <= 0) {
+        res.status(400).json({ error: "labelId (positive int) required" });
+        return;
+    }
+    if (!labelName) {
+        res.status(400).json({ error: "labelName required" });
+        return;
+    }
+    try {
+        const result = await startAdHocLabelSweep(labelId, labelName, { resetCursor });
+        if (!result.ok) {
+            res.status(409).json(result);
+            return;
+        }
+        res.json(result);
+    }
+    catch (err) {
+        console.error("[label-directory start-sweep]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
