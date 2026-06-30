@@ -10621,6 +10621,27 @@ export interface ExternalDiscographyRow {
   data?: any;                 // raw row JSON for anything unmapped
 }
 
+// Defensive sanitation for label names — strips HTML tags, decodes
+// the handful of entities that commonly leak from upstream scrapes,
+// collapses whitespace (including raw newlines), and truncates to a
+// reasonable display length. Source for the bug: the abrams-labels.json
+// seed file was extracted from Abrams's index page which embeds HTML
+// markup in some label names (e.g. "LAKESIDE (USA)</font>...<a href=…>"),
+// and `seed.name` becomes external_discography.label_name verbatim.
+export function sanitizeLabelName(s: string | null | undefined): string {
+  if (s == null) return "";
+  return String(s)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g,  "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#?\w+;/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
 function _deriveCatnoSort(catno: string | null | undefined): number | null {
   if (!catno) return null;
   const m = String(catno).match(/(\d{1,9})/);
@@ -10658,7 +10679,7 @@ export async function bulkInsertExternalDiscography(
           `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},$${base+14},$${base+15})`,
         );
         args.push(
-          r.label_name,
+          sanitizeLabelName(r.label_name),
           r.label_id ?? null,
           r.catno,
           sort,
@@ -10784,6 +10805,63 @@ export async function purgeExternalDiscographyCovered(opts: { label?: string } =
     args,
   );
   return { deleted: r.rowCount ?? 0 };
+}
+
+// One-shot retroactive cleanup for rows already inserted with dirty
+// label_name (the abrams-labels.json bug). Walks every distinct
+// label_name that has HTML markers / runs of whitespace, computes
+// the sanitized canonical, then for each row UPDATEs to the new name
+// — DELETEing rows whose post-clean (label_name, catno, side, source)
+// collides with an existing row (the keeper). Returns how many rows
+// were renamed and how many duplicates were dropped.
+export async function cleanDirtyExternalDiscographyLabelNames(): Promise<{
+  renamed: number; mergedDuplicates: number; renames: Array<{ from: string; to: string; rows: number }>;
+}> {
+  const dirty = await getPool().query(
+    `SELECT DISTINCT label_name
+       FROM external_discography
+      WHERE label_name ~ '<[^>]+>|\\s\\s|\n|\r|\t'`,
+  );
+  const renames: Array<{ from: string; to: string; rows: number }> = [];
+  let renamed = 0;
+  let mergedDuplicates = 0;
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    for (const r of dirty.rows) {
+      const oldName = String(r.label_name);
+      const newName = sanitizeLabelName(oldName);
+      if (!newName || newName === oldName) continue;
+      // Delete rows on NEW name that would collide with rows on OLD
+      // name (same catno+side+source) — the OLD row will be renamed
+      // and is the keeper.
+      const dropRes = await client.query(
+        `DELETE FROM external_discography ed_new
+           USING external_discography ed_old
+          WHERE ed_old.label_name = $1
+            AND ed_new.label_name = $2
+            AND ed_new.id <> ed_old.id
+            AND ed_new.catno  = ed_old.catno
+            AND COALESCE(ed_new.side,'') = COALESCE(ed_old.side,'')
+            AND ed_new.source = ed_old.source`,
+        [oldName, newName],
+      );
+      mergedDuplicates += dropRes.rowCount ?? 0;
+      const updRes = await client.query(
+        `UPDATE external_discography SET label_name = $2 WHERE label_name = $1`,
+        [oldName, newName],
+      );
+      renamed += updRes.rowCount ?? 0;
+      renames.push({ from: oldName.slice(0, 80), to: newName.slice(0, 80), rows: updRes.rowCount ?? 0 });
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+  return { renamed, mergedDuplicates, renames };
 }
 
 // ── Label directory ─────────────────────────────────────────────
