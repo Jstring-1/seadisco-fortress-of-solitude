@@ -53,6 +53,9 @@ const REQ_INTERVAL_MS = 1000;
 export interface CatnoSeries {
   key: string;       // unique slug, e.g. "excello:2000-2400"
   label: string;     // Discogs label string for the `label` search param
+  labelId?: number;  // Discogs label ID — when set, label sweep uses
+                     // /labels/{id}/releases (precise) instead of the
+                     // fuzzy ?label=Name search. Strongly recommended.
   prefix?: string;   // optional prefix joined to the number, e.g. "B-"
   lo: number;
   hi: number;
@@ -63,6 +66,7 @@ export const CATNO_SERIES: CatnoSeries[] = [
   {
     key: "excello:2000-2400",
     label: "Excello",
+    labelId: 51225,
     lo: 2000, hi: 2400,
     yearMax: 1968,
     notes: "Excello 7-inch single 2000-series, Nashville swamp blues / R&B (Slim Harpo, Lightnin' Slim, Lazy Lester).",
@@ -297,13 +301,18 @@ async function _processSearchResults(
   client: DiscogsClient,
   series: CatnoSeries,
   results: any[],
+  opts: { trustLabelScope?: boolean } = {},
 ): Promise<number> {
   await recordCacheWarmCatnoRunSearched(series.key, results.length);
 
   // Year filter dropped intentionally — every label-matched release is
   // cached regardless of year. The yearMax field on the seed entry is
   // kept for documentation only.
-  const candidates = results.filter(r => _labelMatches(r, series.label));
+  // trustLabelScope: the upstream endpoint already guarantees label
+  // membership (e.g. /labels/{id}/releases) — skip the fuzzy name filter.
+  const candidates = opts.trustLabelScope
+    ? results
+    : results.filter(r => _labelMatches(r, series.label));
 
   const ids: number[] = [];
   for (const r of candidates) {
@@ -416,19 +425,29 @@ async function _runLabelSweepPhase(
   startPage: number,
 ): Promise<void> {
   let page = Math.max(1, startPage);
+  const useLabelId = Number.isFinite(series.labelId) && (series.labelId as number) > 0;
   while (true) {
     if (_stopRequested) break;
     let searchRes: any;
     try {
       await _sleep(REQ_INTERVAL_MS);
-      searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () =>
-        client.search("", {
-          type:    "release",
-          label:   series.label,
-          perPage: LABEL_SWEEP_PER_PAGE,
-          page,
-        }),
-      );
+      if (useLabelId) {
+        searchRes = await _withRetry(`label-sweep id=${series.labelId} p${page}`, () =>
+          client.getLabelReleases(series.labelId as number, {
+            perPage: LABEL_SWEEP_PER_PAGE,
+            page,
+          }),
+        );
+      } else {
+        searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () =>
+          client.search("", {
+            type:    "release",
+            label:   series.label,
+            perPage: LABEL_SWEEP_PER_PAGE,
+            page,
+          }),
+        );
+      }
     } catch (err: any) {
       await recordCacheWarmCatnoRunError(series.key, `label-sweep p${page}: ${err?.message ?? String(err)}`);
       // Skip the bad page so we don't loop forever on a server-side glitch.
@@ -439,9 +458,14 @@ async function _runLabelSweepPhase(
       continue;
     }
 
-    const results: any[] = Array.isArray(searchRes?.results) ? searchRes.results : [];
+    // /labels/{id}/releases returns `releases:[]`; /database/search returns `results:[]`.
+    const results: any[] = Array.isArray(searchRes?.releases)
+      ? searchRes.releases
+      : Array.isArray(searchRes?.results)
+        ? searchRes.results
+        : [];
     if (!results.length) break;     // pagination exhausted
-    await _processSearchResults(client, series, results);
+    await _processSearchResults(client, series, results, { trustLabelScope: useLabelId });
     if (_stopRequested) break;
 
     const totalPages = Number(searchRes?.pagination?.pages);
