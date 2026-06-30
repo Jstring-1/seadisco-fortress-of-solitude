@@ -43,6 +43,7 @@ export const CATNO_SERIES = [
     {
         key: "excello:2000-2400",
         label: "Excello",
+        labelId: 51225,
         lo: 2000, hi: 2400,
         yearMax: 1968,
         notes: "Excello 7-inch single 2000-series, Nashville swamp blues / R&B (Slim Harpo, Lightnin' Slim, Lazy Lester).",
@@ -271,12 +272,16 @@ export async function startLabelSweepRun(seriesKey, opts = {}) {
 // Returns the number of label-matched results (regardless of whether
 // they were new or already cached) so the caller can detect the end
 // of a sequential catalog by counting consecutive empty catnos.
-async function _processSearchResults(client, series, results) {
+async function _processSearchResults(client, series, results, opts = {}) {
     await recordCacheWarmCatnoRunSearched(series.key, results.length);
     // Year filter dropped intentionally — every label-matched release is
     // cached regardless of year. The yearMax field on the seed entry is
     // kept for documentation only.
-    const candidates = results.filter(r => _labelMatches(r, series.label));
+    // trustLabelScope: the upstream endpoint already guarantees label
+    // membership (e.g. /labels/{id}/releases) — skip the fuzzy name filter.
+    const candidates = opts.trustLabelScope
+        ? results
+        : results.filter(r => _labelMatches(r, series.label));
     const ids = [];
     for (const r of candidates) {
         const id = Number(r?.id);
@@ -387,18 +392,27 @@ async function _runCatnoPhase(client, series, startCatno) {
 const LABEL_SWEEP_PER_PAGE = 100;
 async function _runLabelSweepPhase(client, series, startPage) {
     let page = Math.max(1, startPage);
+    const useLabelId = Number.isFinite(series.labelId) && series.labelId > 0;
     while (true) {
         if (_stopRequested)
             break;
         let searchRes;
         try {
             await _sleep(REQ_INTERVAL_MS);
-            searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () => client.search("", {
-                type: "release",
-                label: series.label,
-                perPage: LABEL_SWEEP_PER_PAGE,
-                page,
-            }));
+            if (useLabelId) {
+                searchRes = await _withRetry(`label-sweep id=${series.labelId} p${page}`, () => client.getLabelReleases(series.labelId, {
+                    perPage: LABEL_SWEEP_PER_PAGE,
+                    page,
+                }));
+            }
+            else {
+                searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () => client.search("", {
+                    type: "release",
+                    label: series.label,
+                    perPage: LABEL_SWEEP_PER_PAGE,
+                    page,
+                }));
+            }
         }
         catch (err) {
             await recordCacheWarmCatnoRunError(series.key, `label-sweep p${page}: ${err?.message ?? String(err)}`);
@@ -409,10 +423,15 @@ async function _runLabelSweepPhase(client, series, startPage) {
             }, { label_sweep_page: page, last_run_at: new Date() });
             continue;
         }
-        const results = Array.isArray(searchRes?.results) ? searchRes.results : [];
+        // /labels/{id}/releases returns `releases:[]`; /database/search returns `results:[]`.
+        const results = Array.isArray(searchRes?.releases)
+            ? searchRes.releases
+            : Array.isArray(searchRes?.results)
+                ? searchRes.results
+                : [];
         if (!results.length)
             break; // pagination exhausted
-        await _processSearchResults(client, series, results);
+        await _processSearchResults(client, series, results, { trustLabelScope: useLabelId });
         if (_stopRequested)
             break;
         const totalPages = Number(searchRes?.pagination?.pages);
