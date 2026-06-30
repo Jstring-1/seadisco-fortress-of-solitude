@@ -1927,7 +1927,9 @@ async function _labelDirStartSweep(labelId, labelName) {
 
 function _labelDirOpenMerge(labelName) {
   _labelDirMergeOpen  = labelName;
-  _labelDirMergeQuery = "";
+  // Pre-seed the filter with the source name so similar-named candidates
+  // (typo variants, "Foo" vs "Foo Records") surface immediately.
+  _labelDirMergeQuery = labelName;
   _renderLabelDir();
 }
 function _labelDirCloseMerge() {
