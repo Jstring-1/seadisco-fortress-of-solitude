@@ -200,6 +200,17 @@
                 <label>Country contains
                   <input id="rcx-country" type="text" placeholder="US" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                 </label>
+                <label style="grid-column:span 2;position:relative">Labels (any of)
+                  <button type="button" id="rcx-labels-btn" onclick="_rcxToggleLabelsPanel(event)" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;text-align:left;cursor:pointer">(any)</button>
+                  <div id="rcx-labels-panel" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:0.5rem;margin-top:0.2rem;box-shadow:0 6px 18px rgba(0,0,0,0.4);flex-direction:column;gap:0.4rem">
+                    <input id="rcx-labels-search" type="text" placeholder="Filter labels…" oninput="_rcxRenderLabelsList()" style="padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <div style="display:flex;gap:0.4rem;align-items:center;font-size:0.72rem">
+                      <button class="admin-btn" type="button" onclick="_rcxClearLabels()" style="padding:0.15rem 0.4rem;font-size:0.7rem">Clear</button>
+                      <span id="rcx-labels-count" style="color:var(--muted)"></span>
+                    </div>
+                    <div id="rcx-labels-list" style="overflow-y:auto;max-height:240px;border:1px solid var(--border);border-radius:3px;padding:0.3rem 0.4rem;font-size:0.78rem">Loading…</div>
+                  </div>
+                </label>
                 <label>Limit (max 1M)
                   <input id="rcx-limit" type="number" value="1000000" min="1" max="1000000" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                 </label>
@@ -1698,11 +1709,101 @@ function _rcxBuildParams() {
   add("year_to",   document.getElementById("rcx-year-to")?.value);
   add("country",   document.getElementById("rcx-country")?.value?.trim());
   if (document.getElementById("rcx-has-yt")?.checked) q.set("has_youtube", "1");
+  if (window._rcxSelectedLabels && window._rcxSelectedLabels.size) {
+    q.set("labels", Array.from(window._rcxSelectedLabels).join(","));
+  }
   add("sort",  document.getElementById("rcx-sort")?.value);
   add("order", document.getElementById("rcx-order")?.value);
   add("limit", document.getElementById("rcx-limit")?.value);
   return q;
 }
+
+// ── Labels multi-select picker ────────────────────────────────────
+window._rcxSelectedLabels = window._rcxSelectedLabels || new Set();
+window._rcxLabelsAll      = window._rcxLabelsAll      || null;  // cached fetch
+async function _rcxToggleLabelsPanel(ev) {
+  ev?.preventDefault?.(); ev?.stopPropagation?.();
+  const panel = document.getElementById("rcx-labels-panel");
+  if (!panel) return;
+  const open = panel.style.display !== "none" && panel.style.display !== "";
+  if (open) { panel.style.display = "none"; return; }
+  panel.style.display = "flex";
+  if (!window._rcxLabelsAll) {
+    document.getElementById("rcx-labels-list").textContent = "Loading…";
+    try {
+      const r = await apiFetch("/api/admin/release-cache/labels?limit=1000");
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        document.getElementById("rcx-labels-list").innerHTML = `<span style="color:#e88">Failed: ${j.error || r.status}</span>`;
+        return;
+      }
+      window._rcxLabelsAll = Array.isArray(j.items) ? j.items : [];
+    } catch (e) {
+      document.getElementById("rcx-labels-list").innerHTML = `<span style="color:#e88">${String(e).slice(0, 200)}</span>`;
+      return;
+    }
+  }
+  _rcxRenderLabelsList();
+  // One-shot outside click to close.
+  setTimeout(() => {
+    const off = (e) => {
+      if (!panel.contains(e.target) && e.target.id !== "rcx-labels-btn") {
+        panel.style.display = "none";
+        document.removeEventListener("click", off, true);
+      }
+    };
+    document.addEventListener("click", off, true);
+  }, 0);
+}
+window._rcxToggleLabelsPanel = _rcxToggleLabelsPanel;
+function _rcxRenderLabelsList() {
+  const list = document.getElementById("rcx-labels-list");
+  if (!list || !window._rcxLabelsAll) return;
+  const q = (document.getElementById("rcx-labels-search")?.value || "").toLowerCase().trim();
+  const filtered = q
+    ? window._rcxLabelsAll.filter(it => String(it.name).toLowerCase().includes(q))
+    : window._rcxLabelsAll;
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const rows = filtered.slice(0, 600).map(it => {
+    const checked = window._rcxSelectedLabels.has(it.name) ? "checked" : "";
+    return `<label style="display:flex;gap:0.4rem;align-items:center;padding:0.15rem 0;cursor:pointer">
+      <input type="checkbox" ${checked} onchange="_rcxToggleLabel(this,'${esc(it.name)}')">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span>
+      <span style="color:var(--muted);font-size:0.72rem">${Number(it.count).toLocaleString()}</span>
+    </label>`;
+  }).join("");
+  list.innerHTML = rows || `<div style="color:var(--muted)">No matches.</div>`;
+  const countEl = document.getElementById("rcx-labels-count");
+  if (countEl) countEl.textContent = `${window._rcxSelectedLabels.size} selected · ${filtered.length} shown of ${window._rcxLabelsAll.length}`;
+}
+window._rcxRenderLabelsList = _rcxRenderLabelsList;
+function _rcxToggleLabel(cb, name) {
+  if (cb.checked) window._rcxSelectedLabels.add(name);
+  else window._rcxSelectedLabels.delete(name);
+  _rcxUpdateLabelsButton();
+  const countEl = document.getElementById("rcx-labels-count");
+  if (countEl && window._rcxLabelsAll) {
+    const q = (document.getElementById("rcx-labels-search")?.value || "").toLowerCase().trim();
+    const filtered = q ? window._rcxLabelsAll.filter(it => String(it.name).toLowerCase().includes(q)) : window._rcxLabelsAll;
+    countEl.textContent = `${window._rcxSelectedLabels.size} selected · ${filtered.length} shown of ${window._rcxLabelsAll.length}`;
+  }
+}
+window._rcxToggleLabel = _rcxToggleLabel;
+function _rcxClearLabels() {
+  window._rcxSelectedLabels.clear();
+  _rcxRenderLabelsList();
+  _rcxUpdateLabelsButton();
+}
+window._rcxClearLabels = _rcxClearLabels;
+function _rcxUpdateLabelsButton() {
+  const btn = document.getElementById("rcx-labels-btn");
+  if (!btn) return;
+  const n = window._rcxSelectedLabels.size;
+  if (!n) { btn.textContent = "(any)"; return; }
+  const names = Array.from(window._rcxSelectedLabels);
+  btn.textContent = n <= 3 ? names.join(", ") : `${names.slice(0, 2).join(", ")} +${n - 2} more`;
+}
+window._rcxUpdateLabelsButton = _rcxUpdateLabelsButton;
 async function rcxPreview() {
   const status = document.getElementById("rcx-status");
   if (status) status.textContent = "Counting…";
