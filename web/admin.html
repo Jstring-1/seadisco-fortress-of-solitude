@@ -1634,6 +1634,43 @@ function _renderLabelDir() {
         </tbody>
       </table>
     </div>
+    ${_labelDirPopoverHtml()}
+  `;
+}
+
+function _labelDirPopoverHtml() {
+  if (!_labelDirSearchOpen) return "";
+  const labelName = _labelDirSearchOpen;
+  const results = _labelDirSearchResults?.[labelName];
+  const body = _labelDirSearchLoading
+    ? `<div style="color:var(--muted);padding:0.6rem 0">Searching Discogs…</div>`
+    : results === null
+      ? `<div style="color:#e88;padding:0.6rem 0">Search failed.</div>`
+      : !results?.length
+        ? `<div style="color:var(--muted);padding:0.6rem 0">No Discogs label matches.</div>`
+        : `<div style="display:flex;flex-direction:column;gap:0.3rem;max-height:50vh;overflow-y:auto">
+            ${results.map(c => `<div style="display:flex;gap:0.5rem;align-items:center;padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:3px">
+              ${c.thumb ? `<img src="${_eHtml(c.thumb)}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:2px">` : `<div style="width:32px;height:32px;background:rgba(255,255,255,0.05);border-radius:2px"></div>`}
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600">${_eHtml(c.title)}</div>
+                <div style="font-size:0.72rem;color:var(--muted)">ID ${c.id} · <a href="https://www.discogs.com${_eHtml(c.uri)}" target="_blank" rel="noopener" style="color:var(--muted)">view ↗</a></div>
+              </div>
+              <button class="admin-btn" type="button" onclick="_labelDirSaveId('${_jsEsc(labelName)}', ${c.id})">Save</button>
+            </div>`).join("")}
+          </div>`;
+  return `
+    <div onclick="_labelDirCloseSearch()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:80"></div>
+    <div role="dialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:80vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.9rem 1rem;z-index:81;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem;gap:0.5rem">
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(labelName)}">Discogs label search · "${_eHtml(labelName.slice(0, 80))}${labelName.length > 80 ? "…" : ""}"</div>
+        <button class="admin-btn" type="button" onclick="_labelDirCloseSearch()" style="font-size:0.78rem">✕</button>
+      </div>
+      ${body}
+      <div style="margin-top:0.5rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+        <input data-labeldir-manual="${_eHtml(labelName)}" type="number" placeholder="…or enter ID manually" style="flex:1;min-width:160px;padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.82rem">
+        <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(labelName)}')">Save manual ID</button>
+      </div>
+    </div>
   `;
 }
 
@@ -1682,33 +1719,11 @@ function _labelDirRowHtml(r) {
     ? `<a href="https://www.discogs.com/label/${r.label_id}" target="_blank" rel="noopener" style="color:var(--accent)">${r.label_id}</a>
        <button class="admin-btn" type="button" onclick="_labelDirClearId('${_jsEsc(r.label_name)}')" style="font-size:0.7rem;padding:0.1rem 0.3rem;margin-left:0.3rem" title="Clear ID">×</button>`
     : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
-  const expanded = _labelDirSearchOpen === r.label_name;
-  const results = _labelDirSearchResults?.[r.label_name];
-  const searchBlock = expanded
-    ? `<tr><td colspan="7" style="padding:0.5rem 1rem;background:rgba(255,255,255,0.03);border-bottom:1px dashed rgba(255,255,255,0.1)">
-        ${_labelDirSearchLoading
-          ? `<span style="color:var(--muted)">Searching Discogs…</span>`
-          : results === null
-            ? `<span style="color:#e88">Search failed.</span>`
-            : !results?.length
-              ? `<span style="color:var(--muted)">No Discogs label matches for "${_eHtml(r.label_name)}".</span>`
-              : `<div style="display:flex;flex-direction:column;gap:0.3rem">
-                  ${results.map(c => `<div style="display:flex;gap:0.5rem;align-items:center;padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:3px">
-                    ${c.thumb ? `<img src="${_eHtml(c.thumb)}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:2px">` : `<div style="width:32px;height:32px;background:rgba(255,255,255,0.05);border-radius:2px"></div>`}
-                    <div style="flex:1;min-width:0">
-                      <div style="font-weight:600">${_eHtml(c.title)}</div>
-                      <div style="font-size:0.72rem;color:var(--muted)">ID ${c.id} · <a href="https://www.discogs.com${_eHtml(c.uri)}" target="_blank" rel="noopener" style="color:var(--muted)">view ↗</a></div>
-                    </div>
-                    <button class="admin-btn" type="button" onclick="_labelDirSaveId('${_jsEsc(r.label_name)}', ${c.id})">Save</button>
-                  </div>`).join("")}
-                </div>`}
-        <div style="margin-top:0.4rem;display:flex;gap:0.4rem;align-items:center">
-          <input data-labeldir-manual="${_eHtml(r.label_name)}" type="number" placeholder="…or enter ID manually" style="width:180px;padding:0.25rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.78rem">
-          <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(r.label_name)}')" style="font-size:0.78rem">Save manual ID</button>
-          <button class="admin-btn" type="button" onclick="_labelDirCloseSearch()" style="font-size:0.78rem">Close</button>
-        </div>
-      </td></tr>`
-    : "";
+  // Popover renders outside the table — see _labelDirRenderPopover.
+  // Keeping it inline (as a <tr> inset) caused the fixed-layout table
+  // to reflow and the sticky thead to recalculate position on every
+  // expand/collapse, which the user perceived as the grid "shifting".
+  const searchBlock = "";
   // Defensive render: strip HTML tags + collapse whitespace + truncate
   // so a dirty-data row (e.g. label_name still has HTML chrome before
   // Clean names has been clicked) can't wreck the table layout.
