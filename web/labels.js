@@ -464,7 +464,7 @@
           <div style="font-size:1.15rem;font-weight:600">Labels</div>
           <div style="color:var(--muted);font-size:0.78rem;margin-top:0.1rem">Flip through cached releases for a label, chronologically. ← / → arrow keys also work.</div>
         </div>
-        <div id="labels-controls" style="position:sticky;top:0;background:var(--bg);z-index:5;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:0.5rem"></div>
+        <div id="labels-controls" style="position:sticky;top:0;background:var(--bg);z-index:50;border:1px solid var(--border);border-radius:6px;margin-bottom:0.5rem"></div>
         <div id="labels-stage"></div>
       `;
       document.addEventListener("keydown", _onKey);
