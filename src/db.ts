@@ -10864,6 +10864,100 @@ export async function cleanDirtyExternalDiscographyLabelNames(): Promise<{
   return { renamed, mergedDuplicates, renames };
 }
 
+// Merge one external_discography label_name into another. Typical
+// case: the scraper recorded "Excello" but the canonical Discogs
+// name (and label_id) live under "Excello Records", so the directory
+// shows them as two separate rows even though they're the same label.
+// Rename FROM → TO so the FULL OUTER JOIN in listLabelDirectory
+// coalesces the cache + external counts onto one row.
+//
+// Steps inside one txn:
+//   1. Pick a final label_id = MAX across rows on FROM ∪ TO (prefer
+//      non-null; ties broken by latter winning, but COALESCE keeps
+//      whichever exists).
+//   2. Delete any TO rows that would collide (same catno+side+source)
+//      with a FROM row after the rename — FROM wins (it's the user's
+//      canonical pick to keep, since they're moving everything to TO).
+//      Actually: we keep TO's preexisting rows when they exist, drop
+//      FROM rows that collide. Reason: TO is the user-picked target,
+//      so its established data is more likely the intended one.
+//      ... wait, the OPPOSITE is simpler: rename FROM → TO and drop
+//      pre-existing TO rows that collide. Then every FROM row becomes
+//      a TO row. Consistent and explained.
+//   3. UPDATE FROM rows to label_name = TO and label_id = final_id.
+//   4. Backfill label_id on any straggling rows on TO that were null.
+export async function mergeExternalLabel(
+  fromName: string,
+  toName:   string,
+): Promise<{ renamed: number; mergedDuplicates: number; finalLabelId: number | null }> {
+  const cleanFrom = sanitizeLabelName(fromName);
+  const cleanTo   = sanitizeLabelName(toName);
+  if (!cleanFrom) throw new Error("from label required");
+  if (!cleanTo)   throw new Error("to label required");
+  if (cleanFrom === cleanTo) throw new Error("from and to are the same label");
+
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+
+    // Determine the final label_id — prefer TO's, fall back to FROM's.
+    const idQ = await client.query(
+      `SELECT
+         (SELECT MAX(label_id) FROM external_discography WHERE label_name = $1) AS to_id,
+         (SELECT MAX(label_id) FROM external_discography WHERE label_name = $2) AS from_id`,
+      [cleanTo, cleanFrom],
+    );
+    const toId   = idQ.rows[0]?.to_id;
+    const fromId = idQ.rows[0]?.from_id;
+    const finalId = toId != null ? Number(toId)
+                  : fromId != null ? Number(fromId)
+                  : null;
+
+    // Drop pre-existing TO rows whose (catno, side, source) collides
+    // with a FROM row — FROM rows will replace them after the rename.
+    const dropQ = await client.query(
+      `DELETE FROM external_discography ed_to
+         USING external_discography ed_from
+        WHERE ed_to.label_name   = $1
+          AND ed_from.label_name = $2
+          AND ed_to.id <> ed_from.id
+          AND ed_to.catno  = ed_from.catno
+          AND COALESCE(ed_to.side,'')   = COALESCE(ed_from.side,'')
+          AND ed_to.source = ed_from.source`,
+      [cleanTo, cleanFrom],
+    );
+    const mergedDuplicates = dropQ.rowCount ?? 0;
+
+    // Rename FROM → TO with the final id.
+    const renQ = await client.query(
+      `UPDATE external_discography
+          SET label_name = $1,
+              label_id   = COALESCE($3::int, label_id)
+        WHERE label_name = $2`,
+      [cleanTo, cleanFrom, finalId],
+    );
+    const renamed = renQ.rowCount ?? 0;
+
+    // Backfill label_id on any pre-existing TO rows that still have null.
+    if (finalId != null) {
+      await client.query(
+        `UPDATE external_discography
+            SET label_id = $2
+          WHERE label_name = $1 AND label_id IS NULL`,
+        [cleanTo, finalId],
+      );
+    }
+
+    await client.query("COMMIT");
+    return { renamed, mergedDuplicates, finalLabelId: finalId };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ── Label directory ─────────────────────────────────────────────
 //
 // Single canonical list of every label we touch: union of distinct
