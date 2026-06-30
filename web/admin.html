@@ -56,6 +56,7 @@
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
+        <button class="admin-tab" onclick="switchAdminTab('labels')">Labels</button>
         <button class="admin-tab" onclick="switchAdminTab('all-blues')">All Blues</button>
         <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
       </div>
@@ -142,24 +143,6 @@
           <span id="cw-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-        <!-- ── Catalog-number runs ─────────────────────────────────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
-        <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap.
-          </div>
-          <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
-        <!-- ── External discography (non-Discogs sources) ──────────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
-        <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge.
-          </div>
-          <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
         <!-- ── Year backfill (label + catno → missing years) ─────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details open>
@@ -286,6 +269,47 @@
               </div>
             </div>
           </div>
+        </details>
+      </div>
+
+      <!-- ── Labels tab ─────────────────────────────────────────────
+           Everything that operates per-label: the catalog-number
+           crawler, the external-discography scraper (wirz.de +
+           78discography.com), and the unified label directory grid
+           with Discogs ID lookup. -->
+      <div class="admin-tab-panel admin-grp-labels" id="panel-labels" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Labels</h2>
+          <button class="admin-refresh-btn" id="lbl-refresh-btn" onclick="_adminClickRefresh(this, loadLabelDirectory)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+        </div>
+
+        <!-- ── Label directory grid ─────────────────────────────── -->
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later.
+          </div>
+          <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
+
+        <!-- ── Catalog-number crawls ────────────────────────────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap.
+          </div>
+          <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
+
+        <!-- ── External discography (non-Discogs sources) ───────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details open>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
+          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
+            Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge.
+          </div>
+          <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
       </div>
 
@@ -616,7 +640,11 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheWarmCatno(); loadExternalDiscography(); loadYearBackfill(); },
+    load: () => { loadCacheWarm(); loadYearBackfill(); },
+  },
+  'labels': {
+    panels: ['panel-labels'],
+    load: () => { loadLabelDirectory(); loadCacheWarmCatno(); loadExternalDiscography(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -1348,7 +1376,7 @@ async function loadCacheWarmCatno() {
       ${recentBlock}
     `;
     // Auto-poll while the worker is running so progress visibly moves.
-    if (running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+    if (running && document.getElementById("panel-labels")?.style.display !== "none") {
       clearTimeout(window._cwcPollTimer);
       window._cwcPollTimer = setTimeout(loadCacheWarmCatno, 5000);
     }
@@ -1453,7 +1481,7 @@ async function loadExternalDiscography() {
     `;
 
     clearTimeout(window._extdiscPollTimer);
-    if (running) {
+    if (running && document.getElementById("panel-labels")?.style.display !== "none") {
       window._extdiscPollTimer = setTimeout(loadExternalDiscography, 5000);
     }
   } catch (err) {
@@ -1525,6 +1553,174 @@ async function _extdiscUploadXlsx(ev) {
   } catch (err) {
     statusEl.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
+}
+
+// ── Label directory (Labels tab) ────────────────────────────────
+let _labelDirRows = [];
+let _labelDirQuery = "";
+let _labelDirSearchOpen = null;        // label_name currently expanded
+let _labelDirSearchResults = null;     // {[label_name]: [...candidates]}
+let _labelDirSearchLoading = false;
+let _labelDirQueryTimer = null;
+
+async function loadLabelDirectory() {
+  const el = document.getElementById("labeldir-content");
+  if (!el) return;
+  try {
+    const url = `/api/admin/label-directory?limit=2000${_labelDirQuery ? `&q=${encodeURIComponent(_labelDirQuery)}` : ""}`;
+    const r = await apiFetch(url);
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const j = await r.json();
+    _labelDirRows = j.rows || [];
+    _renderLabelDir();
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+
+function _renderLabelDir() {
+  const el = document.getElementById("labeldir-content");
+  if (!el) return;
+  const withId    = _labelDirRows.filter(r => r.label_id).length;
+  const withoutId = _labelDirRows.length - withId;
+  el.innerHTML = `
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap">
+      <input id="labeldir-search" type="search" placeholder="Filter labels…" value="${_eHtml(_labelDirQuery)}"
+             oninput="_labelDirOnSearch(event)"
+             style="flex:1;min-width:180px;padding:0.3rem 0.5rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+      <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
+    </div>
+    <div style="overflow-x:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
+      <table style="width:100%;font-size:0.8rem;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
+          <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+            <th style="padding:0.35rem 0.5rem">Label</th>
+            <th style="padding:0.35rem 0.5rem;text-align:right">Pad rows</th>
+            <th style="padding:0.35rem 0.5rem;text-align:right">Cache R</th>
+            <th style="padding:0.35rem 0.5rem;text-align:right">Cache M</th>
+            <th style="padding:0.35rem 0.5rem">Sources</th>
+            <th style="padding:0.35rem 0.5rem">Discogs ID</th>
+            <th style="padding:0.35rem 0.5rem"></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_labelDirRows.map(r => _labelDirRowHtml(r)).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function _labelDirRowHtml(r) {
+  const sources = (r.sources || []).map(s => _eHtml(s)).join(", ");
+  const idCell = r.label_id
+    ? `<a href="https://www.discogs.com/label/${r.label_id}" target="_blank" rel="noopener" style="color:var(--accent)">${r.label_id}</a>
+       <button class="admin-btn" type="button" onclick="_labelDirClearId('${_jsEsc(r.label_name)}')" style="font-size:0.7rem;padding:0.1rem 0.3rem;margin-left:0.3rem" title="Clear ID">×</button>`
+    : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+  const expanded = _labelDirSearchOpen === r.label_name;
+  const results = _labelDirSearchResults?.[r.label_name];
+  const searchBlock = expanded
+    ? `<tr><td colspan="7" style="padding:0.5rem 1rem;background:rgba(255,255,255,0.03);border-bottom:1px dashed rgba(255,255,255,0.1)">
+        ${_labelDirSearchLoading
+          ? `<span style="color:var(--muted)">Searching Discogs…</span>`
+          : results === null
+            ? `<span style="color:#e88">Search failed.</span>`
+            : !results?.length
+              ? `<span style="color:var(--muted)">No Discogs label matches for "${_eHtml(r.label_name)}".</span>`
+              : `<div style="display:flex;flex-direction:column;gap:0.3rem">
+                  ${results.map(c => `<div style="display:flex;gap:0.5rem;align-items:center;padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:3px">
+                    ${c.thumb ? `<img src="${_eHtml(c.thumb)}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:2px">` : `<div style="width:32px;height:32px;background:rgba(255,255,255,0.05);border-radius:2px"></div>`}
+                    <div style="flex:1;min-width:0">
+                      <div style="font-weight:600">${_eHtml(c.title)}</div>
+                      <div style="font-size:0.72rem;color:var(--muted)">ID ${c.id} · <a href="https://www.discogs.com${_eHtml(c.uri)}" target="_blank" rel="noopener" style="color:var(--muted)">view ↗</a></div>
+                    </div>
+                    <button class="admin-btn" type="button" onclick="_labelDirSaveId('${_jsEsc(r.label_name)}', ${c.id})">Save</button>
+                  </div>`).join("")}
+                </div>`}
+        <div style="margin-top:0.4rem;display:flex;gap:0.4rem;align-items:center">
+          <input data-labeldir-manual="${_eHtml(r.label_name)}" type="number" placeholder="…or enter ID manually" style="width:180px;padding:0.25rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.78rem">
+          <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(r.label_name)}')" style="font-size:0.78rem">Save manual ID</button>
+          <button class="admin-btn" type="button" onclick="_labelDirCloseSearch()" style="font-size:0.78rem">Close</button>
+        </div>
+      </td></tr>`
+    : "";
+  return `
+    <tr style="border-bottom:1px dashed rgba(255,255,255,0.05)">
+      <td style="padding:0.3rem 0.5rem;font-weight:500">${_eHtml(r.label_name)}</td>
+      <td style="padding:0.3rem 0.5rem;text-align:right">${r.external_count.toLocaleString()}</td>
+      <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_releases.toLocaleString()}</td>
+      <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
+      <td style="padding:0.3rem 0.5rem;color:var(--muted);font-size:0.72rem">${sources}</td>
+      <td style="padding:0.3rem 0.5rem">${idCell}</td>
+      <td style="padding:0.3rem 0.5rem;text-align:right">
+        <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem">🔍 Search</button>
+      </td>
+    </tr>
+    ${searchBlock}
+  `;
+}
+
+function _jsEsc(s) {
+  return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function _labelDirOnSearch(ev) {
+  _labelDirQuery = String(ev.target.value || "").trim();
+  clearTimeout(_labelDirQueryTimer);
+  _labelDirQueryTimer = setTimeout(() => loadLabelDirectory(), 250);
+}
+
+async function _labelDirSearch(labelName) {
+  _labelDirSearchOpen = labelName;
+  _labelDirSearchLoading = true;
+  _labelDirSearchResults = { ...(_labelDirSearchResults || {}), [labelName]: [] };
+  _renderLabelDir();
+  try {
+    const r = await apiFetch(`/api/admin/label-directory/discogs-search?q=${encodeURIComponent(labelName)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    _labelDirSearchResults = { ...(_labelDirSearchResults || {}), [labelName]: j.results || [] };
+  } catch (err) {
+    _labelDirSearchResults = { ...(_labelDirSearchResults || {}), [labelName]: null };
+  } finally {
+    _labelDirSearchLoading = false;
+    _renderLabelDir();
+  }
+}
+
+function _labelDirCloseSearch() {
+  _labelDirSearchOpen = null;
+  _renderLabelDir();
+}
+
+async function _labelDirSaveId(labelName, labelId) {
+  try {
+    const r = await apiFetch("/api/admin/label-directory/set-id", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ labelName, labelId }),
+    });
+    if (!r.ok) { alert(`Save failed: ${r.status}`); return; }
+    const j = await r.json();
+    _labelDirSearchOpen = null;
+    // Patch in memory so re-render is instant, then refetch to confirm.
+    const row = _labelDirRows.find(x => x.label_name === labelName);
+    if (row) row.label_id = labelId;
+    _renderLabelDir();
+    loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
+}
+
+async function _labelDirSaveIdManual(labelName) {
+  const inp = document.querySelector(`input[data-labeldir-manual="${labelName.replace(/"/g, '\\"')}"]`);
+  const raw = inp ? inp.value : "";
+  const id = Number(String(raw).trim());
+  if (!Number.isFinite(id) || id <= 0) { alert("Enter a positive Discogs label ID"); return; }
+  await _labelDirSaveId(labelName, id);
+}
+
+async function _labelDirClearId(labelName) {
+  if (!confirm(`Clear Discogs ID on "${labelName}"?`)) return;
+  await _labelDirSaveId(labelName, null);
 }
 
 // ── Year backfill ───────────────────────────────────────────────
