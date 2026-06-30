@@ -8416,6 +8416,36 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
   }
 });
 
+// ── Per-label catno sort rules ────────────────────────────────────
+// Some labels distinguish format variants in the catno itself (e.g.
+// Excello's 7-inch singles are catalogued as "45-2001", "45-2002"
+// alongside their bare-numeric LPs and 78s). String-sorting those
+// raw values clusters every 7-inch at the top of the catalog,
+// breaking the chronological reading order. The map below names the
+// SQL transforms to apply to the catno BEFORE it's used as a sort
+// key. Display catno stays raw — only the ORDER BY changes.
+//
+// Add a new label by appending an entry here; the carousel picks it
+// up automatically on next request. Format:
+//   stripPrefixes: regex alternation of leading tokens to drop
+const LABEL_CATNO_RULES: Record<string, { stripPrefixes?: string[] }> = {
+  "Excello": { stripPrefixes: ["45-"] },
+};
+function _labelCatnoSortExpr(label: string): string {
+  const base = `COALESCE(rc.data->'labels'->0->>'catno', '')`;
+  const rule = LABEL_CATNO_RULES[label];
+  if (!rule?.stripPrefixes?.length) return base;
+  // Escape regex metacharacters so a literal prefix like "45-" stays
+  // a literal prefix (the "-" is fine in a non-class context but the
+  // generic escape keeps future entries safe).
+  const escaped = rule.stripPrefixes
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  // ^(…) is anchored so we only strip the leading token, never an
+  // occurrence in the middle of a longer catno.
+  return `REGEXP_REPLACE(${base}, '^(${escaped})', '')`;
+}
+
 // GET /api/admin/labels/releases?label=X&page=1&per_page=60
 //   &type=release|master|both&year_from=&year_to=
 // Releases tied to a single label, sorted year ASC then catno ASC
@@ -8494,7 +8524,7 @@ app.get("/api/admin/labels/releases", async (req, res) => {
            FROM release_cache rc
            ${whereSql}
            ORDER BY COALESCE(NULLIF(rc.data->>'year','')::int, 0) ASC,
-                    COALESCE(rc.data->'labels'->0->>'catno', '') ASC,
+                    ${_labelCatnoSortExpr(label)} ASC,
                     rc.discogs_id ASC
            LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`,
         args,
