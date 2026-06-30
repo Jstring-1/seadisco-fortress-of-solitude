@@ -199,29 +199,19 @@ export async function startCacheWarmCatnoRun(seriesKey: string, opts: { resetCur
 
   await _writeActiveRun(series.key);
 
-  console.log(`[cache-warm-catno] kicking worker for ${series.key} phase=${phase} catno=${catnoCursor} sweep_page=${sweepPage} (range ${series.lo}-${series.hi})`);
+  console.log(`[cache-warm-catno] kicking catno-walk worker for ${series.key} from catno=${catnoCursor} (range ${series.lo}-${series.hi})`);
   (async () => {
     try {
-      if (phase === "catno") {
-        await _runCatnoPhase(client, series, catnoCursor);
-        if (!_stopRequested) {
-          // Phase transition.
-          await upsertCacheWarmCatnoRun(series.key, {
-            label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-          }, { phase: "label_sweep", label_sweep_page: 1, last_run_at: new Date() });
-          phase = "label_sweep";
-          sweepPage = 1;
-        }
+      await _runCatnoPhase(client, series, catnoCursor);
+      if (!_stopRequested) {
+        // Catno phase done. We no longer auto-chain into the label
+        // sweep — the curator kicks that explicitly with the
+        // "Sweep label" button when they want the catalog tail too.
+        await upsertCacheWarmCatnoRun(series.key, {
+          label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+        }, { phase: "catno_done", last_run_at: new Date() });
       }
-      if (phase === "label_sweep" && !_stopRequested) {
-        await _runLabelSweepPhase(client, series, sweepPage);
-        if (!_stopRequested) {
-          await upsertCacheWarmCatnoRun(series.key, {
-            label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-          }, { phase: "done", last_run_at: new Date() });
-        }
-      }
-      console.log(`[cache-warm-catno] worker for ${series.key} exited cleanly`);
+      console.log(`[cache-warm-catno] catno-walk worker for ${series.key} exited cleanly`);
       await _clearActiveRun();
     } catch (err: any) {
       console.error(`[cache-warm-catno] worker for ${series.key} crashed:`, err?.stack || err);
@@ -240,6 +230,64 @@ export async function startCacheWarmCatnoRun(seriesKey: string, opts: { resetCur
   return { ok: true };
 }
 
+// Independent label-sweep run — paginated /database/search?label=X
+// with no catno filter. Catches releases with catnos outside the
+// configured [lo, hi] range, releases with no catno at all, and one-
+// off variants the catno walk misses. Resumes from the persisted
+// label_sweep_page unless resetCursor=true.
+export async function startLabelSweepRun(seriesKey: string, opts: { resetCursor?: boolean } = {}): Promise<{ ok: boolean; error?: string }> {
+  if (_runningKey) return { ok: false, error: `Another catno run is in progress: ${_runningKey}` };
+  const series = _findSeries(seriesKey);
+  if (!series) return { ok: false, error: `Unknown series: ${seriesKey}` };
+  const client = await _adminClient();
+  if (!client) return { ok: false, error: "Admin Discogs OAuth not connected (or DISCOGS_CONSUMER_KEY/SECRET missing)" };
+
+  _runningKey = series.key;
+  _stopRequested = false;
+
+  await upsertCacheWarmCatnoRun(series.key, {
+    label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+  });
+  const row = await getCacheWarmCatnoRun(series.key);
+  let sweepPage = (opts.resetCursor || !row?.label_sweep_page)
+    ? 1
+    : Number(row.label_sweep_page);
+  if (!Number.isFinite(sweepPage) || sweepPage < 1) sweepPage = 1;
+
+  await upsertCacheWarmCatnoRun(series.key, {
+    label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+  }, { phase: "label_sweep", label_sweep_page: sweepPage, last_run_at: new Date() });
+
+  await _writeActiveRun(series.key);
+
+  console.log(`[cache-warm-catno] kicking label-sweep worker for ${series.key} from page=${sweepPage}`);
+  (async () => {
+    try {
+      await _runLabelSweepPhase(client, series, sweepPage);
+      if (!_stopRequested) {
+        await upsertCacheWarmCatnoRun(series.key, {
+          label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+        }, { phase: "label_sweep_done", last_run_at: new Date() });
+      }
+      console.log(`[cache-warm-catno] label-sweep worker for ${series.key} exited cleanly`);
+      await _clearActiveRun();
+    } catch (err: any) {
+      console.error(`[cache-warm-catno] label-sweep worker for ${series.key} crashed:`, err?.stack || err);
+      try {
+        await recordCacheWarmCatnoRunError(series.key, `crash: ${err?.message ?? String(err)}`);
+      } catch (e2) {
+        console.error(`[cache-warm-catno] failed to record crash:`, e2);
+      }
+    } finally {
+      console.log(`[cache-warm-catno] clearing in-memory lock for ${series.key}`);
+      _runningKey = null;
+      _stopRequested = false;
+    }
+  })().catch(err => console.error(`[cache-warm-catno] label-sweep IIFE rejected:`, err));
+
+  return { ok: true };
+}
+
 // ── Shared candidate processor ────────────────────────────────────
 // Filter the search payload to results that actually carry the label
 // term + fall within the year cap, cache the missing ones, bump skip
@@ -252,12 +300,10 @@ async function _processSearchResults(
 ): Promise<number> {
   await recordCacheWarmCatnoRunSearched(series.key, results.length);
 
-  const candidates = results.filter(r => {
-    if (!_labelMatches(r, series.label)) return false;
-    const yr = parseInt(String(r?.year ?? ""), 10);
-    if (Number.isFinite(yr) && yr > series.yearMax) return false;
-    return true;
-  });
+  // Year filter dropped intentionally — every label-matched release is
+  // cached regardless of year. The yearMax field on the seed entry is
+  // kept for documentation only.
+  const candidates = results.filter(r => _labelMatches(r, series.label));
 
   const ids: number[] = [];
   for (const r of candidates) {
@@ -279,8 +325,6 @@ async function _processSearchResults(
     try {
       await _sleep(REQ_INTERVAL_MS);
       const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
-      const fullYear = parseInt(String(full?.year ?? ""), 10);
-      if (Number.isFinite(fullYear) && fullYear > series.yearMax) continue;
       await cacheRelease(id, "release", full as object);
       const title = String(full?.title ?? r?.title ?? "(untitled)");
       await recordCacheWarmCatnoRunHit(series.key, title, id);

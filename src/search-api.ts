@@ -14,6 +14,7 @@ import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWa
 import {
   initCacheWarmCatnoModule,
   startCacheWarmCatnoRun,
+  startLabelSweepRun,
   requestCacheWarmCatnoStop,
   isCacheWarmCatnoRunning,
   getActiveCacheWarmCatnoKey,
@@ -10050,6 +10051,19 @@ app.post("/api/admin/cache-warm-catno/start", express.json({ limit: "1kb" }), as
   if (!seriesKey) { res.status(400).json({ error: "seriesKey required" }); return; }
   try {
     const out = await startCacheWarmCatnoRun(seriesKey, { resetCursor: !!req.body?.resetCursor });
+    if (!out.ok) { res.status(409).json({ error: out.error || "could not start" }); return; }
+    res.json({ ok: true });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Independent label-sweep — paginated /database/search?label=X with
+// no catno filter. Catches releases the catno walk would miss.
+app.post("/api/admin/cache-warm-catno/start-label-sweep", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const seriesKey = String(req.body?.seriesKey ?? "").trim();
+  if (!seriesKey) { res.status(400).json({ error: "seriesKey required" }); return; }
+  try {
+    const out = await startLabelSweepRun(seriesKey, { resetCursor: !!req.body?.resetCursor });
     if (!out.ok) { res.status(409).json({ error: out.error || "could not start" }); return; }
     res.json({ ok: true });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
