@@ -2810,6 +2810,7 @@ function _baLyricRowHtml(l) {
     <td style="text-align:center"><input type="checkbox" class="ba-lyric-cb" data-lyric-cb="${l.id}"${selectedAttr} onclick="event.stopPropagation();_baLyricsToggleRow(${l.id}, this.checked)"></td>
     <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
+    <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
     <td class="ba-lyric-snippet" style="font-size:0.7rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
     <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
@@ -2886,6 +2887,7 @@ function _baRenderLyricsTable() {
         <col style="width:30px">
         <col style="width:26%">
         <col style="width:18%">
+        <col style="width:60px">
         <col style="width:18%">
         <col>
         <col style="width:32px">
@@ -2894,6 +2896,7 @@ function _baRenderLyricsTable() {
         <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-lyrics-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baLyricsToggleAllOnPage(this.checked)"></th>
         ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
         ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
+        ${_baSortTh("Year",    "first_release_year", S, "_baSortLyricsList", "text-align:right;padding-right:0.6rem")}
         ${_baSortTh("Tuning",  "tuning",             S, "_baSortLyricsList")}
         ${_baSortTh("Snippet", "snippet",    S, "_baSortLyricsList")}
         <th style="width:1%"></th>
@@ -3315,6 +3318,9 @@ const _BA_TUNINGS_LIMIT = 100;
 let _baTuningsTotal = 0;
 let _baTuningsSearchTimer = null;
 const _baTuningsSort = { key: "artist", dir: "asc" };
+let _baTuningsRowsCache = [];                  // current page rows; rebound by _baLoadTuningsGrid
+const _baTuningsSelectedIds = new Set();       // bulk-editor selection
+let _baTuningsSelectedCapped = false;          // true if "Select all matching" hit the 10k cap
 
 async function _baLoadTuningsFacets() {
   try {
@@ -3358,6 +3364,7 @@ async function _baLoadTuningsGrid() {
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
     const { rows = [], total = 0 } = await r.json();
     _baTuningsTotal = total;
+    _baTuningsRowsCache = rows;
     if (countEl) countEl.textContent = total ? `${total.toLocaleString()} row${total === 1 ? "" : "s"}` : "No matches.";
     if (!rows.length) {
       rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
@@ -3398,7 +3405,9 @@ async function _baLoadTuningsGrid() {
         const searchLink = displayTitle
           ? `<a href="/${searchQs}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a> `
           : "";
+        const selectedAttr = _baTuningsSelectedIds.has(Number(r.id)) ? " checked" : "";
         return `<tr>
+          <td style="text-align:center"><input type="checkbox" class="ba-tuning-cb" data-tuning-cb="${r.id}"${selectedAttr} onclick="event.stopPropagation();_baTuningsToggleRow(${r.id}, this.checked)"></td>
           <td style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(artist)}">${escHtml(artist)}</td>
           <td style="color:var(--text);overflow:hidden;text-overflow:ellipsis" title="${escHtml(displayTitle)}">${searchLink}${escHtml(displayTitle)}</td>
           <td style="color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(String(r.position || ""))}">${escHtml(String(r.position || ""))}</td>
@@ -3406,9 +3415,13 @@ async function _baLoadTuningsGrid() {
           <td style="text-align:right;white-space:nowrap"><a href="#" onclick="event.preventDefault();_baDeleteTuning(${r.id}, ${JSON.stringify(displayTitle).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")})" title="Delete this tuning row" style="color:#e88;text-decoration:none;font-weight:600;padding:0.1rem 0.4rem">×</a></td>
         </tr>`;
       };
+      const pageIds = rows.map(rr => Number(rr.id));
+      const pageSelectedCount = pageIds.filter(id => _baTuningsSelectedIds.has(id)).length;
+      const allOnPageSelected = pageIds.length > 0 && pageSelectedCount === pageIds.length;
       rowsEl.innerHTML = `
         <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
           <colgroup>
+            <col style="width:30px">
             <col style="width:18%">
             <col style="width:36%">
             <col style="width:120px">
@@ -3416,6 +3429,7 @@ async function _baLoadTuningsGrid() {
             <col style="width:32px">
           </colgroup>
           <thead><tr>
+            <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-tunings-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baTuningsToggleAllOnPage(this.checked)"></th>
             ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
             ${_baSortTh("Title",    "title",    S, "_baSortTunings")}
             ${_baSortTh("Position", "position", S, "_baSortTunings")}
@@ -3424,7 +3438,10 @@ async function _baLoadTuningsGrid() {
           </tr></thead>
           <tbody>${rows.map(rowHtml).join("")}</tbody>
         </table>`;
+      const hdrCb = document.getElementById("ba-tunings-cb-all");
+      if (hdrCb) hdrCb.indeterminate = pageSelectedCount > 0 && !allOnPageSelected;
     }
+    _baTuningsRenderBulkBar();
     _baRenderTuningsPager();
   } catch (e) {
     rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
@@ -3433,6 +3450,186 @@ async function _baLoadTuningsGrid() {
   }
 }
 window._baLoadTuningsGrid = _baLoadTuningsGrid;
+
+// ── Tunings bulk editor ──────────────────────────────────────────
+// Mirror of the lyrics bulk editor: checkbox column + bulk action bar
+// for mass-setting position and mass-deleting rows. Selection is a Set
+// of tuning ids that survives pagination — rows just rebind to it
+// every render via the data-tuning-cb attribute.
+function _baTuningsToggleRow(id, checked) {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  if (checked) _baTuningsSelectedIds.add(n);
+  else         _baTuningsSelectedIds.delete(n);
+  _baTuningsSelectedCapped = false;
+  _baTuningsRenderBulkBar();
+  _baTuningsRefreshHeaderCheckbox();
+}
+window._baTuningsToggleRow = _baTuningsToggleRow;
+
+function _baTuningsToggleAllOnPage(checked) {
+  for (const r of (_baTuningsRowsCache || [])) {
+    const n = Number(r.id);
+    if (!Number.isFinite(n)) continue;
+    if (checked) _baTuningsSelectedIds.add(n);
+    else         _baTuningsSelectedIds.delete(n);
+  }
+  _baTuningsSelectedCapped = false;
+  document.querySelectorAll(".ba-tuning-cb").forEach(cb => {
+    const id = Number(cb.getAttribute("data-tuning-cb"));
+    cb.checked = _baTuningsSelectedIds.has(id);
+  });
+  _baTuningsRenderBulkBar();
+  _baTuningsRefreshHeaderCheckbox();
+}
+window._baTuningsToggleAllOnPage = _baTuningsToggleAllOnPage;
+
+function _baTuningsRefreshHeaderCheckbox() {
+  const hdrCb = document.getElementById("ba-tunings-cb-all");
+  if (!hdrCb) return;
+  const pageIds = (_baTuningsRowsCache || []).map(r => Number(r.id));
+  const pageSelectedCount = pageIds.filter(id => _baTuningsSelectedIds.has(id)).length;
+  const allOnPage = pageIds.length > 0 && pageSelectedCount === pageIds.length;
+  hdrCb.checked = allOnPage;
+  hdrCb.indeterminate = pageSelectedCount > 0 && !allOnPage;
+}
+
+async function _baTuningsSelectAllMatching() {
+  const params = new URLSearchParams();
+  const q        = (document.getElementById("ba-tunings-search")?.value   || "").trim();
+  const artist   = (document.getElementById("ba-tunings-artist")?.value   || "").trim();
+  const position = (document.getElementById("ba-tunings-position")?.value || "").trim();
+  if (q)        params.set("q",        q);
+  if (artist)   params.set("artist",   artist);
+  if (position) params.set("position", position);
+  try {
+    const r = await apiFetch(`/api/blues-archive/tunings/matching-ids?${params}`);
+    if (!r.ok) { alert(`Select-all failed: HTTP ${r.status}`); return; }
+    const { ids = [], capped = false } = await r.json();
+    for (const id of ids) {
+      const n = Number(id);
+      if (Number.isFinite(n)) _baTuningsSelectedIds.add(n);
+    }
+    _baTuningsSelectedCapped = !!capped;
+    document.querySelectorAll(".ba-tuning-cb").forEach(cb => {
+      const id = Number(cb.getAttribute("data-tuning-cb"));
+      cb.checked = _baTuningsSelectedIds.has(id);
+    });
+    _baTuningsRefreshHeaderCheckbox();
+    _baTuningsRenderBulkBar();
+  } catch (e) {
+    alert(`Select-all failed: ${String(e?.message || e)}`);
+  }
+}
+window._baTuningsSelectAllMatching = _baTuningsSelectAllMatching;
+
+function _baTuningsClearSelection() {
+  _baTuningsSelectedIds.clear();
+  _baTuningsSelectedCapped = false;
+  document.querySelectorAll(".ba-tuning-cb").forEach(cb => { cb.checked = false; });
+  _baTuningsRefreshHeaderCheckbox();
+  _baTuningsRenderBulkBar();
+}
+window._baTuningsClearSelection = _baTuningsClearSelection;
+
+function _baTuningsRenderBulkBar() {
+  const el = document.getElementById("ba-tunings-bulkbar");
+  if (!el) return;
+  const n = _baTuningsSelectedIds.size;
+  if (!n) { el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const capNote = _baTuningsSelectedCapped
+    ? ` <span style="color:#e88" title="Server capped the matching-ids response at 10k; some matches above that limit aren't in the selection.">(capped at 10k)</span>`
+    : "";
+  // Pull canonical position values from the facet dropdown — the
+  // facets endpoint already supplies them and they're loaded into
+  // #ba-tunings-position as <option>s.
+  const positionOpts = Array.from(document.querySelectorAll("#ba-tunings-position option"))
+    .map(o => o.value)
+    .filter(Boolean)
+    .map(v => `<option value="${escHtml(v)}">`)
+    .join("");
+  el.innerHTML = `
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+      <strong>${n.toLocaleString()} selected</strong>${capNote}
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baTuningsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching</a>
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baTuningsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
+      <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+        <label style="font-weight:600">Set position →</label>
+        <input id="ba-tunings-bulk-position" type="text" list="ba-tunings-bulk-position-list" placeholder="e.g. Open G" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" onkeydown="if(event.key==='Enter'){event.preventDefault();_baTuningsBulkSetPositionFromInput()}">
+        <datalist id="ba-tunings-bulk-position-list">${positionOpts}</datalist>
+        <button type="button" class="archive-btn" onclick="_baTuningsBulkSetPositionFromInput()" title="Apply the text above to every selected row.">Apply</button>
+        <button type="button" class="archive-btn" onclick="_baTuningsBulkSetPosition(null)" title="Clear the position column on every selected row.">Clear position</button>
+        <button type="button" class="archive-btn" onclick="_baTuningsBulkDelete()" title="Hard-delete every selected tuning row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
+      </span>
+    </div>
+  `;
+}
+window._baTuningsRenderBulkBar = _baTuningsRenderBulkBar;
+
+function _baTuningsBulkSetPositionFromInput() {
+  const inp = document.getElementById("ba-tunings-bulk-position");
+  const val = (inp?.value || "").trim();
+  if (!val) { alert("Enter a position value (or click Clear position to wipe)."); return; }
+  _baTuningsBulkSetPosition(val);
+}
+window._baTuningsBulkSetPositionFromInput = _baTuningsBulkSetPositionFromInput;
+
+async function _baTuningsBulkSetPosition(value) {
+  const ids = Array.from(_baTuningsSelectedIds);
+  if (!ids.length) return;
+  const display = value == null ? "(blank — clear position)" : `"${value}"`;
+  if (!confirm(`Set position on ${ids.length.toLocaleString()} tuning row${ids.length === 1 ? "" : "s"} to ${display}?`)) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/tunings/bulk-update-position", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids, position: value }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk update failed: ${j?.error || r.status}`); return; }
+    if (typeof showToast === "function") {
+      showToast(`Updated ${(j.updated ?? 0).toLocaleString()} row${j.updated === 1 ? "" : "s"}`, "info");
+    }
+    _baTuningsClearSelection();
+    _baTuningsFacetsLoaded = false;
+    if (typeof _baLoadTuningsFacets === "function") _baLoadTuningsFacets();
+    _baLoadTuningsGrid();
+  } catch (e) {
+    alert(`Bulk update failed: ${String(e?.message || e)}`);
+  }
+}
+window._baTuningsBulkSetPosition = _baTuningsBulkSetPosition;
+
+async function _baTuningsBulkDelete() {
+  const ids = Array.from(_baTuningsSelectedIds);
+  if (!ids.length) return;
+  const n = ids.length;
+  if (!confirm(`Hard-delete ${n.toLocaleString()} tuning row${n === 1 ? "" : "s"}? This cannot be undone.`)) return;
+  if (n > 50) {
+    const typed = prompt(`Type "delete ${n}" to confirm:`);
+    if (typed !== `delete ${n}`) { alert("Confirmation didn't match — cancelled."); return; }
+  }
+  try {
+    const r = await apiFetch("/api/blues-archive/tunings/bulk-delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk delete failed: ${j?.error || r.status}`); return; }
+    if (typeof showToast === "function") {
+      showToast(`Deleted ${(j.deleted ?? 0).toLocaleString()} tuning row${j.deleted === 1 ? "" : "s"}`, "info");
+    }
+    _baTuningsClearSelection();
+    _baLoadTuningsGrid();
+  } catch (e) {
+    alert(`Bulk delete failed: ${String(e?.message || e)}`);
+  }
+}
+window._baTuningsBulkDelete = _baTuningsBulkDelete;
 
 // Tuning CRUD: add + delete (admin only — gated server-side too).
 async function _baDeleteTuning(id, title) {
