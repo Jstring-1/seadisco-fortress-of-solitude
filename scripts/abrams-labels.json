@@ -1,0 +1,2622 @@
+[
+  {
+    "slug": "Abbey",
+    "name": "Abbey"
+  },
+  {
+    "slug": "Abbott",
+    "name": "Abbott"
+  },
+  {
+    "slug": "ABCParamount",
+    "name": "Abc-Paramount"
+  },
+  {
+    "slug": "Abner",
+    "name": "Abner"
+  },
+  {
+    "slug": "Acorn",
+    "name": "Acorn"
+  },
+  {
+    "slug": "AFRS1",
+    "name": "AFRS Transcriptions"
+  },
+  {
+    "slug": "Ajax",
+    "name": "Ajax"
+  },
+  {
+    "slug": "Aladdin100",
+    "name": "Aladdin"
+  },
+  {
+    "slug": "Aladdin3000",
+    "name": "Aladdin"
+  },
+  {
+    "slug": "Aladdin500",
+    "name": "Aladdin"
+  },
+  {
+    "slug": "Aladdin2000",
+    "name": "Aladdin"
+  },
+  {
+    "slug": "AmericanMusic",
+    "name": "American Music"
+  },
+  {
+    "slug": "Ammor",
+    "name": "Ammor"
+  },
+  {
+    "slug": "Angelophone",
+    "name": "Angelophone"
+  },
+  {
+    "slug": "Apollo100",
+    "name": "Apollo"
+  },
+  {
+    "slug": "Apollo350",
+    "name": "Apollo"
+  },
+  {
+    "slug": "Apollo750",
+    "name": "Apollo"
+  },
+  {
+    "slug": "Apollo1000",
+    "name": "Apollo"
+  },
+  {
+    "slug": "ARA100",
+    "name": "Ara"
+  },
+  {
+    "slug": "ARA4000",
+    "name": "Ara"
+  },
+  {
+    "slug": "ARA4500",
+    "name": "Ara"
+  },
+  {
+    "slug": "ARA5000",
+    "name": "Ara"
+  },
+  {
+    "slug": "Arco",
+    "name": "Arco"
+  },
+  {
+    "slug": "AretinoA200",
+    "name": "A200"
+  },
+  {
+    "slug": "AretinoA1000",
+    "name": "A1000"
+  },
+  {
+    "slug": "AretinoD500",
+    "name": "D500"
+  },
+  {
+    "slug": "Aristocrat",
+    "name": "Aristocrat"
+  },
+  {
+    "slug": "Asch",
+    "name": "Asch"
+  },
+  {
+    "slug": "Atco",
+    "name": "Atco"
+  },
+  {
+    "slug": "Atlantic",
+    "name": "Atlantic"
+  },
+  {
+    "slug": "AuroraVic",
+    "name": "Aurora"
+  },
+  {
+    "slug": "Ban1000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban1500",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban6000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban7000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban500",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban32000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban32500",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban33000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Ban2000",
+    "name": "Banner"
+  },
+  {
+    "slug": "Banner40s",
+    "name": "Banner"
+  },
+  {
+    "slug": "Baton",
+    "name": "Baton"
+  },
+  {
+    "slug": "Bayou",
+    "name": "Bayou"
+  },
+  {
+    "slug": "Bell1920",
+    "name": "Bell"
+  },
+  {
+    "slug": "Bell7",
+    "name": "Bell"
+  },
+  {
+    "slug": "Berliner",
+    "name": "Berliner"
+  },
+  {
+    "slug": "Berliner0",
+    "name": "Berliner"
+  },
+  {
+    "slug": "Biltmore",
+    "name": "Biltmore"
+  },
+  {
+    "slug": "BlackandWhite",
+    "name": "Black And White"
+  },
+  {
+    "slug": "Blackpat",
+    "name": "Black Patti"
+  },
+  {
+    "slug": "BS2000",
+    "name": "Black Swan"
+  },
+  {
+    "slug": "BSmisc",
+    "name": "Black Swan"
+  },
+  {
+    "slug": "BluDisc",
+    "name": "Blu-Disc"
+  },
+  {
+    "slug": "BlueLake",
+    "name": "Blue Lake"
+  },
+  {
+    "slug": "BlueNote",
+    "name": "Blue Note"
+  },
+  {
+    "slug": "BB2000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB2500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB3000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB4500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB5000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB5500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB6000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB6500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB7000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB7500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB8000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB8500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB10000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB10500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB11000",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "BB11500",
+    "name": "Bluebird"
+  },
+  {
+    "slug": "Bop",
+    "name": "Bop!"
+  },
+  {
+    "slug": "Broadway1000",
+    "name": "Broadway"
+  },
+  {
+    "slug": "Broadway4000",
+    "name": "Broadway"
+  },
+  {
+    "slug": "Broadway5000",
+    "name": "Broadway"
+  },
+  {
+    "slug": "Broadway8000",
+    "name": "Broadway"
+  },
+  {
+    "slug": "Bronze",
+    "name": "Bronze"
+  },
+  {
+    "slug": "BRN100",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN2000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN2500",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN3000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN3500",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN4000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN4500",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN5000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN6000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN6500",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN7000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN7300",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN7500",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN8000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN10000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN10100",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN13000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN15000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN20000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN50000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BRN55000",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "BrunRI",
+    "name": "Brunswick"
+  },
+  {
+    "slug": "Buddy",
+    "name": "Buddy"
+  },
+  {
+    "slug": "BusyBeeCyl",
+    "name": "Busy Bee"
+  },
+  {
+    "slug": "BusyBee",
+    "name": "Busy Bee"
+  },
+  {
+    "slug": "Cadence",
+    "name": "Cadence"
+  },
+  {
+    "slug": "Cameo200",
+    "name": "Cameo"
+  },
+  {
+    "slug": "Cameo500",
+    "name": "Cameo"
+  },
+  {
+    "slug": "Cameo1000",
+    "name": "Cameo"
+  },
+  {
+    "slug": "Cameo8000",
+    "name": "Cameo"
+  },
+  {
+    "slug": "Cameo9000",
+    "name": "Cameo"
+  },
+  {
+    "slug": "Capitol100",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol15000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol500",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol1000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol1500",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol2000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol2500",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol10000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol20000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol40000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol48000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol52000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol60000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "Capitol70000",
+    "name": "Capitol"
+  },
+  {
+    "slug": "CastleOR",
+    "name": "Castle"
+  },
+  {
+    "slug": "Cat",
+    "name": "Cat"
+  },
+  {
+    "slug": "CetraBB25000",
+    "name": "Bb 25000"
+  },
+  {
+    "slug": "CetraSoria2000",
+    "name": "Cetra Soria"
+  },
+  {
+    "slug": "Challenge1",
+    "name": "Challenge"
+  },
+  {
+    "slug": "Challenge5",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ150",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ155",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ160",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ165",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ401",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ500",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ400",
+    "name": "Champion"
+  },
+  {
+    "slug": "Champ450",
+    "name": "Champion"
+  },
+  {
+    "slug": "Chance",
+    "name": "Chance"
+  },
+  {
+    "slug": "Chart",
+    "name": "Chart"
+  },
+  {
+    "slug": "Checker",
+    "name": "Checker"
+  },
+  {
+    "slug": "Chess",
+    "name": "Chess"
+  },
+  {
+    "slug": "CRG",
+    "name": "Children'S\nRecord Guild"
+  },
+  {
+    "slug": "Clarion5000",
+    "name": "Clarion"
+  },
+  {
+    "slug": "ClarionSP",
+    "name": "Clarion"
+  },
+  {
+    "slug": "Clover",
+    "name": "Clover"
+  },
+  {
+    "slug": "Club51",
+    "name": "Club 51"
+  },
+  {
+    "slug": "Cobra",
+    "name": "Cobra"
+  },
+  {
+    "slug": "Colony",
+    "name": "Colony"
+  },
+  {
+    "slug": "ColCyl4000",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl6000",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl8000",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl31300",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl32000",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl32500",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "ColCyl85000",
+    "name": "COLUMBIA (USA): Cylinders"
+  },
+  {
+    "slug": "COL1",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL3000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COLA1",
+    "name": "A 1 to A 499"
+  },
+  {
+    "slug": "COLA500",
+    "name": "A500"
+  },
+  {
+    "slug": "COLA1000",
+    "name": "A1000"
+  },
+  {
+    "slug": "COLA1500",
+    "name": "A1500"
+  },
+  {
+    "slug": "COLA2000",
+    "name": "A2000"
+  },
+  {
+    "slug": "COLA2500",
+    "name": "A2500"
+  },
+  {
+    "slug": "COLA3000",
+    "name": "A3000"
+  },
+  {
+    "slug": "COLA3500",
+    "name": "A3500 to A4001"
+  },
+  {
+    "slug": "COLA5000",
+    "name": "A5000 (12\")"
+  },
+  {
+    "slug": "COLA5500",
+    "name": "A5500 (12\")"
+  },
+  {
+    "slug": "COLA6000",
+    "name": "A6000 to A6233\n(12\")"
+  },
+  {
+    "slug": "COLA7500",
+    "name": "A7500\n(12\"?)"
+  },
+  {
+    "slug": "COLE3000",
+    "name": "E3000"
+  },
+  {
+    "slug": "COL1D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL500D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL1000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL1500D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL2000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL2500D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL3000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL13000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL14000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL15000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL18000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL40000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL67000D",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL12000F",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL40500F",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL67000F",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL50000X",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL20000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL20500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL21000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL30000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL35200",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL35500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL36000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL36500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL37000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL37500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL38000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL38500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL39000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL39500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL40000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL40500",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL41000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "COL55000",
+    "name": "COLUMBIA (USA): Discs"
+  },
+  {
+    "slug": "ColumbiaAlbums",
+    "name": "Album\nSets"
+  },
+  {
+    "slug": "ColENL1500",
+    "name": "L 1500"
+  },
+  {
+    "slug": "Commodore",
+    "name": "Commodore"
+  },
+  {
+    "slug": "Conq7000",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Conq7500",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Conq8000",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Conq8500",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Conq9000",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Conq9500",
+    "name": "Conqueror"
+  },
+  {
+    "slug": "Continental40",
+    "name": "Continental"
+  },
+  {
+    "slug": "Coral60000",
+    "name": "Coral"
+  },
+  {
+    "slug": "Coral60500",
+    "name": "Coral"
+  },
+  {
+    "slug": "Coral61000",
+    "name": "Coral"
+  },
+  {
+    "slug": "Coral61500",
+    "name": "Coral"
+  },
+  {
+    "slug": "Coral64000",
+    "name": "Coral"
+  },
+  {
+    "slug": "Coral65000",
+    "name": "Coral"
+  },
+  {
+    "slug": "Cosmo",
+    "name": "Cosmo"
+  },
+  {
+    "slug": "Crown",
+    "name": "Crown"
+  },
+  {
+    "slug": "Cupol1900",
+    "name": "Cupol"
+  },
+  {
+    "slug": "Decatur",
+    "name": "Decatur"
+  },
+  {
+    "slug": "Dec100",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec1000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec1500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec2000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec2500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec3000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec3500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec4000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec5000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec5500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec6000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec7000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec7500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec8500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec10000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec11000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec12000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec14000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec14500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec15000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec16500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec17000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec17200",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec18000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec18500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec19000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec21000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec23000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec23500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec24000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec24500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec25000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec27000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec27500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec28000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec28500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec29000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec2900F",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec29500",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec40000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec46000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec48000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec50000",
+    "name": "Decca"
+  },
+  {
+    "slug": "Dec90000",
+    "name": "Decca"
+  },
+  {
+    "slug": "DeltaMS",
+    "name": "Delta"
+  },
+  {
+    "slug": "DeLuxe2000",
+    "name": "DeLuxe"
+  },
+  {
+    "slug": "DeLuxe5000",
+    "name": "DeLuxe"
+  },
+  {
+    "slug": "Discovery",
+    "name": "Discovery"
+  },
+  {
+    "slug": "Dom0100",
+    "name": "Domino"
+  },
+  {
+    "slug": "Dom3500",
+    "name": "Domino"
+  },
+  {
+    "slug": "Dom4000",
+    "name": "Domino"
+  },
+  {
+    "slug": "Dom4500",
+    "name": "Domino"
+  },
+  {
+    "slug": "Dot1000",
+    "name": "Dot"
+  },
+  {
+    "slug": "Dot15000",
+    "name": "Dot"
+  },
+  {
+    "slug": "DownHome",
+    "name": "Down Home"
+  },
+  {
+    "slug": "Duke",
+    "name": "Duke"
+  },
+  {
+    "slug": "Electradisk1800",
+    "name": "Electradisk"
+  },
+  {
+    "slug": "Electradisk2500",
+    "name": "Electradisk"
+  },
+  {
+    "slug": "Elite5000",
+    "name": "Elite"
+  },
+  {
+    "slug": "Emerson300",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson500",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson700",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson900",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson2000",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson10000",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson10500",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson3000",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson1200",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Emerson19000",
+    "name": "Emerson"
+  },
+  {
+    "slug": "Exclusive",
+    "name": "Exclusive"
+  },
+  {
+    "slug": "FalconVJ",
+    "name": "Falcon"
+  },
+  {
+    "slug": "Fantasy",
+    "name": "Fantasy"
+  },
+  {
+    "slug": "Fidelity",
+    "name": "Fidelity"
+  },
+  {
+    "slug": "Flair",
+    "name": "Flair"
+  },
+  {
+    "slug": "Flexo",
+    "name": "Flexo / New Flexo\n/ Warner / Titan"
+  },
+  {
+    "slug": "Fortune",
+    "name": "Fortune (Usa)"
+  },
+  {
+    "slug": "FoxMovietone",
+    "name": "Fox Movietone"
+  },
+  {
+    "slug": "Freedom1500",
+    "name": "Freedom"
+  },
+  {
+    "slug": "Freedom",
+    "name": "Freedom"
+  },
+  {
+    "slug": "GNT2500",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT2678",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT3000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT4500",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT5000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT5500",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT6000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT6500",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT7000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT9000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "GNT10000",
+    "name": "Gennett"
+  },
+  {
+    "slug": "Goodson",
+    "name": "Goodson"
+  },
+  {
+    "slug": "Gotham500",
+    "name": "Gotham"
+  },
+  {
+    "slug": "GG1000",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG1500",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG2000",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG4000",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG7000",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG8000",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "GG0100",
+    "name": "Grey Gull"
+  },
+  {
+    "slug": "Groove",
+    "name": "Groove"
+  },
+  {
+    "slug": "Harlem",
+    "name": "Harlem"
+  },
+  {
+    "slug": "Har1",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Har500",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Har1000",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Harobie",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Har6000",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Herwin",
+    "name": "Herwin"
+  },
+  {
+    "slug": "HiQ",
+    "name": "Harmony"
+  },
+  {
+    "slug": "Hit7000",
+    "name": "Hit"
+  },
+  {
+    "slug": "Hit8000",
+    "name": "Hit"
+  },
+  {
+    "slug": "Holly20s",
+    "name": "Hollywood"
+  },
+  {
+    "slug": "HRS",
+    "name": "H.R.S"
+  },
+  {
+    "slug": "HummingBird1000",
+    "name": "Humming Bird"
+  },
+  {
+    "slug": "HyTone46",
+    "name": "Hy-Tone"
+  },
+  {
+    "slug": "Rex5000",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp100",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp500",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp1000",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp5000",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp5500",
+    "name": "Imperial"
+  },
+  {
+    "slug": "Imp8000",
+    "name": "Imperial"
+  },
+  {
+    "slug": "IRC",
+    "name": "International\nRecord Company"
+  },
+  {
+    "slug": "IRCC",
+    "name": "International Record Collectors\nClub"
+  },
+  {
+    "slug": "Jax",
+    "name": "Jax"
+  },
+  {
+    "slug": "JazzMan",
+    "name": "Jazz Man"
+  },
+  {
+    "slug": "JazzRecord",
+    "name": "Jazz Record"
+  },
+  {
+    "slug": "Jewel5000",
+    "name": "Jewel"
+  },
+  {
+    "slug": "Jewel5500",
+    "name": "Jewel"
+  },
+  {
+    "slug": "Jewel6000",
+    "name": "Jewel"
+  },
+  {
+    "slug": "JOB",
+    "name": "J.O.B."
+  },
+  {
+    "slug": "Jubilee5000",
+    "name": "Jubilee (Usa)"
+  },
+  {
+    "slug": "Jubilee6000",
+    "name": "Jubilee (Usa)"
+  },
+  {
+    "slug": "JukeBox",
+    "name": "Juke\nBox"
+  },
+  {
+    "slug": "JVB",
+    "name": "Jvb"
+  },
+  {
+    "slug": "Keynote",
+    "name": "Keynote"
+  },
+  {
+    "slug": "Keyst1",
+    "name": "KEYSTONE (KBS) Transcriptions"
+  },
+  {
+    "slug": "Keyst2",
+    "name": "King"
+  },
+  {
+    "slug": "King500",
+    "name": "King"
+  },
+  {
+    "slug": "King1000",
+    "name": "King"
+  },
+  {
+    "slug": "King4000",
+    "name": "King"
+  },
+  {
+    "slug": "King4500",
+    "name": "King"
+  },
+  {
+    "slug": "King5000",
+    "name": "King"
+  },
+  {
+    "slug": "King15000",
+    "name": "King"
+  },
+  {
+    "slug": "KingJazz",
+    "name": "King Jazz"
+  },
+  {
+    "slug": "Kingsport",
+    "name": "Kingsport"
+  },
+  {
+    "slug": "Lakeside70000",
+    "name": "LAKESIDE (USA)</font></font></b><a href=\"Meteor20.htm\"><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></a><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></center>\n</caption>\n<tbody>\n<tr>\n<td style=\"width: 118px;\">\n<center><a href=\"Lakeside70000.htm\">70000</a></center>\n</td>\n<td style=\"width: 118px; text-align: center;\">\n<center><a href=\"Electradisk2500.htm\"><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></a></center>\n<a href=\"Lakeside70500.htm\">70500</a></td>\n</tr>\n</tbody>\n</table>\n</center>\n</center>\n</center>\n<center>\n<hr width=\"100%\"></center>\n<center><b><font size=\"+1\"><a href=\"LAnthologie.htm\">L'ANTHOLOGIE SONORE\n(France/USA 1930s-50s)</a>"
+  },
+  {
+    "slug": "Lakeside70500",
+    "name": "LAKESIDE (USA)</font></font></b><a href=\"Meteor20.htm\"><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></a><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></center>\n</caption>\n<tbody>\n<tr>\n<td style=\"width: 118px;\">\n<center><a href=\"Lakeside70000.htm\">70000</a></center>\n</td>\n<td style=\"width: 118px; text-align: center;\">\n<center><a href=\"Electradisk2500.htm\"><span style=\"text-decoration: underline;\"><span style=\"font-weight: bold;\"></span></span></a></center>\n<a href=\"Lakeside70500.htm\">70500</a></td>\n</tr>\n</tbody>\n</table>\n</center>\n</center>\n</center>\n<center>\n<hr width=\"100%\"></center>\n<center><b><font size=\"+1\"><a href=\"LAnthologie.htm\">L'ANTHOLOGIE SONORE\n(France/USA 1930s-50s)</a>"
+  },
+  {
+    "slug": "LAnthologie",
+    "name": "L'Anthologie Sonore"
+  },
+  {
+    "slug": "Lasso",
+    "name": "Lasso"
+  },
+  {
+    "slug": "Lenox",
+    "name": "Lenox"
+  },
+  {
+    "slug": "LibertyNHCA",
+    "name": "Liberty"
+  },
+  {
+    "slug": "Linc2000",
+    "name": "Lincoln"
+  },
+  {
+    "slug": "Linc2500",
+    "name": "Lincoln"
+  },
+  {
+    "slug": "Linc3000",
+    "name": "Lincoln"
+  },
+  {
+    "slug": "Linden",
+    "name": "Linden"
+  },
+  {
+    "slug": "Lionel6",
+    "name": "Lionel"
+  },
+  {
+    "slug": "Macys100",
+    "name": "Macy'S"
+  },
+  {
+    "slug": "Macys5000",
+    "name": "Macy'S"
+  },
+  {
+    "slug": "MAD16",
+    "name": "Madison"
+  },
+  {
+    "slug": "MAD19",
+    "name": "Madison"
+  },
+  {
+    "slug": "MAD50",
+    "name": "Madison"
+  },
+  {
+    "slug": "Majestic",
+    "name": "Majestic"
+  },
+  {
+    "slug": "Manor",
+    "name": "Manor"
+  },
+  {
+    "slug": "MarsNY",
+    "name": "Mars"
+  },
+  {
+    "slug": "Master",
+    "name": "Master"
+  },
+  {
+    "slug": "MasterChi",
+    "name": "Master"
+  },
+  {
+    "slug": "Masterpiece",
+    "name": "Masterpiece"
+  },
+  {
+    "slug": "Medallion",
+    "name": "Medallion"
+  },
+  {
+    "slug": "Mel12000",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel12500",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel13000",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel35",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel36",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel37",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Mel38",
+    "name": "Melotone"
+  },
+  {
+    "slug": "Merc010",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc020",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc030",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc050",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc055",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc060",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc070",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc080",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc089",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc110",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc700",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Merc890",
+    "name": "Mercury"
+  },
+  {
+    "slug": "Meritt",
+    "name": "Meritt"
+  },
+  {
+    "slug": "MGM10000",
+    "name": "Mgm"
+  },
+  {
+    "slug": "MGM10500",
+    "name": "Mgm"
+  },
+  {
+    "slug": "MGM11000",
+    "name": "Mgm"
+  },
+  {
+    "slug": "MGM11500",
+    "name": "Mgm"
+  },
+  {
+    "slug": "MGM30000",
+    "name": "Mgm"
+  },
+  {
+    "slug": "MGM30500",
+    "name": "Mgm"
+  },
+  {
+    "slug": "Miltone",
+    "name": "Miltone"
+  },
+  {
+    "slug": "Miracle",
+    "name": "Miracle"
+  },
+  {
+    "slug": "Mitchell",
+    "name": "Mitchell"
+  },
+  {
+    "slug": "Modern100",
+    "name": "MODERN (Modern Music/Modern\nHollywood)"
+  },
+  {
+    "slug": "Modern500",
+    "name": "MODERN (Modern Music/Modern\nHollywood)"
+  },
+  {
+    "slug": "MW1000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW4000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW4500",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW6000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW7000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW7500",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW8000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW8500",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "MW10000",
+    "name": "Montgomery Ward"
+  },
+  {
+    "slug": "Morgan",
+    "name": "Morgan"
+  },
+  {
+    "slug": "Musicraft200",
+    "name": "Musicraft"
+  },
+  {
+    "slug": "Musicraft1000",
+    "name": "Musicraft"
+  },
+  {
+    "slug": "Musicraft5000",
+    "name": "Musicraft"
+  },
+  {
+    "slug": "Musicraft15000",
+    "name": "Musicraft"
+  },
+  {
+    "slug": "NationalLate",
+    "name": "National"
+  },
+  {
+    "slug": "Nassau",
+    "name": "Nassau"
+  },
+  {
+    "slug": "NML",
+    "name": "National\nMusic Lovers"
+  },
+  {
+    "slug": "NationsForum",
+    "name": "Nation'S Forum"
+  },
+  {
+    "slug": "Od36000",
+    "name": "Odeon"
+  },
+  {
+    "slug": "OK1000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK4000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK4500",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK8000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK8500",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK40000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK40500",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK41000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK41500",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK45000",
+    "name": "Okeh"
+  },
+  {
+    "slug": "OK5600",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OK6000",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OK6500",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OK6800",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OK16000",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OK18000",
+    "name": "Okeh\n(Cbs)"
+  },
+  {
+    "slug": "OR0100",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR0500",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR1000",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR1500",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR2000",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR2500",
+    "name": "Oriole"
+  },
+  {
+    "slug": "OR3000",
+    "name": "Oriole"
+  },
+  {
+    "slug": "Oxford1",
+    "name": "Oxford"
+  },
+  {
+    "slug": "Oxford1000",
+    "name": "Oxford"
+  },
+  {
+    "slug": "Oxford3000",
+    "name": "Oxford"
+  },
+  {
+    "slug": "Oxford5000",
+    "name": "Oxford"
+  },
+  {
+    "slug": "Pacific",
+    "name": "Pacific"
+  },
+  {
+    "slug": "Para030",
+    "name": "Paramount"
+  },
+  {
+    "slug": "PMT20000",
+    "name": "Paramount"
+  },
+  {
+    "slug": "PMT33000",
+    "name": "Paramount"
+  },
+  {
+    "slug": "Para120",
+    "name": "Paramount"
+  },
+  {
+    "slug": "Para125",
+    "name": "Paramount"
+  },
+  {
+    "slug": "Para130",
+    "name": "Paramount"
+  },
+  {
+    "slug": "ParlophoneE5000",
+    "name": "E.5000"
+  },
+  {
+    "slug": "ParlophoneE10000",
+    "name": "E.10000 - E.10500"
+  },
+  {
+    "slug": "ParlophoneE10500",
+    "name": "E.10500\n- E.11000"
+  },
+  {
+    "slug": "ParlophoneE11000",
+    "name": "E.11000\n- E.11500"
+  },
+  {
+    "slug": "ParlophoneMO",
+    "name": "MO series"
+  },
+  {
+    "slug": "ParlophoneOT",
+    "name": "OT series"
+  },
+  {
+    "slug": "ParlophoneR2500",
+    "name": "R2500"
+  },
+  {
+    "slug": "ParlophoneR20000",
+    "name": "Parlophone"
+  },
+  {
+    "slug": "Parlophone",
+    "name": "Parlophone"
+  },
+  {
+    "slug": "Parokeet",
+    "name": "Par-O-Ket"
+  },
+  {
+    "slug": "Parrot",
+    "name": "Parrot"
+  },
+  {
+    "slug": "Pathe10000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe10100",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe20000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe20500",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe21000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe22000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe25000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe29000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe30000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe32000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe35000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe36000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe36500",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe40000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe54000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Pathe60000",
+    "name": "Pathe\n/ Actuelle"
+  },
+  {
+    "slug": "Peacock500800",
+    "name": "Peacock"
+  },
+  {
+    "slug": "Peacock1500",
+    "name": "Peacock"
+  },
+  {
+    "slug": "Peacock1700",
+    "name": "Peacock"
+  },
+  {
+    "slug": "PE100",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE11000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE11500",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE12000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE12500",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE13000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE14000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE14500",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE15000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE15500",
+    "name": "Perfect"
+  },
+  {
+    "slug": "RCA206500",
+    "name": "Perfect"
+  },
+  {
+    "slug": "PE16000",
+    "name": "Perfect"
+  },
+  {
+    "slug": "Polydor800lp",
+    "name": "Polydor"
+  },
+  {
+    "slug": "Polygon",
+    "name": "Polygon"
+  },
+  {
+    "slug": "Post",
+    "name": "Post"
+  },
+  {
+    "slug": "Premium",
+    "name": "Premium"
+  },
+  {
+    "slug": "Prestige",
+    "name": "Prestige"
+  },
+  {
+    "slug": "Puritan11000",
+    "name": "Puritan"
+  },
+  {
+    "slug": "QRS",
+    "name": "Qrs"
+  },
+  {
+    "slug": "Queen",
+    "name": "Queen"
+  },
+  {
+    "slug": "Rainbow20",
+    "name": "Rainbow"
+  },
+  {
+    "slug": "RCA151000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA201500",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA202000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA202500",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA203000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA203500",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA204000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA204500",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA205000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA205500",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA206000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA207000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA210000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RCA255000",
+    "name": "RCA Victor"
+  },
+  {
+    "slug": "RedRaven",
+    "name": "Red Raven"
+  },
+  {
+    "slug": "Reg900",
+    "name": "Regal"
+  },
+  {
+    "slug": "Reg9100",
+    "name": "Regal"
+  },
+  {
+    "slug": "Reg9500",
+    "name": "Regal"
+  },
+  {
+    "slug": "Reg8000",
+    "name": "Regal"
+  },
+  {
+    "slug": "Reg8500",
+    "name": "Regal"
+  },
+  {
+    "slug": "Reg10000",
+    "name": "Regal"
+  },
+  {
+    "slug": "Regal49",
+    "name": "Regal"
+  },
+  {
+    "slug": "RedRobin",
+    "name": "Red\nRobin"
+  },
+  {
+    "slug": "Regent1000",
+    "name": "Regent"
+  },
+  {
+    "slug": "Regis",
+    "name": "Regis"
+  },
+  {
+    "slug": "RexUK8000",
+    "name": "REX (British)"
+  },
+  {
+    "slug": "ROM200",
+    "name": "Romeo"
+  },
+  {
+    "slug": "ROM500",
+    "name": "Romeo"
+  },
+  {
+    "slug": "ROM1000",
+    "name": "Romeo"
+  },
+  {
+    "slug": "ROM1500",
+    "name": "Romeo"
+  },
+  {
+    "slug": "ROM2000",
+    "name": "Romeo"
+  },
+  {
+    "slug": "Rockin",
+    "name": "Rockin'"
+  },
+  {
+    "slug": "Ronnex",
+    "name": "Ronnex"
+  },
+  {
+    "slug": "Royale1700",
+    "name": "Royale"
+  },
+  {
+    "slug": "Roycroft",
+    "name": "Roycroft"
+  },
+  {
+    "slug": "RPM",
+    "name": "Rpm"
+  },
+  {
+    "slug": "Sabre",
+    "name": "Sabre"
+  },
+  {
+    "slug": "Sav100",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav500",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav1100",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav1500",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav4000",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav4500",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Sav5500",
+    "name": "Savoy"
+  },
+  {
+    "slug": "Schirmer2500",
+    "name": "Schirmer"
+  },
+  {
+    "slug": "Sensation",
+    "name": "Sensation"
+  },
+  {
+    "slug": "Session",
+    "name": "Session"
+  },
+  {
+    "slug": "Signiature",
+    "name": "Signature"
+  },
+  {
+    "slug": "SIL2000",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL3000",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL3500",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL3800",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL4000",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL5000",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL5000g",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SIL8000",
+    "name": "Silvertone"
+  },
+  {
+    "slug": "SRC",
+    "name": "Silvertone\nRecord Club"
+  },
+  {
+    "slug": "SittinIn",
+    "name": "Sittin' In With / Sittin'\nIn"
+  },
+  {
+    "slug": "Sonora",
+    "name": "Sonora"
+  },
+  {
+    "slug": "SpecialEditions",
+    "name": "Special Editions"
+  },
+  {
+    "slug": "Specialty",
+    "name": "Specialty"
+  },
+  {
+    "slug": "Staff",
+    "name": "Staff"
+  },
+  {
+    "slug": "StarCol",
+    "name": "STAR (ca 1907-1910, U.S.A)"
+  },
+  {
+    "slug": "StarHS",
+    "name": "STAR (ca 1907-1910, U.S.A)"
+  },
+  {
+    "slug": "StarTalent",
+    "name": "Star Talent"
+  },
+  {
+    "slug": "Starday",
+    "name": "Starday"
+  },
+  {
+    "slug": "STGNT",
+    "name": "STARR Gennett"
+  },
+  {
+    "slug": "States",
+    "name": "States"
+  },
+  {
+    "slug": "Statesmen",
+    "name": "Statesmen"
+  },
+  {
+    "slug": "SterlingNY",
+    "name": "Sterling"
+  },
+  {
+    "slug": "Sun50s",
+    "name": "Sun"
+  },
+  {
+    "slug": "Sunbeam46",
+    "name": "Sunbeam"
+  },
+  {
+    "slug": "SunriseVi",
+    "name": "Sunrise"
+  },
+  {
+    "slug": "SunriseChi",
+    "name": "Sunrise"
+  },
+  {
+    "slug": "Sunset",
+    "name": "Sunset"
+  },
+  {
+    "slug": "Sunshine",
+    "name": "Sunshine"
+  },
+  {
+    "slug": "SuperDisc",
+    "name": "Super Disc"
+  },
+  {
+    "slug": "Superior",
+    "name": "Superior"
+  },
+  {
+    "slug": "SPTCol",
+    "name": "Supertone"
+  },
+  {
+    "slug": "SPTN2000",
+    "name": "Supertone"
+  },
+  {
+    "slug": "SPTN9000",
+    "name": "Supertone"
+  },
+  {
+    "slug": "SPTN9500",
+    "name": "Supertone"
+  },
+  {
+    "slug": "Supreme47",
+    "name": "Supreme"
+  },
+  {
+    "slug": "SwingFR",
+    "name": "Swing"
+  },
+  {
+    "slug": "TTM",
+    "name": "Supertone"
+  },
+  {
+    "slug": "Tennessee",
+    "name": "Tennessee"
+  },
+  {
+    "slug": "Tico10",
+    "name": "Tico"
+  },
+  {
+    "slug": "TimelyTunes",
+    "name": "Timely Tunes"
+  },
+  {
+    "slug": "Tri11000",
+    "name": "Triangle"
+  },
+  {
+    "slug": "Trumpet",
+    "name": "Trumpet"
+  },
+  {
+    "slug": "TopTen",
+    "name": "Top Ten"
+  },
+  {
+    "slug": "United50",
+    "name": "United"
+  },
+  {
+    "slug": "Vari1937",
+    "name": "Variety"
+  },
+  {
+    "slug": "Vars3000",
+    "name": "Varsity"
+  },
+  {
+    "slug": "Vars5000",
+    "name": "Varsity"
+  },
+  {
+    "slug": "Vars6000",
+    "name": "Varsity"
+  },
+  {
+    "slug": "Vars7000",
+    "name": "Varsity"
+  },
+  {
+    "slug": "Vars8000",
+    "name": "Varsity"
+  },
+  {
+    "slug": "VarsWri",
+    "name": "Varsity"
+  },
+  {
+    "slug": "VeeJay",
+    "name": "Vee Jay"
+  },
+  {
+    "slug": "VeeJay800",
+    "name": "Vee Jay"
+  },
+  {
+    "slug": "VelvetTone2000",
+    "name": "Velvet Tone"
+  },
+  {
+    "slug": "VelvetTone7000",
+    "name": "Velvet Tone"
+  },
+  {
+    "slug": "VOC13000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC14000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC14500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC15000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC15500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC25000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC2500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC3000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC3500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC4000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC4500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC5000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC5500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC1000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC1500",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC5000c",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC52000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "VOC70000",
+    "name": "Vocalion"
+  },
+  {
+    "slug": "YPR",
+    "name": "Young People'S Records"
+  },
+  {
+    "slug": "Zonoetch",
+    "name": "Zonophone"
+  },
+  {
+    "slug": "ZonoCP",
+    "name": "Zonophone"
+  },
+  {
+    "slug": "Zono10",
+    "name": "Zonophone"
+  },
+  {
+    "slug": "Zono12",
+    "name": "Zonophone"
+  },
+  {
+    "slug": "ZonoDS",
+    "name": "Zonophone"
+  }
+]

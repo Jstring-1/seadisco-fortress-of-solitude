@@ -8757,6 +8757,44 @@ export async function countExternalDiscographyByLabel() {
       ORDER BY n DESC`);
     return r.rows;
 }
+// Delete external rows whose (label_name, catno_sort) is already
+// represented in release_cache — once a Discogs payload covers the
+// catalog number, the external stub is redundant. Matching is by
+// EXACT label name (release_cache `data->'labels'[i].name` ILIKE
+// label_name) plus the leading-numeric component of the cache row's
+// catno (which strips off the same prefixes the carousel sort
+// normalises out, but only the digits we actually need to match).
+// Pass label=undefined to purge across every label at once.
+export async function purgeExternalDiscographyCovered(opts = {}) {
+    const args = [];
+    let labelFilter = "";
+    if (opts.label) {
+        args.push(opts.label);
+        labelFilter = `AND ed.label_name = $${args.length}`;
+    }
+    // For each external row, check release_cache for any item whose
+    // labels[] array contains an entry with a matching name and whose
+    // catno's leading numeric component equals ed.catno_sort.
+    const r = await getPool().query(`WITH covered AS (
+       SELECT ed.id
+         FROM external_discography ed
+         JOIN release_cache rc
+           ON rc.data->'labels' @> jsonb_build_array(jsonb_build_object('name', ed.label_name))
+        WHERE ed.catno_sort IS NOT NULL
+          ${labelFilter}
+          AND EXISTS (
+            SELECT 1
+              FROM jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) AS lbl
+             WHERE LOWER(lbl->>'name') = LOWER(ed.label_name)
+               AND COALESCE(
+                     NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1], '')::numeric,
+                     -1
+                   ) = ed.catno_sort
+          )
+     )
+     DELETE FROM external_discography WHERE id IN (SELECT id FROM covered)`, args);
+    return { deleted: r.rowCount ?? 0 };
+}
 export async function resetCacheWarmRun(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs
         SET current_year    = NULL,
