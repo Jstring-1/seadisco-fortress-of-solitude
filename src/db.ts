@@ -10786,6 +10786,105 @@ export async function purgeExternalDiscographyCovered(opts: { label?: string } =
   return { deleted: r.rowCount ?? 0 };
 }
 
+// ── Label directory ─────────────────────────────────────────────
+//
+// Single canonical list of every label we touch: union of distinct
+// names from external_discography and release_cache, with row counts
+// from each side. Used by the admin Labels grid so the curator can
+// see, for each label, how much Discogs cache and how much external
+// padding we already have, and (if no Discogs label_id is recorded)
+// kick off a search to fix that.
+
+export interface LabelDirectoryRow {
+  label_name:      string;
+  label_id:        number | null;
+  external_count:  number;
+  cache_releases:  number;
+  cache_masters:   number;
+  sources:         string[];
+}
+
+export async function listLabelDirectory(opts: {
+  search?: string;
+  limit?:  number;
+} = {}): Promise<LabelDirectoryRow[]> {
+  const limit = Math.max(1, Math.min(5000, opts.limit ?? 1000));
+  // Two-pass build:
+  // (1) per-label-name aggregates over external_discography
+  // (2) per-(label_name_lc) aggregates over release_cache labels[*]
+  // Outer join, prefer external's casing for display.
+  const args: any[] = [];
+  let extraWhere = "";
+  if (opts.search) {
+    args.push(`%${opts.search}%`);
+    extraWhere = `WHERE label_name ILIKE $${args.length}`;
+  }
+  const r = await getPool().query(
+    `WITH ext AS (
+       SELECT
+         label_name,
+         COUNT(*)::int           AS external_count,
+         MAX(label_id)           AS label_id,
+         ARRAY_AGG(DISTINCT source ORDER BY source) AS sources
+         FROM external_discography
+        GROUP BY label_name
+     ),
+     cache_lbl AS (
+       SELECT
+         LOWER(lbl->>'name')        AS label_name_lc,
+         MIN(lbl->>'name')          AS label_name_display,
+         COUNT(*) FILTER (WHERE rc.type = 'release')::int AS cache_releases,
+         COUNT(*) FILTER (WHERE rc.type = 'master' )::int AS cache_masters,
+         MAX(NULLIF(lbl->>'id','')::int)                 AS label_id_cache
+       FROM release_cache rc,
+            jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
+       WHERE COALESCE(lbl->>'name','') <> ''
+       GROUP BY LOWER(lbl->>'name')
+     ),
+     joined AS (
+       SELECT
+         COALESCE(ext.label_name,  cache_lbl.label_name_display) AS label_name,
+         COALESCE(ext.label_id,    cache_lbl.label_id_cache)      AS label_id,
+         COALESCE(ext.external_count, 0) AS external_count,
+         COALESCE(cache_lbl.cache_releases, 0) AS cache_releases,
+         COALESCE(cache_lbl.cache_masters,  0) AS cache_masters,
+         COALESCE(ext.sources,     ARRAY[]::text[])              AS sources
+       FROM ext
+       FULL OUTER JOIN cache_lbl ON LOWER(ext.label_name) = cache_lbl.label_name_lc
+     )
+     SELECT * FROM joined
+      ${extraWhere}
+      ORDER BY external_count DESC NULLS LAST,
+               cache_releases DESC NULLS LAST,
+               label_name ASC
+      LIMIT ${limit}`,
+    args,
+  );
+  return r.rows.map(row => ({
+    label_name:     String(row.label_name ?? ""),
+    label_id:       row.label_id != null ? Number(row.label_id) : null,
+    external_count: Number(row.external_count ?? 0),
+    cache_releases: Number(row.cache_releases ?? 0),
+    cache_masters:  Number(row.cache_masters  ?? 0),
+    sources:        Array.isArray(row.sources) ? row.sources : [],
+  }));
+}
+
+// Bulk-set a Discogs label_id for every external_discography row
+// matching the given label_name. Idempotent and cheap (UPDATE on an
+// indexed column). Returns rowCount.
+export async function setLabelDirectoryId(
+  labelName: string,
+  labelId:   number | null,
+): Promise<{ updated: number }> {
+  if (!labelName) throw new Error("labelName required");
+  const r = await getPool().query(
+    `UPDATE external_discography SET label_id = $1 WHERE label_name = $2`,
+    [labelId, labelName],
+  );
+  return { updated: r.rowCount ?? 0 };
+}
+
 // ── Year backfill (label + catno → missing year) ─────────────────
 //
 // Donor pool unions:
