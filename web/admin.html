@@ -1261,7 +1261,7 @@ async function loadCacheWarmCatno() {
       : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">idle</span>`;
     const rows = series.map(s => {
       const isActive = running && active === s.key;
-      const range = `${s.lo}–${s.hi}`;
+      const range = `from ${s.lo}`;
       const phase = String(s.phase || "catno");
       let cursorTxt;
       let progressPct = 0;

@@ -155,23 +155,22 @@ export async function startCacheWarmCatnoRun(seriesKey, opts = {}) {
         label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
     });
     const row = await getCacheWarmCatnoRun(series.key);
-    let phase = String(row?.phase ?? "catno");
+    // The hi field is informational only — the walker keeps going past
+    // it until the empty-streak detector catches the end of the catalog.
     let catnoCursor = (opts.resetCursor || !row?.current_catno)
         ? series.lo
         : Number(row.current_catno);
-    if (catnoCursor > series.hi && phase === "catno") {
-        // Catno walk previously finished but phase didn't advance — bump it
-        // so we don't re-walk the same range.
-        phase = "label_sweep";
-    }
     let sweepPage = (opts.resetCursor || !row?.label_sweep_page)
         ? 1
         : Number(row.label_sweep_page);
     if (opts.resetCursor) {
-        phase = "catno";
         catnoCursor = series.lo;
         sweepPage = 1;
     }
+    // Force phase back to catno — caller picked the "Catno walk" path,
+    // so any prior "catno_done" / "label_sweep" state is irrelevant for
+    // this run.
+    const phase = "catno";
     await upsertCacheWarmCatnoRun(series.key, {
         label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
     }, { current_catno: catnoCursor, phase, label_sweep_page: sweepPage, last_run_at: new Date() });
@@ -268,9 +267,10 @@ export async function startLabelSweepRun(seriesKey, opts = {}) {
 }
 // ── Shared candidate processor ────────────────────────────────────
 // Filter the search payload to results that actually carry the label
-// term + fall within the year cap, cache the missing ones, bump skip
-// counter for the rest. Returns the number of fresh hits cached so
-// the caller can decide when to stop a paginated phase.
+// term, cache the missing ones, bump skip counter for the rest.
+// Returns the number of label-matched results (regardless of whether
+// they were new or already cached) so the caller can detect the end
+// of a sequential catalog by counting consecutive empty catnos.
 async function _processSearchResults(client, series, results) {
     await recordCacheWarmCatnoRunSearched(series.key, results.length);
     // Year filter dropped intentionally — every label-matched release is
@@ -293,6 +293,9 @@ async function _processSearchResults(client, series, results) {
     const skipsThisN = ids.filter(id => cachedIds.has(id)).length;
     if (skipsThisN > 0)
         await bumpCacheWarmCatnoRunSkip(series.key, skipsThisN);
+    // Stash the label-matched count on the function so the catno walker
+    // can read it without re-walking the candidates list.
+    _processSearchResults.lastMatchedCount = candidates.length;
     let fresh = 0;
     for (const r of candidates) {
         if (_stopRequested)
@@ -317,14 +320,27 @@ async function _processSearchResults(client, series, results) {
     }
     return fresh;
 }
-// ── Phase 1: walk the configured catno range ─────────────────────
+// ── Phase 1: walk catnos from `lo` upward ────────────────────────
+// The configured `hi` is treated as a soft target, not a hard cap.
+// The walker keeps incrementing past `hi` and only stops when:
+//   • _stopRequested (admin clicked Stop), OR
+//   • CATNO_EMPTY_STREAK_BREAK consecutive catnos return zero
+//     label-matched results (catalog has run out).
+// The empty-streak detector uses the lastMatchedCount that
+// _processSearchResults stashes for us — every catno whose search
+// returns no row that actually carries the configured label bumps
+// the streak counter; any label-matched hit resets it to zero.
+const CATNO_EMPTY_STREAK_BREAK = 200;
 async function _runCatnoPhase(client, series, startCatno) {
     let n = startCatno;
+    let emptyStreak = 0;
     while (true) {
         if (_stopRequested)
             break;
-        if (n > series.hi)
+        if (emptyStreak >= CATNO_EMPTY_STREAK_BREAK) {
+            console.log(`[cache-warm-catno] catno walk for ${series.key}: ${CATNO_EMPTY_STREAK_BREAK} consecutive empty catnos at n=${n}, auto-stop`);
             break;
+        }
         const catnoStr = `${series.prefix ?? ""}${n}`;
         let searchRes;
         try {
@@ -347,6 +363,11 @@ async function _runCatnoPhase(client, series, startCatno) {
         }
         const results = Array.isArray(searchRes?.results) ? searchRes.results : [];
         await _processSearchResults(client, series, results);
+        const matched = Number(_processSearchResults.lastMatchedCount) || 0;
+        if (matched > 0)
+            emptyStreak = 0;
+        else
+            emptyStreak += 1;
         if (_stopRequested)
             break;
         n += 1;
