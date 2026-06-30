@@ -11,7 +11,9 @@ import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
-import { initCacheWarmCatnoModule, startCacheWarmCatnoRun, startLabelSweepRun, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
+import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
+import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, requestExternalDiscographyStop, getExternalDiscographyStatus, isExternalDiscographyRunning, parseExcelloXlsxBuffer, } from "./external-discography-worker.js";
+import { startCacheWarmCatnoRun, startLabelSweepRun, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9395,6 +9397,82 @@ app.get("/api/admin/external-discography/labels", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// ── External discography server-side worker endpoints ───────────
+// One singleflight worker for wirz / Abrams scrapes. Polite 2s delay
+// per page; cursor persists in app_settings so a Railway restart
+// resumes from the last completed seed. Admin-gated.
+app.get("/api/admin/external-discography-worker/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(getExternalDiscographyStatus());
+});
+app.post("/api/admin/external-discography-worker/start", express.json({ limit: "8kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const source = String((req.body || {}).source ?? "").trim().toLowerCase();
+    if (source !== "wirz" && source !== "abrams") {
+        res.status(400).json({ error: "source must be 'wirz' or 'abrams'" });
+        return;
+    }
+    const result = await startExternalDiscographyRun(source);
+    if (!result.ok) {
+        res.status(409).json(result);
+        return;
+    }
+    res.json(result);
+});
+app.post("/api/admin/external-discography-worker/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (!isExternalDiscographyRunning()) {
+        res.json({ ok: true, message: "not running" });
+        return;
+    }
+    requestExternalDiscographyStop();
+    res.json({ ok: true, message: "stop requested" });
+});
+// POST /api/admin/external-discography/upload-xlsx
+// Body: raw .xlsx bytes (application/octet-stream).
+// Headers: x-label, x-label-id, x-source (e.g. "Excello", "51225",
+// "excello-xlsx-praguefrank"). Server parses + bulk inserts.
+app.post("/api/admin/external-discography/upload-xlsx", express.raw({ type: "application/octet-stream", limit: "32mb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const label = String(req.headers["x-label"] ?? "").trim().slice(0, 200);
+    const source = String(req.headers["x-source"] ?? "").trim().slice(0, 100) || "xlsx-upload";
+    const labelIdRaw = String(req.headers["x-label-id"] ?? "").trim();
+    const labelId = labelIdRaw && /^\d+$/.test(labelIdRaw) ? Number(labelIdRaw) : null;
+    if (!label) {
+        res.status(400).json({ error: "x-label header required" });
+        return;
+    }
+    const buf = req.body;
+    if (!buf || !buf.length) {
+        res.status(400).json({ error: "empty body — POST .xlsx as application/octet-stream" });
+        return;
+    }
+    try {
+        const parsed = parseExcelloXlsxBuffer(buf);
+        if (!parsed.length) {
+            res.status(400).json({ error: "no rows parsed — wrong xlsx shape?" });
+            return;
+        }
+        const payload = parsed.map(r => ({
+            ...r,
+            label_name: label,
+            label_id: labelId,
+            source,
+            catno: r.catno,
+        }));
+        const result = await bulkInsertExternalDiscography(payload);
+        _invalidateLabelsCarouselCache(label);
+        res.json({ ok: true, parsed: parsed.length, inserted: result.inserted });
+    }
+    catch (err) {
+        console.error("[external-discography/upload-xlsx]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // POST /api/admin/external-discography/purge-covered
 // Body (optional): { label: "Excello" }
 // Deletes external rows whose (label_name, catno_sort) is already
@@ -17760,6 +17838,12 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] cache-warm-catno init failed:", e);
+        }
+        try {
+            initExternalDiscographyWorkerModule();
+        }
+        catch (e) {
+            console.error("[startup] external-discography-worker init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the
