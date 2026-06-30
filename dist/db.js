@@ -8699,8 +8699,16 @@ function _deriveCatnoSort(catno) {
     const n = Number(m[1]);
     return Number.isFinite(n) ? n : null;
 }
-// Batch upsert. Conflicts on (label_name, catno, side, source) update
-// every other field — handy for re-running a parser after fixing a row.
+// Batch upsert with multi-row VALUES — one network round-trip per
+// 500-row chunk instead of one per row. The original per-row loop
+// was ~100s per page on huge catalogs (Aladdin 3000 = 921 rows,
+// Bluebird/Decca race series push thousands), turning the Abrams
+// scrape into a multi-hour grind. Chunking at 500 stays well under
+// Postgres's 65535-parameter limit (500 × 15 = 7500).
+//
+// Conflicts on (label_name, catno, side, source) update every other
+// field — handy for re-running a parser after fixing a row.
+const _BULK_EXT_DISC_CHUNK = 500;
 export async function bulkInsertExternalDiscography(rows) {
     if (!rows.length)
         return { inserted: 0 };
@@ -8708,13 +8716,21 @@ export async function bulkInsertExternalDiscography(rows) {
     let inserted = 0;
     try {
         await client.query("BEGIN");
-        for (const r of rows) {
-            const sort = r.catno_sort ?? _deriveCatnoSort(r.catno);
+        for (let off = 0; off < rows.length; off += _BULK_EXT_DISC_CHUNK) {
+            const chunk = rows.slice(off, off + _BULK_EXT_DISC_CHUNK);
+            const valueClauses = [];
+            const args = [];
+            for (const r of chunk) {
+                const sort = r.catno_sort ?? _deriveCatnoSort(r.catno);
+                const base = args.length;
+                valueClauses.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14},$${base + 15})`);
+                args.push(r.label_name, r.label_id ?? null, r.catno, sort, r.side ?? null, r.artist ?? null, r.title ?? null, r.year ?? null, r.matrix ?? null, r.xref ?? null, r.loc ?? null, r.composer ?? null, r.notes ?? null, r.source, r.data ? JSON.stringify(r.data) : null);
+            }
             await client.query(`INSERT INTO external_discography
            (label_name, label_id, catno, catno_sort, side,
             artist, title, year, matrix, xref, loc, composer, notes,
             source, data)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         VALUES ${valueClauses.join(",")}
          ON CONFLICT (label_name, catno, side, source) DO UPDATE SET
            label_id   = EXCLUDED.label_id,
            catno_sort = EXCLUDED.catno_sort,
@@ -8726,24 +8742,8 @@ export async function bulkInsertExternalDiscography(rows) {
            loc        = EXCLUDED.loc,
            composer   = EXCLUDED.composer,
            notes      = EXCLUDED.notes,
-           data       = EXCLUDED.data`, [
-                r.label_name,
-                r.label_id ?? null,
-                r.catno,
-                sort,
-                r.side ?? null,
-                r.artist ?? null,
-                r.title ?? null,
-                r.year ?? null,
-                r.matrix ?? null,
-                r.xref ?? null,
-                r.loc ?? null,
-                r.composer ?? null,
-                r.notes ?? null,
-                r.source,
-                r.data ? JSON.stringify(r.data) : null,
-            ]);
-            inserted += 1;
+           data       = EXCLUDED.data`, args);
+            inserted += chunk.length;
         }
         await client.query("COMMIT");
     }
