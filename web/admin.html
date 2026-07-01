@@ -692,11 +692,12 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
       apiFetch('/api/admin/cache-warm-runs/status').catch(() => null),
+      apiFetch('/api/admin/yt-review/status').catch(() => null),
     ]);
     const badges = [];
     if (catnoR?.ok) {
@@ -720,6 +721,14 @@ async function loadAdminWorkerStatus() {
         const p = j.active || {};
         const label = p.genreKey ? `Cache-warm · ${p.genreKey}${p.styleKey ? '/' + p.styleKey : ''}` : 'Cache-warm run';
         badges.push({ label, tab: 'cache' });
+      }
+    }
+    if (ytR?.ok) {
+      const j = await ytR.json().catch(() => null);
+      if (j?.running) {
+        const pending = j?.counts?.pending;
+        const suffix  = Number.isFinite(pending) ? ` (${pending} pending)` : '';
+        badges.push({ label: `YT review${suffix}`, tab: 'yt-review' });
       }
     }
     if (badges.length === 0) {
