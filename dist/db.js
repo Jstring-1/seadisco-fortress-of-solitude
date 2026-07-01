@@ -9286,58 +9286,71 @@ export async function applyYearBackfill() {
         // Generate one batch id for this whole apply pass.
         const batchRow = await client.query(`SELECT gen_random_uuid() AS id`);
         const batchId = String(batchRow.rows[0].id);
-        // Phase 1: matches → log + cache update.
-        const matches = await client.query(`${_YEAR_BACKFILL_DONOR_CTE}
-       SELECT discogs_id, type, new_year, donor_ref, donor_source, label_name, catno
-         FROM matches`);
+        // Phase 1 — bulk. One INSERT logs every match that's still
+        // year-less at commit time; one UPDATE lifts every row that got
+        // logged. Replaces the earlier per-row loop that ran 2 statements
+        // × 150k rows and timed out (the 500 the user was seeing).
+        const phase1LogQ = await client.query(`${_YEAR_BACKFILL_DONOR_CTE}
+       INSERT INTO year_backfill_log
+         (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source, label_name, catno)
+       SELECT $1::uuid, m.discogs_id, m.type,
+              NULLIF(rc.data->>'year','')::int,
+              m.new_year, m.donor_ref, m.donor_source, m.label_name, m.catno
+         FROM matches m
+         JOIN release_cache rc
+           ON rc.discogs_id = m.discogs_id AND rc.type = m.type
+        WHERE COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0
+       ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId]);
+        const phase1Logged = phase1LogQ.rowCount ?? 0;
         let phase1Updated = 0;
-        for (const m of matches.rows) {
-            // Re-read current year inside the txn so we don't overwrite a
-            // value some other process just wrote.
-            const cur = await client.query(`SELECT COALESCE(NULLIF(data->>'year','')::int, NULL) AS year
-           FROM release_cache WHERE discogs_id = $1 AND type = $2`, [m.discogs_id, m.type]);
-            const oldYear = cur.rows[0]?.year != null ? Number(cur.rows[0].year) : null;
-            if (oldYear && oldYear > 0)
-                continue; // raced — skip
-            await client.query(`INSERT INTO year_backfill_log
-           (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source, label_name, catno)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId, m.discogs_id, m.type, oldYear, m.new_year, m.donor_ref, m.donor_source, m.label_name, m.catno]);
-            await client.query(`UPDATE release_cache
+        if (phase1Logged > 0) {
+            const upd = await client.query(`UPDATE release_cache rc
             SET data = jsonb_set(
-                         jsonb_set(data, '{year}', to_jsonb($3::int)),
-                         '{_year_backfilled_from}', to_jsonb($4::text)
+                         jsonb_set(rc.data, '{year}', to_jsonb(l.new_year::int)),
+                         '{_year_backfilled_from}', to_jsonb(l.donor_ref::text)
                        )
-          WHERE discogs_id = $1 AND type = $2`, [m.discogs_id, m.type, m.new_year, m.donor_ref]);
-            phase1Updated += 1;
+           FROM year_backfill_log l
+          WHERE l.batch_id = $1::uuid
+            AND rc.discogs_id = l.discogs_id
+            AND rc.type = l.type
+            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0`, [batchId]);
+            phase1Updated = upd.rowCount ?? 0;
         }
-        // Phase 2: masters whose versions now (or already) have years.
-        const masterMatches = await client.query(`SELECT m.discogs_id,
-              MIN(NULLIF(v.data->>'year','')::int) AS new_year
+        // Phase 2 — bulk. Same shape: log + UPDATE against the log.
+        // Master row's year = MIN of its known-year versions in cache.
+        const phase2LogQ = await client.query(`INSERT INTO year_backfill_log
+         (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source)
+       SELECT $1::uuid, m.discogs_id, 'master', NULL, agg.new_year,
+              'aggregate:versions', 'aggregate:versions'
          FROM release_cache m
-         JOIN release_cache v
-           ON v.type = 'release'
-          AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) = m.discogs_id
-          AND NULLIF(v.data->>'year','')::int > 0
+         JOIN (
+           SELECT COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) AS master_id,
+                  MIN(NULLIF(v.data->>'year','')::int) AS new_year
+             FROM release_cache v
+            WHERE v.type = 'release'
+              AND NULLIF(v.data->>'year','')::int > 0
+              AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) > 0
+            GROUP BY 1
+         ) agg ON agg.master_id = m.discogs_id
         WHERE m.type = 'master'
           AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
-        GROUP BY m.discogs_id`);
+          AND agg.new_year IS NOT NULL
+       ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId]);
+        const phase2Logged = phase2LogQ.rowCount ?? 0;
         let phase2Updated = 0;
-        for (const m of masterMatches.rows) {
-            const newYear = Number(m.new_year);
-            if (!Number.isFinite(newYear) || newYear <= 0)
-                continue;
-            await client.query(`INSERT INTO year_backfill_log
-           (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source)
-         VALUES ($1,$2,'master',NULL,$3,'aggregate:versions','aggregate:versions')
-         ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`, [batchId, m.discogs_id, newYear]);
-            await client.query(`UPDATE release_cache
+        if (phase2Logged > 0) {
+            const upd = await client.query(`UPDATE release_cache rc
             SET data = jsonb_set(
-                         jsonb_set(data, '{year}', to_jsonb($2::int)),
+                         jsonb_set(rc.data, '{year}', to_jsonb(l.new_year::int)),
                          '{_year_backfilled_from}', to_jsonb('aggregate:versions'::text)
                        )
-          WHERE discogs_id = $1 AND type = 'master'`, [m.discogs_id, newYear]);
-            phase2Updated += 1;
+           FROM year_backfill_log l
+          WHERE l.batch_id = $1::uuid
+            AND l.type = 'master'
+            AND rc.discogs_id = l.discogs_id
+            AND rc.type = 'master'
+            AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0`, [batchId]);
+            phase2Updated = upd.rowCount ?? 0;
         }
         const sourceQ = await client.query(`SELECT donor_source, COUNT(*)::int AS n
          FROM year_backfill_log
@@ -9398,51 +9411,55 @@ export async function rollbackYearBackfillBatch(batchId) {
     const client = await getPool().connect();
     try {
         await client.query("BEGIN");
-        const logRows = await client.query(`SELECT id, discogs_id, type, old_year, new_year
-         FROM year_backfill_log
-        WHERE batch_id = $1
-          AND rolled_back_at IS NULL`, [batchId]);
-        let reverted = 0;
-        let drifted = 0;
-        for (const r of logRows.rows) {
-            const cur = await client.query(`SELECT NULLIF(data->>'year','')::int AS year
-           FROM release_cache WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type]);
-            const curYear = cur.rows[0]?.year != null ? Number(cur.rows[0].year) : null;
-            if (curYear !== Number(r.new_year)) {
-                drifted += 1;
-                continue;
-            }
-            if (r.old_year == null) {
-                await client.query(`UPDATE release_cache
-              SET data = (data - 'year') - '_year_backfilled_from'
-            WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type]);
-            }
-            else {
-                await client.query(`UPDATE release_cache
-              SET data = (jsonb_set(data, '{year}', to_jsonb($3::int))) - '_year_backfilled_from'
-            WHERE discogs_id = $1 AND type = $2`, [r.discogs_id, r.type, Number(r.old_year)]);
-            }
-            reverted += 1;
-        }
+        const alreadyPreQ = await client.query(`SELECT COUNT(*)::int AS n FROM year_backfill_log
+        WHERE batch_id = $1::uuid AND rolled_back_at IS NOT NULL`, [batchId]);
+        const alreadyReverted = Number(alreadyPreQ.rows[0]?.n ?? 0);
+        // Bulk rewind. Only rows still un-reverted count.
+        // A row is "drifted" if the cache's current year no longer matches
+        // what we wrote — leave those alone and record a count.
+        const driftQ = await client.query(`SELECT COUNT(*)::int AS n
+         FROM year_backfill_log l
+         JOIN release_cache rc
+           ON rc.discogs_id = l.discogs_id AND rc.type = l.type
+        WHERE l.batch_id = $1::uuid
+          AND l.rolled_back_at IS NULL
+          AND NULLIF(rc.data->>'year','')::int IS DISTINCT FROM l.new_year`, [batchId]);
+        const drifted = Number(driftQ.rows[0]?.n ?? 0);
+        // Restore rows whose current year still equals new_year:
+        //   * old_year IS NULL → strip the year key entirely
+        //   * old_year IS NOT NULL → set year back to old_year
+        // Both cases also strip the _year_backfilled_from provenance marker.
+        const restoreNullQ = await client.query(`UPDATE release_cache rc
+          SET data = (rc.data - 'year') - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.rolled_back_at IS NULL
+          AND l.old_year IS NULL
+          AND rc.discogs_id = l.discogs_id
+          AND rc.type = l.type
+          AND NULLIF(rc.data->>'year','')::int IS NOT DISTINCT FROM l.new_year`, [batchId]);
+        const restoreValQ = await client.query(`UPDATE release_cache rc
+          SET data = jsonb_set(rc.data, '{year}', to_jsonb(l.old_year::int)) - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.rolled_back_at IS NULL
+          AND l.old_year IS NOT NULL
+          AND rc.discogs_id = l.discogs_id
+          AND rc.type = l.type
+          AND NULLIF(rc.data->>'year','')::int IS NOT DISTINCT FROM l.new_year`, [batchId]);
+        const reverted = (restoreNullQ.rowCount ?? 0) + (restoreValQ.rowCount ?? 0);
         const rollbackBatchRow = await client.query(`SELECT gen_random_uuid() AS id`);
         const rollbackBatchId = String(rollbackBatchRow.rows[0].id);
+        // Mark every previously-un-reverted row as rolled back — even the
+        // drifted ones. Their state can't be undone anyway; treating them
+        // as "handled" prevents the same rollback firing on them again.
         await client.query(`UPDATE year_backfill_log
           SET rolled_back_at = NOW(),
               rolled_back_batch_id = $2::uuid
-        WHERE batch_id = $1
+        WHERE batch_id = $1::uuid
           AND rolled_back_at IS NULL`, [batchId, rollbackBatchId]);
-        // Read once-alreadyReverted count (rows in this batch that were
-        // already rolled back before this call).
-        const alreadyQ = await client.query(`SELECT COUNT(*)::int AS n FROM year_backfill_log
-        WHERE batch_id = $1 AND rolled_back_batch_id IS DISTINCT FROM $2::uuid
-          AND rolled_back_at IS NOT NULL`, [batchId, rollbackBatchId]);
         await client.query("COMMIT");
-        return {
-            batchId,
-            reverted,
-            alreadyReverted: Number(alreadyQ.rows[0]?.n ?? 0),
-            drifted,
-        };
+        return { batchId, reverted, alreadyReverted, drifted };
     }
     catch (err) {
         await client.query("ROLLBACK");
