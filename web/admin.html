@@ -155,6 +155,12 @@
           <summary title="Looks up year for cache rows that have none, matching by (label, catno) against external discography and cache siblings. Phase 2 propagates min(version year) to year-less masters. Every change is logged — each batch can be rolled back if a source turns out wrong." style="cursor:pointer;font-weight:600;font-size:0.95rem">🗓 Backfill missing years</summary>
           <div id="ybf-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
+        <!-- ── Cache analytics (faceted drilldown) ─────────────────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details>
+          <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache</summary>
+          <div id="cache-analytics-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)"></div>
+        </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
@@ -616,7 +622,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadYearBackfill(); },
+    load: () => { loadCacheWarm(); loadYearBackfill(); loadCacheAnalytics(); },
   },
   'labels': {
     panels: ['panel-labels'],
@@ -2069,6 +2075,157 @@ async function _labelDirCleanNames() {
     alert(`Renamed ${j.renamed} rows · merged ${j.mergedDuplicates} duplicates.\n\n${summary || "(no changes)"}`);
     loadLabelDirectory();
   } catch (err) { alert(String(err)); }
+}
+
+// ── Cache analytics (faceted drilldown) ─────────────────────────
+let _cacheAnalyticsFilters = { label:"", artist:"", genre:"", style:"", country:"", yearFrom:"", yearTo:"", type:"" };
+let _cacheAnalyticsResult = null;
+let _cacheAnalyticsLoading = false;
+
+function loadCacheAnalytics() {
+  // Just render the form on first tab open — running the query is
+  // explicit (button click) since it walks release_cache end-to-end
+  // and can take a few seconds on wide filters.
+  _renderCacheAnalytics();
+}
+function _renderCacheAnalytics() {
+  const el = document.getElementById("cache-analytics-content");
+  if (!el) return;
+  const f = _cacheAnalyticsFilters;
+  const facetCol = (title, rows, keyName) => {
+    const list = (rows || []).map(r => {
+      const name = keyName === "decade" ? `${r.decade}s` : (r.name || "(none)");
+      const click = keyName === "decade" ? "" : `onclick="_caFacetPin('${keyName}','${_eHtml(String(r.name || "")).replace(/'/g, "\\'")}')"`;
+      const style = keyName === "decade"
+        ? ""
+        : "cursor:pointer;text-decoration:underline;text-decoration-style:dotted";
+      return `<li ${click} style="${style}"><span>${_eHtml(name)}</span> <span style="color:var(--muted)">${r.count.toLocaleString()}</span></li>`;
+    }).join("") || `<li style="color:var(--muted);list-style:none">—</li>`;
+    return `<div>
+      <div style="font-weight:600;font-size:0.82rem;margin-bottom:0.3rem">${title}</div>
+      <ul style="margin:0;padding-left:1.1rem;font-size:0.78rem;line-height:1.4;max-height:220px;overflow-y:auto">${list}</ul>
+    </div>`;
+  };
+  const resultsHtml = _cacheAnalyticsLoading
+    ? `<div style="color:var(--muted);margin-top:0.6rem">Running query…</div>`
+    : !_cacheAnalyticsResult
+      ? `<div style="color:var(--muted);margin-top:0.6rem">Set filters and hit Analyze.</div>`
+      : (() => {
+          const r = _cacheAnalyticsResult;
+          const sampleRows = (r.sample || []).map(s => `
+            <tr style="border-bottom:1px dashed rgba(255,255,255,0.05)">
+              <td style="padding:0.2rem 0.4rem">${_eHtml(s.type)}</td>
+              <td style="padding:0.2rem 0.4rem">${_eHtml(s.year != null ? String(s.year) : '—')}</td>
+              <td style="padding:0.2rem 0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px" title="${_eHtml(s.title)}">${_eHtml(s.title || '')}</td>
+              <td style="padding:0.2rem 0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="${_eHtml(s.artist)}">${_eHtml(s.artist || '')}</td>
+              <td style="padding:0.2rem 0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="${_eHtml(s.label)}">${_eHtml(s.label || '')}</td>
+              <td style="padding:0.2rem 0.4rem"><a href="https://www.discogs.com/${s.type === 'master' ? 'master' : 'release'}/${s.id}" target="_blank" rel="noopener" style="color:var(--accent)">↗</a></td>
+            </tr>`).join("");
+          return `
+            <div style="font-size:0.9rem;margin:0.5rem 0"><strong>${r.totalCount.toLocaleString()}</strong> matching cache rows.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.8rem;margin-bottom:0.8rem">
+              ${facetCol("Genres",    r.facets.genres,    "genre")}
+              ${facetCol("Styles",    r.facets.styles,    "style")}
+              ${facetCol("Labels",    r.facets.labels,    "label")}
+              ${facetCol("Artists",   r.facets.artists,   "artist")}
+              ${facetCol("Countries", r.facets.countries, "country")}
+              ${facetCol("Decades",   r.facets.decades,   "decade")}
+            </div>
+            <div style="font-weight:600;font-size:0.82rem;margin:0.5rem 0 0.3rem">Sample (earliest 20)</div>
+            <table style="width:100%;font-size:0.78rem;border-collapse:collapse">
+              <thead><tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+                <th style="padding:0.25rem 0.4rem">Type</th>
+                <th style="padding:0.25rem 0.4rem">Year</th>
+                <th style="padding:0.25rem 0.4rem">Title</th>
+                <th style="padding:0.25rem 0.4rem">Artist</th>
+                <th style="padding:0.25rem 0.4rem">Label</th>
+                <th></th>
+              </tr></thead>
+              <tbody>${sampleRows || `<tr><td colspan="6" style="padding:0.4rem;color:var(--muted)">No matches.</td></tr>`}</tbody>
+            </table>
+          `;
+        })();
+  const inp = (id, label, placeholder = "") => `
+    <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
+      <span>${label}</span>
+      <input id="${id}" type="text" value="${_eHtml(f[id.replace(/^ca-/, '').replace(/-/g, '_')] || "")}"
+             oninput="_caFilterInput(event)" placeholder="${_eHtml(placeholder)}"
+             style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+    </label>`;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.5rem;margin-bottom:0.5rem">
+      ${inp("ca-label",  "Label",   "Excello")}
+      ${inp("ca-artist", "Artist",  "Slim Harpo")}
+      ${inp("ca-genre",  "Genre",   "Blues")}
+      ${inp("ca-style",  "Style",   "Delta Blues")}
+      ${inp("ca-country","Country", "US")}
+      <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
+        <span>Year range</span>
+        <div style="display:flex;gap:0.3rem">
+          <input id="ca-year-from" type="number" value="${_eHtml(String(f.yearFrom || ""))}" oninput="_caFilterInput(event)" placeholder="from"
+                 style="width:50%;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          <input id="ca-year-to"   type="number" value="${_eHtml(String(f.yearTo   || ""))}" oninput="_caFilterInput(event)" placeholder="to"
+                 style="width:50%;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+        </div>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
+        <span>Type</span>
+        <select id="ca-type" onchange="_caFilterInput(event)"
+                style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          <option value=""${f.type === "" ? " selected" : ""}>Both</option>
+          <option value="release"${f.type === "release" ? " selected" : ""}>Release</option>
+          <option value="master"${f.type === "master" ? " selected" : ""}>Master</option>
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem">
+      <button class="admin-btn" type="button" onclick="_caRun()" ${_cacheAnalyticsLoading ? "disabled" : ""}>▶ Analyze</button>
+      <button class="admin-btn" type="button" onclick="_caReset()">Reset</button>
+    </div>
+    ${resultsHtml}
+  `;
+}
+function _caFilterInput(ev) {
+  const id = ev.target.id;
+  const map = { "ca-label":"label", "ca-artist":"artist", "ca-genre":"genre", "ca-style":"style",
+                "ca-country":"country", "ca-year-from":"yearFrom", "ca-year-to":"yearTo", "ca-type":"type" };
+  const key = map[id];
+  if (!key) return;
+  _cacheAnalyticsFilters[key] = ev.target.value.trim();
+}
+function _caFacetPin(dim, name) {
+  const map = { genre:"genre", style:"style", label:"label", artist:"artist", country:"country" };
+  const key = map[dim];
+  if (!key) return;
+  _cacheAnalyticsFilters[key] = name;
+  _renderCacheAnalytics();
+  _caRun();
+}
+function _caReset() {
+  _cacheAnalyticsFilters = { label:"", artist:"", genre:"", style:"", country:"", yearFrom:"", yearTo:"", type:"" };
+  _cacheAnalyticsResult = null;
+  _renderCacheAnalytics();
+}
+async function _caRun() {
+  _cacheAnalyticsLoading = true;
+  _renderCacheAnalytics();
+  try {
+    const body = { ...(_cacheAnalyticsFilters) };
+    // Blank strings should not be sent as filter values.
+    for (const k of Object.keys(body)) if (body[k] === "") delete body[k];
+    const r = await apiFetch("/api/admin/cache-analytics", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _cacheAnalyticsResult = await r.json();
+  } catch (err) {
+    alert(`Analyze failed: ${err}`);
+    _cacheAnalyticsResult = null;
+  } finally {
+    _cacheAnalyticsLoading = false;
+    _renderCacheAnalytics();
+  }
 }
 
 // ── Year backfill ───────────────────────────────────────────────

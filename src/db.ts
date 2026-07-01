@@ -11058,6 +11058,178 @@ export async function setLabelDirectoryId(
   return { updated: r.rowCount ?? 0 };
 }
 
+// ── Cache analytics ─────────────────────────────────────────────
+//
+// Faceted drilldown over release_cache. Given a combination of
+// filters (label, artist, genre, style, country, year range, type),
+// return the total match count plus top-N counts across every
+// dimension the admin might want to slice by — genres, styles,
+// labels, artists, countries, decades — and a small sample of
+// matching titles for context.
+//
+// Under the hood: one materialised CTE that captures the filtered
+// row set once, then parallel-friendly aggregations off it. Cheaper
+// than N separate WHERE scans, and Postgres's JSONB indexes make
+// the containment filters fast even at 150k+ rows.
+
+export interface CacheAnalyticsFilters {
+  label?:    string;
+  artist?:   string;
+  genre?:    string;
+  style?:    string;
+  country?:  string;
+  yearFrom?: number;
+  yearTo?:   number;
+  type?:     "release" | "master";
+}
+export interface CacheAnalyticsFacet {
+  name:  string;
+  count: number;
+}
+export interface CacheAnalyticsResult {
+  totalCount: number;
+  facets: {
+    genres:    CacheAnalyticsFacet[];
+    styles:    CacheAnalyticsFacet[];
+    labels:    CacheAnalyticsFacet[];
+    artists:   CacheAnalyticsFacet[];
+    countries: CacheAnalyticsFacet[];
+    decades:   Array<{ decade: number; count: number }>;
+  };
+  sample: Array<{
+    id: number; type: string; title: string;
+    artist: string; label: string; year: number | null;
+  }>;
+}
+
+export async function computeCacheAnalytics(f: CacheAnalyticsFilters): Promise<CacheAnalyticsResult> {
+  const args: any[] = [];
+  const where: string[] = [];
+  const push = (v: any): string => { args.push(v); return `$${args.length}`; };
+
+  if (f.label) {
+    // Match any row whose labels[] contains an entry with this name
+    // (case-insensitive substring — the carousel/directory work by
+    // exact name so we mirror that convention for exact matches, but
+    // let a curator paste "Excello" and catch "Excello Records" too).
+    where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
+                        WHERE LOWER(lbl->>'name') LIKE LOWER(${push('%' + f.label + '%')}))`);
+  }
+  if (f.artist) {
+    where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(rc.data->'artists','[]'::jsonb)) art
+                        WHERE LOWER(art->>'name') LIKE LOWER(${push('%' + f.artist + '%')}))`);
+  }
+  if (f.genre) {
+    where.push(`rc.data->'genres' @> to_jsonb(ARRAY[${push(f.genre)}])`);
+  }
+  if (f.style) {
+    where.push(`rc.data->'styles' @> to_jsonb(ARRAY[${push(f.style)}])`);
+  }
+  if (f.country) {
+    where.push(`rc.data->>'country' = ${push(f.country)}`);
+  }
+  if (Number.isFinite(f.yearFrom)) {
+    where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 0) >= ${push(f.yearFrom)}`);
+  }
+  if (Number.isFinite(f.yearTo)) {
+    where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= ${push(f.yearTo)}`);
+  }
+  if (f.type === "release" || f.type === "master") {
+    where.push(`rc.type = ${push(f.type)}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  // AS MATERIALIZED forces Postgres to compute filtered once instead
+  // of inlining the CTE into every downstream aggregation.
+  const q = `
+    WITH filtered AS MATERIALIZED (
+      SELECT rc.discogs_id, rc.type, rc.data
+        FROM release_cache rc
+        ${whereSql}
+    ),
+    total AS (SELECT COUNT(*)::bigint AS n FROM filtered),
+    genre_facets AS (
+      SELECT g AS name, COUNT(*)::int AS n
+        FROM filtered,
+             jsonb_array_elements_text(COALESCE(data->'genres','[]'::jsonb)) g
+        WHERE g <> ''
+        GROUP BY g ORDER BY n DESC LIMIT 20
+    ),
+    style_facets AS (
+      SELECT s AS name, COUNT(*)::int AS n
+        FROM filtered,
+             jsonb_array_elements_text(COALESCE(data->'styles','[]'::jsonb)) s
+        WHERE s <> ''
+        GROUP BY s ORDER BY n DESC LIMIT 20
+    ),
+    label_facets AS (
+      SELECT lbl->>'name' AS name, COUNT(*)::int AS n
+        FROM filtered,
+             jsonb_array_elements(COALESCE(data->'labels','[]'::jsonb)) lbl
+        WHERE COALESCE(lbl->>'name','') <> ''
+        GROUP BY 1 ORDER BY n DESC LIMIT 20
+    ),
+    artist_facets AS (
+      SELECT art->>'name' AS name, COUNT(*)::int AS n
+        FROM filtered,
+             jsonb_array_elements(COALESCE(data->'artists','[]'::jsonb)) art
+        WHERE COALESCE(art->>'name','') <> ''
+        GROUP BY 1 ORDER BY n DESC LIMIT 20
+    ),
+    country_facets AS (
+      SELECT data->>'country' AS name, COUNT(*)::int AS n
+        FROM filtered
+        WHERE COALESCE(data->>'country','') <> ''
+        GROUP BY 1 ORDER BY n DESC LIMIT 20
+    ),
+    decade_facets AS (
+      SELECT ((NULLIF(data->>'year','')::int / 10) * 10) AS decade, COUNT(*)::int AS n
+        FROM filtered
+        WHERE NULLIF(data->>'year','')::int > 0
+        GROUP BY 1 ORDER BY 1 ASC
+    ),
+    sample AS (
+      SELECT discogs_id, type,
+             data->>'title'                       AS title,
+             COALESCE(data->'artists'->0->>'name','') AS artist,
+             COALESCE(data->'labels'->0->>'name','')  AS label,
+             NULLIF(data->>'year','')::int         AS year
+        FROM filtered
+        ORDER BY NULLIF(data->>'year','')::int ASC NULLS LAST, discogs_id ASC
+        LIMIT 20
+    )
+    SELECT jsonb_build_object(
+      'totalCount', (SELECT n FROM total),
+      'facets', jsonb_build_object(
+        'genres',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM genre_facets),    '[]'::jsonb),
+        'styles',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM style_facets),    '[]'::jsonb),
+        'labels',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM label_facets),    '[]'::jsonb),
+        'artists',   COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM artist_facets),   '[]'::jsonb),
+        'countries', COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM country_facets),  '[]'::jsonb),
+        'decades',   COALESCE((SELECT jsonb_agg(jsonb_build_object('decade', decade, 'count', n) ORDER BY decade ASC) FROM decade_facets), '[]'::jsonb)
+      ),
+      'sample', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id', discogs_id, 'type', type, 'title', title,
+        'artist', artist, 'label', label, 'year', year
+      )) FROM sample), '[]'::jsonb)
+    ) AS payload
+  `;
+  const r = await getPool().query(q, args);
+  const payload = r.rows[0]?.payload ?? {};
+  return {
+    totalCount: Number(payload.totalCount ?? 0),
+    facets: {
+      genres:    payload.facets?.genres    ?? [],
+      styles:    payload.facets?.styles    ?? [],
+      labels:    payload.facets?.labels    ?? [],
+      artists:   payload.facets?.artists   ?? [],
+      countries: payload.facets?.countries ?? [],
+      decades:   payload.facets?.decades   ?? [],
+    },
+    sample:     payload.sample ?? [],
+  };
+}
+
 // ── Year backfill (label + catno → missing year) ─────────────────
 //
 // Donor pool unions:
