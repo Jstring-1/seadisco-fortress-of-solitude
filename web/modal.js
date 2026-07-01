@@ -5096,12 +5096,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                 : parts.join(dash);
               const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
-                <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
+                <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:var(--accent);text-decoration:none">(${count}) :: ${priceBar} ↗</a>
                 ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
               </div>`;
             })()
           : (stats?.numForSale === 0
-              ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace${renderEbayLink(artists[0], title, catno, false, labelNames[0])}</div>`
+              ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem" title="Not currently available on Discogs marketplace">Not on marketplace${renderEbayLink(artists[0], title, catno, false, labelNames[0])}</div>`
               : (artists.length || title ? `<div style="font-size:0.75rem;margin-top:0.2rem">${renderEbayLink(artists[0], title, catno, true, labelNames[0])}</div>` : ""))
         }
         ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
