@@ -1619,6 +1619,12 @@ function _renderLabelDir() {
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
+    ${_labelDirActiveSweepKey ? `
+      <div style="display:flex;gap:0.4rem;align-items:center;padding:0.4rem 0.6rem;margin-bottom:0.5rem;background:rgba(160,60,40,0.15);border:1px solid #a44;border-radius:4px;flex-wrap:wrap">
+        <span style="font-size:0.82rem"><strong>Sweep running:</strong> <code>${_eHtml(_labelDirActiveSweepKey)}</code></span>
+        <button class="admin-btn" type="button" onclick="_labelDirStopSweep()" style="background:#a33;color:#fff">■ Stop sweep</button>
+        <button class="admin-btn" type="button" onclick="_labelDirForceClearSweep()" title="Only if Stop doesn't take. Clears the in-memory + persisted 'active' flag so a new sweep can start; the running IIFE may still be processing its current page.">⚠ Force clear</button>
+      </div>` : ""}
     <div id="labeldir-scroll" style="overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
       <table style="width:100%;font-size:0.8rem;border-collapse:collapse;table-layout:fixed">
         <colgroup>
@@ -1856,6 +1862,26 @@ function _labelDirOnSearch(ev) {
 function _labelDirToggleUnassigned(ev) {
   _labelDirUnassignedOnly = !!ev.target.checked;
   _renderLabelDir();
+}
+
+async function _labelDirStopSweep() {
+  if (!confirm("Stop the currently-running sweep? Cursor state is persisted so you can Restart later from where it stops.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/stop", { method: "POST" });
+    if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+    loadLabelDirectory();
+    if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+
+async function _labelDirForceClearSweep() {
+  if (!confirm("Force-clear the sweep lock? Only do this if Stop didn't take. The running IIFE may keep processing its current page for a bit — but a new sweep can start.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-catno/force-clear", { method: "POST" });
+    if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+    loadLabelDirectory();
+    if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
 }
 
 async function _labelDirSearch(labelName) {
