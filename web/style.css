@@ -5322,6 +5322,29 @@ body.card-mode-wide .card-tracklist .card-tracklist-rows {
   letter-spacing: 0.02em;
 }
 
+/* Matrix / runout line — injected by _sdInjectEnrichmentIntoCards for
+   release cards that have matrix identifiers cached. Only shown in
+   wide mode; single line with ellipsis. Click toggles is-expanded
+   for a tap-friendly reveal (title attr covers hover). */
+.card-matrix-line {
+  display: none;
+  font-size: 0.68rem;
+  color: #888;
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+body.card-mode-wide .card-matrix-line { display: block; }
+.card-matrix-line.is-expanded {
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+}
+
 /* ── Saved searches ── */
 .saved-search-wrap {
   position: relative;
