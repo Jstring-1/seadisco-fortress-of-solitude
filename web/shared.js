@@ -918,6 +918,7 @@ function _sdInjectEnrichmentIntoCards(row) {
   // Full-album special slot — backed by an override at position "ALBUM".
   const fullAlbumId  = overrides["ALBUM"] || "";
   const fullAlbumUrl = fullAlbumId ? `https://www.youtube.com/watch?v=${fullAlbumId}` : "";
+  const matrix = Array.isArray(row.matrix) ? row.matrix.filter(m => m && m.value) : [];
   cards.forEach(card => {
     if (card.dataset.cardEnriched === "1") return;
     card.dataset.cardEnriched = "1";
@@ -925,6 +926,29 @@ function _sdInjectEnrichmentIntoCards(row) {
     const cardTitle   = card.querySelector(".card-title")?.textContent?.trim()  || "";
     const releaseType = card.dataset.cardType || "";
     const releaseId   = card.dataset.cardId   || "";
+    // Matrix / runout line — CSS keeps it hidden except in wide mode.
+    // Single line with ellipsis; title attribute holds the full text
+    // for hover, click toggles .is-expanded for tap-friendly reveal.
+    if (matrix.length && !card.querySelector(".card-matrix-line")) {
+      const meta = card.querySelector(".card-meta");
+      if (meta) {
+        const shortText = matrix
+          .map(m => m.description ? `${m.value} (${m.description})` : m.value)
+          .join(" · ");
+        const fullText  = matrix
+          .map(m => m.description ? `${m.value} — ${m.description}` : m.value)
+          .join("\n");
+        const line = document.createElement("div");
+        line.className   = "card-matrix-line";
+        line.title       = fullText;
+        line.textContent = "mx: " + shortText;
+        line.addEventListener("click", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          line.classList.toggle("is-expanded");
+        });
+        meta.insertAdjacentElement("afterend", line);
+      }
+    }
     if (images.length > 1) {
       const wrap = card.querySelector(".card-thumb-wrap");
       if (wrap && !wrap.querySelector(".card-images-strip")) {
@@ -1846,6 +1870,14 @@ function renderSharedFooter(opts) {
     suggestions: "Personalized suggestions from your taste profile",
     submitted:   "Albums you've contributed YouTube videos for",
     feed:        "Random sample from the catalog cache — explore freely",
+    active:      "Vinyl most-opened on SeaDisco in the last 90 days",
+    played:      "Vinyl with the most YouTube plays on SeaDisco in the last 90 days",
+    rare:        "Early-era vinyl with many collectors wanting it and almost no one owning it",
+    dig:         "Long-tail vinyl that nobody on SeaDisco has opened yet",
+    // Extras tabs (admin / demo)
+    "blues-archive": "Blues Archive — admin-only artist browser (lyrics + releases)",
+    musicbrainz:   "MusicBrainz — proxied entity search with caching",
+    labels:        "Labels — chronological browse of cached label catalogs",
   };
   // data-sd-view marks the link for the live href-sync system below.
   // `idAttr` is used for admin-only gated links so the post-/api/me
@@ -1905,8 +1937,12 @@ function renderSharedFooter(opts) {
       </div>
       <div class="footer-col">
         ${stripLink("Recent",      "recent")}
-        ${(window._isAdmin || window._sdIsDemo) ? stripLink("Submitted", "submitted") : ""}
         ${stripLink("Feed",        "feed")}
+        ${stripLink("Active",      "active")}
+        ${stripLink("Played",      "played")}
+        ${stripLink("Rare",        "rare")}
+        ${stripLink("Dig",         "dig")}
+        ${(window._isAdmin || window._sdIsDemo) ? stripLink("Submitted", "submitted") : ""}
       </div>
       <div class="footer-col">
         ${link("LOC",       "loc")}
@@ -1915,7 +1951,10 @@ function renderSharedFooter(opts) {
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
+        <a id="footer-musicbrainz-link" href="${_seaDiscoBuildViewHref("musicbrainz")}" data-sd-view="musicbrainz" title="${escHtml(HINTS.musicbrainz)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('musicbrainz');return false"` : ""}>MusicBrainz</a>
         <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="Constellations — network of inferred relationships across cached Discogs blues artists" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>Constellations</a>
+        <a id="footer-blues-archive-link" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Blues Archive</a>
+        <a id="footer-labels-link" href="${_seaDiscoBuildViewHref("labels")}" data-sd-view="labels" title="${escHtml(HINTS.labels)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('labels');return false"` : ""}>Labels</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -2092,6 +2131,21 @@ function renderSharedFooter(opts) {
       if (window._isAdmin) {
         const abA = document.getElementById("footer-all-blues-link");
         if (abA) abA.style.display = "";
+      }
+      // Blues Archive — admin-only artist browser.
+      if (window._isAdmin) {
+        const baA = document.getElementById("footer-blues-archive-link");
+        if (baA) baA.style.display = "";
+      }
+      // Labels — admin-only carousel of cached label catalogs.
+      if (window._isAdmin) {
+        const lbA = document.getElementById("footer-labels-link");
+        if (lbA) lbA.style.display = "";
+      }
+      // MusicBrainz — admin + demo allowlist (server gate is source of truth).
+      if (window._isAdmin || window._sdIsDemo) {
+        const mbA = document.getElementById("footer-musicbrainz-link");
+        if (mbA) mbA.style.display = "";
       }
       if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the

@@ -7340,7 +7340,18 @@ app.post("/api/cards/enrich", express.json({ limit: "32kb" }), async (req, res) 
             if (ov)
                 for (const [pos, vid] of ov.entries())
                     overrides[pos] = vid;
-            return { id: row.id, type: row.type, images, tracklist, videos, overrides };
+            // Matrix / runout identifiers — only for release payloads
+            // (Discogs masters don't carry these). Kept to first 8 so
+            // deep-etched runouts don't blow the response size.
+            const matrix = (Array.isArray(d.identifiers) ? d.identifiers : [])
+                .filter((it) => /matrix|runout/i.test(String(it?.type ?? "")))
+                .map((it) => ({
+                value: String(it?.value ?? "").trim(),
+                description: String(it?.description ?? "").trim(),
+            }))
+                .filter((it) => it.value)
+                .slice(0, 8);
+            return { id: row.id, type: row.type, images, tracklist, videos, overrides, matrix };
         });
         res.json({ items });
     }
