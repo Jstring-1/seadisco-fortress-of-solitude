@@ -298,13 +298,6 @@
           <summary title="Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap." style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
           <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
-
-        <!-- ── External discography (non-Discogs sources) ───────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
-        <details open>
-          <summary title="Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge." style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
-          <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
       </div>
 
       <!-- All Blues background worker: walks release_cache for the
@@ -627,7 +620,7 @@ const _adminGroups = {
   },
   'labels': {
     panels: ['panel-labels'],
-    load: () => { loadLabelDirectory(); loadCacheWarmCatno(); loadExternalDiscography(); },
+    load: () => { loadLabelDirectory(); loadCacheWarmCatno(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
