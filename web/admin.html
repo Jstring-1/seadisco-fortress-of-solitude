@@ -2300,10 +2300,19 @@ async function loadYearBackfill() {
     el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
 }
+// Pull the error message out of a 500 response body so alerts show
+// the actual SQL/logic failure instead of just the status code.
+async function _errText(r) {
+  try {
+    const j = await r.json();
+    if (j?.error) return `HTTP ${r.status} — ${j.error}`;
+  } catch {}
+  return `HTTP ${r.status}`;
+}
 async function _ybfPreviewRun() {
   try {
     const r = await apiFetch("/api/admin/year-backfill/preview", { method: "POST" });
-    if (!r.ok) { alert(`Preview failed: ${r.status}`); return; }
+    if (!r.ok) { alert(`Preview failed: ${await _errText(r)}`); return; }
     _ybfPreview = await r.json();
     loadYearBackfill();
   } catch (err) { alert(String(err)); }
@@ -2314,7 +2323,7 @@ async function _ybfApply() {
   if (!confirm(`Apply year backfill — will update ${total} cache rows and log every change. Continue?`)) return;
   try {
     const r = await apiFetch("/api/admin/year-backfill/apply", { method: "POST" });
-    if (!r.ok) { alert(`Apply failed: ${r.status}`); return; }
+    if (!r.ok) { alert(`Apply failed: ${await _errText(r)}`); return; }
     const j = await r.json();
     alert(`Applied. Phase 1: ${j.phase1Updated}, Phase 2: ${j.phase2Updated}. Batch ${j.batchId.slice(0, 8)}…`);
     _ybfPreview = null;
@@ -2328,7 +2337,7 @@ async function _ybfRollback(batchId) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ batchId }),
     });
-    if (!r.ok) { alert(`Rollback failed: ${r.status}`); return; }
+    if (!r.ok) { alert(`Rollback failed: ${await _errText(r)}`); return; }
     const j = await r.json();
     alert(`Rolled back ${j.reverted} rows · drifted (skipped): ${j.drifted} · already reverted: ${j.alreadyReverted}`);
     loadYearBackfill();
