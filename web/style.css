@@ -8162,10 +8162,16 @@ tr.ba-lyric-visited .ba-lyric-snippet { color: #555; opacity: 0.7; }
 }
 .queue-row:last-child { border-bottom: none; }
 .queue-row.sortable-chosen { background: rgba(255,255,255,0.04); }
-/* Subtle row hover — was bright enough to wash out the title/artist
-   text. Dark tint (slight black overlay) instead of additive white
-   keeps the white text legible. */
-.queue-row:hover { background: rgba(0,0,0,0.25); }
+/* Subtle row hover — a light lift so text pops against it, paired
+   with an explicit brightness bump on the title/artist so the muted
+   grey (#888) artist line isn't harder to read at hover time than at
+   rest. Previous form used a black overlay which dropped artist
+   contrast even further. */
+.queue-row:hover                          { background: rgba(255,255,255,0.05); }
+.queue-row:hover .queue-row-title         { color: #fff; }
+.queue-row:hover .queue-row-artist        { color: #bfbfbf; }
+/* Playing-row keeps its accent color on hover, doesn't get whitewashed. */
+.queue-row.is-playing:hover .queue-row-title { color: var(--accent); }
 /* The play button inside the row would otherwise pick up the browser's
    default <button> hover bg on some platforms. Force transparent so the
    row's hover tint shows through unmodified. */
