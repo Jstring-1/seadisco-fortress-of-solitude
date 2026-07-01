@@ -5345,6 +5345,97 @@ body.card-mode-wide .card-matrix-line { display: block; }
   word-break: break-word;
 }
 
+/* ── Covers-only mode ─────────────────────────────────────────────
+   Bare album covers in a dense grid. Info reveals as an absolute
+   overlay on hover / keyboard focus / tap. Click still opens the
+   album modal exactly like compact mode.  */
+body.card-mode-covers .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.4rem;
+}
+body.card-mode-covers .card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 4px;
+}
+/* Cover fills the card. Kill any thumb wrapper padding / max-width. */
+body.card-mode-covers .card-thumb-wrap {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+}
+body.card-mode-covers .card-thumb-wrap img,
+body.card-mode-covers .card-thumb-wrap .thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+}
+/* Enrichment strips / tracklist / matrix line — all irrelevant in
+   covers mode. Hide unconditionally. */
+body.card-mode-covers .card-images-strip,
+body.card-mode-covers .card-images-stack,
+body.card-mode-covers .card-tracklist,
+body.card-mode-covers .card-matrix-line {
+  display: none !important;
+}
+/* Info overlay: reuse the existing .card-body block; float it over
+   the cover, fade in on hover. Dark backdrop so text stays legible
+   on any cover art. */
+body.card-mode-covers .card-body {
+  position: absolute;
+  inset: 0;
+  padding: 0.5rem 0.6rem;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.9) 100%);
+  color: #fff;
+  overflow-y: auto;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease-out, visibility 0s linear 0.15s;
+  z-index: 2;
+  pointer-events: none;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+body.card-mode-covers .card:hover .card-body,
+body.card-mode-covers .card:focus-visible .card-body,
+body.card-mode-covers .card:focus-within .card-body,
+body.card-mode-covers .card.is-info-open .card-body {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+/* Text inside the overlay: no line clamps, readable weight. */
+body.card-mode-covers .card-artist,
+body.card-mode-covers .card-title {
+  display: block;
+  color: #fff;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  font-size: 0.82rem;
+}
+body.card-mode-covers .card-title { font-weight: 600; margin-bottom: 0.2rem; }
+body.card-mode-covers .card-bottom { margin-top: 0.3rem; }
+body.card-mode-covers .card-meta,
+body.card-mode-covers .card-sub,
+body.card-mode-covers .card-format,
+body.card-mode-covers .card-catno-line {
+  color: rgba(255,255,255,0.75);
+}
+/* Badge strip stays visible above the cover so favorite/collection
+   status is scannable at a glance. Push it above the overlay. */
+body.card-mode-covers .card .card-badges,
+body.card-mode-covers .card .card-badge {
+  z-index: 3;
+}
+
 /* ── Saved searches ── */
 .saved-search-wrap {
   position: relative;

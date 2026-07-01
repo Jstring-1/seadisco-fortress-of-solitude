@@ -312,18 +312,20 @@ function _sdUnlockBodyScroll(id) {
 window._sdLockBodyScroll = _sdLockBodyScroll;
 window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
 
-// ── Card display mode (compact / wide / list) ─────────────────────
+// ── Card display mode (compact / wide / list / covers) ────────────
 // User-toggleable via the ▦ button on the search bar. Persisted in
-// localStorage so the choice sticks across reloads and tabs. Three
-// modes:
+// localStorage so the choice sticks across reloads and tabs. Modes:
 //   compact — default; small grid cards.
 //   wide    — roughly doubles per-card width, drops title/artist
 //             clamps, adds image strip + tracklist.
 //   list    — Discogs-style single-row layout with sortable headers.
 //             Container becomes a single column; every .card becomes
 //             a flex row of [thumb | title | artist | year | format].
+//   covers  — bare album-cover grid. Info reveals as an overlay on
+//             hover (desktop) or focus (keyboard); click still opens
+//             the modal.
 const _SD_CARD_MODE_KEY = "sd_card_mode";
-const _SD_CARD_MODES = ["compact", "wide", "list"];
+const _SD_CARD_MODES = ["compact", "wide", "list", "covers"];
 function _sdGetCardMode() {
   try {
     const v = localStorage.getItem(_SD_CARD_MODE_KEY);
@@ -332,12 +334,14 @@ function _sdGetCardMode() {
 }
 function _sdApplyCardMode() {
   const mode = _sdGetCardMode();
-  document.body.classList.toggle("card-mode-wide", mode === "wide");
-  document.body.classList.toggle("card-mode-list", mode === "list");
+  document.body.classList.toggle("card-mode-wide",   mode === "wide");
+  document.body.classList.toggle("card-mode-list",   mode === "list");
+  document.body.classList.toggle("card-mode-covers", mode === "covers");
   // Reflect state across EVERY toggle button on the page.
-  const label = mode === "wide" ? "▦ Wide"
-              : mode === "list" ? "☰ List"
-              : "▦ Cards";
+  const label = mode === "wide"   ? "▦ Wide"
+              : mode === "list"   ? "☰ List"
+              : mode === "covers" ? "🖼 Covers"
+              :                     "▦ Cards";
   document.querySelectorAll(".card-mode-toggle-btn").forEach(btn => {
     btn.textContent = label;
     btn.classList.toggle("is-on", mode !== "compact");
@@ -345,6 +349,7 @@ function _sdApplyCardMode() {
     btn.style.borderColor = mode !== "compact" ? "var(--accent)" : "var(--border)";
     btn.title = mode === "compact" ? "Switch to wide cards (next: ▦ Wide)"
              :  mode === "wide"    ? "Switch to list view (next: ☰ List)"
+             :  mode === "list"    ? "Switch to covers-only grid (next: 🖼 Covers)"
              :                       "Switch back to compact cards (next: ▦ Cards)";
   });
   // Sortable column header was removed — each surface already has its
@@ -645,6 +650,20 @@ function _sdCardOuterClick(event, id, type, url) {
               || card?.querySelector(".card-thumb-wrap > .thumb-placeholder");
     const onMain = main && (event.target === main || main.contains(event.target));
     if (!onMain) return;
+  }
+  if (document.body.classList.contains("card-mode-covers")) {
+    // Two-tap flow for touch: first tap opens the info overlay,
+    // second tap opens the modal. Desktop hover skips this because
+    // CSS :hover already keeps the overlay open, so by the time the
+    // click lands the class is already set.
+    const card = event.currentTarget;
+    const hasFinePointer = window.matchMedia?.("(hover:hover)").matches;
+    if (!hasFinePointer && card && !card.classList.contains("is-info-open")) {
+      // Close any other card's info overlay so only one is open at a time.
+      document.querySelectorAll(".card.is-info-open").forEach(c => c.classList.remove("is-info-open"));
+      card.classList.add("is-info-open");
+      return;   // let the same tap open the modal on the NEXT tap
+    }
   }
   if (typeof openModal === "function") openModal(event, id, type, url);
 }
