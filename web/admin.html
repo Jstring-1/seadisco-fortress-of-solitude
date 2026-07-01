@@ -1646,6 +1646,8 @@ let _labelDirUnassignedOnly = false;
 let _labelDirActiveSweepKey = null;    // cache_warm_catno_runs.series_key currently running
 let _labelDirMergeOpen = null;          // label_name of the row whose merge popover is open
 let _labelDirMergeQuery = "";           // filter text inside the merge popover
+let _labelDirAliasOpen  = null;         // {label_name, label_id} whose alias popover is open
+let _labelDirAliasQuery = "";           // filter text inside the alias popover
 
 async function loadLabelDirectory() {
   const el = document.getElementById("labeldir-content");
@@ -1732,6 +1734,7 @@ function _renderLabelDir() {
     </div>
     ${_labelDirPopoverHtml()}
     ${_labelDirMergePopoverHtml()}
+    ${_labelDirAliasPopoverHtml()}
   `;
   // Restore scroll on next frame so the freshly-rendered DOM has
   // measured itself before we set scrollTop.
@@ -1774,6 +1777,40 @@ function _labelDirPopoverHtml() {
         <input data-labeldir-manual="${_eHtml(labelName)}" type="number" placeholder="…or enter ID manually" style="flex:1;min-width:160px;padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.82rem">
         <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(labelName)}')">Save manual ID</button>
       </div>
+    </div>
+  `;
+}
+
+function _labelDirAliasPopoverHtml() {
+  if (!_labelDirAliasOpen) return "";
+  const from = _labelDirAliasOpen;   // { label_name, label_id }
+  const q = _labelDirAliasQuery.trim().toLowerCase();
+  // Candidates: any OTHER row with a label_id set.
+  const candidates = _labelDirRows
+    .filter(r => r.label_id && r.label_id !== from.label_id)
+    .filter(r => !q || r.label_name.toLowerCase().includes(q) || String(r.label_id).includes(q))
+    .slice(0, 80);
+  const listBody = candidates.length
+    ? `<div style="display:flex;flex-direction:column;gap:0.2rem;max-height:44vh;overflow-y:auto">
+        ${candidates.map(c => `<button type="button" onclick="_labelDirConfirmAlias(${from.label_id}, ${c.label_id})"
+            style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;background:rgba(255,255,255,0.03);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;text-align:left">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(c.label_name)}">${_eHtml(c.label_name.length > 60 ? c.label_name.slice(0, 60) + "…" : c.label_name)}</span>
+            <span style="color:var(--muted);font-size:0.72rem;white-space:nowrap">ID ${c.label_id} · pad ${c.external_count} · R ${c.cache_releases}</span>
+          </button>`).join("")}
+      </div>`
+    : `<div style="color:var(--muted);padding:0.6rem 0">No candidate labels with an ID.</div>`;
+  return `
+    <div onclick="_labelDirCloseAlias()" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:80"></div>
+    <div role="dialog" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:80vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.9rem 1rem;z-index:81;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.4rem;gap:0.5rem">
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(from.label_name)}">Alias "${_eHtml(from.label_name)}" (ID ${from.label_id}) under…</div>
+        <button class="admin-btn" type="button" onclick="_labelDirCloseAlias()" style="font-size:0.78rem">✕</button>
+      </div>
+      <input type="search" oninput="_labelDirAliasFilter(event)" autofocus
+             placeholder="Filter target labels…" value="${_eHtml(_labelDirAliasQuery)}"
+             style="margin-bottom:0.5rem;padding:0.35rem 0.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
+      ${listBody}
+      <div style="margin-top:0.4rem;color:var(--muted);font-size:0.72rem">Groups both Discogs IDs under the target for display. Underlying data is untouched — un-alias with the × next to the entry on the canonical row.</div>
     </div>
   `;
 }
@@ -1888,9 +1925,24 @@ function _labelDirRowHtml(r) {
   const dirtyHint = isDirty
     ? `<span title="HTML/whitespace in source — click 🧼 Clean names to fix" style="color:#ea8;font-size:0.72rem;margin-left:0.3rem">⚠</span>`
     : "";
+  // Aliases sub-line: shows on canonical rows so the curator sees
+  // which Discogs IDs got folded in. Click × to un-alias.
+  const aliasesLine = (r.aliases && r.aliases.length)
+    ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem">
+         aliases: ${r.aliases.map(a => `
+           <span title="${a.reason ? _eHtml(a.reason) : ''}" style="margin-right:0.4rem">
+             <a href="https://www.discogs.com/label/${a.label_id}" target="_blank" rel="noopener" style="color:var(--muted)">${_eHtml(a.label_name)}</a>
+             <span style="color:#777">·id ${a.label_id}</span>
+             <button class="admin-btn" type="button" onclick="_labelDirRemoveAlias(${a.label_id})" title="Un-alias" style="font-size:0.62rem;padding:0 0.25rem;margin-left:0.1rem">×</button>
+           </span>`).join('')}
+       </div>`
+    : "";
   return `
     <tr style="border-bottom:1px dashed rgba(255,255,255,0.05)">
-      <td style="padding:0.3rem 0.5rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(cleanName)}">${_eHtml(displayName)}${dirtyHint}</td>
+      <td style="padding:0.3rem 0.5rem;font-weight:500;overflow:hidden;text-overflow:ellipsis" title="${_eHtml(cleanName)}">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_eHtml(displayName)}${dirtyHint}</div>
+        ${aliasesLine}
+      </td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.external_count.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_releases.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
@@ -1899,7 +1951,8 @@ function _labelDirRowHtml(r) {
       <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
         ${_labelDirSweepCell(r)}
         <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem" title="Search Discogs for this label">🔍</button>
-        <button class="admin-btn" type="button" onclick="_labelDirOpenMerge('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Merge this label into another (scraped variant → canonical Discogs name, etc.)">⇄</button>
+        <button class="admin-btn" type="button" onclick="_labelDirOpenMerge('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Merge (rename external rows into another label)">⇄</button>
+        ${r.label_id ? `<button class="admin-btn" type="button" onclick="_labelDirOpenAlias('${_jsEsc(r.label_name)}', ${r.label_id})" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Alias this Discogs ID under another (fold two IDs for the same conceptual label together)">🔗</button>` : ""}
       </td>
     </tr>
     ${searchBlock}
@@ -2026,6 +2079,51 @@ async function _labelDirStartSweep(labelId, labelName) {
     loadLabelDirectory();
     // Also kick the catno panel so the user can scroll down and watch.
     if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+  } catch (err) { alert(String(err)); }
+}
+
+function _labelDirOpenAlias(labelName, labelId) {
+  _labelDirAliasOpen  = { label_name: labelName, label_id: Number(labelId) };
+  _labelDirAliasQuery = labelName;
+  _renderLabelDir();
+}
+function _labelDirCloseAlias() {
+  _labelDirAliasOpen  = null;
+  _labelDirAliasQuery = "";
+  _renderLabelDir();
+}
+function _labelDirAliasFilter(ev) {
+  _labelDirAliasQuery = String(ev.target.value || "");
+  _renderLabelDir();
+  requestAnimationFrame(() => {
+    const inp = document.querySelector('div[role="dialog"] input[type="search"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(_labelDirAliasQuery.length, _labelDirAliasQuery.length); }
+  });
+}
+async function _labelDirConfirmAlias(aliasId, canonicalId) {
+  const reason = prompt(`Reason (optional): variant name / reissue / ownership change / etc.`, "");
+  if (reason === null) return;   // cancelled
+  try {
+    const r = await apiFetch("/api/admin/label-directory/set-alias", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aliasLabelId: aliasId, canonicalLabelId: canonicalId, reason: reason.trim() || null }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Alias failed: ${j.error || r.status}`); return; }
+    _labelDirAliasOpen = null;
+    loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
+}
+async function _labelDirRemoveAlias(aliasId) {
+  if (!confirm(`Un-alias label ID ${aliasId}? It becomes its own directory row again.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/remove-alias", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ aliasLabelId: aliasId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Un-alias failed: ${j.error || r.status}`); return; }
+    loadLabelDirectory();
   } catch (err) { alert(String(err)); }
 }
 
