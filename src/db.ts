@@ -1413,6 +1413,24 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_sort ON external_discography(label_name, catno_sort)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_year ON external_discography(label_name, year)`);
 
+  // ── Label aliases ────────────────────────────────────────────────
+  // Group multiple Discogs label IDs under one canonical for display
+  // in the Label directory. Handles the "Excello / Excello (2) /
+  // Excello Records" split-ID case and simple rename / reissue
+  // successions. One row per alias — PK on alias_label_id ensures a
+  // given Discogs ID can only be an alias of one canonical. Data
+  // itself is left untouched; the collapse happens at read time.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS label_aliases (
+      alias_label_id      INT PRIMARY KEY,
+      canonical_label_id  INT NOT NULL,
+      reason              TEXT,
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CHECK (alias_label_id <> canonical_label_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS idx_label_aliases_canonical ON label_aliases(canonical_label_id)`);
+
   // ── Year backfill audit log ──────────────────────────────────────
   // Every year written to release_cache.data->>'year' by the backfill
   // pass is logged here so the curator can roll back a whole batch if
@@ -10968,6 +10986,11 @@ export async function mergeExternalLabel(
 // padding we already have, and (if no Discogs label_id is recorded)
 // kick off a search to fix that.
 
+export interface LabelDirectoryAlias {
+  label_id:   number;
+  label_name: string;
+  reason:     string | null;
+}
 export interface LabelDirectoryRow {
   label_name:      string;
   label_id:        number | null;
@@ -10975,6 +10998,7 @@ export interface LabelDirectoryRow {
   cache_releases:  number;
   cache_masters:   number;
   sources:         string[];
+  aliases?:        LabelDirectoryAlias[];   // set only when this row is a canonical
 }
 
 export async function listLabelDirectory(opts: {
@@ -11033,7 +11057,7 @@ export async function listLabelDirectory(opts: {
       LIMIT ${limit}`,
     args,
   );
-  return r.rows.map(row => ({
+  const rawRows: LabelDirectoryRow[] = r.rows.map(row => ({
     label_name:     String(row.label_name ?? ""),
     label_id:       row.label_id != null ? Number(row.label_id) : null,
     external_count: Number(row.external_count ?? 0),
@@ -11041,6 +11065,106 @@ export async function listLabelDirectory(opts: {
     cache_masters:  Number(row.cache_masters  ?? 0),
     sources:        Array.isArray(row.sources) ? row.sources : [],
   }));
+
+  // Fold aliases into their canonical. Alias table is small (dozens
+  // of rows at most, probably) so we do the resolution in memory
+  // rather than baking it into the CTE.
+  const aliasQ = await getPool().query(
+    `SELECT alias_label_id, canonical_label_id, reason FROM label_aliases`,
+  );
+  if (aliasQ.rows.length === 0) return rawRows;
+
+  const aliasMap = new Map<number, { canonical: number; reason: string | null }>();
+  for (const a of aliasQ.rows) {
+    aliasMap.set(Number(a.alias_label_id), {
+      canonical: Number(a.canonical_label_id),
+      reason:    a.reason ?? null,
+    });
+  }
+  // Group rows by their canonical id. Rows without a label_id, or with
+  // a label_id that isn't an alias, keep their identity.
+  interface Group { canonicalId: number; rows: LabelDirectoryRow[]; }
+  const groups = new Map<number, Group>();
+  const passthrough: LabelDirectoryRow[] = [];
+  for (const row of rawRows) {
+    const id = row.label_id;
+    if (id == null) { passthrough.push(row); continue; }
+    const mapped = aliasMap.get(id);
+    const canonicalId = mapped ? mapped.canonical : id;
+    // Only actually GROUP if either (a) this row is an alias, or (b)
+    // there's another row that aliases into this id. Otherwise it's a
+    // solo row with no group and we just pass it through.
+    let g = groups.get(canonicalId);
+    if (!g) { g = { canonicalId, rows: [] }; groups.set(canonicalId, g); }
+    g.rows.push(row);
+  }
+  const merged: LabelDirectoryRow[] = [...passthrough];
+  for (const g of groups.values()) {
+    if (g.rows.length === 1 && g.rows[0].label_id === g.canonicalId) {
+      merged.push(g.rows[0]);
+      continue;
+    }
+    const canonicalRow = g.rows.find(r => r.label_id === g.canonicalId) ?? g.rows[0];
+    const aliasRows    = g.rows.filter(r => r !== canonicalRow);
+    merged.push({
+      ...canonicalRow,
+      external_count: g.rows.reduce((a, r) => a + r.external_count, 0),
+      cache_releases: g.rows.reduce((a, r) => a + r.cache_releases, 0),
+      cache_masters:  g.rows.reduce((a, r) => a + r.cache_masters,  0),
+      sources:        Array.from(new Set(g.rows.flatMap(r => r.sources))),
+      aliases:        aliasRows.map(r => ({
+        label_id:   r.label_id ?? 0,
+        label_name: r.label_name,
+        reason:     r.label_id != null ? (aliasMap.get(r.label_id)?.reason ?? null) : null,
+      })),
+    });
+  }
+  // Preserve the original sort by external_count desc.
+  merged.sort((a, b) => (b.external_count - a.external_count));
+  return merged;
+}
+
+// ── Label alias mutators ────────────────────────────────────────
+export async function addLabelAlias(
+  aliasLabelId:     number,
+  canonicalLabelId: number,
+  reason?:          string | null,
+): Promise<void> {
+  if (!Number.isFinite(aliasLabelId) || aliasLabelId <= 0) throw new Error("aliasLabelId required");
+  if (!Number.isFinite(canonicalLabelId) || canonicalLabelId <= 0) throw new Error("canonicalLabelId required");
+  if (aliasLabelId === canonicalLabelId) throw new Error("alias and canonical are the same id");
+  // Guard against alias → alias → canonical chains: if the target is
+  // itself an alias, resolve to its canonical first.
+  const chain = await getPool().query(
+    `SELECT canonical_label_id FROM label_aliases WHERE alias_label_id = $1`,
+    [canonicalLabelId],
+  );
+  const finalCanonical = chain.rows[0]?.canonical_label_id
+    ? Number(chain.rows[0].canonical_label_id)
+    : canonicalLabelId;
+  // And: if this id was already someone else's canonical, that whole
+  // group would become orphaned. Flip them all to the new canonical.
+  await getPool().query(
+    `UPDATE label_aliases SET canonical_label_id = $1 WHERE canonical_label_id = $2`,
+    [finalCanonical, aliasLabelId],
+  );
+  await getPool().query(
+    `INSERT INTO label_aliases (alias_label_id, canonical_label_id, reason)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (alias_label_id) DO UPDATE
+       SET canonical_label_id = EXCLUDED.canonical_label_id,
+           reason             = EXCLUDED.reason`,
+    [aliasLabelId, finalCanonical, reason ?? null],
+  );
+}
+
+export async function removeLabelAlias(aliasLabelId: number): Promise<{ removed: boolean }> {
+  if (!Number.isFinite(aliasLabelId)) throw new Error("aliasLabelId required");
+  const r = await getPool().query(
+    `DELETE FROM label_aliases WHERE alias_label_id = $1`,
+    [aliasLabelId],
+  );
+  return { removed: (r.rowCount ?? 0) > 0 };
 }
 
 // Bulk-set a Discogs label_id for every external_discography row
