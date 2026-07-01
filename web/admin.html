@@ -152,10 +152,7 @@
         <!-- ── Year backfill (label + catno → missing years) ─────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗓 Backfill missing years</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Looks up year for cache rows that have none, matching by (label, catno) against external discography and cache siblings. Phase 2 propagates min(version year) to year-less masters. Every change is logged — each batch can be rolled back if a source turns out wrong.
-          </div>
+          <summary title="Looks up year for cache rows that have none, matching by (label, catno) against external discography and cache siblings. Phase 2 propagates min(version year) to year-less masters. Every change is logged — each batch can be rolled back if a source turns out wrong." style="cursor:pointer;font-weight:600;font-size:0.95rem">🗓 Backfill missing years</summary>
           <div id="ybf-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
@@ -291,30 +288,21 @@
 
         <!-- ── Label directory grid ─────────────────────────────── -->
         <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later.
-          </div>
+          <summary title="Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later." style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
           <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
 
         <!-- ── Catalog-number crawls ────────────────────────────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap.
-          </div>
+          <summary title="Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap." style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
           <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
 
         <!-- ── External discography (non-Discogs sources) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details open>
-          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
-          <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--muted)">
-            Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge.
-          </div>
+          <summary title="Pads the labels carousel with canonical catalog data from wirz.de (~130 blues LP series) and 78discography.com (~655 label-series pages). Polite 2s scrape rate; resumable across restarts. Drop the redundant rows after the Discogs cache catches up via Purge." style="cursor:pointer;font-weight:600;font-size:0.95rem">🗃 External discography (non-Discogs)</summary>
           <div id="extdisc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
       </div>
@@ -439,46 +427,35 @@
       <!-- Personal suggestions stats + manual triggers (Users group) -->
       <div class="admin-tab-panel admin-grp-users" id="panel-suggestions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Suggestions</h2>
+          <h2 style="margin:0" title="Hourly background job populates each user's personal feed by searching Discogs for masters in their top genre/style/year combos that they don't already own.">Suggestions</h2>
           <button class="admin-refresh-btn" id="suggestions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSuggestions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="suggestions-refresh-status" class="admin-refresh-status"></span>
           <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user generator for the admin user only">Run for me</button>
           <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user generator for every user (background, may take minutes)">Run for everyone</button>
           <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
-        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">Hourly background job populates each user's personal feed by searching Discogs for masters in their top genre/style/year combos that they don't already own.</p>
         <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
       <!-- Per-user behavior stats (Users group) -->
       <div class="admin-tab-panel admin-grp-users" id="panel-behavior" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">User Behavior</h2>
+          <h2 style="margin:0" title="Per-user activity counts. Favs = total favorites. Sugg pool = current personal-suggestion row count. Sugg fav'd = how many of those suggestions the user has actually favorited. Album clicks = release/master modal opens (last 30d / lifetime). Plays = media-player track plays (last 30d / lifetime). Searches = Discogs main-search calls (last 30d / lifetime).">User Behavior</h2>
           <button class="admin-refresh-btn" id="behavior-refresh-btn" onclick="_adminClickRefresh(this, loadAdminBehavior)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="behavior-refresh-status" class="admin-refresh-status"></span>
         </div>
-        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
-          Per-user activity counts.
-          Favs = total favorites.
-          Sugg pool = current personal-suggestion row count.
-          Sugg fav'd = how many of those suggestions the user has actually favorited.
-          Album clicks = release/master modal opens (last 30d / lifetime).
-          Plays = media-player track plays (last 30d / lifetime).
-          Searches = Discogs main-search calls (last 30d / lifetime).
-        </p>
         <div id="behavior-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
 
       <!-- Unavailable YouTube videos (Content group) -->
       <div class="admin-tab-panel admin-grp-content" id="panel-unavailable" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Unavailable Videos</h2>
+          <h2 style="margin:0" title="Videos auto-reported as broken when the YouTube IFrame Player throws error code 100 (not found), 101, or 150 (embed disabled / region-blocked). After 2 distinct reports, the videoId graduates to 'unavailable' and is filtered out of every album popup site-wide so the affected tracks register as missing and contributors can submit replacements.">Unavailable Videos</h2>
           <button class="admin-refresh-btn" id="unavailable-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUnavailable)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="unavailable-refresh-status" class="admin-refresh-status"></span>
           <input type="search" id="unavailable-filter" class="sd-filter-input" placeholder="filter by videoId, code, user…" oninput="_filterAdminUnavailable(this)" style="margin-left:auto;width:14rem">
           <span id="unavailable-count" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
-        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">Videos auto-reported as broken when the YouTube IFrame Player throws error code 100 (not found), 101, or 150 (embed disabled / region-blocked). After 2 distinct reports, the videoId graduates to "unavailable" and is filtered out of every album popup site-wide so the affected tracks register as missing and contributors can submit replacements.</p>
         <div id="unavailable-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
