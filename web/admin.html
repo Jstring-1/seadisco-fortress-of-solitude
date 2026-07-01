@@ -61,6 +61,12 @@
         <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
       </div>
 
+      <!-- Persistent worker-status bar. Populated by
+           loadAdminWorkerStatus() on interval; hidden when nothing's
+           running. Sits above every tab's content so a runaway worker
+           is visible no matter which tab the admin is on. -->
+      <div id="admin-worker-status" style="display:none;margin:0.5rem 0;padding:0.4rem 0.7rem;background:rgba(160,60,40,0.15);border:1px solid #a55;border-radius:4px;font-size:0.82rem;display:none"></div>
+
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
       <div class="admin-tab-panel admin-grp-overview" id="panel-overview-kpis">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
@@ -693,6 +699,87 @@ function switchAdminTab(group) {
     _adminTabLoaded[group] = true;
     try { g.load(); } catch (e) { console.warn('[admin] group load failed', group, e); }
   }
+  // Mirror the current tab in the URL hash so refresh / share-link
+  // lands back on the same tab. replaceState (not push) so the browser
+  // back button still exits the admin rather than cycling through tabs.
+  if (location.hash !== '#' + group) {
+    try { history.replaceState(null, '', '#' + group); } catch {}
+  }
+}
+
+// URL-backed tabs — read the hash on boot + on external navigation.
+function _adminBootTabFromHash() {
+  const h = (location.hash || '').replace(/^#/, '');
+  if (h && _adminGroups[h]) switchAdminTab(h);
+}
+window.addEventListener('hashchange', _adminBootTabFromHash);
+
+// ── Persistent worker-status bar ──────────────────────────────────
+// Polls every worker's status endpoint in parallel every 8s and
+// renders one badge per active worker with click-to-tab. Silent when
+// nothing's running.
+async function loadAdminWorkerStatus() {
+  const bar = document.getElementById('admin-worker-status');
+  if (!bar) return;
+  try {
+    const [catnoR, extR, blueR, warmR] = await Promise.all([
+      apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
+      apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
+      apiFetch('/api/admin/all-blues/status').catch(() => null),
+      apiFetch('/api/admin/cache-warm-runs/status').catch(() => null),
+    ]);
+    const badges = [];
+    if (catnoR?.ok) {
+      const j = await catnoR.json().catch(() => null);
+      if (j?.running) badges.push({ label: `Sweep · ${j.active || '?'}`, tab: 'labels' });
+    }
+    if (extR?.ok) {
+      const j = await extR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        badges.push({ label: `Ext scrape · ${j.source || 'unknown'}${pos}`, tab: 'labels' });
+      }
+    }
+    if (blueR?.ok) {
+      const j = await blueR.json().catch(() => null);
+      if (j?.running) badges.push({ label: 'All Blues worker', tab: 'all-blues' });
+    }
+    if (warmR?.ok) {
+      const j = await warmR.json().catch(() => null);
+      if (j?.running) {
+        const p = j.active || {};
+        const label = p.genreKey ? `Cache-warm · ${p.genreKey}${p.styleKey ? '/' + p.styleKey : ''}` : 'Cache-warm run';
+        badges.push({ label, tab: 'cache' });
+      }
+    }
+    if (badges.length === 0) {
+      bar.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+    bar.style.display = '';
+    bar.innerHTML = `
+      <strong style="color:#fc8">⚙ Workers running:</strong>
+      ${badges.map(b => `
+        <button type="button" onclick="switchAdminTab('${b.tab}')"
+          style="margin-left:0.4rem;padding:0.15rem 0.55rem;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;cursor:pointer;font-size:0.78rem">
+          ${_adminWorkerEscape(b.label)} ↗
+        </button>
+      `).join('')}
+    `;
+  } catch (err) {
+    // Silent — the bar just stays hidden. Persistent workers status
+    // isn't critical enough to alert on network hiccups.
+  }
+}
+function _adminWorkerEscape(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+// Kick off polling once. The interval survives tab switches since
+// nothing tears it down.
+if (!window._adminWorkerStatusTimer) {
+  window._adminWorkerStatusTimer = setInterval(loadAdminWorkerStatus, 8000);
+  setTimeout(loadAdminWorkerStatus, 500);   // first tick soon after boot
 }
 
 function showDenied() {
@@ -727,8 +814,14 @@ async function verifyAdmin(c) {
     renderFeedback(items);
     _adminUpdateFeedbackDot(Array.isArray(items) ? items.length : 0);
     _adminSyncViewBtn();
-    // Default group is Overview.
-    switchAdminTab('overview');
+    // Boot tab: URL hash wins (e.g. /admin#labels reloads to Labels),
+    // otherwise default to Overview.
+    const bootHash = (location.hash || '').replace(/^#/, '');
+    if (bootHash && _adminGroups[bootHash]) {
+      switchAdminTab(bootHash);
+    } else {
+      switchAdminTab('overview');
+    }
     checkKillStatus();
   } catch (e) {
     // Network / timeout / abort. Distinguish from real auth denial:
