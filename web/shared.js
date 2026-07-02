@@ -1985,7 +1985,6 @@ function renderSharedFooter(opts) {
         <a id="footer-admin-link" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
       </div>
     </div>
-    <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div><a href="#" onclick="_seaDiscoOpenJimmy(event);return false;" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
     <div style="margin-top:0.5rem;display:flex;justify-content:center;align-items:center;gap:0.35rem;color:#999;font-size:0.78rem">
       <span>Catalog data from</span>
