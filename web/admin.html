@@ -1967,14 +1967,19 @@ function _labelDirSweepCell(r) {
   if (meRunning) {
     return `<span style="font-size:0.72rem;color:#9e8;background:#264;padding:0.1rem 0.4rem;border-radius:3px;margin-right:0.3rem" title="Sweep in progress — view in Catalog-number crawls">running…</span>`;
   }
+  const sweptBadge = r.swept_at
+    ? `<span style="font-size:0.72rem;color:#9e8;background:rgba(80,160,80,0.15);border:1px solid #4a8;padding:0.1rem 0.4rem;border-radius:3px;margin-right:0.3rem" title="Sweep completed ${new Date(r.swept_at).toLocaleString()}">swept</span>`
+    : "";
   // Curated catno-series keys (e.g. excello:2000-2400) overlap by labelId
   // too — let the curator still kick the ad-hoc path if needed, but
   // disable while ANY worker is active so we don't race.
   const dis = someoneRunning ? "disabled" : "";
   const title = someoneRunning
     ? `Another sweep is running (${_labelDirActiveSweepKey}). Wait or stop it first.`
-    : `Sweep every release Discogs has tagged with label_id ${r.label_id} into the cache.`;
-  return `<button class="admin-btn" type="button" ${dis}
+    : r.swept_at
+      ? `Re-sweep (last completed ${new Date(r.swept_at).toLocaleString()})`
+      : `Sweep every release Discogs has tagged with label_id ${r.label_id} into the cache.`;
+  return `${sweptBadge}<button class="admin-btn" type="button" ${dis}
             onclick="_labelDirStartSweep(${r.label_id}, '${_jsEsc(r.label_name)}')"
             title="${_eHtml(title)}"
             style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-right:0.3rem">▶ Sweep</button>`;

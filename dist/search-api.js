@@ -9532,8 +9532,40 @@ app.get("/api/admin/label-directory", async (req, res) => {
     const search = String(req.query.q ?? "").trim().slice(0, 200);
     const limit = Math.max(1, Math.min(5000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
     try {
-        const rows = await listLabelDirectory({ search: search || undefined, limit });
-        res.json({ rows, total: rows.length });
+        const [rows, catnoRuns] = await Promise.all([
+            listLabelDirectory({ search: search || undefined, limit }),
+            listCacheWarmCatnoRuns(),
+        ]);
+        const donePhasesSet = new Set(["label_sweep_done", "catno_done"]);
+        const sweptMap = new Map();
+        for (const run of catnoRuns) {
+            if (!donePhasesSet.has(run.phase) || !run.last_run_at)
+                continue;
+            let labelId = null;
+            if (String(run.series_key).startsWith("adhoc:")) {
+                const n = Number(String(run.series_key).slice("adhoc:".length));
+                if (Number.isFinite(n) && n > 0)
+                    labelId = n;
+            }
+            else {
+                const series = CATNO_SERIES.find(s => s.key === run.series_key);
+                if (series?.labelId)
+                    labelId = series.labelId;
+            }
+            if (labelId == null)
+                continue;
+            const ts = run.last_run_at instanceof Date
+                ? run.last_run_at.toISOString()
+                : String(run.last_run_at);
+            const existing = sweptMap.get(labelId);
+            if (!existing || ts > existing)
+                sweptMap.set(labelId, ts);
+        }
+        const enriched = rows.map(row => ({
+            ...row,
+            swept_at: row.label_id != null ? (sweptMap.get(row.label_id) ?? null) : null,
+        }));
+        res.json({ rows: enriched, total: enriched.length });
     }
     catch (err) {
         console.error("[label-directory list]", err);

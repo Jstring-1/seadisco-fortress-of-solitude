@@ -10999,6 +10999,7 @@ export interface LabelDirectoryRow {
   cache_masters:   number;
   sources:         string[];
   aliases?:        LabelDirectoryAlias[];   // set only when this row is a canonical
+  swept_at?:       string | null;           // ISO timestamp of most recent completed sweep, if any
 }
 
 export async function listLabelDirectory(opts: {
