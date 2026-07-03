@@ -11795,6 +11795,26 @@ export async function getCachedReleaseIds(
   return new Set((r.rows ?? []).map((row: any) => Number(row.discogs_id)));
 }
 
+// GET /masters/{id} carries no `labels` field (labels are a
+// release-level concept — a master can span pressings on several
+// labels), so a cached master row can never be found by the label
+// directory's `data->labels` join no matter how it was cached. The
+// label sweep knows which label it matched a master against, so it
+// stamps a synthetic single-entry `labels` array onto the cached row
+// purely so that join can find it — this doesn't touch any other
+// field and never overwrites a non-empty `labels` already present.
+export async function backfillCachedMasterLabel(ids: number[], labelName: string): Promise<number> {
+  if (!ids.length || !labelName) return 0;
+  const r = await getPool().query(
+    `UPDATE release_cache
+        SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
+      WHERE type = 'master' AND discogs_id = ANY($1::int[])
+        AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`,
+    [ids, JSON.stringify([{ name: labelName }])],
+  );
+  return r.rowCount ?? 0;
+}
+
 
 // Patch a single blues_lyrics row's tuning + artist fields. Both are
 // optional — only the keys you pass get updated. Returns the row

@@ -29,6 +29,7 @@ import {
   getAppSetting,
   setAppSetting,
   getCachedReleaseIds,
+  backfillCachedMasterLabel,
 } from "./db.js";
 
 const ACTIVE_KEY = "cache_warm_catno_active_run";
@@ -440,8 +441,17 @@ async function _processSearchResults(
   let cachedIds: Set<number>;
   try { cachedIds = await getCachedReleaseIds(ids, type); }
   catch { cachedIds = new Set(); }
-  const skipsThisN = ids.filter(id => cachedIds.has(id)).length;
-  if (skipsThisN > 0) await bumpCacheWarmCatnoRunSkip(series.key, skipsThisN);
+  const skippedIds = ids.filter(id => cachedIds.has(id));
+  if (skippedIds.length > 0) await bumpCacheWarmCatnoRunSkip(series.key, skippedIds.length);
+  // GET /masters/{id} carries no `labels` field, so a master cached
+  // by an earlier run (before this backfill existed, or via the
+  // genre/style warm worker) has nothing for the label directory to
+  // join on. Stamp it in now — cheap, no Discogs call — so a resweep
+  // over already-cached masters still fixes the Cache M count.
+  if (type === "master" && skippedIds.length > 0) {
+    try { await backfillCachedMasterLabel(skippedIds, series.label); }
+    catch (err: any) { console.error(`[cache-warm-catno] master label backfill failed for ${series.key}:`, err?.message ?? err); }
+  }
 
   // Stash the label-matched count on the function so the catno walker
   // can read it without re-walking the candidates list.
@@ -457,6 +467,9 @@ async function _processSearchResults(
       const full = type === "master"
         ? await _withRetry(`master ${id}`, () => client.getMasterRelease(id)) as any
         : await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
+      // See backfillCachedMasterLabel above — /masters/{id} has no
+      // `labels` field, so stamp one on before caching.
+      if (type === "master" && !Array.isArray(full?.labels)) full.labels = [{ name: series.label }];
       await cacheRelease(id, type, full as object);
       const title = String(full?.title ?? r?.title ?? "(untitled)");
       await recordCacheWarmCatnoRunHit(series.key, title, id);
