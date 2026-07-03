@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260702.0959" />
+  <link rel="stylesheet" href="/style.css?v=260703.0953" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260702.0959"></script>
-<script defer src="/shared.js?v=260702.0959"></script>
+<script defer src="/utils.js?v=260703.0953"></script>
+<script defer src="/shared.js?v=260703.0953"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -540,8 +540,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260702.0959"></script>
-<script defer src="/blues-admin.js?v=260702.0959"></script>
+<script defer src="/modal.js?v=260703.0953"></script>
+<script defer src="/blues-admin.js?v=260703.0953"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1389,9 +1389,9 @@ async function loadCacheWarmCatno() {
       const phase = String(s.phase || "catno");
       let cursorTxt;
       let progressPct = 0;
-      if (phase === "label_sweep") {
+      if (phase === "label_sweep_masters" || phase === "label_sweep_orphans") {
         const page = Number.isFinite(Number(s.label_sweep_page)) ? Number(s.label_sweep_page) : 1;
-        cursorTxt = `label-sweep p${page}`;
+        cursorTxt = phase === "label_sweep_masters" ? `label-sweep masters p${page}` : `label-sweep orphans p${page}`;
         progressPct = 100;
       } else if (phase === "label_sweep_done") {
         cursorTxt = "label sweep done";
@@ -1410,7 +1410,7 @@ async function loadCacheWarmCatno() {
       const buttons = !running
         ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)" title="Walk the configured catno range">Catno walk</button>
            <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and re-walk the catno range">Restart catno</button>
-           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', false)" title="Paginated /search?label= sweep. Catches releases with catnos outside the range or none at all.${sweepPageTxt}">Sweep label</button>
+           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', false)" title="Paginated /search?label= sweep: every master, then every orphan release (no parent master).${sweepPageTxt}">Sweep label</button>
            <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', true)" title="Reset label-sweep page to 1 and re-sweep">Restart sweep</button>`
         : isActive
           ? `<button class="admin-btn" onclick="_cwcStop()">Stop</button>`
@@ -1978,7 +1978,7 @@ function _labelDirSweepCell(r) {
     ? `Another sweep is running (${_labelDirActiveSweepKey}). Wait or stop it first.`
     : r.swept_at
       ? `Re-sweep (last completed ${new Date(r.swept_at).toLocaleString()})`
-      : `Sweep every release Discogs has tagged with label_id ${r.label_id} into the cache.`;
+      : `Sweep every master Discogs has tagged with this label, plus any orphan releases (no parent master), into the cache.`;
   return `${sweptBadge}<button class="admin-btn" type="button" ${dis}
             onclick="_labelDirStartSweep(${r.label_id}, '${_jsEsc(r.label_name)}')"
             title="${_eHtml(title)}"
@@ -2073,7 +2073,7 @@ async function _labelDirClearId(labelName) {
 }
 
 async function _labelDirStartSweep(labelId, labelName) {
-  if (!confirm(`Start a /labels/${labelId}/releases sweep for "${labelName}"?\n\nThis walks every release Discogs has tagged with that label_id and fetches+caches any that aren't in the cache yet. Progress is visible in the Catalog-number crawls panel below.`)) return;
+  if (!confirm(`Start a label sweep for "${labelName}"?\n\nThis fetches+caches every master Discogs has tagged with that label, then every orphan release (no parent master). Existing cached releases aren't touched. Progress is visible in the Catalog-number crawls panel below.`)) return;
   try {
     const r = await apiFetch("/api/admin/label-directory/start-sweep", {
       method: "POST", headers: { "content-type": "application/json" },

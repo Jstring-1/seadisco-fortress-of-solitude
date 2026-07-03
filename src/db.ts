@@ -1372,9 +1372,11 @@ export async function initDb() {
     )
   `);
   // Two-phase walker: after the catno range exhausts, transition to a
-  // label-only search to catch releases with catnos outside the range
-  // or none at all. `phase` is 'catno' | 'label_sweep' | 'done' and
-  // `label_sweep_page` tracks the current page within the label sweep.
+  // label-only sweep for every master + orphan release under the
+  // label. `phase` is 'catno' | 'catno_done' | 'label_sweep_masters' |
+  // 'label_sweep_orphans' | 'label_sweep_done'; `label_sweep_page`
+  // tracks the current page within whichever label-sweep sub-pass is
+  // active.
   await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'catno'`);
   await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS label_sweep_page INT`);
 
