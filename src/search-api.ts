@@ -8527,6 +8527,12 @@ interface LabelsCarouselCacheEntry {
 }
 const _LABELS_CAROUSEL_CACHE = new Map<string, LabelsCarouselCacheEntry>();
 const _LABELS_CAROUSEL_TTL_MS = 60_000;
+// TEMP: external_discography stub cards are disabled in the labels
+// carousel until catno/format matching against the Discogs cache is
+// more reliable — surfacing unverified scraped matches next to real
+// Discogs masters+releases was confusing. Flip back to true to
+// re-enable; the ingest/review admin tools are untouched either way.
+const _LABELS_CAROUSEL_INCLUDE_EXTERNAL = false;
 function _invalidateLabelsCarouselCache(label?: string): void {
   if (!label) { _LABELS_CAROUSEL_CACHE.clear(); return; }
   for (const k of _LABELS_CAROUSEL_CACHE.keys()) {
@@ -8632,11 +8638,13 @@ app.get("/api/admin/labels/releases", async (req, res) => {
              ${_labelOrderBy(label)}`,
           args,
         ),
-        listExternalDiscographyForLabel({
-          label,
-          yearFrom: Number.isFinite(yFrom) ? yFrom : undefined,
-          yearTo:   Number.isFinite(yTo)   ? yTo   : undefined,
-        }),
+        _LABELS_CAROUSEL_INCLUDE_EXTERNAL
+          ? listExternalDiscographyForLabel({
+              label,
+              yearFrom: Number.isFinite(yFrom) ? yFrom : undefined,
+              yearTo:   Number.isFinite(yTo)   ? yTo   : undefined,
+            })
+          : Promise.resolve([]),
       ]);
 
       const cacheItems = pageRes.rows.map(r => ({
