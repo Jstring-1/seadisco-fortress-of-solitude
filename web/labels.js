@@ -1,10 +1,11 @@
 // ── Labels page (admin-only) — chronological carousel ────────────
 // One release on screen at a time, big "open" card with the
-// release's cover, metadata, and a collapsed tracklist. Left / right
-// arrows (and ← → keys) flip through the label's catalog in year
-// ASC + catno ASC order. Source is release_cache only — no Discogs
-// calls. Pages of 200 rows are loaded lazily; the next page is
-// prefetched as the user nears the end of the current one.
+// release's cover, metadata, and a collapsed tracklist. Click the
+// prev/next peek card (or use ← →) to flip through the label's
+// catalog in year ASC + catno ASC order. Source is release_cache
+// only — no Discogs calls. Pages of 200 rows are loaded lazily; the
+// next page is prefetched as the user nears the end of the current
+// one.
 
 (function () {
   if (window.__sdLabelsBound) return;
@@ -373,6 +374,11 @@
             <div style="font-size:0.7rem">${_esc(cur._externalSource || "external source")}</div>
           </div>`
         : `<div style="width:240px;max-width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85rem">no image</div>`;
+    // Cover opens the album popup directly — external stub cards have
+    // no real Discogs id to open, so they stay non-clickable.
+    const coverHtml = isExternal
+      ? cover
+      : `<div onclick="_labelsOpenRelease(${cur.id}, '${cur.type}')" style="cursor:pointer" title="Open album">${cover}</div>`;
 
     const tracks = Array.isArray(cur.tracklist) ? cur.tracklist : [];
     const tracksLabel = isExternal ? "Sides" : "Tracks";
@@ -415,14 +421,21 @@
         ? `<div style="width:100%;aspect-ratio:1/1;background:repeating-linear-gradient(45deg,rgba(255,255,255,0.03),rgba(255,255,255,0.03) 6px,rgba(255,255,255,0.06) 6px,rgba(255,255,255,0.06) 12px);border-radius:5px;opacity:0.55;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.72rem">ext</div>`
         : `<div style="width:100%;aspect-ratio:1/1;background:rgba(255,255,255,0.03);border-radius:5px;opacity:0.55"></div>`;
 
-    // Prev/next arrows live in a zero-height sticky wrapper so their
-    // on-screen position tracks the viewport, not the center column's
-    // height — expanding the tracklist or notes no longer pushes them
-    // down the page and out of reach.
-    const navBtn = (dir, enabled, glyph) => `
-      <button type="button" onclick="_labels${dir}()" ${enabled ? "" : "disabled"}
-        title="${dir === "Prev" ? "Previous (←)" : "Next (→)"}"
-        style="position:absolute;${dir === "Prev" ? "left:-10px" : "right:-10px"};top:0;transform:translateY(-50%);pointer-events:auto;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:50%;width:42px;height:42px;font-size:1.2rem;cursor:${enabled ? "pointer" : "not-allowed"};opacity:${enabled ? "1" : "0.35"}">${glyph}</button>`;
+    // Same lookup popup used on album-popup title/artist text (search
+    // SeaDisco / Wikipedia / copy / etc.) — clicking either opens it.
+    // The title also gets a direct "Open release/master" shortcut at
+    // the top of that popup (external stub cards have no real id, so
+    // they're skipped).
+    const titleHtml = (typeof entityLookupLinkHtml === "function")
+      ? entityLookupLinkHtml("release", cur.title || "(untitled)", {
+          title: `Lookup options for "${cur.title || ""}"`,
+          ...(isExternal ? {} : { openId: cur.id, openType: cur.type === "master" ? "master" : "release" }),
+        })
+      : _esc(cur.title || "(untitled)");
+    const artistHtml = cur.artist && typeof entityLookupLinkHtml === "function"
+      ? entityLookupLinkHtml("artist", cur.artist, { title: `Lookup options for "${cur.artist}"` })
+      : _esc(cur.artist || "");
+    const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cur.artist || ""} ${cur.title || ""}`.trim())}`;
 
     // Year + label banner, shown once above the whole row — every card
     // on this page is the same label, so it doesn't need repeating in
@@ -444,15 +457,10 @@
         </div>
 
         <!-- Center card -->
-        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:0.3rem;position:relative">
-          <div style="position:sticky;top:38vh;height:0;overflow:visible;align-self:stretch;width:100%;z-index:5;pointer-events:none">
-            ${navBtn("Prev", !!prevIt, "‹")}
-            ${navBtn("Next", !!(nextIt || _state.hasMore), "›")}
-          </div>
-
-          ${cover}
-          <div style="font-size:1.2rem;font-weight:600;line-height:1.2;margin-top:0.3rem">${_esc(cur.title || "(untitled)")}</div>
-          <div style="font-size:0.95rem;color:var(--text)">${_esc(cur.artist || "")}</div>
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:0.3rem">
+          ${coverHtml}
+          <div style="font-size:1.2rem;font-weight:600;line-height:1.2;margin-top:0.3rem">${titleHtml}</div>
+          <div style="font-size:0.95rem;color:var(--text)">${artistHtml}</div>
           <div style="font-size:0.82rem;color:var(--muted)">${_catnoFor(cur)}</div>
           <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">${_typeLineFor(cur)}</div>
           ${formats ? `<div style="font-size:0.78rem;color:var(--muted)">${formats}${cur.country ? ` · ${_esc(cur.country)}` : ""}</div>` : (cur.country ? `<div style="font-size:0.78rem;color:var(--muted)">${_esc(cur.country)}</div>` : "")}
@@ -460,8 +468,8 @@
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin-top:0.3rem">
             ${isExternal
               ? `<span style="font-size:0.75rem;color:var(--muted);font-style:italic">Source: ${_esc(cur._externalSource || "unknown")}</span>`
-              : `<button class="admin-btn" type="button" onclick="_labelsOpenRelease(${cur.id}, '${cur.type}')">Open full modal ↗</button>
-                 <a class="admin-btn" href="https://www.discogs.com/${cur.type === 'master' ? 'master' : 'release'}/${cur.id}" target="_blank" rel="noopener" style="text-decoration:none">Discogs ↗</a>`}
+              : `<a class="admin-btn" href="https://www.discogs.com/${cur.type === 'master' ? 'master' : 'release'}/${cur.id}" target="_blank" rel="noopener" style="text-decoration:none">Discogs ↗</a>`}
+            <a class="admin-btn" href="${_esc(ebayUrl)}" target="_blank" rel="noopener" style="text-decoration:none">eBay ↗</a>
           </div>
 
           <div style="width:100%;max-width:520px;text-align:left">
@@ -491,9 +499,56 @@
   }
   window._labelsOpenRelease = _openRelease;
 
+  // ── URL deep-link — identify + reopen a specific album on this page ──
+  // lbl = label name, lid = discogs release/master id (or the negative
+  // external_discography row id), ltype = master|release|external.
+  // Every render stamps the current position into the URL (replaceState,
+  // so prev/next clicks don't spam browser history); loading that URL
+  // fresh re-selects the label and jumps straight to the same album.
+  function _urlParams() {
+    const p = new URLSearchParams(location.search);
+    return { label: p.get("lbl") || "", id: p.get("lid") || "", type: p.get("ltype") || "" };
+  }
+
+  function _updateUrl() {
+    const u = new URL(location.href);
+    u.searchParams.set("v", "labels");
+    if (_state.label) u.searchParams.set("lbl", _state.label); else u.searchParams.delete("lbl");
+    const cur = _state.items[_state.index];
+    if (cur) {
+      u.searchParams.set("lid", String(cur.id));
+      u.searchParams.set("ltype", cur.type || "release");
+    } else {
+      u.searchParams.delete("lid");
+      u.searchParams.delete("ltype");
+    }
+    history.replaceState({}, "", u.toString());
+  }
+
+  async function _openFromUrl(label, id, type) {
+    _state.label = label;
+    // Bypass the default Masters+ filter so a deep-linked release
+    // isn't hidden just because it also has a parent master.
+    if (id) _state.type = "both";
+    _renderControls();
+    await _resetAndLoad();
+    if (id) {
+      const targetId = Number(id);
+      const findIdx = () => _state.items.findIndex(it => Number(it.id) === targetId && (!type || it.type === type));
+      let idx = findIdx();
+      while (idx < 0 && _state.hasMore) {
+        await _ensureLoaded(_state.items.length);
+        idx = findIdx();
+      }
+      if (idx >= 0) { await _goto(idx); return; }
+    }
+    _render();
+  }
+
   function _render() {
     _renderControls();
     _renderStage();
+    _updateUrl();
   }
 
   // ── Init ────────────────────────────────────────────────────────
@@ -513,7 +568,11 @@
       `;
       document.addEventListener("keydown", _onKey);
     }
-    _render();
     _fetchLabelsList().catch(() => {});
+    if (!_state.label) {
+      const { label, id, type } = _urlParams();
+      if (label) { _openFromUrl(label, id, type); return; }
+    }
+    _render();
   };
 })();
