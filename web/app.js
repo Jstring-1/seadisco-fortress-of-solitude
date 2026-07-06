@@ -89,7 +89,7 @@ window._ensureAdminFlag = _ensureAdminFlag;
     // + MusicBrainz: admin/demo gated. Wait for auth so the gate
     // decision and save-button visibility happen post-Clerk-resolve.
     await authReadyPromise;
-    if (rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "musicbrainz") await _ensureAdminFlag();
+    if (rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "musicbrainz" || rawView === "labels") await _ensureAdminFlag();
     switchView(rawView, true);
   } else if (rawView === "picks") {
     // Legacy /?v=picks bookmark — Submitted Tracks moved into the
