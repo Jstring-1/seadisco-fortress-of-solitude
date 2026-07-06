@@ -349,13 +349,18 @@
           return `${qty}${_esc(f?.name || "")}${_esc(desc)}`;
         }).join(" / ")
       : "";
-    const _labelsStrFor = (it) => Array.isArray(it?.labels) && it.labels.length
-      ? it.labels.map(l => {
-          const cn = l?.catno ? ` ${_esc(l.catno)}` : "";
-          return `${_esc(l?.name || "")}${cn}`;
-        }).join(" · ")
-      : `${_esc(it?.catno || "")}`;
-    const labelsStr = _labelsStrFor(cur);
+    // Catalog number(s) only — the label name itself is shown once in
+    // the shared banner above the stage (every card on this page is
+    // the same label, so repeating the name per-card was noise).
+    const _catnoFor = (it) => {
+      const fromLabels = Array.isArray(it?.labels) && it.labels.length
+        ? it.labels.map(l => l?.catno || "").filter(Boolean).join(" · ")
+        : "";
+      return _esc(fromLabels || it?.catno || "");
+    };
+    const _typeLineFor = (it) => it?._source === "external"
+      ? `<span style="background:rgba(255,255,255,0.08);padding:0.1rem 0.4rem;border-radius:3px;border:1px dashed rgba(255,255,255,0.2)">External</span>`
+      : _esc(it?.type || "");
 
     const isExternal = cur._source === "external";
     const cover = cur.cover
@@ -393,18 +398,15 @@
         </div>`
       : "";
 
-    // Same top-to-bottom order as the center card (type·year, title,
-    // artist, label/catno) so scanning ahead/back doesn't require
-    // re-locating each field in a different spot.
-    const peekText = (it) => {
-      if (!it) return "";
-      const itExternal = it._source === "external";
-      const typeYear = itExternal ? `External · ${_esc(it.year || "—")}` : `${_esc(it.type || "")} · ${_esc(it.year || "—")}`;
-      return `<div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-top:0.4rem">${typeYear}</div>
-        <div style="font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.title || "")}</div>
+    // Same top-to-bottom order as the center card (title, artist,
+    // catno, type) so scanning ahead/back doesn't require re-locating
+    // each field in a different spot.
+    const peekText = (it) => it
+      ? `<div style="font-size:0.82rem;color:var(--text);margin-top:0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.title || "")}</div>
         <div style="font-size:0.75rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.artist || "")}</div>
-        <div style="font-size:0.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_labelsStrFor(it)}</div>`;
-    };
+        <div style="font-size:0.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_catnoFor(it)}</div>
+        <div style="font-size:0.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_typeLineFor(it)}</div>`
+      : "";
 
     const peekCover = (it) => it && it.coverThumb
       ? `<img src="${_esc(it.coverThumb)}" alt="" loading="lazy"
@@ -422,7 +424,16 @@
         title="${dir === "Prev" ? "Previous (←)" : "Next (→)"}"
         style="position:absolute;${dir === "Prev" ? "left:-10px" : "right:-10px"};top:0;transform:translateY(-50%);pointer-events:auto;background:rgba(0,0,0,0.55);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:50%;width:42px;height:42px;font-size:1.2rem;cursor:${enabled ? "pointer" : "not-allowed"};opacity:${enabled ? "1" : "0.35"}">${glyph}</button>`;
 
+    // Year + label banner, shown once above the whole row — every card
+    // on this page is the same label, so it doesn't need repeating in
+    // each of the three cards.
+    const bannerHtml = `
+      <div style="text-align:center;font-size:0.8rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;padding:0 0.6rem 0.3rem">
+        ${_esc(cur.year || "—")} · ${_esc(_state.label)}
+      </div>`;
+
     el.innerHTML = `
+      ${bannerHtml}
       <div style="display:grid;grid-template-columns:120px 1fr 120px;gap:0.8rem;align-items:start;padding:0.6rem">
         <!-- Prev peek -->
         <div style="cursor:${prevIt ? "pointer" : "default"}" onclick="${prevIt ? "_labelsPrev()" : ""}"
@@ -440,14 +451,10 @@
           </div>
 
           ${cover}
-          <div style="font-size:0.78rem;color:${isExternal ? "var(--muted)" : "var(--accent)"};text-transform:uppercase;letter-spacing:0.05em;margin-top:0.3rem">
-            ${isExternal
-              ? `<span style="background:rgba(255,255,255,0.08);padding:0.1rem 0.4rem;border-radius:3px;border:1px dashed rgba(255,255,255,0.2)">External</span> · ${_esc(cur.year || "—")}`
-              : `${_esc(cur.type)} · ${_esc(cur.year || "—")}`}
-          </div>
-          <div style="font-size:1.2rem;font-weight:600;line-height:1.2">${_esc(cur.title || "(untitled)")}</div>
+          <div style="font-size:1.2rem;font-weight:600;line-height:1.2;margin-top:0.3rem">${_esc(cur.title || "(untitled)")}</div>
           <div style="font-size:0.95rem;color:var(--text)">${_esc(cur.artist || "")}</div>
-          <div style="font-size:0.82rem;color:var(--muted)">${labelsStr}</div>
+          <div style="font-size:0.82rem;color:var(--muted)">${_catnoFor(cur)}</div>
+          <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">${_typeLineFor(cur)}</div>
           ${formats ? `<div style="font-size:0.78rem;color:var(--muted)">${formats}${cur.country ? ` · ${_esc(cur.country)}` : ""}</div>` : (cur.country ? `<div style="font-size:0.78rem;color:var(--muted)">${_esc(cur.country)}</div>` : "")}
 
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin-top:0.3rem">
