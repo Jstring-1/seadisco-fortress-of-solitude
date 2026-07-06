@@ -518,9 +518,8 @@ const _ytOpenToUsers = (process.env.YT_OPEN_TO_USERS === "1" || process.env.YT_O
 // Clerk user IDs that get the same privileges as admin without being
 // admin: bypass the MAX_USERS cap, see the YouTube view + submission
 // flow, hit YT routes server-side. Used for the Google API quota
-// reviewer's `kylejester+ytdemo@gmail.com` account so the reviewer
-// can demo without admin credentials AND without opening the doors
-// to every signed-in user.
+// reviewer's demo account so the reviewer can demo without admin
+// credentials AND without opening the doors to every signed-in user.
 //
 // Find the Clerk user ID in Clerk dashboard → Users → click the user
 // → "user_xxxxxxxx" copyable string. Set DEMO_CLERK_IDS=user_abc,user_def
