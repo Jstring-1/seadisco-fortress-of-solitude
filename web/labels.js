@@ -76,6 +76,7 @@
     _state.hasMore = false;
     _state.index = 0;
     _state.tracksOpen = false;
+    _state.animDir = "jump";
     if (!_state.label) { _render(); return; }
     _state.loading = true;
     _render();
@@ -94,13 +95,17 @@
     }
   }
 
+  // Returns true only when a new page was actually fetched — callers
+  // use that to decide whether a re-render is warranted (an
+  // unconditional re-render on every call would restart the stage's
+  // entrance animation mid-flight on every single nav click).
   async function _ensureLoaded(index) {
     // Lazy-load subsequent pages so flipping past the boundary doesn't
     // stall the carousel. We load when the user is within 20 cards of
     // the loaded edge.
-    if (!_state.hasMore) return;
-    if (_state.inFlightPage) return;
-    if (index < _state.items.length - 20) return;
+    if (!_state.hasMore) return false;
+    if (_state.inFlightPage) return false;
+    if (index < _state.items.length - 20) return false;
     const next = _state.pagesLoaded + 1;
     _state.inFlightPage = next;
     try {
@@ -112,24 +117,33 @@
       } else {
         _state.hasMore = false;
       }
-    } catch {} finally {
+      return true;
+    } catch {
+      return false;
+    } finally {
       _state.inFlightPage = null;
     }
   }
 
   // ── Navigation ──────────────────────────────────────────────────
-  async function _goto(idx) {
+  // `dir` drives the stage's entrance animation ("prev"/"next" slide
+  // in from the matching side; anything else — year jump, scrubber,
+  // label switch — just fades). tracksOpen is intentionally NOT reset
+  // here: if you had the tracklist expanded, it stays expanded as you
+  // flip through the catalog.
+  async function _goto(idx, dir = "jump") {
     if (idx < 0) idx = 0;
     if (idx >= _state.total) idx = _state.total - 1;
     _state.index = idx;
-    _state.tracksOpen = false;
-    _ensureLoaded(idx).then(() => _render());
+    _state.animDir = dir;
     _render();
+    const loadedMore = await _ensureLoaded(idx);
+    if (loadedMore) _render();
   }
   window._labelsGoto = _goto;
 
-  function _prev() { _goto(Math.max(0, _state.index - 1)); }
-  function _next() { _goto(Math.min(_state.total - 1, _state.index + 1)); }
+  function _prev() { _goto(Math.max(0, _state.index - 1), "prev"); }
+  function _next() { _goto(Math.min(_state.total - 1, _state.index + 1), "next"); }
   window._labelsPrev = _prev;
   window._labelsNext = _next;
 
@@ -320,6 +334,7 @@
 
   function _toggleTracks() {
     _state.tracksOpen = !_state.tracksOpen;
+    _state.animDir = "jump"; // expand/collapse fades in place, no slide
     _renderStage();
   }
   window._labelsToggleTracks = _toggleTracks;
@@ -453,7 +468,15 @@
         ${_esc(cur.year || "—")} · ${_esc(_state.label)}
       </div>`;
 
+    // Entrance animation: slide in from the side matching the nav
+    // direction (prev/next); anything else (year jump, scrubber,
+    // filter change) just fades. Runs via rAF below since it needs
+    // the freshly-inserted node to exist first.
+    const dir = _state.animDir || "jump";
+    const fromX = dir === "next" ? 14 : dir === "prev" ? -14 : 0;
+
     el.innerHTML = `
+      <div id="labels-anim" style="opacity:0;transform:translateX(${fromX}px);transition:opacity 0.16s ease,transform 0.16s ease">
       ${bannerHtml}
       <div style="display:grid;grid-template-columns:120px 1fr 120px;gap:0.8rem;align-items:start;padding:0.6rem">
         <!-- Prev peek -->
@@ -494,7 +517,12 @@
           ${peekText(nextIt)}
         </div>
       </div>
+      </div>
     `;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const anim = document.getElementById("labels-anim");
+      if (anim) { anim.style.opacity = "1"; anim.style.transform = "translateX(0)"; }
+    }));
   }
 
   function _openRelease(id, type) {
