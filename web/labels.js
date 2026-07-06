@@ -349,12 +349,13 @@
           return `${qty}${_esc(f?.name || "")}${_esc(desc)}`;
         }).join(" / ")
       : "";
-    const labelsStr = Array.isArray(cur.labels) && cur.labels.length
-      ? cur.labels.map(l => {
+    const _labelsStrFor = (it) => Array.isArray(it?.labels) && it.labels.length
+      ? it.labels.map(l => {
           const cn = l?.catno ? ` ${_esc(l.catno)}` : "";
           return `${_esc(l?.name || "")}${cn}`;
         }).join(" · ")
-      : `${_esc(cur.catno || "")}`;
+      : `${_esc(it?.catno || "")}`;
+    const labelsStr = _labelsStrFor(cur);
 
     const isExternal = cur._source === "external";
     const cover = cur.cover
@@ -392,11 +393,18 @@
         </div>`
       : "";
 
-    const peekText = (it) => it
-      ? `<div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">${_esc(it.catno || "")}</div>
-         <div style="font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.title || "")}</div>
-         <div style="font-size:0.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.year || "")} · ${_esc(it.artist || "")}</div>`
-      : "";
+    // Same top-to-bottom order as the center card (type·year, title,
+    // artist, label/catno) so scanning ahead/back doesn't require
+    // re-locating each field in a different spot.
+    const peekText = (it) => {
+      if (!it) return "";
+      const itExternal = it._source === "external";
+      const typeYear = itExternal ? `External · ${_esc(it.year || "—")}` : `${_esc(it.type || "")} · ${_esc(it.year || "—")}`;
+      return `<div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-top:0.4rem">${typeYear}</div>
+        <div style="font-size:0.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.title || "")}</div>
+        <div style="font-size:0.75rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(it.artist || "")}</div>
+        <div style="font-size:0.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_labelsStrFor(it)}</div>`;
+    };
 
     const peekCover = (it) => it && it.coverThumb
       ? `<img src="${_esc(it.coverThumb)}" alt="" loading="lazy"
