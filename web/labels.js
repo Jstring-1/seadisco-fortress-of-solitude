@@ -43,7 +43,12 @@
   // ── Data ────────────────────────────────────────────────────────
   async function _fetchLabelsList() {
     if (_state.labelsAll) return _state.labelsAll;
-    const r = await apiFetch("/api/admin/release-cache/labels?limit=2000");
+    // masters_plus=1 counts the same way the carousel's default view
+    // does (masters + orphan releases only), so the number shown next
+    // to a label in the picker matches the "N of total" you land on
+    // once you open it — plain cache-row counts included every
+    // pressing/reissue too, which never matched.
+    const r = await apiFetch("/api/admin/release-cache/labels?limit=2000&masters_plus=1");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
     _state.labelsAll = Array.isArray(j.items) ? j.items : [];

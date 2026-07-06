@@ -9018,15 +9018,18 @@ function _csvEscape(v) {
 // on the export form. Memoized for 10 min — the underlying scan is
 // expensive (LATERAL over a few hundred thousand jsonb arrays).
 let _releaseLabelsCache = null;
+let _releaseLabelsCacheMP = null;
 const _RELEASE_LABELS_TTL_MS = 10 * 60 * 1000;
 app.get("/api/admin/release-cache/labels", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "300"), 10) || 300));
     const qstr = String(req.query.q ?? "").trim().toLowerCase().slice(0, 80);
+    const mastersPlus = req.query.masters_plus === "1";
     try {
-        let rows = _releaseLabelsCache && (Date.now() - _releaseLabelsCache.at) < _RELEASE_LABELS_TTL_MS
-            ? _releaseLabelsCache.rows
+        const cacheRef = mastersPlus ? _releaseLabelsCacheMP : _releaseLabelsCache;
+        let rows = cacheRef && (Date.now() - cacheRef.at) < _RELEASE_LABELS_TTL_MS
+            ? cacheRef.rows
             : null;
         if (!rows) {
             const r = await getPool().query(`
@@ -9035,12 +9038,16 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
                LATERAL jsonb_array_elements(COALESCE(rc.data->'labels', '[]'::jsonb)) lbl,
                LATERAL (SELECT NULLIF(TRIM(lbl->>'name'), '') AS name) x
          WHERE x.name IS NOT NULL
+         ${mastersPlus ? "AND (rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) = 0))" : ""}
          GROUP BY name
          ORDER BY c DESC
          LIMIT 2000
       `);
             rows = r.rows.map(row => ({ name: String(row.name), count: Number(row.c) }));
-            _releaseLabelsCache = { at: Date.now(), rows };
+            if (mastersPlus)
+                _releaseLabelsCacheMP = { at: Date.now(), rows };
+            else
+                _releaseLabelsCache = { at: Date.now(), rows };
         }
         const filtered = qstr
             ? rows.filter(r => r.name.toLowerCase().includes(qstr))

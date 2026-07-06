@@ -8401,20 +8401,30 @@ function _csvEscape(v: any): string {
   return s;
 }
 
-// GET /api/admin/release-cache/labels?limit=300&q=
+// GET /api/admin/release-cache/labels?limit=300&q=&masters_plus=1
 // Returns the top label names by row count in release_cache, with
 // optional substring filter. Powers the multi-select label filter
 // on the export form. Memoized for 10 min — the underlying scan is
 // expensive (LATERAL over a few hundred thousand jsonb arrays).
+// masters_plus=1 counts the same way the labels carousel's default
+// view does (masters + orphan releases only, long pressing tail
+// collapsed) so the count shown in that picker matches what you see
+// once you open the label — plain COUNT(*) counts every cached
+// pressing/reissue too, which is a much bigger (and less meaningful)
+// number. Kept opt-in so the export form's picker keeps the raw
+// per-row count it was built around.
 let _releaseLabelsCache: { at: number; rows: Array<{ name: string; count: number }> } | null = null;
+let _releaseLabelsCacheMP: { at: number; rows: Array<{ name: string; count: number }> } | null = null;
 const _RELEASE_LABELS_TTL_MS = 10 * 60 * 1000;
 app.get("/api/admin/release-cache/labels", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "300"), 10) || 300));
   const qstr = String(req.query.q ?? "").trim().toLowerCase().slice(0, 80);
+  const mastersPlus = req.query.masters_plus === "1";
   try {
-    let rows = _releaseLabelsCache && (Date.now() - _releaseLabelsCache.at) < _RELEASE_LABELS_TTL_MS
-      ? _releaseLabelsCache.rows
+    const cacheRef = mastersPlus ? _releaseLabelsCacheMP : _releaseLabelsCache;
+    let rows = cacheRef && (Date.now() - cacheRef.at) < _RELEASE_LABELS_TTL_MS
+      ? cacheRef.rows
       : null;
     if (!rows) {
       const r = await getPool().query(`
@@ -8423,12 +8433,14 @@ app.get("/api/admin/release-cache/labels", async (req, res) => {
                LATERAL jsonb_array_elements(COALESCE(rc.data->'labels', '[]'::jsonb)) lbl,
                LATERAL (SELECT NULLIF(TRIM(lbl->>'name'), '') AS name) x
          WHERE x.name IS NOT NULL
+         ${mastersPlus ? "AND (rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id','')::bigint, 0) = 0))" : ""}
          GROUP BY name
          ORDER BY c DESC
          LIMIT 2000
       `);
       rows = r.rows.map(row => ({ name: String(row.name), count: Number(row.c) }));
-      _releaseLabelsCache = { at: Date.now(), rows };
+      if (mastersPlus) _releaseLabelsCacheMP = { at: Date.now(), rows };
+      else _releaseLabelsCache = { at: Date.now(), rows };
     }
     const filtered = qstr
       ? rows.filter(r => r.name.toLowerCase().includes(qstr))
