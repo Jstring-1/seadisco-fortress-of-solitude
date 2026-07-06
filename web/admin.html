@@ -1672,6 +1672,13 @@ async function loadLabelDirectory() {
       _labelDirActiveSweepKey = sj?.running ? (sj?.active || null) : null;
     }
     _renderLabelDir();
+    // Auto-poll while a sweep is running so the "running…" pill, the
+    // running banner, and the swept badge / cache counts pick up the
+    // finished state without a manual refresh.
+    clearTimeout(window._labelDirPollTimer);
+    if (_labelDirActiveSweepKey && document.getElementById("panel-labels")?.style.display !== "none") {
+      window._labelDirPollTimer = setTimeout(loadLabelDirectory, 5000);
+    }
   } catch (err) {
     el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
