@@ -8538,6 +8538,7 @@ app.get("/api/admin/labels/releases", async (req, res) => {
   const type    = String(req.query.type ?? "").trim().toLowerCase();
   const yFrom   = parseInt(String(req.query.year_from ?? ""), 10);
   const yTo     = parseInt(String(req.query.year_to   ?? ""), 10);
+  const vinylOnly = String(req.query.format ?? "").trim().toLowerCase() === "vinyl";
 
   const args: any[] = [];
   args.push(JSON.stringify([{ name: label }]));
@@ -8563,10 +8564,24 @@ app.get("/api/admin/labels/releases", async (req, res) => {
     args.push(yTo);
     where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= $${args.length}`);
   }
+  // Vinyl-only: master rows carry no "formats" field of their own
+  // (that's release-specific in Discogs' API), so fall back to the
+  // master's main_release cache row when checking a master.
+  if (vinylOnly) {
+    where.push(`(
+      EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(rc.data->'formats','[]'::jsonb)) f WHERE f->>'name' ILIKE 'Vinyl')
+      OR (rc.type = 'master' AND EXISTS (
+        SELECT 1 FROM release_cache rc2
+         WHERE rc2.type = 'release'
+           AND rc2.discogs_id = COALESCE(NULLIF(rc.data->>'main_release','')::bigint, -1)
+           AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(rc2.data->'formats','[]'::jsonb)) f2 WHERE f2->>'name' ILIKE 'Vinyl')
+      ))
+    )`);
+  }
   const whereSql = `WHERE ${where.join(" AND ")}`;
 
   try {
-    const cacheKey = JSON.stringify({ label, type, yFrom, yTo });
+    const cacheKey = JSON.stringify({ label, type, yFrom, yTo, vinylOnly });
     let cached = _LABELS_CAROUSEL_CACHE.get(cacheKey);
     if (!cached || Date.now() - cached.ts > _LABELS_CAROUSEL_TTL_MS) {
       // Fetch all cache rows for this label (no SQL pagination — merged

@@ -16,6 +16,7 @@
   const _state = {
     label:        "",
     type:         "",
+    vinylOnly:    false,
     yearFrom:     "",
     yearTo:       "",
     items:        [],          // flat list across all loaded pages
@@ -56,6 +57,7 @@
     q.set("page",  String(page));
     q.set("per_page", String(PER_PAGE));
     if (_state.type) q.set("type", _state.type);
+    if (_state.vinylOnly) q.set("format", "vinyl");
     if (_state.yearFrom) q.set("year_from", _state.yearFrom);
     if (_state.yearTo)   q.set("year_to",   _state.yearTo);
     const r = await apiFetch(`/api/admin/labels/releases?${q.toString()}`);
@@ -178,6 +180,11 @@
           </select>
         </label>
 
+        <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="labels-vinyl-only" ${_state.vinylOnly ? "checked" : ""} onchange="_labelsOnFiltersChange()">
+          Vinyl only
+        </label>
+
         <label style="display:inline-flex;gap:0.3rem;align-items:center;color:var(--muted)">Year
           <input id="labels-year-from" type="number" placeholder="from" value="${_esc(_state.yearFrom)}"
             onchange="_labelsOnFiltersChange()" style="width:70px;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
@@ -272,9 +279,10 @@
   window._labelsPickLabel = _pickLabel;
 
   function _onFiltersChange() {
-    _state.type     = document.getElementById("labels-type")?.value || "";
-    _state.yearFrom = document.getElementById("labels-year-from")?.value || "";
-    _state.yearTo   = document.getElementById("labels-year-to")?.value || "";
+    _state.type       = document.getElementById("labels-type")?.value || "";
+    _state.vinylOnly  = !!document.getElementById("labels-vinyl-only")?.checked;
+    _state.yearFrom   = document.getElementById("labels-year-from")?.value || "";
+    _state.yearTo     = document.getElementById("labels-year-to")?.value || "";
     _resetAndLoad();
   }
   window._labelsOnFiltersChange = _onFiltersChange;
