@@ -453,15 +453,19 @@
     // SeaDisco / Wikipedia / copy / etc.) — clicking either opens it.
     // The title also gets a direct "Open release/master" shortcut at
     // the top of that popup (external stub cards have no real id, so
-    // they're skipped).
+    // they're skipped). resultType: "both" makes "Search SeaDisco"
+    // skip the Masters+ dedupe — this page already collapses same-
+    // title pressings, so the search link is the escape hatch to see
+    // every individual release of the master.
     const titleHtml = (typeof entityLookupLinkHtml === "function")
       ? entityLookupLinkHtml("release", cur.title || "(untitled)", {
           title: `Lookup options for "${cur.title || ""}"`,
+          resultType: "both",
           ...(isExternal ? {} : { openId: cur.id, openType: cur.type === "master" ? "master" : "release" }),
         })
       : _esc(cur.title || "(untitled)");
     const artistHtml = cur.artist && typeof entityLookupLinkHtml === "function"
-      ? entityLookupLinkHtml("artist", cur.artist, { title: `Lookup options for "${cur.artist}"` })
+      ? entityLookupLinkHtml("artist", cur.artist, { title: `Lookup options for "${cur.artist}"`, resultType: "both" })
       : _esc(cur.artist || "");
     const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${cur.artist || ""} ${cur.title || ""}`.trim())}`;
 

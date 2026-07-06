@@ -1757,7 +1757,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260705.2313";
+  const SITE_VERSION = "build 260705.2318";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2237,6 +2237,11 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // curator having to copy them in by hand.
   const relIdAttr    = opts.releaseId != null && opts.releaseId !== "" ? ` data-lk-release-id="${escHtml(String(opts.releaseId))}"` : "";
   const mstIdAttr    = opts.masterId  != null && opts.masterId  !== "" ? ` data-lk-master-id="${escHtml(String(opts.masterId))}"`   : "";
+  // Overrides the "Search SeaDisco" button's default Masters+ result
+  // type. Callers browsing an already-deduped list (e.g. the labels
+  // carousel, which already collapses same-title pressings) pass
+  // "both" so the search results show every individual pressing.
+  const resultTypeAttr = opts.resultType ? ` data-lk-result-type="${escHtml(opts.resultType)}"` : "";
   const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`                  : "";
   const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
   // <span> not <a> — these markups can be embedded inside card <a>
@@ -2244,7 +2249,7 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // anchor is encountered, which broke wide-card layout (each card
   // split across multiple grid cells). Click semantics are unchanged
   // because the onclick handler does the work.
-  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr}${relIdAttr}${mstIdAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr}${relIdAttr}${mstIdAttr}${resultTypeAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
@@ -2257,6 +2262,7 @@ function _handleLookupClick(el, ev) {
     openType:    el.dataset.lkOpenType  || "",
     releaseId:   el.dataset.lkReleaseId || "",
     masterId:    el.dataset.lkMasterId  || "",
+    resultType:  el.dataset.lkResultType || "",
   };
   openLookupPopup(ev, scope, label, ctx);
 }
@@ -2267,7 +2273,9 @@ function _handleLookupClick(el, ev) {
 //   artist  → f-artist field, advanced panel open
 //   release → main query field
 //   label   → f-label field, advanced panel open
-function _lookupSearchSeaDisco(scope, label, entityId) {
+// resultType overrides the default Masters+ result-type radio (see
+// entityLookupLinkHtml's resultType opt above).
+function _lookupSearchSeaDisco(scope, label, entityId, resultType) {
   if (typeof closeModal === "function") { try { closeModal(); } catch {} }
   if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
   if (typeof clearForm === "function") { try { clearForm(); } catch {} }
@@ -2303,8 +2311,13 @@ function _lookupSearchSeaDisco(scope, label, entityId) {
     // returns the artist's entire discography rather than a
     // substring-matched bag, so chronological order is the
     // expected default.
-    const masterPlusRadio = document.querySelector('input[name="result-type"][value="master+"]');
-    if (masterPlusRadio) masterPlusRadio.checked = true;
+    // resultType === "both" (e.g. from the labels carousel, which
+    // already shows a deduped Masters+ view) drops the type
+    // restriction entirely — the "All" radio — so every individual
+    // pressing shows up instead of one collapsed master row.
+    const radioValue = resultType === "both" ? "" : "master+";
+    const resultRadio = document.querySelector(`input[name="result-type"][value="${radioValue}"]`);
+    if (resultRadio) resultRadio.checked = true;
     const sortEl = document.getElementById("f-sort");
     if (sortEl) sortEl.value = "year:asc";
     if (typeof doSearch === "function") doSearch(1);
@@ -2326,6 +2339,7 @@ function openLookupPopup(ev, scope, label, ctx) {
   const openType    = ctx?.openType    || "";
   const ctxReleaseId = ctx?.releaseId  || "";
   const ctxMasterId  = ctx?.masterId   || "";
+  const ctxResultType = ctx?.resultType || "";
 
   // Build the YouTube search query — scope-aware for disambiguation.
   // We send users to the in-app YouTube view (results play in the
@@ -2650,7 +2664,7 @@ function openLookupPopup(ev, scope, label, ctx) {
               .catch(() => showToast?.("Couldn't load lyric editor", "error"));
           }
         }
-        else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label, entityId);
+        else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label, entityId, ctxResultType);
         else if (b.key === "coll") {
           if (typeof searchCollectionFor === "function") {
             const cwField =
