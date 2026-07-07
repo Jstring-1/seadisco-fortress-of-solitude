@@ -32,6 +32,14 @@ import {
   forceClearCacheWarmCatnoRunning,
   CATNO_SERIES,
 } from "./cache-warm-catno.js";
+import {
+  initBulkLabelSweepModule,
+  startBulkLabelSweep,
+  requestBulkLabelSweepStop,
+  forceClearBulkLabelSweep,
+  getBulkLabelSweepStatus,
+  isBulkLabelSweepRunning,
+} from "./label-bulk-sweep-worker.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9025,6 +9033,40 @@ app.post("/api/admin/label-directory/start-sweep", express.json({ limit: "4kb" }
   }
 });
 
+// ── Bulk masters+ sweep queue runner ─────────────────────────────
+// Walks the label directory top-down by pad-row count, firing an
+// ad-hoc masters+ sweep at each label in turn. Owned by the
+// label-bulk-sweep-worker module.
+app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const body = req.body || {};
+  const minExternalCount = Number.isFinite(Number(body.minExternalCount))
+    ? Number(body.minExternalCount) : 1;
+  try {
+    const result = await startBulkLabelSweep({ minExternalCount });
+    if (!result.ok) { res.status(409).json(result); return; }
+    res.json(result);
+  } catch (err: any) {
+    console.error("[bulk-label-sweep start]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+app.post("/api/admin/label-directory/bulk-sweep/stop", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { requestBulkLabelSweepStop(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.post("/api/admin/label-directory/bulk-sweep/force-clear", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { forceClearBulkLabelSweep(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { res.json(getBulkLabelSweepStatus()); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Merge one external_discography label into another. Typical use:
 // fold a scraped variant (e.g. "Excello") into the canonical Discogs
 // name ("Excello Records") so the directory shows them as one row.
@@ -16980,6 +17022,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initExternalDiscographyWorkerModule(); } catch (e) {
       console.error("[startup] external-discography-worker init failed:", e);
+    }
+    try { initBulkLabelSweepModule(); } catch (e) {
+      console.error("[startup] bulk-label-sweep init failed:", e);
     }
     // Warm the cache-warm-runs stats cache out of band so the first
     // admin who opens the panel after deploy doesn't pay for the

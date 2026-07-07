@@ -1301,9 +1301,11 @@ export async function initDb() {
     )
   `);
     // Two-phase walker: after the catno range exhausts, transition to a
-    // label-only search to catch releases with catnos outside the range
-    // or none at all. `phase` is 'catno' | 'label_sweep' | 'done' and
-    // `label_sweep_page` tracks the current page within the label sweep.
+    // label-only sweep for every master + orphan release under the
+    // label. `phase` is 'catno' | 'catno_done' | 'label_sweep_masters' |
+    // 'label_sweep_orphans' | 'label_sweep_done'; `label_sweep_page`
+    // tracks the current page within whichever label-sweep sub-pass is
+    // active.
     await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'catno'`);
     await getPool().query(`ALTER TABLE cache_warm_catno_runs ADD COLUMN IF NOT EXISTS label_sweep_page INT`);
     // ── External discography rows ────────────────────────────────────
@@ -9603,6 +9605,23 @@ export async function getCachedReleaseIds(ids, type = "release") {
         return new Set();
     const r = await getPool().query(`SELECT discogs_id FROM release_cache WHERE type = $1 AND discogs_id = ANY($2::int[])`, [type, ids]);
     return new Set((r.rows ?? []).map((row) => Number(row.discogs_id)));
+}
+// GET /masters/{id} carries no `labels` field (labels are a
+// release-level concept — a master can span pressings on several
+// labels), so a cached master row can never be found by the label
+// directory's `data->labels` join no matter how it was cached. The
+// label sweep knows which label it matched a master against, so it
+// stamps a synthetic single-entry `labels` array onto the cached row
+// purely so that join can find it — this doesn't touch any other
+// field and never overwrites a non-empty `labels` already present.
+export async function backfillCachedMasterLabel(ids, labelName) {
+    if (!ids.length || !labelName)
+        return 0;
+    const r = await getPool().query(`UPDATE release_cache
+        SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
+      WHERE type = 'master' AND discogs_id = ANY($1::int[])
+        AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`, [ids, JSON.stringify([{ name: labelName }])]);
+    return r.rowCount ?? 0;
 }
 // Patch a single blues_lyrics row's tuning + artist fields. Both are
 // optional — only the keys you pass get updated. Returns the row

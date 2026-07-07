@@ -14,6 +14,7 @@ import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWa
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
 import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, requestExternalDiscographyStop, getExternalDiscographyStatus, isExternalDiscographyRunning, parseExcelloXlsxBuffer, } from "./external-discography-worker.js";
 import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
+import { initBulkLabelSweepModule, startBulkLabelSweep, requestBulkLabelSweepStop, forceClearBulkLabelSweep, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9011,11 +9012,18 @@ function _csvEscape(v) {
         return `"${s.replace(/"/g, '""')}"`;
     return s;
 }
-// GET /api/admin/release-cache/labels?limit=300&q=
+// GET /api/admin/release-cache/labels?limit=300&q=&masters_plus=1
 // Returns the top label names by row count in release_cache, with
 // optional substring filter. Powers the multi-select label filter
 // on the export form. Memoized for 10 min — the underlying scan is
 // expensive (LATERAL over a few hundred thousand jsonb arrays).
+// masters_plus=1 counts the same way the labels carousel's default
+// view does (masters + orphan releases only, long pressing tail
+// collapsed) so the count shown in that picker matches what you see
+// once you open the label — plain COUNT(*) counts every cached
+// pressing/reissue too, which is a much bigger (and less meaningful)
+// number. Kept opt-in so the export form's picker keeps the raw
+// per-row count it was built around.
 let _releaseLabelsCache = null;
 let _releaseLabelsCacheMP = null;
 const _RELEASE_LABELS_TTL_MS = 10 * 60 * 1000;
@@ -9565,8 +9573,11 @@ app.get("/api/admin/label-directory", async (req, res) => {
             listLabelDirectory({ search: search || undefined, limit }),
             listCacheWarmCatnoRuns(),
         ]);
-        const donePhasesSet = new Set(["label_sweep_done", "catno_done"]);
+        // Build label_id → most-recent completed-sweep timestamp.
+        // Considers both ad-hoc keys ("adhoc:{labelId}") and curated series
+        // (matched via CATNO_SERIES which carries the labelId).
         const sweptMap = new Map();
+        const donePhasesSet = new Set(["label_sweep_done", "catno_done"]);
         for (const run of catnoRuns) {
             if (!donePhasesSet.has(run.phase) || !run.last_run_at)
                 continue;
@@ -9631,6 +9642,61 @@ app.post("/api/admin/label-directory/start-sweep", express.json({ limit: "4kb" }
     }
     catch (err) {
         console.error("[label-directory start-sweep]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Bulk masters+ sweep queue runner ─────────────────────────────
+// Walks the label directory top-down by pad-row count, firing an
+// ad-hoc masters+ sweep at each label in turn. Owned by the
+// label-bulk-sweep-worker module.
+app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const minExternalCount = Number.isFinite(Number(body.minExternalCount))
+        ? Number(body.minExternalCount) : 1;
+    try {
+        const result = await startBulkLabelSweep({ minExternalCount });
+        if (!result.ok) {
+            res.status(409).json(result);
+            return;
+        }
+        res.json(result);
+    }
+    catch (err) {
+        console.error("[bulk-label-sweep start]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/label-directory/bulk-sweep/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestBulkLabelSweepStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/label-directory/bulk-sweep/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearBulkLabelSweep();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getBulkLabelSweepStatus());
+    }
+    catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
@@ -18219,6 +18285,12 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] external-discography-worker init failed:", e);
+        }
+        try {
+            initBulkLabelSweepModule();
+        }
+        catch (e) {
+            console.error("[startup] bulk-label-sweep init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the

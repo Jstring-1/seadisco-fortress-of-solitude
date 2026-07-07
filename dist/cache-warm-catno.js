@@ -16,7 +16,7 @@
 // every cataloged release gets a chance, regardless of how the
 // year/genre facet would have surfaced (or buried) it.
 import { DiscogsClient } from "./discogs-client.js";
-import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, backfillCachedMasterLabel, } from "./db.js";
 const ACTIVE_KEY = "cache_warm_catno_active_run";
 async function _writeActiveRun(seriesKey) {
     try {
@@ -84,7 +84,7 @@ export function initCacheWarmCatnoModule(adminClerkId) {
                 return;
             }
             // Curated seeds — dispatch by phase.
-            if (phase === "label_sweep") {
+            if (phase === "label_sweep_masters" || phase === "label_sweep_orphans") {
                 await startLabelSweepRun(active).catch(err => console.error("[cache-warm-catno] label-sweep boot-resume failed:", err));
             }
             else {
@@ -202,8 +202,8 @@ export async function startCacheWarmCatnoRun(seriesKey, opts = {}) {
         sweepPage = 1;
     }
     // Force phase back to catno — caller picked the "Catno walk" path,
-    // so any prior "catno_done" / "label_sweep" state is irrelevant for
-    // this run.
+    // so any prior "catno_done" / "label_sweep_*" state is irrelevant
+    // for this run.
     const phase = "catno";
     await upsertCacheWarmCatnoRun(series.key, {
         label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
@@ -241,11 +241,26 @@ export async function startCacheWarmCatnoRun(seriesKey, opts = {}) {
     })().catch(err => console.error(`[cache-warm-catno] outer IIFE rejected:`, err));
     return { ok: true };
 }
+// Resolves where a (re)started label sweep should pick up: resume the
+// masters or orphans pass at its persisted page, or start fresh at
+// masters p1 (resetCursor, no prior run, or a prior run whose phase
+// predates the masters/orphans split — e.g. "label_sweep_done" or the
+// legacy single-phase "label_sweep").
+function _resumeLabelSweepCursor(row, resetCursor) {
+    if (!resetCursor && (row?.phase === "label_sweep_masters" || row?.phase === "label_sweep_orphans")) {
+        const page = Number(row.label_sweep_page);
+        return {
+            subphase: row.phase === "label_sweep_orphans" ? "orphans" : "masters",
+            page: Number.isFinite(page) && page >= 1 ? page : 1,
+        };
+    }
+    return { subphase: "masters", page: 1 };
+}
 // Independent label-sweep run — paginated /database/search?label=X
-// with no catno filter. Catches releases with catnos outside the
-// configured [lo, hi] range, releases with no catno at all, and one-
-// off variants the catno walk misses. Resumes from the persisted
-// label_sweep_page unless resetCursor=true.
+// with no catno filter, in two passes: every master, then every
+// orphan release (no parent master). Catches masters + one-off
+// pressings the catno walk misses. Resumes from the persisted
+// (subphase, label_sweep_page) unless resetCursor=true.
 export async function startLabelSweepRun(seriesKey, opts = {}) {
     if (_runningKey)
         return { ok: false, error: `Another catno run is in progress: ${_runningKey}` };
@@ -261,19 +276,15 @@ export async function startLabelSweepRun(seriesKey, opts = {}) {
         label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
     });
     const row = await getCacheWarmCatnoRun(series.key);
-    let sweepPage = (opts.resetCursor || !row?.label_sweep_page)
-        ? 1
-        : Number(row.label_sweep_page);
-    if (!Number.isFinite(sweepPage) || sweepPage < 1)
-        sweepPage = 1;
+    const { subphase, page: sweepPage } = _resumeLabelSweepCursor(row, opts.resetCursor);
     await upsertCacheWarmCatnoRun(series.key, {
         label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-    }, { phase: "label_sweep", label_sweep_page: sweepPage, last_run_at: new Date() });
+    }, { phase: subphase === "masters" ? "label_sweep_masters" : "label_sweep_orphans", label_sweep_page: sweepPage, last_run_at: new Date() });
     await _writeActiveRun(series.key);
-    console.log(`[cache-warm-catno] kicking label-sweep worker for ${series.key} from page=${sweepPage}`);
+    console.log(`[cache-warm-catno] kicking label-sweep worker for ${series.key} (${subphase}) from page=${sweepPage}`);
     (async () => {
         try {
-            await _runLabelSweepPhase(client, series, sweepPage);
+            await _runLabelSweepPhase(client, series, sweepPage, subphase);
             if (!_stopRequested) {
                 await upsertCacheWarmCatnoRun(series.key, {
                     label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
@@ -330,17 +341,15 @@ export async function startAdHocLabelSweep(labelId, labelName, opts = {}) {
         label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
     });
     const row = await getCacheWarmCatnoRun(key);
-    let sweepPage = (opts.resetCursor || !row?.label_sweep_page) ? 1 : Number(row.label_sweep_page);
-    if (!Number.isFinite(sweepPage) || sweepPage < 1)
-        sweepPage = 1;
+    const { subphase, page: sweepPage } = _resumeLabelSweepCursor(row, opts.resetCursor);
     await upsertCacheWarmCatnoRun(key, {
         label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
-    }, { phase: "label_sweep", label_sweep_page: sweepPage, last_run_at: new Date() });
+    }, { phase: subphase === "masters" ? "label_sweep_masters" : "label_sweep_orphans", label_sweep_page: sweepPage, last_run_at: new Date() });
     await _writeActiveRun(key);
-    console.log(`[cache-warm-catno] ad-hoc sweep ${key} (${safeName}) from page=${sweepPage}`);
+    console.log(`[cache-warm-catno] ad-hoc sweep ${key} (${safeName}, ${subphase}) from page=${sweepPage}`);
     (async () => {
         try {
-            await _runLabelSweepPhase(client, ephemeral, sweepPage);
+            await _runLabelSweepPhase(client, ephemeral, sweepPage, subphase);
             if (!_stopRequested) {
                 await upsertCacheWarmCatnoRun(key, {
                     label: safeName, catLo: 0, catHi: 0, yearMax: 9999,
@@ -373,14 +382,18 @@ export async function startAdHocLabelSweep(labelId, labelName, opts = {}) {
 // of a sequential catalog by counting consecutive empty catnos.
 async function _processSearchResults(client, series, results, opts = {}) {
     await recordCacheWarmCatnoRunSearched(series.key, results.length);
+    const type = opts.type ?? "release";
     // Year filter dropped intentionally — every label-matched release is
     // cached regardless of year. The yearMax field on the seed entry is
     // kept for documentation only.
-    // trustLabelScope: the upstream endpoint already guarantees label
-    // membership (e.g. /labels/{id}/releases) — skip the fuzzy name filter.
-    const candidates = opts.trustLabelScope
-        ? results
-        : results.filter(r => _labelMatches(r, series.label));
+    let candidates = results.filter(r => _labelMatches(r, series.label));
+    // orphansOnly: the label-sweep's release pass only wants pressings
+    // with no parent master — masters themselves are covered by the
+    // separate master-type pass, so a release with a master_id would
+    // just be a duplicate of a pressing already represented by its
+    // master.
+    if (opts.orphansOnly)
+        candidates = candidates.filter(r => !Number(r?.master_id));
     const ids = [];
     for (const r of candidates) {
         const id = Number(r?.id);
@@ -389,14 +402,27 @@ async function _processSearchResults(client, series, results, opts = {}) {
     }
     let cachedIds;
     try {
-        cachedIds = await getCachedReleaseIds(ids, "release");
+        cachedIds = await getCachedReleaseIds(ids, type);
     }
     catch {
         cachedIds = new Set();
     }
-    const skipsThisN = ids.filter(id => cachedIds.has(id)).length;
-    if (skipsThisN > 0)
-        await bumpCacheWarmCatnoRunSkip(series.key, skipsThisN);
+    const skippedIds = ids.filter(id => cachedIds.has(id));
+    if (skippedIds.length > 0)
+        await bumpCacheWarmCatnoRunSkip(series.key, skippedIds.length);
+    // GET /masters/{id} carries no `labels` field, so a master cached
+    // by an earlier run (before this backfill existed, or via the
+    // genre/style warm worker) has nothing for the label directory to
+    // join on. Stamp it in now — cheap, no Discogs call — so a resweep
+    // over already-cached masters still fixes the Cache M count.
+    if (type === "master" && skippedIds.length > 0) {
+        try {
+            await backfillCachedMasterLabel(skippedIds, series.label);
+        }
+        catch (err) {
+            console.error(`[cache-warm-catno] master label backfill failed for ${series.key}:`, err?.message ?? err);
+        }
+    }
     // Stash the label-matched count on the function so the catno walker
     // can read it without re-walking the candidates list.
     _processSearchResults.lastMatchedCount = candidates.length;
@@ -411,14 +437,20 @@ async function _processSearchResults(client, series, results, opts = {}) {
             continue;
         try {
             await _sleep(REQ_INTERVAL_MS);
-            const full = await _withRetry(`release ${id}`, () => client.getRelease(id));
-            await cacheRelease(id, "release", full);
+            const full = type === "master"
+                ? await _withRetry(`master ${id}`, () => client.getMasterRelease(id))
+                : await _withRetry(`release ${id}`, () => client.getRelease(id));
+            // See backfillCachedMasterLabel above — /masters/{id} has no
+            // `labels` field, so stamp one on before caching.
+            if (type === "master" && !Array.isArray(full?.labels))
+                full.labels = [{ name: series.label }];
+            await cacheRelease(id, type, full);
             const title = String(full?.title ?? r?.title ?? "(untitled)");
             await recordCacheWarmCatnoRunHit(series.key, title, id);
             fresh++;
         }
         catch (err) {
-            await recordCacheWarmCatnoRunError(series.key, `release ${id}: ${err?.message ?? String(err)}`);
+            await recordCacheWarmCatnoRunError(series.key, `${type} ${id}: ${err?.message ?? String(err)}`);
             await _sleep(REQ_INTERVAL_MS);
         }
     }
@@ -480,66 +512,81 @@ async function _runCatnoPhase(client, series, startCatno) {
         }, { current_catno: n, last_run_at: new Date() });
     }
 }
-// ── Phase 2: paginate the whole label ────────────────────────────
-// After the configured catno range is fully walked, sweep every
-// release Discogs has tagged with this label. Catches releases with
-// catnos outside the [lo, hi] range, releases with no catno at all,
-// and one-off variants the sequential walk would miss. Year filter
-// still applies. Discogs caps label search at 10000 results (~100
-// pages × 100 per page); the worker stops when pagination exhausts
-// or when an empty page comes back.
+// ── Phase 2: masters + orphan releases for the whole label ───────
+// After the configured catno range is fully walked, sweep the rest
+// of the label in two passes:
+//   1. "masters"  — /database/search?type=master&label=X. Each master
+//      already aggregates every pressing under it, so this is the
+//      unit we actually want for search/feed/wide-card views.
+//   2. "orphans"  — /database/search?type=release&label=X, kept only
+//      when the release carries no master_id. These are the pressings
+//      Discogs never grouped under a master, so the masters pass
+//      would otherwise miss them entirely. Releases that DO have a
+//      master are skipped here — the masters pass already covers
+//      them, and re-fetching every pressing is exactly what this
+//      change is dropping.
+// There's no /labels/{id}/releases equivalent for masters (that
+// endpoint is release-only and doesn't expose master_id either), so
+// both passes go through the fuzzy ?label=Name search and rely on
+// _labelMatches to filter noise — same tradeoff the non-ID label
+// search already made. Discogs caps label search at 10000 results
+// (~100 pages × 100 per page); each pass stops when its pagination
+// exhausts or an empty page comes back, then the sweep is done.
 const LABEL_SWEEP_PER_PAGE = 100;
-async function _runLabelSweepPhase(client, series, startPage) {
+async function _runLabelSweepPhase(client, series, startPage, startSubphase = "masters") {
+    let subphase = startSubphase;
     let page = Math.max(1, startPage);
-    const useLabelId = Number.isFinite(series.labelId) && series.labelId > 0;
+    const persist = (patch) => upsertCacheWarmCatnoRun(series.key, {
+        label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
+    }, patch);
+    const phaseName = () => subphase === "masters" ? "label_sweep_masters" : "label_sweep_orphans";
     while (true) {
         if (_stopRequested)
             break;
+        const searchType = subphase === "masters" ? "master" : "release";
         let searchRes;
         try {
             await _sleep(REQ_INTERVAL_MS);
-            if (useLabelId) {
-                searchRes = await _withRetry(`label-sweep id=${series.labelId} p${page}`, () => client.getLabelReleases(series.labelId, {
-                    perPage: LABEL_SWEEP_PER_PAGE,
-                    page,
-                }));
-            }
-            else {
-                searchRes = await _withRetry(`label-sweep ${series.label} p${page}`, () => client.search("", {
-                    type: "release",
-                    label: series.label,
-                    perPage: LABEL_SWEEP_PER_PAGE,
-                    page,
-                }));
-            }
+            searchRes = await _withRetry(`label-sweep ${subphase} ${series.label} p${page}`, () => client.search("", {
+                type: searchType,
+                label: series.label,
+                perPage: LABEL_SWEEP_PER_PAGE,
+                page,
+            }));
         }
         catch (err) {
-            await recordCacheWarmCatnoRunError(series.key, `label-sweep p${page}: ${err?.message ?? String(err)}`);
+            await recordCacheWarmCatnoRunError(series.key, `label-sweep ${subphase} p${page}: ${err?.message ?? String(err)}`);
             // Skip the bad page so we don't loop forever on a server-side glitch.
             page += 1;
-            await upsertCacheWarmCatnoRun(series.key, {
-                label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-            }, { label_sweep_page: page, last_run_at: new Date() });
+            await persist({ phase: phaseName(), label_sweep_page: page, last_run_at: new Date() });
             continue;
         }
-        // /labels/{id}/releases returns `releases:[]`; /database/search returns `results:[]`.
-        const results = Array.isArray(searchRes?.releases)
-            ? searchRes.releases
-            : Array.isArray(searchRes?.results)
-                ? searchRes.results
-                : [];
-        if (!results.length)
-            break; // pagination exhausted
-        await _processSearchResults(client, series, results, { trustLabelScope: useLabelId });
+        const results = Array.isArray(searchRes?.results) ? searchRes.results : [];
+        if (!results.length) {
+            if (subphase === "masters") {
+                // Masters exhausted — hand off to the orphan-release pass.
+                subphase = "orphans";
+                page = 1;
+                await persist({ phase: phaseName(), label_sweep_page: page, last_run_at: new Date() });
+                continue;
+            }
+            break; // orphan pagination exhausted — sweep done
+        }
+        await _processSearchResults(client, series, results, { type: searchType, orphansOnly: subphase === "orphans" });
         if (_stopRequested)
             break;
         const totalPages = Number(searchRes?.pagination?.pages);
         const next = page + 1;
         page = next;
-        await upsertCacheWarmCatnoRun(series.key, {
-            label: series.label, catLo: series.lo, catHi: series.hi, yearMax: series.yearMax,
-        }, { label_sweep_page: page, last_run_at: new Date() });
-        if (Number.isFinite(totalPages) && next > totalPages)
+        await persist({ phase: phaseName(), label_sweep_page: page, last_run_at: new Date() });
+        if (Number.isFinite(totalPages) && next > totalPages) {
+            if (subphase === "masters") {
+                subphase = "orphans";
+                page = 1;
+                await persist({ phase: phaseName(), label_sweep_page: page, last_run_at: new Date() });
+                continue;
+            }
             break;
+        }
     }
 }

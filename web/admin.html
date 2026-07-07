@@ -698,14 +698,23 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR, bulkR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
       apiFetch('/api/admin/cache-warm-runs/status').catch(() => null),
       apiFetch('/api/admin/yt-review/status').catch(() => null),
+      apiFetch('/api/admin/label-directory/bulk-sweep/status').catch(() => null),
     ]);
     const badges = [];
+    if (bulkR?.ok) {
+      const j = await bulkR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
+        badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
+      }
+    }
     if (catnoR?.ok) {
       const j = await catnoR.json().catch(() => null);
       if (j?.running) badges.push({ label: `Sweep · ${j.active || '?'}`, tab: 'labels' });
@@ -1648,18 +1657,19 @@ let _labelDirMergeOpen = null;          // label_name of the row whose merge pop
 let _labelDirMergeQuery = "";           // filter text inside the merge popover
 let _labelDirAliasOpen  = null;         // {label_name, label_id} whose alias popover is open
 let _labelDirAliasQuery = "";           // filter text inside the alias popover
+let _labelDirBulkStatus = null;         // last poll of /bulk-sweep/status
 
 async function loadLabelDirectory() {
   const el = document.getElementById("labeldir-content");
   if (!el) return;
   try {
     const url = `/api/admin/label-directory?limit=2000${_labelDirQuery ? `&q=${encodeURIComponent(_labelDirQuery)}` : ""}`;
-    // Fetch directory + catno-worker status in parallel so we know
-    // whether to surface a "running" badge on a row instead of the
-    // ▶ Sweep button.
-    const [r, statusR] = await Promise.all([
+    // Fetch directory + catno-worker + bulk-sweep status in parallel
+    // so the row badges, banners, and bulk progress bar stay in sync.
+    const [r, statusR, bulkR] = await Promise.all([
       apiFetch(url),
       apiFetch("/api/admin/cache-warm-catno/status").catch(() => null),
+      apiFetch("/api/admin/label-directory/bulk-sweep/status").catch(() => null),
     ]);
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
     const j = await r.json();
@@ -1667,16 +1677,17 @@ async function loadLabelDirectory() {
     _labelDirActiveSweepKey = null;
     if (statusR?.ok) {
       const sj = await statusR.json().catch(() => null);
-      // Status payload: { series, running, active }. `active` is the
-      // series_key of the in-flight run (curated or adhoc:N).
       _labelDirActiveSweepKey = sj?.running ? (sj?.active || null) : null;
     }
+    _labelDirBulkStatus = null;
+    if (bulkR?.ok) {
+      _labelDirBulkStatus = await bulkR.json().catch(() => null);
+    }
     _renderLabelDir();
-    // Auto-poll while a sweep is running so the "running…" pill, the
-    // running banner, and the swept badge / cache counts pick up the
-    // finished state without a manual refresh.
+    // Auto-poll while any sweep or bulk queue is running.
     clearTimeout(window._labelDirPollTimer);
-    if (_labelDirActiveSweepKey && document.getElementById("panel-labels")?.style.display !== "none") {
+    const anyRunning = _labelDirActiveSweepKey || _labelDirBulkStatus?.running;
+    if (anyRunning && document.getElementById("panel-labels")?.style.display !== "none") {
       window._labelDirPollTimer = setTimeout(loadLabelDirectory, 5000);
     }
   } catch (err) {
@@ -1704,8 +1715,11 @@ function _renderLabelDir() {
         Unassigned only
       </label>
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
+      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart()" ${_labelDirBulkStatus?.running ? "disabled" : ""}
+        title="Iterate every label with a Discogs ID and pad rows ≥1, top-down by pad-row count, firing a masters+orphans sweep at each in turn. Progress is persisted so a redeploy resumes cleanly.">⏵ Bulk masters+ sweep</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
+    ${_labelDirBulkStatus?.running ? _labelDirBulkBannerHtml() : ""}
     ${_labelDirActiveSweepKey ? `
       <div style="display:flex;gap:0.4rem;align-items:center;padding:0.4rem 0.6rem;margin-bottom:0.5rem;background:rgba(160,60,40,0.15);border:1px solid #a44;border-radius:4px;flex-wrap:wrap">
         <span style="font-size:0.82rem"><strong>Sweep running:</strong> <code>${_eHtml(_labelDirActiveSweepKey)}</code></span>
@@ -2005,6 +2019,68 @@ function _labelDirOnSearch(ev) {
 function _labelDirToggleUnassigned(ev) {
   _labelDirUnassignedOnly = !!ev.target.checked;
   _renderLabelDir();
+}
+
+function _labelDirBulkBannerHtml() {
+  const s = _labelDirBulkStatus || {};
+  const cur = s.currentLabel;
+  const pct = s.total > 0 ? Math.round((s.cursor / s.total) * 100) : 0;
+  const nextPreview = (s.remaining || []).slice(0, 3)
+    .map(q => `${q.labelName} (${q.externalCount})`).join(", ");
+  return `
+    <div style="display:flex;gap:0.5rem;align-items:center;padding:0.4rem 0.6rem;margin-bottom:0.5rem;background:rgba(60,120,200,0.15);border:1px solid #48a;border-radius:4px;flex-wrap:wrap">
+      <span style="font-size:0.82rem"><strong>Bulk sweep:</strong> ${s.cursor}/${s.total} (${pct}%)${s.completed != null ? ` · ✓${s.completed}` : ""}${s.errors ? ` · ⚠${s.errors}` : ""}</span>
+      ${cur ? `<span style="font-size:0.78rem;color:var(--muted)">current: <code>${_eHtml(cur.labelName)}</code> · pad ${cur.externalCount}</span>` : ""}
+      ${nextPreview ? `<span style="font-size:0.72rem;color:var(--muted)" title="${_eHtml(nextPreview)}">next: ${_eHtml(nextPreview.length > 60 ? nextPreview.slice(0, 60) + "…" : nextPreview)}</span>` : ""}
+      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStop()" style="background:#a33;color:#fff">■ Stop bulk</button>
+      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepForceClear()" title="Only if Stop doesn't take. Wipes bulk state without touching the inner sweep.">⚠ Force clear</button>
+    </div>
+  `;
+}
+
+async function _labelDirBulkSweepStart() {
+  // One quick preview call so the confirm can show the queue size.
+  let queueSize = null;
+  try {
+    const r = await apiFetch("/api/admin/label-directory?limit=2000");
+    if (r.ok) {
+      const j = await r.json();
+      queueSize = (j.rows || []).filter(x => x.label_id && x.external_count > 0).length;
+    }
+  } catch {}
+  const msg = queueSize != null
+    ? `Start bulk masters+ sweep across ${queueSize} labels (with Discogs ID and ≥1 pad row), top-down by pad-row count?\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. Progress is persisted; a redeploy resumes cleanly. Stop bulk at any time.`
+    : `Start bulk masters+ sweep across every label with a Discogs ID and ≥1 pad row?`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/bulk-sweep/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minExternalCount: 1 }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk start failed: ${j.error || r.status}`); return; }
+    loadLabelDirectory();
+    if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+
+async function _labelDirBulkSweepStop() {
+  if (!confirm("Stop the bulk sweep queue?\n\nThis also stops the currently-running per-label sweep. Queue state is kept so you can inspect where it stopped, but starting a new bulk sweep rebuilds the queue from scratch.")) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/bulk-sweep/stop", { method: "POST" });
+    if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+    loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
+}
+
+async function _labelDirBulkSweepForceClear() {
+  if (!confirm("Force-clear bulk sweep state?\n\nOnly use if Stop didn't take. The current inner per-label sweep is NOT touched (use ■ Stop sweep for that).")) return;
+  try {
+    const r = await apiFetch("/api/admin/label-directory/bulk-sweep/force-clear", { method: "POST" });
+    if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+    loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
 }
 
 async function _labelDirStopSweep() {
