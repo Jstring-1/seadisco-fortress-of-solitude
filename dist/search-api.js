@@ -18347,6 +18347,15 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         startDailySyncSchedule();
         startExtrasSyncSchedule();
+        // Wait for initDb to finish so background workers don't
+        // boot-resume against a still-migrating schema (e.g. a worker
+        // whose write path references a column an in-flight ALTER TABLE
+        // hasn't added yet). Cheap — initDb is normally done within a
+        // few seconds of boot.
+        try {
+            await _dbReady;
+        }
+        catch { /* logged in _dbReady */ }
         // Nightly 1am–6am Pacific cron that warms release_cache for
         // blues releases by year. Idles when out-of-window or disabled
         // in the admin UI. Persists progress so a restart resumes.
