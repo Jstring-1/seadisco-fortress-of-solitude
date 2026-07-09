@@ -19,6 +19,7 @@ import { initCacheProjectionBackfillModule, startCacheProjectionBackfill, reques
 import { initArtistSweepModule, startArtistSweep, requestArtistSweepStop, forceClearArtistSweep, getArtistSweepStatus, } from "./artist-sweep-worker.js";
 import { initMasterVersionsWalkModule, startMasterVersionsWalk, requestMasterVersionsWalkStop, forceClearMasterVersionsWalk, getMasterVersionsWalkStatus, } from "./master-versions-worker.js";
 import { initFacetedSweepModule, startFacetedSweep, requestFacetedSweepStop, forceClearFacetedSweep, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
+import { initSublabelDiscoveryModule, startSublabelDiscovery, requestSublabelDiscoveryStop, forceClearSublabelDiscovery, getSublabelDiscoveryStatus, } from "./sublabel-discovery-worker.js";
 import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
@@ -9970,67 +9971,61 @@ app.get("/api/admin/faceted-sweep/status", async (req, res) => {
     }
 });
 // ── Sublabel discovery ───────────────────────────────────────────
-// One-shot: for every label in the directory with a Discogs ID, hit
-// /labels/{id} to fetch sublabels[], and insert placeholder rows
-// into external_discography so the sublabels show up as unassigned
-// entries in the label directory. Bulk label sweep can then pick
-// them up naturally after we tag each with its own Discogs ID.
+// Background worker: for every cached label with a Discogs ID and
+// pad rows ≥ threshold, hits /labels/{id} and inserts each
+// sublabels[] entry as an external_discography row so it surfaces
+// in the label directory as unassigned. Fire and forget — poll
+// /status for progress. Prior inline endpoint tripped the request
+// timeout on any run of realistic size (thousands of labels ×
+// 1 req/sec = minutes).
 app.post("/api/admin/sublabels/expand", express.json({ limit: "1kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const body = req.body || {};
     const minCount = Number.isFinite(Number(body.minExternalCount)) ? Number(body.minExternalCount) : 1;
+    const resetCursor = !!body.resetCursor;
     try {
-        if (!ADMIN_CLERK_ID) {
-            res.status(500).json({ error: "ADMIN_CLERK_ID unset" });
+        const r = await startSublabelDiscovery({ minExternalCount: minCount, resetCursor });
+        if (!r.ok) {
+            res.status(409).json(r);
             return;
         }
-        const oauth = await getOAuthCredentials(ADMIN_CLERK_ID);
-        if (!oauth || !process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) {
-            res.status(500).json({ error: "Admin Discogs OAuth not connected" });
-            return;
-        }
-        const dc = new DiscogsClient({
-            consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-            consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-            accessToken: oauth.accessToken,
-            accessSecret: oauth.accessSecret,
-        });
-        const rows = await listLabelDirectory({ limit: 5000 });
-        const candidates = rows.filter(r => r.label_id && (r.external_count ?? 0) >= minCount);
-        let queried = 0, discovered = 0, inserted = 0, errors = 0, lastError = "";
-        for (const r of candidates) {
-            queried++;
-            try {
-                const payload = await dc.getLabel(r.label_id);
-                const subs = Array.isArray(payload?.sublabels) ? payload.sublabels : [];
-                for (const s of subs) {
-                    const subName = String(s?.name ?? "").trim();
-                    const subId = Number(s?.id);
-                    if (!subName)
-                        continue;
-                    discovered++;
-                    // external_discography.catno is NOT NULL — use an empty
-                    // string so the row satisfies the unique constraint and
-                    // still shows up in listLabelDirectory with 1 pad row.
-                    const ins = await getPool().query(`INSERT INTO external_discography
-               (source, label_name, label_id, catno)
-             VALUES ('discogs:sublabels', $1, $2, '')
-             ON CONFLICT DO NOTHING`, [subName, Number.isFinite(subId) ? subId : null]);
-                    inserted += ins.rowCount ?? 0;
-                }
-                await new Promise(r2 => setTimeout(r2, 1100));
-            }
-            catch (err) {
-                errors++;
-                lastError = `label=${r.label_id}: ${err?.message ?? String(err)}`;
-                console.warn(`[sublabels expand] ${lastError}`);
-            }
-        }
-        res.json({ ok: true, queried, discovered, inserted, errors, lastError: lastError || null });
+        res.json(r);
     }
     catch (err) {
         console.error("[sublabels expand]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/sublabels/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestSublabelDiscoveryStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/sublabels/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearSublabelDiscovery();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/sublabels/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getSublabelDiscoveryStatus());
+    }
+    catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
@@ -18910,6 +18905,12 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] faceted-sweep init failed:", e);
+        }
+        try {
+            initSublabelDiscoveryModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] sublabel-discovery init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the

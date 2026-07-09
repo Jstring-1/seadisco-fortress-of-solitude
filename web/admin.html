@@ -714,7 +714,7 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, mvR, facR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, mvR, facR, subR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
@@ -725,6 +725,7 @@ async function loadAdminWorkerStatus() {
       apiFetch('/api/admin/artist-sweep/status').catch(() => null),
       apiFetch('/api/admin/master-versions-walk/status').catch(() => null),
       apiFetch('/api/admin/faceted-sweep/status').catch(() => null),
+      apiFetch('/api/admin/sublabels/status').catch(() => null),
     ]);
     const badges = [];
     if (bulkR?.ok) {
@@ -794,6 +795,13 @@ async function loadAdminWorkerStatus() {
         const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
         const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
         badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, tab: 'labels' });
+      }
+    }
+    if (subR?.ok) {
+      const j = await subR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        badges.push({ label: `Sublabel discovery${pos}`, tab: 'labels' });
       }
     }
     if (badges.length === 0) {
@@ -2134,22 +2142,24 @@ async function _labelDirBulkSweepForceClear() {
 }
 
 // ── Coverage sweeps (artist / master-versions / faceted / sublabels)
-let _covArtist = null, _covMasterVer = null, _covFaceted = null;
+let _covArtist = null, _covMasterVer = null, _covFaceted = null, _covSublab = null;
 async function loadCoverageSweeps() {
   const el = document.getElementById("coverage-sweeps-content");
   if (!el) return;
   try {
-    const [aR, mR, fR] = await Promise.all([
+    const [aR, mR, fR, sR] = await Promise.all([
       apiFetch("/api/admin/artist-sweep/status").catch(() => null),
       apiFetch("/api/admin/master-versions-walk/status").catch(() => null),
       apiFetch("/api/admin/faceted-sweep/status").catch(() => null),
+      apiFetch("/api/admin/sublabels/status").catch(() => null),
     ]);
     _covArtist    = aR?.ok ? await aR.json() : null;
     _covMasterVer = mR?.ok ? await mR.json() : null;
     _covFaceted   = fR?.ok ? await fR.json() : null;
+    _covSublab    = sR?.ok ? await sR.json() : null;
     _renderCoverageSweeps();
     clearTimeout(window._covPollTimer);
-    const anyRunning = _covArtist?.running || _covMasterVer?.running || _covFaceted?.running;
+    const anyRunning = _covArtist?.running || _covMasterVer?.running || _covFaceted?.running || _covSublab?.running;
     if (anyRunning && document.getElementById("panel-labels")?.style.display !== "none") {
       window._covPollTimer = setTimeout(loadCoverageSweeps, 5000);
     }
@@ -2248,21 +2258,27 @@ function _renderCoverageSweeps() {
         ${f.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(f.lastError)}</div>` : ""}
       </div>
 
-      <!-- Sublabel discovery (one-shot) -->
+      <!-- Sublabel discovery (background) -->
       <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
         <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
           <strong>🏷 Sublabel discovery</strong>
           <span style="font-size:0.72rem;color:var(--muted)">
-            one-shot: fetches /labels/&#123;id&#125; for each cached label with pad rows ≥ threshold, inserts every sublabel[] as a new external_discography row so it shows up in the label directory (unswept). Kick a bulk masters+ sweep afterwards.
+            fetches /labels/&#123;id&#125; for each cached label with pad rows ≥ threshold, inserts every sublabel[] as a new external_discography row so it shows up in the label directory (unswept). Kick a bulk masters+ sweep afterwards.
           </span>
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
           <label style="font-size:0.78rem;color:var(--muted)">min pad rows
-            <input id="cov-sub-min" type="number" value="1" style="width:4rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+            <input id="cov-sub-min" type="number" value="${_covSublab && _covSublab.minCount != null ? _covSublab.minCount : 1}" style="width:4rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
           </label>
-          <button class="admin-btn" type="button" onclick="_covSublabelsRun()">⏵ Discover sublabels</button>
-          <span id="cov-sub-status" style="font-size:0.72rem;color:var(--muted)"></span>
+          ${_covSublab && _covSublab.running
+            ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${_covSublab.cursor}/${_covSublab.total} (${pct(_covSublab.cursor,_covSublab.total)}%) · discovered ${_covSublab.discovered} · inserted ${_covSublab.inserted} · ⚠${_covSublab.errors}${_covSublab.currentLabel ? ` · ${_eHtml(_covSublab.currentLabel.labelName)}` : ""}</span>
+               <button class="admin-btn" type="button" onclick="_covSublabelsStop()" style="background:#a33;color:#fff">■ Stop</button>
+               <button class="admin-btn" type="button" onclick="_covSublabelsForceClear()">⚠ Force clear</button>`
+            : `<button class="admin-btn" type="button" onclick="_covSublabelsStart(false)">⏵ Start / resume</button>
+               <button class="admin-btn" type="button" onclick="_covSublabelsStart(true)" title="Rebuild the queue and start from cursor 0.">↻ Restart from top</button>
+               ${_covSublab && _covSublab.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: discovered ${_covSublab.discovered} · inserted ${_covSublab.inserted}</span>` : ""}`}
         </div>
+        ${_covSublab && _covSublab.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(_covSublab.lastError)}</div>` : ""}
       </div>
 
     </div>
@@ -2354,21 +2370,31 @@ async function _covFacetedForceClear() {
   loadCoverageSweeps();
 }
 
-async function _covSublabelsRun() {
+async function _covSublabelsStart(reset) {
   const minCount = Number(document.getElementById("cov-sub-min")?.value || 1);
-  if (!confirm(`Fetch /labels/{id} for every cached label with ≥${minCount} pad rows and expand sublabels into the directory?\n\nRate-limited to ~1 req/sec so this can take several minutes on a busy directory. Errors are logged per-label and don't stop the run.`)) return;
-  const statusEl = document.getElementById("cov-sub-status");
-  if (statusEl) statusEl.textContent = "Working…";
+  if (!confirm(`Start sublabel discovery for every cached label with ≥${minCount} pad rows?\n\nRuns in the background at ~1 req/sec; progress polls into this panel. Kick a Bulk masters+ sweep once it's drained to actually sweep the new sublabels.`)) return;
   try {
     const r = await apiFetch("/api/admin/sublabels/expand", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ minExternalCount: minCount }),
+      body: JSON.stringify({ minExternalCount: minCount, resetCursor: !!reset }),
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { if (statusEl) statusEl.textContent = `Failed: ${j.error || r.status}`; return; }
-    if (statusEl) statusEl.textContent = `queried ${j.queried} labels · discovered ${j.discovered} sublabels · inserted ${j.inserted} new · ⚠${j.errors}`;
-    if (typeof loadLabelDirectory === "function") loadLabelDirectory();
-  } catch (err) { if (statusEl) statusEl.textContent = String(err); }
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadCoverageSweeps();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _covSublabelsStop() {
+  if (!confirm("Stop sublabel discovery? Cursor is persisted so ⏵ Resume picks up where it stopped.")) return;
+  const r = await apiFetch("/api/admin/sublabels/stop", { method: "POST" });
+  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+async function _covSublabelsForceClear() {
+  if (!confirm("Force-clear sublabel discovery state? Only if Stop didn't take.")) return;
+  const r = await apiFetch("/api/admin/sublabels/force-clear", { method: "POST" });
+  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+  loadCoverageSweeps();
 }
 
 async function _labelDirStopSweep() {
