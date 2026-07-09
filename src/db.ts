@@ -7940,11 +7940,21 @@ export async function getFeedActiveAlbums(
   }
 }
 
-// Played-tab sampler. Like Active but driven by user_play_events
-// (source='yt') instead of opens. Rewards vinyl whose YouTube
-// playback gets triggered most often — a different signal from
-// "clicked on" since plenty of cards get opened without anyone
-// actually listening.
+// Played-tab sampler. Driven by user_play_events (source='yt'). Two
+// meaningful shifts from the earlier version:
+//   * Rolls each play up under its master when a master_id is set,
+//     otherwise under the release. Aligns with how the mini-player
+//     actually logs — most listens are against the master, so
+//     attributing to the specific pressing was fragmenting a single
+//     album's playcount across multiple release rows AND filtering
+//     out master-typed plays entirely at the release_cache join.
+//   * Vinyl-only filter removed. Masters carry no data.formats at
+//     all in Discogs's payload, so the old filter silently dropped
+//     every master-typed play. Better to surface the album whatever
+//     its format cluster is; the Feed / Rare tabs still enforce
+//     Vinyl-only when the user wants that lens.
+// Ordering stays the same weighted-random draw (higher play count
+// = more likely to surface, but every counted row is reachable).
 export async function getFeedPlayedAlbums(
   limit = 48,
   excludeIds?: Array<{ id: number; type: string }>,
@@ -7965,14 +7975,17 @@ export async function getFeedPlayedAlbums(
     }
     const sql = `
       WITH counts AS (
-        SELECT upe.release_id AS discogs_id,
-               COALESCE(upe.release_type, 'release') AS entity_type,
-               COUNT(*)::int AS n
+        SELECT
+          CASE WHEN upe.master_id IS NOT NULL THEN upe.master_id
+               ELSE upe.release_id END                 AS discogs_id,
+          CASE WHEN upe.master_id IS NOT NULL THEN 'master'
+               ELSE 'release' END                       AS entity_type,
+          COUNT(*)::int                                AS n
           FROM user_play_events upe
          WHERE upe.source = 'yt'
-           AND upe.release_id IS NOT NULL
            AND upe.created_at >= NOW() - INTERVAL '90 days'
-         GROUP BY upe.release_id, COALESCE(upe.release_type, 'release')
+           AND (upe.release_id IS NOT NULL OR upe.master_id IS NOT NULL)
+         GROUP BY 1, 2
       )
       SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
         FROM counts c
@@ -7980,7 +7993,6 @@ export async function getFeedPlayedAlbums(
           ON rc.discogs_id = c.discogs_id
          AND rc.type       = c.entity_type
        WHERE rc.seen_at IS NOT NULL
-         AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
          ${excludeClause}
        ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
        LIMIT $1`;
