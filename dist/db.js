@@ -7923,11 +7923,17 @@ export async function getUnavailableYoutubeVideoIds() {
 // Newest reports first so admin sees recent issues at the top.
 export async function listYoutubeVideoUnavailable(limit = 500) {
     try {
+        // LEFT JOIN release_cache so the admin panel can show the album
+        // title + first artist as the clickable link text — hitting the
+        // release/master JSON blob for a single field per row is fine at
+        // the 500-row cap; no need to fan out through the split schema.
         const r = await getPool().query(`SELECT u.video_id, u.status, u.report_count,
               u.first_reported_at, u.last_reported_at,
               u.sample_user_id, u.sample_error_code,
               ov.release_type, ov.release_id,
-              ov.track_title, ov.track_position
+              ov.track_title, ov.track_position,
+              rc.data->>'title'                                AS album_title,
+              COALESCE(rc.data->'artists'->0->>'name', '')     AS album_artist
          FROM youtube_video_unavailable u
          LEFT JOIN LATERAL (
            SELECT release_type, release_id, track_title, track_position
@@ -7936,6 +7942,9 @@ export async function listYoutubeVideoUnavailable(limit = 500) {
             ORDER BY o.submitted_at DESC
             LIMIT 1
          ) ov ON true
+         LEFT JOIN release_cache rc
+           ON rc.discogs_id = ov.release_id::int
+          AND rc.type       = ov.release_type
         ORDER BY u.last_reported_at DESC
         LIMIT $1`, [Math.max(1, Math.min(2000, limit))]);
         return r.rows;
@@ -10433,6 +10442,33 @@ export async function applyYearBackfill() {
             AND rc.type = l.type
             AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0`, [batchId]);
             phase1Updated = upd.rowCount ?? 0;
+            // Propagate into the split schema. A Phase-1 release lives in
+            // masters_plus (type='release') when it's an orphan, in
+            // pressings when it has a master_id — hit both, filtered by
+            // discogs_id + type in the log. Postgres just skips the table
+            // that doesn't have the row.
+            await client.query(`UPDATE discogs_cache_masters_plus mp
+            SET year = l.new_year::smallint,
+                data = jsonb_set(
+                         jsonb_set(mp.data, '{year}', to_jsonb(l.new_year::int)),
+                         '{_year_backfilled_from}', to_jsonb(l.donor_ref::text)
+                       )
+           FROM year_backfill_log l
+          WHERE l.batch_id = $1::uuid
+            AND mp.discogs_id = l.discogs_id
+            AND mp.type       = l.type
+            AND (mp.year IS NULL OR mp.year = 0)`, [batchId]);
+            await client.query(`UPDATE discogs_cache_pressings p
+            SET year = l.new_year::smallint,
+                data = jsonb_set(
+                         jsonb_set(p.data, '{year}', to_jsonb(l.new_year::int)),
+                         '{_year_backfilled_from}', to_jsonb(l.donor_ref::text)
+                       )
+           FROM year_backfill_log l
+          WHERE l.batch_id = $1::uuid
+            AND l.type = 'release'
+            AND p.discogs_id = l.discogs_id
+            AND (p.year IS NULL OR p.year = 0)`, [batchId]);
         }
         // Phase 2 — bulk. Same shape: log + UPDATE against the log.
         // Master row's year = MIN of its known-year versions in cache.
@@ -10469,6 +10505,20 @@ export async function applyYearBackfill() {
             AND rc.type = 'master'
             AND COALESCE(NULLIF(rc.data->>'year','')::int, 0) = 0`, [batchId]);
             phase2Updated = upd.rowCount ?? 0;
+            // Masters live only in discogs_cache_masters_plus with
+            // type='master'. Same shape update.
+            await client.query(`UPDATE discogs_cache_masters_plus mp
+            SET year = l.new_year::smallint,
+                data = jsonb_set(
+                         jsonb_set(mp.data, '{year}', to_jsonb(l.new_year::int)),
+                         '{_year_backfilled_from}', to_jsonb('aggregate:versions'::text)
+                       )
+           FROM year_backfill_log l
+          WHERE l.batch_id = $1::uuid
+            AND l.type = 'master'
+            AND mp.discogs_id = l.discogs_id
+            AND mp.type = 'master'
+            AND (mp.year IS NULL OR mp.year = 0)`, [batchId]);
         }
         const sourceQ = await client.query(`SELECT donor_source, COUNT(*)::int AS n
          FROM year_backfill_log
@@ -10566,6 +10616,45 @@ export async function rollbackYearBackfillBatch(batchId) {
           AND rc.type = l.type
           AND NULLIF(rc.data->>'year','')::int IS NOT DISTINCT FROM l.new_year`, [batchId]);
         const reverted = (restoreNullQ.rowCount ?? 0) + (restoreValQ.rowCount ?? 0);
+        // Mirror the reversal into the split schema. Same NULL-vs-value
+        // branch shape; drift check stays keyed on release_cache above so
+        // a split-only drift can't stall the rollback.
+        await client.query(`UPDATE discogs_cache_masters_plus mp
+          SET year = NULL,
+              data = (mp.data - 'year') - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.old_year IS NULL
+          AND mp.discogs_id = l.discogs_id
+          AND mp.type = l.type
+          AND (mp.year IS NOT DISTINCT FROM l.new_year::smallint)`, [batchId]);
+        await client.query(`UPDATE discogs_cache_masters_plus mp
+          SET year = l.old_year::smallint,
+              data = jsonb_set(mp.data, '{year}', to_jsonb(l.old_year::int)) - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.old_year IS NOT NULL
+          AND mp.discogs_id = l.discogs_id
+          AND mp.type = l.type
+          AND (mp.year IS NOT DISTINCT FROM l.new_year::smallint)`, [batchId]);
+        await client.query(`UPDATE discogs_cache_pressings p
+          SET year = NULL,
+              data = (p.data - 'year') - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.old_year IS NULL
+          AND l.type = 'release'
+          AND p.discogs_id = l.discogs_id
+          AND (p.year IS NOT DISTINCT FROM l.new_year::smallint)`, [batchId]);
+        await client.query(`UPDATE discogs_cache_pressings p
+          SET year = l.old_year::smallint,
+              data = jsonb_set(p.data, '{year}', to_jsonb(l.old_year::int)) - '_year_backfilled_from'
+         FROM year_backfill_log l
+        WHERE l.batch_id = $1::uuid
+          AND l.old_year IS NOT NULL
+          AND l.type = 'release'
+          AND p.discogs_id = l.discogs_id
+          AND (p.year IS NOT DISTINCT FROM l.new_year::smallint)`, [batchId]);
         const rollbackBatchRow = await client.query(`SELECT gen_random_uuid() AS id`);
         const rollbackBatchId = String(rollbackBatchRow.rows[0].id);
         // Mark every previously-un-reverted row as rolled back — even the

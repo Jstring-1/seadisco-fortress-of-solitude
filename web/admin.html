@@ -303,13 +303,6 @@
           <summary title="Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later." style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
           <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
-
-        <!-- ── Catalog-number crawls ────────────────────────────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
-        <details open>
-          <summary title="Sequential walks through known label catalog ranges. Fills the gaps the year/genre worker misses because of Discogs's 10k pagination cap." style="cursor:pointer;font-weight:600;font-size:0.95rem">📒 Catalog-number crawls</summary>
-          <div id="cwc-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
       </div>
 
       <!-- All Blues background worker: walks release_cache for the
@@ -632,7 +625,7 @@ const _adminGroups = {
   },
   'labels': {
     panels: ['panel-labels'],
-    load: () => { loadLabelDirectory(); loadCacheWarmCatno(); },
+    load: () => { loadLabelDirectory(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -4405,13 +4398,29 @@ function _renderAdminUnavailableTable() {
     </tr></thead>`;
   const body = sorted.map(o => {
     const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none;font-family:monospace">${escHtml(o.video_id)}</a>`;
-    const albumCell = _adminAlbumLink(o.release_type, o.release_id,
-      o.release_id ? `${o.release_type}/${o.release_id}` : "");
+    // Prefer the real album title (+ first artist) as the visible
+    // link text so you can spot which album is affected at a glance.
+    // Falls back to the release_type/release_id pattern when the
+    // Discogs row hasn't been cached yet.
+    let albumLabel = "";
+    if (o.album_title) {
+      const artist = o.album_artist ? `${o.album_artist} — ` : "";
+      albumLabel = `${artist}${o.album_title}`;
+    } else if (o.release_id) {
+      albumLabel = `${o.release_type}/${o.release_id}`;
+    }
+    const albumCell = _adminAlbumLink(o.release_type, o.release_id, albumLabel);
+    // Extra sub-line under the album title: which track + position is
+    // the one whose video is broken. Empty when we have no override
+    // mapping this videoId to a specific pressing.
+    const trackSub = o.track_title
+      ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem">Track: ${escHtml(o.track_title)}${o.track_position ? ` · pos ${escHtml(o.track_position)}` : ""}</div>`
+      : "";
     const statusColor = o.status === "unavailable" ? "var(--danger)" : "var(--accent)";
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
       <td style="padding:0.35rem 0.5rem;font-weight:600;color:${statusColor};text-transform:uppercase;font-size:0.7rem;letter-spacing:0.04em">${escHtml(o.status)}</td>
       <td style="padding:0.35rem 0.5rem">${ytLink}</td>
-      <td style="padding:0.35rem 0.5rem"${o.track_title ? ` title="${escHtml(o.track_title)}${o.track_position ? ' · ' + escHtml(o.track_position) : ''}"` : ""}>${albumCell}</td>
+      <td style="padding:0.35rem 0.5rem">${albumCell}${trackSub}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-weight:600">${o.report_count}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.first_reported_at))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.last_reported_at))}</td>
