@@ -6337,6 +6337,12 @@ export async function getCachedRelease(
   type: DiscogsCacheType,
   maxAgeSeconds?: number,
 ): Promise<any | null> {
+  // V2 dispatch — masters and releases live in the split schema when
+  // the flag's on. artist / master-versions stay on release_cache
+  // (infra caches, not projected).
+  if ((type === "release" || type === "master") && await isSplitCacheReaderEnabled()) {
+    return _getCachedReleaseV2(discogsId, type, maxAgeSeconds);
+  }
   const r = await getPool().query(
     `SELECT data, cached_at FROM release_cache WHERE discogs_id = $1 AND type = $2`,
     [discogsId, type]
@@ -6347,14 +6353,6 @@ export async function getCachedRelease(
     const ageMs = Date.now() - new Date(row.cached_at).getTime();
     if (ageMs > maxAgeSeconds * 1000) return null;
   }
-  // Promote on first read: a row whose seen_at is NULL was pre-warmed
-  // by the overnight job and hasn't yet been touched by a real user.
-  // Reaching it via getCachedRelease almost always means a user just
-  // opened it (modal / version / suggestion click), so stamp seen_at
-  // now so the feed pool starts including it. Fire-and-forget — no
-  // need to block the response on the bookkeeping. Bare release/
-  // master types only; master-versions / artist are infra caches that
-  // don't need promotion since they don't appear in the feed anyway.
   if (type === "release" || type === "master") {
     getPool().query(
       `UPDATE release_cache SET seen_at = NOW()
@@ -6362,6 +6360,74 @@ export async function getCachedRelease(
       [discogsId, type],
     ).catch(() => {});
   }
+  return row.data ?? null;
+}
+
+// Split-schema getCachedRelease. Masters live in masters_plus only.
+// Releases: try pressings first (the common case — most releases have
+// a master_id), fall back to masters_plus (orphan releases with no
+// master_id). seen_at bookkeeping targets whichever table the row
+// came from.
+async function _getCachedReleaseV2(
+  discogsId:      number,
+  type:           "release" | "master",
+  maxAgeSeconds?: number,
+): Promise<any | null> {
+  const pool = getPool();
+  if (type === "master") {
+    const r = await pool.query(
+      `SELECT data, cached_at FROM discogs_cache_masters_plus
+        WHERE discogs_id = $1 AND type = 'master' LIMIT 1`,
+      [discogsId],
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    if (typeof maxAgeSeconds === "number" && row.cached_at) {
+      const ageMs = Date.now() - new Date(row.cached_at).getTime();
+      if (ageMs > maxAgeSeconds * 1000) return null;
+    }
+    pool.query(
+      `UPDATE discogs_cache_masters_plus SET seen_at = NOW()
+        WHERE discogs_id = $1 AND type = 'master' AND seen_at IS NULL`,
+      [discogsId],
+    ).catch(() => {});
+    return row.data ?? null;
+  }
+  // type === "release"
+  const rp = await pool.query(
+    `SELECT data, cached_at FROM discogs_cache_pressings
+      WHERE discogs_id = $1 LIMIT 1`,
+    [discogsId],
+  );
+  if (rp.rows[0]) {
+    const row = rp.rows[0];
+    if (typeof maxAgeSeconds === "number" && row.cached_at) {
+      const ageMs = Date.now() - new Date(row.cached_at).getTime();
+      if (ageMs > maxAgeSeconds * 1000) return null;
+    }
+    pool.query(
+      `UPDATE discogs_cache_pressings SET seen_at = NOW()
+        WHERE discogs_id = $1 AND seen_at IS NULL`,
+      [discogsId],
+    ).catch(() => {});
+    return row.data ?? null;
+  }
+  const rm = await pool.query(
+    `SELECT data, cached_at FROM discogs_cache_masters_plus
+      WHERE discogs_id = $1 AND type = 'release' LIMIT 1`,
+    [discogsId],
+  );
+  if (!rm.rows[0]) return null;
+  const row = rm.rows[0];
+  if (typeof maxAgeSeconds === "number" && row.cached_at) {
+    const ageMs = Date.now() - new Date(row.cached_at).getTime();
+    if (ageMs > maxAgeSeconds * 1000) return null;
+  }
+  pool.query(
+    `UPDATE discogs_cache_masters_plus SET seen_at = NOW()
+      WHERE discogs_id = $1 AND type = 'release' AND seen_at IS NULL`,
+    [discogsId],
+  ).catch(() => {});
   return row.data ?? null;
 }
 
@@ -6997,14 +7063,96 @@ export async function readReleaseCacheBatchForProjection(
 
 /** Prune stale cache entries — masters/artists older than 30 days,
  *  releases older than 7 days. Run nightly via a scheduled task or
- *  on-demand from the admin DB Stats panel. Returns rows deleted. */
+ *  on-demand from the admin DB Stats panel. Returns rows deleted from
+ *  release_cache (not the sum across all tables — that's what the
+ *  caller expects). Split-schema mirrors run in the same transaction. */
 export async function pruneStaleReleaseCache(): Promise<number> {
-  const r = await getPool().query(
-    `DELETE FROM release_cache
-       WHERE (type IN ('master','artist') AND cached_at < NOW() - INTERVAL '30 days')
-          OR (type = 'release' AND cached_at < NOW() - INTERVAL '7 days')`
-  );
-  return r.rowCount ?? 0;
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const r = await client.query(
+      `DELETE FROM release_cache
+         WHERE (type IN ('master','artist') AND cached_at < NOW() - INTERVAL '30 days')
+            OR (type = 'release' AND cached_at < NOW() - INTERVAL '7 days')`,
+    );
+    // Split-schema mirror. Same TTL semantics; masters live in
+    // masters_plus (both masters proper and orphan releases), and
+    // pressings holds every release with a master_id. Side tables
+    // cascade via (discogs_id, bucket) with a subquery per bucket.
+    const del = await client.query(
+      `WITH stale_master_bucket AS (
+         DELETE FROM discogs_cache_masters_plus
+          WHERE (type = 'master'  AND cached_at < NOW() - INTERVAL '30 days')
+             OR (type = 'release' AND cached_at < NOW() - INTERVAL '7 days')
+         RETURNING discogs_id,
+                   CASE WHEN type = 'master' THEN 0::smallint ELSE 1::smallint END AS bucket
+       ),
+       stale_pressing_bucket AS (
+         DELETE FROM discogs_cache_pressings
+          WHERE cached_at < NOW() - INTERVAL '7 days'
+         RETURNING discogs_id, 2::smallint AS bucket
+       ),
+       all_stale AS (
+         SELECT discogs_id, bucket FROM stale_master_bucket
+         UNION ALL
+         SELECT discogs_id, bucket FROM stale_pressing_bucket
+       )
+       SELECT COUNT(*)::int AS n FROM all_stale`,
+    );
+    const staleCount = Number(del.rows[0]?.n ?? 0);
+    if (staleCount > 0) {
+      // Side-table cleanup — matches the buckets that were just
+      // deleted. No JOIN needed since the primary-side row is gone
+      // (dangling references would only be a problem if we joined
+      // FROM release_labels/artists/tags, which we don't).
+      // Practically we can just leave the side rows dangling until
+      // the next projection touches them, but a targeted DELETE keeps
+      // storage tight. Cheap enough given ~5k stale rows at once.
+      await client.query(
+        `DELETE FROM release_labels rl
+           WHERE NOT EXISTS (
+             SELECT 1 FROM discogs_cache_masters_plus m
+              WHERE m.discogs_id = rl.discogs_id
+                AND ((rl.bucket = 0 AND m.type = 'master') OR (rl.bucket = 1 AND m.type = 'release'))
+           )
+             AND NOT EXISTS (
+             SELECT 1 FROM discogs_cache_pressings p
+              WHERE p.discogs_id = rl.discogs_id AND rl.bucket = 2
+           )`,
+      );
+      await client.query(
+        `DELETE FROM release_artists ra
+           WHERE NOT EXISTS (
+             SELECT 1 FROM discogs_cache_masters_plus m
+              WHERE m.discogs_id = ra.discogs_id
+                AND ((ra.bucket = 0 AND m.type = 'master') OR (ra.bucket = 1 AND m.type = 'release'))
+           )
+             AND NOT EXISTS (
+             SELECT 1 FROM discogs_cache_pressings p
+              WHERE p.discogs_id = ra.discogs_id AND ra.bucket = 2
+           )`,
+      );
+      await client.query(
+        `DELETE FROM release_tags rt
+           WHERE NOT EXISTS (
+             SELECT 1 FROM discogs_cache_masters_plus m
+              WHERE m.discogs_id = rt.discogs_id
+                AND ((rt.bucket = 0 AND m.type = 'master') OR (rt.bucket = 1 AND m.type = 'release'))
+           )
+             AND NOT EXISTS (
+             SELECT 1 FROM discogs_cache_pressings p
+              WHERE p.discogs_id = rt.discogs_id AND rt.bucket = 2
+           )`,
+      );
+    }
+    await client.query("COMMIT");
+    return r.rowCount ?? 0;
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getApiRequestStats(hours: number = 24): Promise<any[]> {
@@ -7867,27 +8015,48 @@ export async function getMostContributedAlbums(
     default:       orderBy = "c.n DESC, c.release_id DESC"; break;
   }
   try {
-    const r = await getPool().query(
-      `WITH counts AS (
-         SELECT release_id, release_type,
-                COUNT(*)::int   AS n,
-                MAX(submitted_at) AS last_at
-           FROM track_youtube_overrides
-          GROUP BY release_id, release_type
-       )
-       SELECT c.release_id   AS id,
-              c.release_type AS type,
-              c.n            AS contribution_count,
-              c.last_at      AS last_contributed_at,
-              rc.data        AS data
-         FROM counts c
-         JOIN release_cache rc
-           ON rc.discogs_id = c.release_id::int
-          AND rc.type       = c.release_type
-        ORDER BY ${orderBy}
-        LIMIT $1`,
-      [Math.max(1, Math.min(200, limit))]
-    );
+    const useV2 = await isSplitCacheReaderEnabled();
+    const cteAndJoin = useV2 ? `
+      WITH counts AS (
+        SELECT release_id, release_type,
+               COUNT(*)::int AS n,
+               MAX(submitted_at) AS last_at
+          FROM track_youtube_overrides
+         GROUP BY release_id, release_type
+      ),
+      cache_all AS (
+        SELECT m.discogs_id, m.type, m.data FROM discogs_cache_masters_plus m
+        UNION ALL
+        SELECT p.discogs_id, 'release'::text AS type, p.data FROM discogs_cache_pressings p
+      )
+      SELECT c.release_id AS id, c.release_type AS type,
+             c.n AS contribution_count, c.last_at AS last_contributed_at,
+             ca.data AS data
+        FROM counts c
+        JOIN cache_all ca
+          ON ca.discogs_id = c.release_id::int
+         AND ca.type       = c.release_type
+       ORDER BY ${orderBy.replace(/c\.release_id/g, "c.release_id")}
+       LIMIT $1` : `
+      WITH counts AS (
+        SELECT release_id, release_type,
+               COUNT(*)::int   AS n,
+               MAX(submitted_at) AS last_at
+          FROM track_youtube_overrides
+         GROUP BY release_id, release_type
+      )
+      SELECT c.release_id   AS id,
+             c.release_type AS type,
+             c.n            AS contribution_count,
+             c.last_at      AS last_contributed_at,
+             rc.data        AS data
+        FROM counts c
+        JOIN release_cache rc
+          ON rc.discogs_id = c.release_id::int
+         AND rc.type       = c.release_type
+       ORDER BY ${orderBy}
+       LIMIT $1`;
+    const r = await getPool().query(cteAndJoin, [Math.max(1, Math.min(200, limit))]);
     return r.rows;
   } catch { return []; }
 }
@@ -7907,6 +8076,46 @@ export async function getFeedActiveAlbums(
     const excludeIdsArr  = exclude.map(e => Number(e.id));
     const excludeTypeArr = exclude.map(e => String(e.type));
     const params: any[] = [cap];
+    if (await isSplitCacheReaderEnabled()) {
+      let excludeClauseV2 = "";
+      if (exclude.length) {
+        params.push(excludeIdsArr);
+        const idIdx = params.length;
+        params.push(excludeTypeArr);
+        const tyIdx = params.length;
+        excludeClauseV2 = `AND NOT (ca.discogs_id = ANY($${idIdx}::int[]) AND ca.type = ANY($${tyIdx}::text[]))`;
+      }
+      // Vinyl filter dropped in V2: masters carry no data.formats at
+      // all in Discogs's payload, so keeping the filter would silently
+      // exclude every master row (same problem the Played fix solved).
+      // Active means "opened lots recently"; if a master is what got
+      // opened, it should surface.
+      const sql = `
+        WITH counts AS (
+          SELECT urv.discogs_id, urv.entity_type, COUNT(*)::int AS n
+            FROM user_recent_views urv
+           WHERE urv.opened_at >= NOW() - INTERVAL '90 days'
+           GROUP BY urv.discogs_id, urv.entity_type
+        ),
+        cache_all AS (
+          SELECT m.discogs_id, m.type, m.data, m.cached_at, m.seen_at
+            FROM discogs_cache_masters_plus m
+          UNION ALL
+          SELECT p.discogs_id, 'release'::text AS type, p.data, p.cached_at, p.seen_at
+            FROM discogs_cache_pressings p
+        )
+        SELECT ca.discogs_id AS id, ca.type, ca.data, ca.cached_at
+          FROM counts c
+          JOIN cache_all ca
+            ON ca.discogs_id = c.discogs_id
+           AND ca.type       = c.entity_type
+         WHERE ca.seen_at IS NOT NULL
+           ${excludeClauseV2}
+         ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+         LIMIT $1`;
+      const r = await getPool().query(sql, params);
+      return r.rows;
+    }
     let excludeClause = "";
     if (exclude.length) {
       params.push(excludeIdsArr);
@@ -7973,7 +8182,38 @@ export async function getFeedPlayedAlbums(
       const tyIdx = params.length;
       excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
     }
-    const sql = `
+    const useV2 = await isSplitCacheReaderEnabled();
+    const excludeClauseV2 = excludeClause.replace(/rc\./g, "ca.");
+    const sql = useV2 ? `
+      WITH counts AS (
+        SELECT
+          CASE WHEN upe.master_id IS NOT NULL THEN upe.master_id
+               ELSE upe.release_id END                 AS discogs_id,
+          CASE WHEN upe.master_id IS NOT NULL THEN 'master'
+               ELSE 'release' END                       AS entity_type,
+          COUNT(*)::int                                AS n
+          FROM user_play_events upe
+         WHERE upe.source = 'yt'
+           AND upe.created_at >= NOW() - INTERVAL '90 days'
+           AND (upe.release_id IS NOT NULL OR upe.master_id IS NOT NULL)
+         GROUP BY 1, 2
+      ),
+      cache_all AS (
+        SELECT m.discogs_id, m.type, m.data, m.cached_at, m.seen_at
+          FROM discogs_cache_masters_plus m
+        UNION ALL
+        SELECT p.discogs_id, 'release'::text AS type, p.data, p.cached_at, p.seen_at
+          FROM discogs_cache_pressings p
+      )
+      SELECT ca.discogs_id AS id, ca.type, ca.data, ca.cached_at
+        FROM counts c
+        JOIN cache_all ca
+          ON ca.discogs_id = c.discogs_id
+         AND ca.type       = c.entity_type
+       WHERE ca.seen_at IS NOT NULL
+         ${excludeClauseV2}
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.n), 1)
+       LIMIT $1` : `
       WITH counts AS (
         SELECT
           CASE WHEN upe.master_id IS NOT NULL THEN upe.master_id
@@ -8027,6 +8267,34 @@ export async function getFeedDigAlbums(
       params.push(excludeTypeArr);
       const tyIdx = params.length;
       excludeClause = `AND NOT (rc.discogs_id = ANY($${idIdx}::int[]) AND rc.type = ANY($${tyIdx}::text[]))`;
+    }
+    if (await isSplitCacheReaderEnabled()) {
+      const excludeClauseV2 = excludeClause.replace(/rc\./g, "sub.");
+      // TABLESAMPLE runs per-table, so we sample masters_plus and
+      // pressings independently and UNION. Vinyl filter dropped for
+      // the same reason as Played/Active — masters carry no formats.
+      const sql = `
+        WITH sampled AS (
+          SELECT m.discogs_id, m.type, m.data, m.cached_at, m.seen_at
+            FROM discogs_cache_masters_plus m TABLESAMPLE SYSTEM (10)
+          UNION ALL
+          SELECT p.discogs_id, 'release'::text AS type, p.data, p.cached_at, p.seen_at
+            FROM discogs_cache_pressings p TABLESAMPLE SYSTEM (10)
+        )
+        SELECT sub.discogs_id AS id, sub.type, sub.data, sub.cached_at
+          FROM sampled sub
+         WHERE sub.seen_at IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1
+               FROM user_recent_views urv
+              WHERE urv.discogs_id  = sub.discogs_id
+                AND urv.entity_type = sub.type
+           )
+           ${excludeClauseV2}
+         ORDER BY RANDOM()
+         LIMIT $1`;
+      const r = await getPool().query(sql, params);
+      return r.rows;
     }
     const sql = `
       SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at
@@ -8508,32 +8776,16 @@ export async function getFeedRandomAlbums(
     // re-samples (no `REPEATABLE`), so callers still see fresh cards.
     // The cost is that any single response only covers a slice of the
     // cache — Load More re-samples to fill in more.
-    const sql = `
-      WITH raw AS (
-        SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
-               COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int,
-               COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_int,
-               COALESCE(pc.num_for_sale, 0) AS sale_int,
-               rc.data->'tracklist' AS tl,
-               rc.data->'videos'    AS vd,
-               rc.data->'genres'    AS gs,
-               rc.data->'styles'    AS sts
-          FROM release_cache rc TABLESAMPLE SYSTEM (5)
-          LEFT JOIN price_cache pc
-            ON pc.discogs_release_id = rc.discogs_id
-           AND rc.type = 'release'
-          ${where}
-           AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
-      ),
+    const useV2 = await isSplitCacheReaderEnabled();
+    // Shared scored + ORDER BY tail. Reads tl_count / vd_count as
+    // plain ints so both V1 (jsonb_array_length) and V2 (promoted
+    // scalar) provide the same shape.
+    const scoredTail = `
       scored AS (
         SELECT id, type, data, cached_at,
                CASE
-                 WHEN jsonb_typeof(tl) = 'array' AND jsonb_array_length(tl) > 0
-                 THEN LEAST(
-                   1.0,
-                   COALESCE(jsonb_array_length(NULLIF(vd,'null'::jsonb)), 0)::float
-                     / NULLIF(jsonb_array_length(tl), 0)::float
-                 )
+                 WHEN tl_count > 0
+                 THEN LEAST(1.0, vd_count::float / tl_count::float)
                  ELSE 0
                END AS yt_score,
                LN(1 + want_int::float / GREATEST(have_int, 1)) AS scarcity_score,
@@ -8571,6 +8823,68 @@ export async function getFeedRandomAlbums(
          0.05
        )
        LIMIT $1`;
+    let sql: string;
+    if (useV2) {
+      // TABLESAMPLE on each split table, UNION, then dress with the
+      // promoted community/videos/tracks scalars (no JSON scans).
+      // Vinyl filter dropped for parity with the other V2 samplers —
+      // masters carry no formats so keeping it drops every master.
+      const typeGate = type === "any"
+        ? "s.type IN ('master','release')"
+        : `s.type = '${type}'`;
+      const excludeClauseV2 = exclude.length
+        ? `AND NOT (s.discogs_id = ANY($${gjIdx - 2}::int[]) AND s.type = ANY($${gjIdx - 1}::text[]))`
+        : "";
+      sql = `
+        WITH sampled AS (
+          SELECT m.discogs_id, m.type, m.data, m.cached_at, m.seen_at,
+                 m.community_want, m.community_have,
+                 m.videos_count, m.tracks_count
+            FROM discogs_cache_masters_plus m TABLESAMPLE SYSTEM (5)
+          UNION ALL
+          SELECT p.discogs_id, 'release'::text AS type, p.data, p.cached_at, p.seen_at,
+                 p.community_want, p.community_have,
+                 p.videos_count, p.tracks_count
+            FROM discogs_cache_pressings p TABLESAMPLE SYSTEM (5)
+        ),
+        raw AS (
+          SELECT s.discogs_id AS id, s.type, s.data, s.cached_at,
+                 COALESCE(s.community_want, 0)::int      AS want_int,
+                 COALESCE(s.community_have, 0)::int      AS have_int,
+                 COALESCE(pc.num_for_sale, 0)::int       AS sale_int,
+                 COALESCE(s.tracks_count, 0)::int        AS tl_count,
+                 COALESCE(s.videos_count, 0)::int        AS vd_count,
+                 s.data->'genres'                        AS gs,
+                 s.data->'styles'                        AS sts
+            FROM sampled s
+            LEFT JOIN price_cache pc
+              ON pc.discogs_release_id = s.discogs_id
+             AND s.type = 'release'
+           WHERE s.seen_at IS NOT NULL
+             AND ${typeGate}
+             ${excludeClauseV2}
+        ),
+        ${scoredTail}`;
+    } else {
+      sql = `
+        WITH raw AS (
+          SELECT rc.discogs_id AS id, rc.type, rc.data, rc.cached_at,
+                 COALESCE(NULLIF(rc.data->'community'->>'want','')::int, 0) AS want_int,
+                 COALESCE(NULLIF(rc.data->'community'->>'have','')::int, 0) AS have_int,
+                 COALESCE(pc.num_for_sale, 0)                               AS sale_int,
+                 jsonb_array_length(CASE WHEN jsonb_typeof(rc.data->'tracklist') = 'array' THEN rc.data->'tracklist' ELSE '[]'::jsonb END) AS tl_count,
+                 jsonb_array_length(CASE WHEN jsonb_typeof(rc.data->'videos')    = 'array' THEN rc.data->'videos'    ELSE '[]'::jsonb END) AS vd_count,
+                 rc.data->'genres'                                          AS gs,
+                 rc.data->'styles'                                          AS sts
+            FROM release_cache rc TABLESAMPLE SYSTEM (5)
+            LEFT JOIN price_cache pc
+              ON pc.discogs_release_id = rc.discogs_id
+             AND rc.type = 'release'
+            ${where}
+             AND rc.data->'formats' @> '[{"name":"Vinyl"}]'::jsonb
+        ),
+        ${scoredTail}`;
+    }
     const r = await getPool().query(sql, params);
     return r.rows;
   } catch (e: any) {
@@ -13039,6 +13353,27 @@ export async function isReleaseCached(
   discogsId: number,
   type: "release" | "master" = "release",
 ): Promise<boolean> {
+  if (await isSplitCacheReaderEnabled()) {
+    const pool = getPool();
+    if (type === "master") {
+      const r = await pool.query(
+        `SELECT 1 FROM discogs_cache_masters_plus
+          WHERE discogs_id = $1 AND type = 'master' LIMIT 1`,
+        [discogsId],
+      );
+      return (r.rowCount ?? 0) > 0;
+    }
+    // release — either bucket
+    const r = await pool.query(
+      `SELECT 1 FROM discogs_cache_pressings WHERE discogs_id = $1
+       UNION ALL
+       SELECT 1 FROM discogs_cache_masters_plus
+        WHERE discogs_id = $1 AND type = 'release'
+       LIMIT 1`,
+      [discogsId],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
   const r = await getPool().query(
     `SELECT 1 FROM release_cache WHERE discogs_id = $1 AND type = $2 LIMIT 1`,
     [discogsId, type],
@@ -13055,6 +13390,23 @@ export async function getCachedReleaseIds(
   type: "release" | "master" = "release",
 ): Promise<Set<number>> {
   if (!ids.length) return new Set();
+  if (await isSplitCacheReaderEnabled()) {
+    const pool = getPool();
+    let q: string;
+    if (type === "master") {
+      q = `SELECT discogs_id FROM discogs_cache_masters_plus
+            WHERE type = 'master' AND discogs_id = ANY($1::int[])`;
+    } else {
+      // Release rows live in either table — UNION covers both buckets.
+      q = `SELECT discogs_id FROM discogs_cache_pressings
+            WHERE discogs_id = ANY($1::int[])
+           UNION
+           SELECT discogs_id FROM discogs_cache_masters_plus
+            WHERE type = 'release' AND discogs_id = ANY($1::int[])`;
+    }
+    const r = await pool.query(q, [ids]);
+    return new Set((r.rows ?? []).map((row: any) => Number(row.discogs_id)));
+  }
   const r = await getPool().query(
     `SELECT discogs_id FROM release_cache WHERE type = $1 AND discogs_id = ANY($2::int[])`,
     [type, ids],
@@ -13072,13 +13424,43 @@ export async function getCachedReleaseIds(
 // field and never overwrites a non-empty `labels` already present.
 export async function backfillCachedMasterLabel(ids: number[], labelName: string): Promise<number> {
   if (!ids.length || !labelName) return 0;
+  const labelsJson = JSON.stringify([{ name: labelName }]);
   const r = await getPool().query(
     `UPDATE release_cache
         SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
       WHERE type = 'master' AND discogs_id = ANY($1::int[])
         AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`,
-    [ids, JSON.stringify([{ name: labelName }])],
+    [ids, labelsJson],
   );
+  // Mirror the stamp into the split schema so the label directory /
+  // analytics see the same label attribution the mini-player would
+  // read out of release_cache. Two touches: patch data->labels on
+  // masters_plus (masters live there), and INSERT a row into
+  // release_labels so the aggregate GROUP BY picks it up. We only
+  // insert when the release_labels side is empty for this master, so
+  // repeat calls (idempotent) don't multiply the row.
+  const pool = getPool();
+  try {
+    await pool.query(
+      `UPDATE discogs_cache_masters_plus
+          SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
+        WHERE type = 'master' AND discogs_id = ANY($1::int[])
+          AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`,
+      [ids, labelsJson],
+    );
+    await pool.query(
+      `INSERT INTO release_labels (discogs_id, bucket, label_id, label_name, catno)
+       SELECT id, 0::smallint, NULL, $2, NULL
+         FROM unnest($1::int[]) AS id
+        WHERE NOT EXISTS (
+          SELECT 1 FROM release_labels rl
+           WHERE rl.discogs_id = id AND rl.bucket = 0
+        )`,
+      [ids, labelName],
+    );
+  } catch (err: any) {
+    console.error("[backfillCachedMasterLabel split mirror]", err?.message ?? err);
+  }
   return r.rowCount ?? 0;
 }
 
