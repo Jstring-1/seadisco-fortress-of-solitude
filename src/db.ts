@@ -960,6 +960,25 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_country_idx   ON discogs_cache_masters_plus (country)   WHERE country IS NOT NULL`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_seen_at_idx   ON discogs_cache_masters_plus (seen_at DESC) WHERE seen_at IS NOT NULL`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_cached_at_idx ON discogs_cache_masters_plus (cached_at DESC)`);
+  // Promoted scalar columns for the Feed / catalog samplers. Adding
+  // them as nullable ints so pre-existing rows stay valid until the
+  // reprojection pass fills them in; each is INT (not SMALLINT) since
+  // community.want for very popular releases exceeds SMALLINT max.
+  await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS community_want  INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS community_have  INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS num_for_sale    INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS videos_count    SMALLINT`);
+  await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS tracks_count    SMALLINT`);
+  // Partial index tuned to the Rare-tab predicate (want>20 AND have<10
+  // AND num_for_sale=0). Small — most rows don't qualify — but it
+  // lets the Rare sampler skip a full table scan.
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS dcmp_rare_idx
+       ON discogs_cache_masters_plus (year, community_want DESC)
+       WHERE community_want IS NOT NULL AND community_want > 20
+         AND community_have IS NOT NULL AND community_have < 10
+         AND num_for_sale = 0`,
+  );
 
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS discogs_cache_pressings (
@@ -976,6 +995,19 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_master_id_idx  ON discogs_cache_pressings (master_id)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_year_idx       ON discogs_cache_pressings (year)     WHERE year IS NOT NULL`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_seen_at_idx    ON discogs_cache_pressings (seen_at DESC) WHERE seen_at IS NOT NULL`);
+  // Same promoted-scalar shape as masters_plus (see comment there).
+  await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS community_want  INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS community_have  INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS num_for_sale    INT`);
+  await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS videos_count    SMALLINT`);
+  await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS tracks_count    SMALLINT`);
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS dcp_rare_idx
+       ON discogs_cache_pressings (year, community_want DESC)
+       WHERE community_want IS NOT NULL AND community_want > 20
+         AND community_have IS NOT NULL AND community_have < 10
+         AND num_for_sale = 0`,
+  );
 
   // Side tables. `bucket` is a small int denoting where the parent row
   // lives: 0 = master, 1 = orphan (release without master_id), 2 =
@@ -6461,6 +6493,11 @@ export interface ProjectedRelease {
   year:           number | null;
   country:        string | null;
   primaryFormat:  string | null;
+  communityWant:  number | null;
+  communityHave:  number | null;
+  numForSale:     number | null;
+  videosCount:    number | null;
+  tracksCount:    number | null;
   labels:         Array<{ id: number | null; name: string; catno: string | null }>;
   artists:        Array<{ id: number; name: string | null; role: "main" | "extra" }>;
   tags:           Array<{ kind: "genre" | "style" | "format"; value: string }>;
@@ -6492,6 +6529,15 @@ export function projectReleaseData(
   const country       = _projCoerceStr((data as any).country);
   const rawFormats    = Array.isArray((data as any).formats) ? (data as any).formats : [];
   const primaryFormat = _projCoerceStr(rawFormats[0]?.name);
+  // community.want / have — coerce '' → null; anything else int.
+  // num_for_sale is at the top level.
+  // videos_count, tracks_count are just array lengths (0 when missing).
+  const community     = (data as any).community ?? {};
+  const communityWant = _projCoerceInt(community.want) ?? 0;
+  const communityHave = _projCoerceInt(community.have) ?? 0;
+  const numForSale    = _projCoerceInt((data as any).num_for_sale) ?? 0;
+  const videosCount   = Array.isArray((data as any).videos)    ? (data as any).videos.length    : 0;
+  const tracksCount   = Array.isArray((data as any).tracklist) ? (data as any).tracklist.length : 0;
 
   const labels: ProjectedRelease["labels"] = [];
   if (Array.isArray((data as any).labels)) {
@@ -6538,7 +6584,11 @@ export function projectReleaseData(
     if (v) tags.push({ kind: "format", value: v });
   }
 
-  return { bucket, bucketNum, masterId, year, country, primaryFormat, labels, artists, tags };
+  return {
+    bucket, bucketNum, masterId, year, country, primaryFormat,
+    communityWant, communityHave, numForSale, videosCount, tracksCount,
+    labels, artists, tags,
+  };
 }
 
 // Write a single release/master into the split schema. Runs inside
@@ -6560,35 +6610,53 @@ export async function writeProjectedCache(
     if (proj.bucket === "pressing") {
       await client.query(
         `INSERT INTO discogs_cache_pressings
-           (discogs_id, master_id, year, country, primary_format, data, cached_at, seen_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), ${warmOnly ? "NULL" : "NOW()"})
+           (discogs_id, master_id, year, country, primary_format,
+            community_want, community_have, num_for_sale, videos_count, tracks_count,
+            data, cached_at, seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), ${warmOnly ? "NULL" : "NOW()"})
          ON CONFLICT (discogs_id) DO UPDATE SET
            master_id      = EXCLUDED.master_id,
            year           = EXCLUDED.year,
            country        = EXCLUDED.country,
            primary_format = EXCLUDED.primary_format,
+           community_want = EXCLUDED.community_want,
+           community_have = EXCLUDED.community_have,
+           num_for_sale   = EXCLUDED.num_for_sale,
+           videos_count   = EXCLUDED.videos_count,
+           tracks_count   = EXCLUDED.tracks_count,
            data           = EXCLUDED.data,
            cached_at      = NOW(),
            seen_at        = ${warmOnly
              ? "discogs_cache_pressings.seen_at"
              : "COALESCE(discogs_cache_pressings.seen_at, NOW())"}`,
-        [discogsId, proj.masterId, proj.year, proj.country, proj.primaryFormat, JSON.stringify(data)],
+        [discogsId, proj.masterId, proj.year, proj.country, proj.primaryFormat,
+         proj.communityWant, proj.communityHave, proj.numForSale, proj.videosCount, proj.tracksCount,
+         JSON.stringify(data)],
       );
     } else {
       await client.query(
         `INSERT INTO discogs_cache_masters_plus
-           (discogs_id, type, year, country, primary_format, data, cached_at, seen_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW(), ${warmOnly ? "NULL" : "NOW()"})
+           (discogs_id, type, year, country, primary_format,
+            community_want, community_have, num_for_sale, videos_count, tracks_count,
+            data, cached_at, seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), ${warmOnly ? "NULL" : "NOW()"})
          ON CONFLICT (discogs_id, type) DO UPDATE SET
            year           = EXCLUDED.year,
            country        = EXCLUDED.country,
            primary_format = EXCLUDED.primary_format,
+           community_want = EXCLUDED.community_want,
+           community_have = EXCLUDED.community_have,
+           num_for_sale   = EXCLUDED.num_for_sale,
+           videos_count   = EXCLUDED.videos_count,
+           tracks_count   = EXCLUDED.tracks_count,
            data           = EXCLUDED.data,
            cached_at      = NOW(),
            seen_at        = ${warmOnly
              ? "discogs_cache_masters_plus.seen_at"
              : "COALESCE(discogs_cache_masters_plus.seen_at, NOW())"}`,
-        [discogsId, type, proj.year, proj.country, proj.primaryFormat, JSON.stringify(data)],
+        [discogsId, type, proj.year, proj.country, proj.primaryFormat,
+         proj.communityWant, proj.communityHave, proj.numForSale, proj.videosCount, proj.tracksCount,
+         JSON.stringify(data)],
       );
     }
 
@@ -6741,7 +6809,10 @@ export async function writeProjectedCacheBatch(
 
     if (mastersPlus.length > 0) {
       const rowsArr = mastersPlus.map(r => [
-        r.discogs_id, r.type, r.proj.year, r.proj.country, r.proj.primaryFormat, JSON.stringify(r.data),
+        r.discogs_id, r.type, r.proj.year, r.proj.country, r.proj.primaryFormat,
+        r.proj.communityWant, r.proj.communityHave, r.proj.numForSale,
+        r.proj.videosCount, r.proj.tracksCount,
+        JSON.stringify(r.data),
       ]);
       // Explicit casts on the SELECT list — Postgres infers every
       // VALUES column as text otherwise, and pg driver serializes
@@ -6749,48 +6820,79 @@ export async function writeProjectedCacheBatch(
       // with "expression is of type text" against the int column.
       await chunkedInsert(client,
         ph => `INSERT INTO discogs_cache_masters_plus
-                 (discogs_id, type, year, country, primary_format, data, cached_at, seen_at)
+                 (discogs_id, type, year, country, primary_format,
+                  community_want, community_have, num_for_sale, videos_count, tracks_count,
+                  data, cached_at, seen_at)
                SELECT v.discogs_id::int,
                       v.type::text,
                       v.year::smallint,
                       v.country::text,
                       v.primary_format::text,
+                      v.community_want::int,
+                      v.community_have::int,
+                      v.num_for_sale::int,
+                      v.videos_count::smallint,
+                      v.tracks_count::smallint,
                       v.data::jsonb,
                       NOW(), NOW()
-                 FROM (VALUES ${ph}) AS v(discogs_id, type, year, country, primary_format, data)
+                 FROM (VALUES ${ph}) AS v(discogs_id, type, year, country, primary_format,
+                                          community_want, community_have, num_for_sale,
+                                          videos_count, tracks_count, data)
                ON CONFLICT (discogs_id, type) DO UPDATE SET
                  year           = EXCLUDED.year,
                  country        = EXCLUDED.country,
                  primary_format = EXCLUDED.primary_format,
+                 community_want = EXCLUDED.community_want,
+                 community_have = EXCLUDED.community_have,
+                 num_for_sale   = EXCLUDED.num_for_sale,
+                 videos_count   = EXCLUDED.videos_count,
+                 tracks_count   = EXCLUDED.tracks_count,
                  data           = EXCLUDED.data,
                  cached_at      = NOW(),
                  seen_at        = COALESCE(discogs_cache_masters_plus.seen_at, NOW())`,
-        rowsArr, 6);
+        rowsArr, 11);
     }
     if (pressings.length > 0) {
       const rowsArr = pressings.map(r => [
-        r.discogs_id, r.proj.masterId, r.proj.year, r.proj.country, r.proj.primaryFormat, JSON.stringify(r.data),
+        r.discogs_id, r.proj.masterId, r.proj.year, r.proj.country, r.proj.primaryFormat,
+        r.proj.communityWant, r.proj.communityHave, r.proj.numForSale,
+        r.proj.videosCount, r.proj.tracksCount,
+        JSON.stringify(r.data),
       ]);
       await chunkedInsert(client,
         ph => `INSERT INTO discogs_cache_pressings
-                 (discogs_id, master_id, year, country, primary_format, data, cached_at, seen_at)
+                 (discogs_id, master_id, year, country, primary_format,
+                  community_want, community_have, num_for_sale, videos_count, tracks_count,
+                  data, cached_at, seen_at)
                SELECT v.discogs_id::int,
                       v.master_id::int,
                       v.year::smallint,
                       v.country::text,
                       v.primary_format::text,
+                      v.community_want::int,
+                      v.community_have::int,
+                      v.num_for_sale::int,
+                      v.videos_count::smallint,
+                      v.tracks_count::smallint,
                       v.data::jsonb,
                       NOW(), NOW()
-                 FROM (VALUES ${ph}) AS v(discogs_id, master_id, year, country, primary_format, data)
+                 FROM (VALUES ${ph}) AS v(discogs_id, master_id, year, country, primary_format,
+                                          community_want, community_have, num_for_sale,
+                                          videos_count, tracks_count, data)
                ON CONFLICT (discogs_id) DO UPDATE SET
                  master_id      = EXCLUDED.master_id,
                  year           = EXCLUDED.year,
                  country        = EXCLUDED.country,
                  primary_format = EXCLUDED.primary_format,
+                 community_want = EXCLUDED.community_want,
+                 community_have = EXCLUDED.community_have,
+                 num_for_sale   = EXCLUDED.num_for_sale,
+                 videos_count   = EXCLUDED.videos_count,
+                 tracks_count   = EXCLUDED.tracks_count,
                  data           = EXCLUDED.data,
                  cached_at      = NOW(),
                  seen_at        = COALESCE(discogs_cache_pressings.seen_at, NOW())`,
-        rowsArr, 6);
+        rowsArr, 11);
     }
 
     // Delete side-table rows for every (discogs_id, bucket) pair we're
@@ -7971,6 +8073,20 @@ export async function getFeedRareAlbums(
   limit = 48,
   excludeIds?: Array<{ id: number; type: string }>,
   genre?: string | null,
+  opts: { forceReader?: "v1" | "v2" } = {},
+): Promise<any[]> {
+  const reader: "v1" | "v2" =
+    opts.forceReader ??
+    ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
+  return reader === "v2"
+    ? _getFeedRareAlbumsV2(limit, excludeIds, genre)
+    : _getFeedRareAlbumsV1(limit, excludeIds, genre);
+}
+
+async function _getFeedRareAlbumsV1(
+  limit: number,
+  excludeIds: Array<{ id: number; type: string }> | undefined,
+  genre: string | null | undefined,
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
@@ -8071,6 +8187,139 @@ export async function getFeedRareAlbums(
     return r.rows;
   } catch (e: any) {
     console.error("[getFeedRareAlbums]", e?.message ?? e);
+    return [];
+  }
+}
+
+// V2 reader — hits the promoted community_want / community_have /
+// num_for_sale columns instead of jsonb->>'community'->>'want' etc.
+// The Rare filter (want>20 AND have<10 AND num_for_sale=0) rides the
+// dcmp_rare_idx / dcp_rare_idx partial indexes, so the candidate
+// pool is pre-filtered before any per-row work. Genre / format
+// checks stay on the release_tags side table.
+async function _getFeedRareAlbumsV2(
+  limit: number,
+  excludeIds: Array<{ id: number; type: string }> | undefined,
+  genre: string | null | undefined,
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let excludeClause = "";
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      excludeClause = `AND NOT (ca.discogs_id = ANY($${idIdx}::int[]) AND ca.type = ANY($${tyIdx}::text[]))`;
+    }
+    // Vinyl match via release_tags with kind='format' — matches the
+    // V1 semantics (data->'formats' @> [{name:Vinyl}]) exactly since
+    // release_tags stores every format entry, not just the primary.
+    const vinylExists = `EXISTS (
+      SELECT 1 FROM release_tags rt
+       WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+         AND rt.kind = 'format' AND rt.value = 'Vinyl')`;
+
+    const strictWindow = genre ? RARE_GENRE_WINDOWS[genre] : null;
+    if (genre && strictWindow) {
+      params.push(genre);
+      const gIdx = params.length;
+      const sql = `
+        WITH cache_all AS (
+          SELECT m.discogs_id, m.type, m.year, m.data, m.cached_at, m.seen_at,
+                 m.community_want, m.community_have, m.num_for_sale,
+                 CASE WHEN m.type = 'master' THEN 0::smallint ELSE 1::smallint END AS bucket
+            FROM discogs_cache_masters_plus m
+          UNION ALL
+          SELECT p.discogs_id, 'release'::text AS type, p.year, p.data, p.cached_at, p.seen_at,
+                 p.community_want, p.community_have, p.num_for_sale,
+                 2::smallint AS bucket
+            FROM discogs_cache_pressings p
+        )
+        SELECT ca.discogs_id AS id, ca.type, ca.data, ca.cached_at
+          FROM cache_all ca
+         WHERE ca.seen_at IS NOT NULL
+           AND ca.year BETWEEN ${strictWindow[0]} AND ${strictWindow[1]}
+           AND ca.community_want IS NOT NULL AND ca.community_want > 20
+           AND ca.community_have IS NOT NULL AND ca.community_have < 10
+           AND ca.num_for_sale = 0
+           AND ${vinylExists}
+           AND EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'genre' AND rt.value = $${gIdx})
+           ${excludeClause}
+         ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + ca.community_want), 1)
+         LIMIT $1`;
+      const r = await getPool().query(sql, params);
+      return r.rows;
+    }
+
+    // Multi-genre path: use the same fixed year-window table but as
+    // a JOIN to release_tags (kind='genre') so the year check applies
+    // per row's actual genre membership. Coarse pre-filter on year
+    // BETWEEN 1900 AND 1999 to shrink the candidate pool before the
+    // per-genre EXISTS runs.
+    const sql = `
+      WITH genre_window(genre, from_year, to_year) AS (
+        VALUES
+          ('Blues',                   1900, 1925),
+          ('Folk, World, & Country',  1900, 1925),
+          ('Jazz',                    1917, 1937),
+          ('Classical',               1900, 1920),
+          ('Stage & Screen',          1900, 1925),
+          ('Latin',                   1930, 1955),
+          ('Rock',                    1955, 1975),
+          ('Pop',                     1950, 1970),
+          ('Reggae',                  1960, 1980),
+          ('Funk / Soul',             1960, 1980),
+          ('Brass & Military',        1900, 1925),
+          ('Electronic',              1970, 1990),
+          ('Hip Hop',                 1979, 1999)
+      ),
+      cache_all AS (
+        SELECT m.discogs_id, m.type, m.year, m.data, m.cached_at, m.seen_at,
+               m.community_want, m.community_have, m.num_for_sale,
+               CASE WHEN m.type = 'master' THEN 0::smallint ELSE 1::smallint END AS bucket
+          FROM discogs_cache_masters_plus m
+        UNION ALL
+        SELECT p.discogs_id, 'release'::text AS type, p.year, p.data, p.cached_at, p.seen_at,
+               p.community_want, p.community_have, p.num_for_sale,
+               2::smallint AS bucket
+          FROM discogs_cache_pressings p
+      ),
+      candidates AS (
+        SELECT ca.discogs_id AS id, ca.type, ca.data, ca.cached_at, ca.bucket, ca.year,
+               ca.community_want AS want_int
+          FROM cache_all ca
+         WHERE ca.seen_at IS NOT NULL
+           AND ca.year BETWEEN 1900 AND 1999
+           AND ca.community_want IS NOT NULL AND ca.community_want > 20
+           AND ca.community_have IS NOT NULL AND ca.community_have < 10
+           AND ca.num_for_sale = 0
+           AND ${vinylExists}
+           ${excludeClause}
+         LIMIT 5000
+      )
+      SELECT c.id, c.type, c.data, c.cached_at
+        FROM candidates c
+       WHERE EXISTS (
+         SELECT 1
+           FROM release_tags rt
+           JOIN genre_window gw ON gw.genre = rt.value
+          WHERE rt.discogs_id = c.id AND rt.bucket = c.bucket
+            AND rt.kind = 'genre'
+            AND c.year BETWEEN gw.from_year AND gw.to_year
+       )
+       ORDER BY -LN(RANDOM() + 1e-12) / GREATEST(LN(1 + c.want_int), 1)
+       LIMIT $1`;
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch (e: any) {
+    console.error("[getFeedRareAlbums V2]", e?.message ?? e);
     return [];
   }
 }
