@@ -5463,10 +5463,19 @@ export async function writeProjectedCacheBatch(batch) {
             const rowsArr = mastersPlus.map(r => [
                 r.discogs_id, r.type, r.proj.year, r.proj.country, r.proj.primaryFormat, JSON.stringify(r.data),
             ]);
+            // Explicit casts on the SELECT list — Postgres infers every
+            // VALUES column as text otherwise, and pg driver serializes
+            // number/null placeholders as text too, so the raw insert fails
+            // with "expression is of type text" against the int column.
             await chunkedInsert(client, ph => `INSERT INTO discogs_cache_masters_plus
                  (discogs_id, type, year, country, primary_format, data, cached_at, seen_at)
-               SELECT v.discogs_id, v.type, v.year, v.country, v.primary_format,
-                      v.data::jsonb, NOW(), NOW()
+               SELECT v.discogs_id::int,
+                      v.type::text,
+                      v.year::smallint,
+                      v.country::text,
+                      v.primary_format::text,
+                      v.data::jsonb,
+                      NOW(), NOW()
                  FROM (VALUES ${ph}) AS v(discogs_id, type, year, country, primary_format, data)
                ON CONFLICT (discogs_id, type) DO UPDATE SET
                  year           = EXCLUDED.year,
@@ -5482,8 +5491,13 @@ export async function writeProjectedCacheBatch(batch) {
             ]);
             await chunkedInsert(client, ph => `INSERT INTO discogs_cache_pressings
                  (discogs_id, master_id, year, country, primary_format, data, cached_at, seen_at)
-               SELECT v.discogs_id, v.master_id, v.year, v.country, v.primary_format,
-                      v.data::jsonb, NOW(), NOW()
+               SELECT v.discogs_id::int,
+                      v.master_id::int,
+                      v.year::smallint,
+                      v.country::text,
+                      v.primary_format::text,
+                      v.data::jsonb,
+                      NOW(), NOW()
                  FROM (VALUES ${ph}) AS v(discogs_id, master_id, year, country, primary_format, data)
                ON CONFLICT (discogs_id) DO UPDATE SET
                  master_id      = EXCLUDED.master_id,
