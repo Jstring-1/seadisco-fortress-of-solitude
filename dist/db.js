@@ -959,8 +959,15 @@ export async function initDb() {
       role        TEXT      NOT NULL           -- 'main' | 'extra'
     )
   `);
+    // Add name inline (mirrors release_labels.label_name) so the
+    // cache-analytics V2 reader can filter + facet on artist name
+    // without joining an out-of-band artist name table. Populated by
+    // the projector; old rows written before this column stay NULL
+    // until the backfill reprojects them.
+    await getPool().query(`ALTER TABLE release_artists ADD COLUMN IF NOT EXISTS name TEXT`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_release_idx ON release_artists (discogs_id, bucket)`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_artist_idx  ON release_artists (artist_id, role)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_name_lower_idx ON release_artists (LOWER(name)) WHERE name IS NOT NULL`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS release_tags (
       id          BIGSERIAL PRIMARY KEY,
@@ -5258,14 +5265,14 @@ export function projectReleaseData(type, data) {
         for (const a of data.artists) {
             const id = _projCoerceInt(a?.id);
             if (id != null)
-                artists.push({ id, role: "main" });
+                artists.push({ id, name: _projCoerceStr(a?.name), role: "main" });
         }
     }
     if (Array.isArray(data.extraartists)) {
         for (const a of data.extraartists) {
             const id = _projCoerceInt(a?.id);
             if (id != null)
-                artists.push({ id, role: "extra" });
+                artists.push({ id, name: _projCoerceStr(a?.name), role: "extra" });
         }
     }
     const tags = [];
@@ -5356,12 +5363,12 @@ export async function writeProjectedCache(discogsId, type, data, opts = {}) {
                 if (seen.has(k))
                     continue;
                 seen.add(k);
-                params.push(discogsId, proj.bucketNum, a.id, a.role);
+                params.push(discogsId, proj.bucketNum, a.id, a.role, a.name);
                 const b = params.length;
-                rows.push(`($${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+                rows.push(`($${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
             }
             if (rows.length > 0) {
-                await client.query(`INSERT INTO release_artists (discogs_id, bucket, artist_id, role) VALUES ${rows.join(",")}`, params);
+                await client.query(`INSERT INTO release_artists (discogs_id, bucket, artist_id, role, name) VALUES ${rows.join(",")}`, params);
             }
         }
         if (proj.tags.length > 0) {
@@ -5424,7 +5431,7 @@ export async function writeProjectedCacheBatch(batch) {
             if (artistSeen.has(k))
                 continue;
             artistSeen.add(k);
-            artistRows.push([r.discogs_id, r.proj.bucketNum, a.id, a.role]);
+            artistRows.push([r.discogs_id, r.proj.bucketNum, a.id, a.role, a.name]);
         }
         const tagSeen = new Set();
         for (const t of r.proj.tags) {
@@ -5521,7 +5528,7 @@ export async function writeProjectedCacheBatch(batch) {
             await client.query(`DELETE FROM release_tags    WHERE bucket = $1 AND discogs_id = ANY($2::int[])`, [bucketNum, ids]);
         }
         await chunkedInsert(client, ph => `INSERT INTO release_labels  (discogs_id, bucket, label_id, label_name, catno) VALUES ${ph}`, labelRows, 5);
-        await chunkedInsert(client, ph => `INSERT INTO release_artists (discogs_id, bucket, artist_id, role)              VALUES ${ph}`, artistRows, 4);
+        await chunkedInsert(client, ph => `INSERT INTO release_artists (discogs_id, bucket, artist_id, role, name)        VALUES ${ph}`, artistRows, 5);
         await chunkedInsert(client, ph => `INSERT INTO release_tags    (discogs_id, bucket, kind, value)                  VALUES ${ph}`, tagRows, 4);
         await client.query("COMMIT");
         return { ok: rows.length, err: 0, lastError: null };
@@ -9696,7 +9703,14 @@ export async function setLabelDirectoryId(labelName, labelId) {
     const r = await getPool().query(`UPDATE external_discography SET label_id = $1 WHERE label_name = $2`, [labelId, labelName]);
     return { updated: r.rowCount ?? 0 };
 }
-export async function computeCacheAnalytics(f) {
+export async function computeCacheAnalytics(f, opts = {}) {
+    const reader = opts.forceReader ??
+        ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
+    return reader === "v2"
+        ? _computeCacheAnalyticsV2(f)
+        : _computeCacheAnalyticsV1(f);
+}
+async function _computeCacheAnalyticsV1(f) {
     const args = [];
     const where = [];
     const push = (v) => { args.push(v); return `$${args.length}`; };
@@ -9803,6 +9817,160 @@ export async function computeCacheAnalytics(f) {
       'sample', COALESCE((SELECT jsonb_agg(jsonb_build_object(
         'id', discogs_id, 'type', type, 'title', title,
         'artist', artist, 'label', label, 'year', year
+      )) FROM sample), '[]'::jsonb)
+    ) AS payload
+  `;
+    const r = await getPool().query(q, args);
+    const payload = r.rows[0]?.payload ?? {};
+    return {
+        totalCount: Number(payload.totalCount ?? 0),
+        facets: {
+            genres: payload.facets?.genres ?? [],
+            styles: payload.facets?.styles ?? [],
+            labels: payload.facets?.labels ?? [],
+            artists: payload.facets?.artists ?? [],
+            countries: payload.facets?.countries ?? [],
+            decades: payload.facets?.decades ?? [],
+        },
+        sample: payload.sample ?? [],
+    };
+}
+// V2 reader — reads from the split schema. cache_all UNIONs
+// discogs_cache_masters_plus + discogs_cache_pressings so every
+// filter that goes through scalar columns (year/country/type) is a
+// straight column lookup, and every filter that goes through
+// side-table content (label name / artist name / genre / style) is
+// a plain indexed EXISTS instead of a LATERAL jsonb_array_elements.
+// bucket is materialised on the union so side-table joins can key
+// on (discogs_id, bucket) — same shape as the writer uses.
+async function _computeCacheAnalyticsV2(f) {
+    const args = [];
+    const where = [];
+    const push = (v) => { args.push(v); return `$${args.length}`; };
+    if (f.label) {
+        where.push(`EXISTS (SELECT 1 FROM release_labels rl
+                        WHERE rl.discogs_id = ca.discogs_id AND rl.bucket = ca.bucket
+                          AND LOWER(rl.label_name) LIKE LOWER(${push('%' + f.label + '%')}))`);
+    }
+    if (f.artist) {
+        where.push(`EXISTS (SELECT 1 FROM release_artists ra
+                        WHERE ra.discogs_id = ca.discogs_id AND ra.bucket = ca.bucket
+                          AND ra.name IS NOT NULL
+                          AND LOWER(ra.name) LIKE LOWER(${push('%' + f.artist + '%')}))`);
+    }
+    if (f.genre) {
+        where.push(`EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'genre' AND rt.value = ${push(f.genre)})`);
+    }
+    if (f.style) {
+        where.push(`EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'style' AND rt.value = ${push(f.style)})`);
+    }
+    if (f.country) {
+        where.push(`ca.country = ${push(f.country)}`);
+    }
+    if (Number.isFinite(f.yearFrom)) {
+        where.push(`COALESCE(ca.year, 0)::int >= ${push(f.yearFrom)}`);
+    }
+    if (Number.isFinite(f.yearTo)) {
+        where.push(`COALESCE(ca.year, 9999)::int <= ${push(f.yearTo)}`);
+    }
+    if (f.type === "release" || f.type === "master") {
+        where.push(`ca.type = ${push(f.type)}`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const q = `
+    WITH cache_all AS (
+      SELECT m.discogs_id,
+             m.type,
+             m.year,
+             m.country,
+             m.data,
+             CASE WHEN m.type = 'master' THEN 0::smallint ELSE 1::smallint END AS bucket
+        FROM discogs_cache_masters_plus m
+      UNION ALL
+      SELECT p.discogs_id,
+             'release'::text AS type,
+             p.year,
+             p.country,
+             p.data,
+             2::smallint AS bucket
+        FROM discogs_cache_pressings p
+    ),
+    filtered AS MATERIALIZED (
+      SELECT ca.discogs_id, ca.type, ca.bucket, ca.year, ca.country, ca.data
+        FROM cache_all ca
+        ${whereSql}
+    ),
+    total AS (SELECT COUNT(*)::bigint AS n FROM filtered),
+    genre_facets AS (
+      SELECT rt.value AS name, COUNT(*)::int AS n
+        FROM filtered f
+        JOIN release_tags rt
+          ON rt.discogs_id = f.discogs_id AND rt.bucket = f.bucket
+        WHERE rt.kind = 'genre'
+        GROUP BY rt.value ORDER BY n DESC LIMIT 20
+    ),
+    style_facets AS (
+      SELECT rt.value AS name, COUNT(*)::int AS n
+        FROM filtered f
+        JOIN release_tags rt
+          ON rt.discogs_id = f.discogs_id AND rt.bucket = f.bucket
+        WHERE rt.kind = 'style'
+        GROUP BY rt.value ORDER BY n DESC LIMIT 20
+    ),
+    label_facets AS (
+      SELECT rl.label_name AS name, COUNT(*)::int AS n
+        FROM filtered f
+        JOIN release_labels rl
+          ON rl.discogs_id = f.discogs_id AND rl.bucket = f.bucket
+        GROUP BY rl.label_name ORDER BY n DESC LIMIT 20
+    ),
+    artist_facets AS (
+      SELECT ra.name, COUNT(*)::int AS n
+        FROM filtered f
+        JOIN release_artists ra
+          ON ra.discogs_id = f.discogs_id AND ra.bucket = f.bucket
+        WHERE ra.name IS NOT NULL
+        GROUP BY ra.name ORDER BY n DESC LIMIT 20
+    ),
+    country_facets AS (
+      SELECT country AS name, COUNT(*)::int AS n
+        FROM filtered
+        WHERE country IS NOT NULL AND country <> ''
+        GROUP BY 1 ORDER BY n DESC LIMIT 20
+    ),
+    decade_facets AS (
+      SELECT ((year::int / 10) * 10) AS decade, COUNT(*)::int AS n
+        FROM filtered
+        WHERE year IS NOT NULL AND year > 0
+        GROUP BY 1 ORDER BY 1 ASC
+    ),
+    sample AS (
+      SELECT discogs_id, type,
+             data->>'title'                              AS title,
+             COALESCE(data->'artists'->0->>'name','')    AS artist,
+             COALESCE(data->'labels'->0->>'name','')     AS label,
+             year::int                                   AS year_out
+        FROM filtered
+        ORDER BY year ASC NULLS LAST, discogs_id ASC
+        LIMIT 20
+    )
+    SELECT jsonb_build_object(
+      'totalCount', (SELECT n FROM total),
+      'facets', jsonb_build_object(
+        'genres',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM genre_facets),    '[]'::jsonb),
+        'styles',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM style_facets),    '[]'::jsonb),
+        'labels',    COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM label_facets),    '[]'::jsonb),
+        'artists',   COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM artist_facets),   '[]'::jsonb),
+        'countries', COALESCE((SELECT jsonb_agg(jsonb_build_object('name', name, 'count', n) ORDER BY n DESC) FROM country_facets),  '[]'::jsonb),
+        'decades',   COALESCE((SELECT jsonb_agg(jsonb_build_object('decade', decade, 'count', n) ORDER BY decade ASC) FROM decade_facets), '[]'::jsonb)
+      ),
+      'sample', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id', discogs_id, 'type', type, 'title', title,
+        'artist', artist, 'label', label, 'year', year_out
       )) FROM sample), '[]'::jsonb)
     ) AS payload
   `;

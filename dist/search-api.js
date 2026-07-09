@@ -9946,8 +9946,12 @@ app.post("/api/admin/cache-analytics", express.json({ limit: "8kb" }), async (re
         yearTo: num(b.yearTo),
         type: b.type === "release" || b.type === "master" ? b.type : undefined,
     };
+    // ?reader=v1|v2 override for side-by-side compare during Phase 2.
+    const rawReader = String(req.query.reader ?? "").toLowerCase();
+    const forceReader = rawReader === "v1" ? "v1" :
+        rawReader === "v2" ? "v2" : undefined;
     try {
-        const result = await computeCacheAnalytics(filters);
+        const result = await computeCacheAnalytics(filters, { forceReader });
         res.json(result);
     }
     catch (err) {
