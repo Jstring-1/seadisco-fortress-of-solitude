@@ -2331,7 +2331,32 @@ function _renderCacheProjection() {
     <div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">
       Dual-write is live: every new cacheRelease() call already writes to the split schema. This backfill just projects the existing rows.
     </div>
+    <hr style="margin:0.7rem 0;border-color:var(--border)">
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap"
+         title="When on, admin panels read from the projected schema (release_labels + discogs_cache_masters_plus / discogs_cache_pressings) instead of unrolling JSONB from release_cache. Flip ON only after the backfill has drained — otherwise counts are missing. Phase 2 covers the label directory reader; cache analytics + feed follow in later phases.">
+      <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem">
+        <input id="cp-split-readers-toggle" type="checkbox" ${s.splitReadersEnabled ? "checked" : ""} onchange="_cacheProjectionToggleReaders(event)">
+        Use split-cache readers (label directory)
+      </label>
+      <span style="font-size:0.72rem;color:var(--muted)">${s.splitReadersEnabled ? "reading from projected schema" : "reading from release_cache (old)"}</span>
+    </div>
   `;
+}
+async function _cacheProjectionToggleReaders(ev) {
+  const enabled = !!ev.target.checked;
+  if (enabled && !confirm("Turn ON split-cache readers?\n\nThe label directory will start reading from the projected schema. If the backfill hasn't finished, cache counts will look low. Toggle back OFF anytime.")) {
+    ev.target.checked = false; return;
+  }
+  try {
+    const r = await apiFetch("/api/admin/cache-projection/set-reader-flag", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Toggle failed: ${j.error || r.status}`); ev.target.checked = !enabled; return; }
+    loadCacheProjection();
+    if (typeof loadLabelDirectory === "function") loadLabelDirectory();
+  } catch (err) { alert(String(err)); ev.target.checked = !enabled; }
 }
 function _cpStat(label, n) {
   const val = Number.isFinite(n) ? n.toLocaleString() : "—";

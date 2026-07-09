@@ -48,7 +48,7 @@ import {
   getCacheProjectionBackfillStatus,
   isCacheProjectionBackfillRunning,
 } from "./cache-projection-backfill-worker.js";
-import { getProjectedCacheStats } from "./db.js";
+import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -8976,9 +8976,15 @@ app.get("/api/admin/label-directory", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const search = String(req.query.q ?? "").trim().slice(0, 200);
   const limit  = Math.max(1, Math.min(5000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
+  // reader=v1|v2 lets the UI compare old vs new during Phase 2. If
+  // absent, listLabelDirectory picks based on the global flag.
+  const rawReader = String(req.query.reader ?? "").toLowerCase();
+  const forceReader: "v1" | "v2" | undefined =
+    rawReader === "v1" ? "v1" :
+    rawReader === "v2" ? "v2" : undefined;
   try {
     const [rows, catnoRuns] = await Promise.all([
-      listLabelDirectory({ search: search || undefined, limit }),
+      listLabelDirectory({ search: search || undefined, limit, forceReader }),
       listCacheWarmCatnoRuns(),
     ]);
 
@@ -9105,11 +9111,25 @@ app.post("/api/admin/cache-projection/force-clear", async (req, res) => {
 app.get("/api/admin/cache-projection/status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const [worker, stats] = await Promise.all([
+    const [worker, stats, splitReaders] = await Promise.all([
       Promise.resolve(getCacheProjectionBackfillStatus()),
       getProjectedCacheStats().catch(() => null),
+      isSplitCacheReaderEnabled().catch(() => false),
     ]);
-    res.json({ ...worker, stats });
+    res.json({ ...worker, stats, splitReadersEnabled: splitReaders });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Global toggle for the split-cache reader path. When on, admin
+// panels (label directory today; cache analytics + feed later) read
+// from the projected schema instead of unrolling JSONB. Flip only
+// after the projection backfill has drained.
+app.post("/api/admin/cache-projection/set-reader-flag", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const enabled = !!(req.body || {}).enabled;
+  try {
+    await setSplitCacheReaderEnabled(enabled);
+    res.json({ ok: true, enabled });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 

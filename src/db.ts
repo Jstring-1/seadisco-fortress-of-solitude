@@ -11376,19 +11376,48 @@ export interface LabelDirectoryRow {
   swept_at?:       string | null;           // ISO timestamp of most recent completed sweep, if any
 }
 
+// ── Split-cache reader feature flag ───────────────────────────────
+// Off by default. When on (per app_settings.use_split_cache_readers),
+// admin panels read from the new split schema; when off they still
+// read from release_cache. Set via the toggle in the Cache tab after
+// the projection backfill has drained.
+const SPLIT_READERS_KEY = "use_split_cache_readers";
+export async function isSplitCacheReaderEnabled(): Promise<boolean> {
+  try {
+    const raw = await getAppSetting(SPLIT_READERS_KEY);
+    return raw === "1" || raw === "true";
+  } catch { return false; }
+}
+export async function setSplitCacheReaderEnabled(v: boolean): Promise<void> {
+  await setAppSetting(SPLIT_READERS_KEY, v ? "1" : "0");
+}
+
 export async function listLabelDirectory(opts: {
-  search?: string;
-  limit?:  number;
+  search?:      string;
+  limit?:       number;
+  forceReader?: "v1" | "v2";           // for side-by-side compare in the UI
 } = {}): Promise<LabelDirectoryRow[]> {
   const limit = Math.max(1, Math.min(5000, opts.limit ?? 1000));
-  // Two-pass build:
-  // (1) per-label-name aggregates over external_discography
-  // (2) per-(label_name_lc) aggregates over release_cache labels[*]
-  // Outer join, prefer external's casing for display.
+  const reader: "v1" | "v2" =
+    opts.forceReader ??
+    ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
+  const rawRows = reader === "v2"
+    ? await _listLabelDirectoryV2Raw(opts.search, limit)
+    : await _listLabelDirectoryV1Raw(opts.search, limit);
+  return _collapseLabelDirectoryAliases(rawRows);
+}
+
+// Old JSONB-unrolling reader. Kept until every Phase 2 reader has
+// been verified against the split schema and readers are switched
+// over globally.
+async function _listLabelDirectoryV1Raw(
+  search: string | undefined,
+  limit:  number,
+): Promise<LabelDirectoryRow[]> {
   const args: any[] = [];
   let extraWhere = "";
-  if (opts.search) {
-    args.push(`%${opts.search}%`);
+  if (search) {
+    args.push(`%${search}%`);
     extraWhere = `WHERE label_name ILIKE $${args.length}`;
   }
   const r = await getPool().query(
@@ -11432,7 +11461,7 @@ export async function listLabelDirectory(opts: {
       LIMIT ${limit}`,
     args,
   );
-  const rawRows: LabelDirectoryRow[] = r.rows.map(row => ({
+  return r.rows.map(row => ({
     label_name:     String(row.label_name ?? ""),
     label_id:       row.label_id != null ? Number(row.label_id) : null,
     external_count: Number(row.external_count ?? 0),
@@ -11440,7 +11469,74 @@ export async function listLabelDirectory(opts: {
     cache_masters:  Number(row.cache_masters  ?? 0),
     sources:        Array.isArray(row.sources) ? row.sources : [],
   }));
+}
 
+// New reader — same shape, same output, but hits the projected side
+// table release_labels + normal GROUP BY instead of the LATERAL JSONB
+// scan. Bucket 0 = master, buckets 1/2 = release (orphan/pressing).
+async function _listLabelDirectoryV2Raw(
+  search: string | undefined,
+  limit:  number,
+): Promise<LabelDirectoryRow[]> {
+  const args: any[] = [];
+  let extraWhere = "";
+  if (search) {
+    args.push(`%${search}%`);
+    extraWhere = `WHERE label_name ILIKE $${args.length}`;
+  }
+  const r = await getPool().query(
+    `WITH ext AS (
+       SELECT
+         label_name,
+         COUNT(*)::int           AS external_count,
+         MAX(label_id)           AS label_id,
+         ARRAY_AGG(DISTINCT source ORDER BY source) AS sources
+         FROM external_discography
+        GROUP BY label_name
+     ),
+     cache_lbl AS (
+       SELECT
+         LOWER(rl.label_name)        AS label_name_lc,
+         MIN(rl.label_name)          AS label_name_display,
+         COUNT(*) FILTER (WHERE rl.bucket IN (1,2))::int AS cache_releases,
+         COUNT(*) FILTER (WHERE rl.bucket = 0)::int      AS cache_masters,
+         MAX(rl.label_id)                                AS label_id_cache
+       FROM release_labels rl
+       WHERE rl.label_name IS NOT NULL AND rl.label_name <> ''
+       GROUP BY LOWER(rl.label_name)
+     ),
+     joined AS (
+       SELECT
+         COALESCE(ext.label_name,  cache_lbl.label_name_display) AS label_name,
+         COALESCE(ext.label_id,    cache_lbl.label_id_cache)      AS label_id,
+         COALESCE(ext.external_count, 0) AS external_count,
+         COALESCE(cache_lbl.cache_releases, 0) AS cache_releases,
+         COALESCE(cache_lbl.cache_masters,  0) AS cache_masters,
+         COALESCE(ext.sources,     ARRAY[]::text[])              AS sources
+       FROM ext
+       FULL OUTER JOIN cache_lbl ON LOWER(ext.label_name) = cache_lbl.label_name_lc
+     )
+     SELECT * FROM joined
+      ${extraWhere}
+      ORDER BY external_count DESC NULLS LAST,
+               cache_releases DESC NULLS LAST,
+               label_name ASC
+      LIMIT ${limit}`,
+    args,
+  );
+  return r.rows.map(row => ({
+    label_name:     String(row.label_name ?? ""),
+    label_id:       row.label_id != null ? Number(row.label_id) : null,
+    external_count: Number(row.external_count ?? 0),
+    cache_releases: Number(row.cache_releases ?? 0),
+    cache_masters:  Number(row.cache_masters  ?? 0),
+    sources:        Array.isArray(row.sources) ? row.sources : [],
+  }));
+}
+
+async function _collapseLabelDirectoryAliases(
+  rawRows: LabelDirectoryRow[],
+): Promise<LabelDirectoryRow[]> {
   // Fold aliases into their canonical. Alias table is small (dozens
   // of rows at most, probably) so we do the resolution in memory
   // rather than baking it into the CTE.
@@ -11456,8 +11552,6 @@ export async function listLabelDirectory(opts: {
       reason:    a.reason ?? null,
     });
   }
-  // Group rows by their canonical id. Rows without a label_id, or with
-  // a label_id that isn't an alias, keep their identity.
   interface Group { canonicalId: number; rows: LabelDirectoryRow[]; }
   const groups = new Map<number, Group>();
   const passthrough: LabelDirectoryRow[] = [];
@@ -11466,9 +11560,6 @@ export async function listLabelDirectory(opts: {
     if (id == null) { passthrough.push(row); continue; }
     const mapped = aliasMap.get(id);
     const canonicalId = mapped ? mapped.canonical : id;
-    // Only actually GROUP if either (a) this row is an alias, or (b)
-    // there's another row that aliases into this id. Otherwise it's a
-    // solo row with no group and we just pass it through.
     let g = groups.get(canonicalId);
     if (!g) { g = { canonicalId, rows: [] }; groups.set(canonicalId, g); }
     g.rows.push(row);
@@ -11494,7 +11585,6 @@ export async function listLabelDirectory(opts: {
       })),
     });
   }
-  // Preserve the original sort by external_count desc.
   merged.sort((a, b) => (b.external_count - a.external_count));
   return merged;
 }
