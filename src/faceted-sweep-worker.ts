@@ -17,8 +17,9 @@ import {
   getOAuthCredentials,
   getAppSetting,
   setAppSetting,
-  isReleaseCached,
+  getCachedReleaseIds,
 } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 
 const STATE_KEY  = "faceted_sweep_state";
 const REQ_INTERVAL_MS = 1000;
@@ -190,7 +191,10 @@ async function _sweepSlot(client: DiscogsClient, mode: FacetedMode, slot: QueueI
     else                    opts.country = slot.value;
     let payload: any;
     try {
-      payload = await client.search("", opts);
+      payload = await retryTransient(
+        () => client.search("", opts),
+        { label: `faceted-sweep ${mode}=${slot.value}/${slot.year}` },
+      );
     } catch (err: any) {
       const msg = String(err?.message ?? err ?? "");
       if (/404/.test(msg)) return;
@@ -198,15 +202,31 @@ async function _sweepSlot(client: DiscogsClient, mode: FacetedMode, slot: QueueI
     }
     const results: any[] = Array.isArray(payload?.results) ? payload.results : [];
     if (results.length === 0) return;
+
+    // Batch cache check across the whole page (all master ids).
+    const inScope: number[] = [];
     for (const r of results) {
-      if (_stopRequested) return;
       const id   = Number(r?.id);
       const kind = String(r?.type ?? "").toLowerCase();
       if (!Number.isFinite(id) || id <= 0) continue;
       if (kind !== "master") continue;
+      inScope.push(id);
+    }
+    if (inScope.length === 0) {
+      if (results.length < perPage) return;
+      page++;
+      continue;
+    }
+    const cachedSet = await getCachedReleaseIds(inScope, "master");
+
+    for (const id of inScope) {
+      if (_stopRequested) return;
+      if (cachedSet.has(id)) { _state!.skipped++; continue; }
       try {
-        if (await isReleaseCached(id, "master")) { _state!.skipped++; continue; }
-        const full = await client.getMasterRelease(id);
+        const full = await retryTransient(
+          () => client.getMasterRelease(id),
+          { label: `faceted-sweep master=${id}` },
+        );
         await cacheRelease(id, "master", full as any, { warmOnly: true });
         _state!.hits++;
         await _persist();

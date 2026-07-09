@@ -11,7 +11,8 @@
 // (year, value) queue on start, walk it with a persisted cursor,
 // resume on boot.
 import { DiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, isReleaseCached, } from "./db.js";
+import { cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "faceted_sweep_state";
 const REQ_INTERVAL_MS = 1000;
 let _state = null;
@@ -177,7 +178,7 @@ async function _sweepSlot(client, mode, slot) {
             opts.country = slot.value;
         let payload;
         try {
-            payload = await client.search("", opts);
+            payload = await retryTransient(() => client.search("", opts), { label: `faceted-sweep ${mode}=${slot.value}/${slot.year}` });
         }
         catch (err) {
             const msg = String(err?.message ?? err ?? "");
@@ -188,21 +189,33 @@ async function _sweepSlot(client, mode, slot) {
         const results = Array.isArray(payload?.results) ? payload.results : [];
         if (results.length === 0)
             return;
+        // Batch cache check across the whole page (all master ids).
+        const inScope = [];
         for (const r of results) {
-            if (_stopRequested)
-                return;
             const id = Number(r?.id);
             const kind = String(r?.type ?? "").toLowerCase();
             if (!Number.isFinite(id) || id <= 0)
                 continue;
             if (kind !== "master")
                 continue;
+            inScope.push(id);
+        }
+        if (inScope.length === 0) {
+            if (results.length < perPage)
+                return;
+            page++;
+            continue;
+        }
+        const cachedSet = await getCachedReleaseIds(inScope, "master");
+        for (const id of inScope) {
+            if (_stopRequested)
+                return;
+            if (cachedSet.has(id)) {
+                _state.skipped++;
+                continue;
+            }
             try {
-                if (await isReleaseCached(id, "master")) {
-                    _state.skipped++;
-                    continue;
-                }
-                const full = await client.getMasterRelease(id);
+                const full = await retryTransient(() => client.getMasterRelease(id), { label: `faceted-sweep master=${id}` });
                 await cacheRelease(id, "master", full, { warmOnly: true });
                 _state.hits++;
                 await _persist();

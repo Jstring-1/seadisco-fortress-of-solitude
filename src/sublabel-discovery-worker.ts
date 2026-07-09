@@ -19,6 +19,7 @@ import {
   setAppSetting,
   getPool,
 } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 
 const STATE_KEY = "sublabel_discovery_state";
 const REQ_INTERVAL_MS = 1100;
@@ -167,7 +168,10 @@ async function _run(client: DiscogsClient): Promise<void> {
 }
 
 async function _processLabel(client: DiscogsClient, item: QueueItem): Promise<void> {
-  const payload: any = await client.getLabel(item.labelId);
+  const payload: any = await retryTransient(
+    () => client.getLabel(item.labelId),
+    { label: `sublabel-discovery getLabel=${item.labelId}` },
+  );
   const subs: any[] = Array.isArray(payload?.sublabels) ? payload.sublabels : [];
   if (subs.length === 0) return;
   for (const s of subs) {

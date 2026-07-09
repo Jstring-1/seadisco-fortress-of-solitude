@@ -12,6 +12,7 @@
 // + persisted cursor + boot-resume like the other bulk workers.
 import { DiscogsClient } from "./discogs-client.js";
 import { listLabelDirectory, getOAuthCredentials, getAppSetting, setAppSetting, getPool, } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "sublabel_discovery_state";
 const REQ_INTERVAL_MS = 1100;
 let _state = null;
@@ -156,7 +157,7 @@ async function _run(client) {
     }
 }
 async function _processLabel(client, item) {
-    const payload = await client.getLabel(item.labelId);
+    const payload = await retryTransient(() => client.getLabel(item.labelId), { label: `sublabel-discovery getLabel=${item.labelId}` });
     const subs = Array.isArray(payload?.sublabels) ? payload.sublabels : [];
     if (subs.length === 0)
         return;

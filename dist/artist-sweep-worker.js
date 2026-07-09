@@ -12,7 +12,8 @@
 // blues/jazz/country artist set covers side-project releases, guest
 // spots, and one-off singles that year × genre / label sweeps miss).
 import { DiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getBluesArtistDiscogsIds, getOAuthCredentials, getAppSetting, setAppSetting, isReleaseCached, } from "./db.js";
+import { cacheRelease, getBluesArtistDiscogsIds, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "artist_sweep_state";
 const REQ_INTERVAL_MS = 1000;
 let _state = null;
@@ -154,7 +155,7 @@ async function _sweepArtist(client, artistId, yearMax) {
             return;
         let payload;
         try {
-            payload = await client.getArtistReleases(artistId, { page, perPage, sort: "year", sortOrder: "asc" });
+            payload = await retryTransient(() => client.getArtistReleases(artistId, { page, perPage, sort: "year", sortOrder: "asc" }), { label: "artist-sweep getArtistReleases" });
         }
         catch (err) {
             const msg = String(err?.message ?? err ?? "");
@@ -165,29 +166,45 @@ async function _sweepArtist(client, artistId, yearMax) {
         const releases = Array.isArray(payload?.releases) ? payload.releases : [];
         if (releases.length === 0)
             return;
+        // ── Batch skip check ──
+        // Filter to valid in-scope candidates once, split by kind, and
+        // call getCachedReleaseIds twice per page (instead of N times).
+        // Cuts DB round trips from ~200 per page down to 2.
+        const candidates = [];
         for (const r of releases) {
-            if (_stopRequested)
-                return;
             const id = Number(r?.id);
             const kind = String(r?.type ?? "").toLowerCase();
             if (!Number.isFinite(id) || id <= 0)
                 continue;
             if (kind !== "master" && kind !== "release")
                 continue;
-            // Client-side year filter — Discogs doesn't support year in
-            // this endpoint's params. NULL year = pre-modern release with
-            // uncertain date; treat as in-scope for pre-1970 sweeps.
             const yr = Number(r?.year);
             if (Number.isFinite(yr) && yr > yearMax)
                 continue;
+            candidates.push({ id, kind: kind });
+        }
+        if (candidates.length === 0) {
+            if (releases.length < perPage)
+                return;
+            page++;
+            continue;
+        }
+        const masterIds = candidates.filter(c => c.kind === "master").map(c => c.id);
+        const releaseIds = candidates.filter(c => c.kind === "release").map(c => c.id);
+        const [cachedMasters, cachedReleases] = await Promise.all([
+            masterIds.length ? getCachedReleaseIds(masterIds, "master") : Promise.resolve(new Set()),
+            releaseIds.length ? getCachedReleaseIds(releaseIds, "release") : Promise.resolve(new Set()),
+        ]);
+        for (const { id, kind } of candidates) {
+            if (_stopRequested)
+                return;
+            const alreadyCached = kind === "master" ? cachedMasters.has(id) : cachedReleases.has(id);
+            if (alreadyCached) {
+                _state.skipped++;
+                continue;
+            }
             try {
-                if (await isReleaseCached(id, kind)) {
-                    _state.skipped++;
-                    continue;
-                }
-                const detailed = kind === "master"
-                    ? await client.getMasterRelease(id)
-                    : await client.getRelease(id);
+                const detailed = await retryTransient(() => kind === "master" ? client.getMasterRelease(id) : client.getRelease(id), { label: `artist-sweep ${kind}=${id}` });
                 await cacheRelease(id, kind, detailed, { warmOnly: true });
                 _state.hits++;
                 await _persist();

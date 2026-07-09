@@ -10,7 +10,8 @@
 // Filters to yearMax at the version level so a master's post-yearMax
 // reissues don't get cached in a pre-1970-only run.
 import { DiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, isReleaseCached, getPool, } from "./db.js";
+import { cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, getPool, } from "./db.js";
+import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "master_versions_walk_state";
 const REQ_INTERVAL_MS = 1000;
 let _state = null;
@@ -176,7 +177,7 @@ async function _walkOne(client, masterId, yearMax) {
             return;
         let payload;
         try {
-            payload = await client.getMasterVersions(masterId, { page, perPage });
+            payload = await retryTransient(() => client.getMasterVersions(masterId, { page, perPage }), { label: "master-versions getMasterVersions" });
         }
         catch (err) {
             const msg = String(err?.message ?? err ?? "");
@@ -187,21 +188,35 @@ async function _walkOne(client, masterId, yearMax) {
         const versions = Array.isArray(payload?.versions) ? payload.versions : [];
         if (versions.length === 0)
             return;
+        // Batch-check all in-scope release ids against the cache in one
+        // DB round trip (releases live in pressings OR masters_plus, so
+        // getCachedReleaseIds UNIONs both).
+        const inScope = [];
         for (const v of versions) {
-            if (_stopRequested)
-                return;
             const releaseId = Number(v?.id);
             if (!Number.isFinite(releaseId) || releaseId <= 0)
                 continue;
             const yr = Number(v?.released ? String(v.released).slice(0, 4) : v?.year);
             if (Number.isFinite(yr) && yr > yearMax)
                 continue;
+            inScope.push(releaseId);
+        }
+        if (inScope.length === 0) {
+            if (versions.length < perPage)
+                return;
+            page++;
+            continue;
+        }
+        const cachedSet = await getCachedReleaseIds(inScope, "release");
+        for (const releaseId of inScope) {
+            if (_stopRequested)
+                return;
+            if (cachedSet.has(releaseId)) {
+                _state.skipped++;
+                continue;
+            }
             try {
-                if (await isReleaseCached(releaseId, "release")) {
-                    _state.skipped++;
-                    continue;
-                }
-                const full = await client.getRelease(releaseId);
+                const full = await retryTransient(() => client.getRelease(releaseId), { label: `master-versions release=${releaseId}` });
                 await cacheRelease(releaseId, "release", full, { warmOnly: true });
                 _state.hits++;
                 await _persist();
