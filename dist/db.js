@@ -6945,9 +6945,16 @@ export async function getTrackYtOverridesBatch(pairs) {
 // results, collection, etc.) without requiring each endpoint to
 // JOIN with release_cache itself. Returns only rows that exist —
 // cache misses are silently dropped.
-export async function getCacheEnrichmentBatch(pairs) {
+export async function getCacheEnrichmentBatch(pairs, opts = {}) {
     if (!Array.isArray(pairs) || !pairs.length)
         return [];
+    const reader = opts.forceReader ??
+        ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
+    return reader === "v2"
+        ? _getCacheEnrichmentBatchV2(pairs)
+        : _getCacheEnrichmentBatchV1(pairs);
+}
+async function _getCacheEnrichmentBatchV1(pairs) {
     // Cap input size to keep the query bounded; at 200 pairs the
     // query fingerprint is still small (~3KB JSON) and the unnest
     // cost is negligible.
@@ -6966,19 +6973,13 @@ export async function getCacheEnrichmentBatch(pairs) {
         // Cross-type fallback: for any (id, 'master') pair we missed on,
         // try to find ANY cached release whose data->>'master_id' matches
         // the master id, and surface its tracklist/images under the master
-        // key. Better than returning empty — wide-card mode shows real
-        // track titles instead of a sparse card — at the cost of the
-        // tracks being from one specific pressing rather than the
-        // canonical master. Released a release_cache row tagged as the
-        // requested master so the client cache-key logic still works.
+        // key.
         const hitKeys = new Set(hits.map(h => `${h.type}:${h.id}`));
         const missedMasterIds = capped
             .filter(p => p.type === "master" && !hitKeys.has(`master:${p.id}`))
             .map(p => Number(p.id));
         if (missedMasterIds.length) {
             try {
-                // DISTINCT ON picks one representative release per master
-                // (lowest discogs_id = oldest cached row, deterministic).
                 const fb = await getPool().query(`SELECT DISTINCT ON ((data->>'master_id')::bigint)
                   (data->>'master_id')::bigint AS master_id,
                   data
@@ -6987,6 +6988,68 @@ export async function getCacheEnrichmentBatch(pairs) {
               AND (data->>'master_id') IS NOT NULL
               AND (data->>'master_id')::bigint = ANY($1::bigint[])
             ORDER BY (data->>'master_id')::bigint, discogs_id ASC`, [missedMasterIds]);
+                for (const row of fb.rows) {
+                    const mid = Number(row.master_id);
+                    if (!Number.isFinite(mid) || mid <= 0)
+                        continue;
+                    hits.push({ id: mid, type: "master", data: row.data });
+                }
+            }
+            catch { /* fallback is best-effort */ }
+        }
+        return hits;
+    }
+    catch {
+        return [];
+    }
+}
+// V2 reader — routes reads by type to the right split table and
+// uses the promoted master_id INT column for the master-miss
+// fallback instead of a JSONB extraction. discogs_cache_pressings
+// carries master_id as an indexed INT column, so the fallback is a
+// straight index seek. Masters + orphan releases both live in
+// masters_plus keyed by (discogs_id, type) — same shape as the old
+// primary lookup.
+async function _getCacheEnrichmentBatchV2(pairs) {
+    const capped = pairs.slice(0, 200).filter(p => Number.isFinite(Number(p.id)) && (p.type === "master" || p.type === "release"));
+    if (!capped.length)
+        return [];
+    try {
+        const masterIds = capped.filter(p => p.type === "master").map(p => Number(p.id));
+        const releaseIds = capped.filter(p => p.type === "release").map(p => Number(p.id));
+        const hits = [];
+        // Masters live only in masters_plus.
+        if (masterIds.length) {
+            const r = await getPool().query(`SELECT discogs_id AS id, type, data
+           FROM discogs_cache_masters_plus
+          WHERE type = 'master' AND discogs_id = ANY($1::int[])`, [masterIds]);
+            hits.push(...r.rows);
+        }
+        // Releases can be in either table — orphans live in masters_plus
+        // (type='release'), pressings live in pressings.
+        if (releaseIds.length) {
+            const [a, b] = await Promise.all([
+                getPool().query(`SELECT discogs_id AS id, type, data
+             FROM discogs_cache_masters_plus
+            WHERE type = 'release' AND discogs_id = ANY($1::int[])`, [releaseIds]),
+                getPool().query(`SELECT discogs_id AS id, 'release'::text AS type, data
+             FROM discogs_cache_pressings
+            WHERE discogs_id = ANY($1::int[])`, [releaseIds]),
+            ]);
+            hits.push(...a.rows, ...b.rows);
+        }
+        // Master-miss fallback: any (id, 'master') that wasn't found gets
+        // a representative pressing surfaced under the master key. Old
+        // path did DISTINCT ON with a JSON extraction; new path is a
+        // straight WHERE master_id = ANY($1) on an indexed INT column.
+        const hitKeys = new Set(hits.map(h => `${h.type}:${h.id}`));
+        const missedMasterIds = masterIds.filter(id => !hitKeys.has(`master:${id}`));
+        if (missedMasterIds.length) {
+            try {
+                const fb = await getPool().query(`SELECT DISTINCT ON (master_id) master_id, data
+             FROM discogs_cache_pressings
+            WHERE master_id = ANY($1::int[])
+            ORDER BY master_id, discogs_id ASC`, [missedMasterIds]);
                 for (const row of fb.rows) {
                     const mid = Number(row.master_id);
                     if (!Number.isFinite(mid) || mid <= 0)

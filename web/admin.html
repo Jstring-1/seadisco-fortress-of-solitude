@@ -2333,10 +2333,10 @@ function _renderCacheProjection() {
     </div>
     <hr style="margin:0.7rem 0;border-color:var(--border)">
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap"
-         title="When on, admin panels read from the projected schema (release_labels + release_artists + release_tags + discogs_cache_masters_plus / discogs_cache_pressings) instead of unrolling JSONB from release_cache. Flip ON only after the backfill has drained — otherwise counts are missing. Currently covers: label directory, cache analytics. Feed pool + mini-player enrichment follow in later phases.">
+         title="When on, admin panels + card enrichment read from the projected schema (release_labels + release_artists + release_tags + discogs_cache_masters_plus / discogs_cache_pressings) instead of unrolling JSONB from release_cache. Flip ON only after the backfill has drained — otherwise counts are missing. Currently covers: label directory, cache analytics, card / mini-player enrichment. Feed pool follows in a later phase (requires promoting community/videos/tracks counts).">
       <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem">
         <input id="cp-split-readers-toggle" type="checkbox" ${s.splitReadersEnabled ? "checked" : ""} onchange="_cacheProjectionToggleReaders(event)">
-        Use split-cache readers (label directory + cache analytics)
+        Use split-cache readers (label directory + analytics + enrichment)
       </label>
       <span style="font-size:0.72rem;color:var(--muted)">${s.splitReadersEnabled ? "reading from projected schema" : "reading from release_cache (old)"}</span>
     </div>
