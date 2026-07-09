@@ -8976,6 +8976,105 @@ function _buildReleaseCacheWhere(q) {
     }
     return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
 }
+// Split-schema equivalent of _buildReleaseCacheWhere. Targets the
+// `cache_all` CTE (UNION of masters_plus + pressings, with bucket
+// materialised) and uses promoted scalar columns where they exist,
+// falling back to indexed side-table EXISTS for genre / style /
+// label / format filters.
+function _buildSplitCacheWhere(q) {
+    const where = [];
+    const args = [];
+    const type = String(q.type || "").trim().toLowerCase();
+    if (type === "release" || type === "master") {
+        args.push(type);
+        where.push(`ca.type = $${args.length}`);
+    }
+    const genre = String(q.genre || "").trim();
+    if (genre) {
+        args.push(genre);
+        where.push(`EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'genre' AND rt.value = $${args.length})`);
+    }
+    const style = String(q.style || "").trim();
+    if (style) {
+        args.push(style);
+        where.push(`EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'style' AND rt.value = $${args.length})`);
+    }
+    const yearFrom = parseInt(String(q.year_from ?? ""), 10);
+    if (Number.isFinite(yearFrom)) {
+        args.push(yearFrom);
+        where.push(`COALESCE(ca.year, 0)::int >= $${args.length}`);
+    }
+    const yearTo = parseInt(String(q.year_to ?? ""), 10);
+    if (Number.isFinite(yearTo)) {
+        args.push(yearTo);
+        where.push(`COALESCE(ca.year, 9999)::int <= $${args.length}`);
+    }
+    const country = String(q.country || "").trim();
+    if (country) {
+        args.push(`%${country.toLowerCase()}%`);
+        where.push(`LOWER(COALESCE(ca.country, '')) LIKE $${args.length}`);
+    }
+    const labelsRaw = Array.isArray(q.labels)
+        ? q.labels.map((s) => String(s ?? "").trim()).filter(Boolean)
+        : String(q.labels || "").split(",").map(s => s.trim()).filter(Boolean);
+    const labels = labelsRaw.slice(0, 200);
+    if (labels.length) {
+        const orClauses = [];
+        for (const name of labels) {
+            args.push(name);
+            orClauses.push(`LOWER(rl.label_name) = LOWER($${args.length})`);
+        }
+        where.push(`EXISTS (SELECT 1 FROM release_labels rl
+                        WHERE rl.discogs_id = ca.discogs_id AND rl.bucket = ca.bucket
+                          AND (${orClauses.join(" OR ")}))`);
+    }
+    const formatContains = String(q.format || "").trim();
+    if (formatContains) {
+        args.push(formatContains);
+        where.push(`EXISTS (SELECT 1 FROM release_tags rt
+                        WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
+                          AND rt.kind = 'format' AND rt.value = $${args.length})`);
+    }
+    if (String(q.has_youtube || "") === "1") {
+        // Uses the promoted videos_count column instead of jsonb_array_length.
+        where.push(`ca.videos_count IS NOT NULL AND ca.videos_count > 0`);
+    }
+    return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
+}
+function _splitCacheOrderBy(q) {
+    const sort = String(q.sort || "year").toLowerCase();
+    const dir = String(q.order || "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+    const map = {
+        cached_at: "ca.cached_at",
+        year: "COALESCE(ca.year, 0)",
+        title: "LOWER(COALESCE(ca.data->>'title',''))",
+        discogs_id: "ca.discogs_id",
+        artist: "LOWER(COALESCE(ca.data->'artists'->0->>'name',''))",
+    };
+    const col = map[sort] || map.year;
+    const ARTIST_COL = map.artist;
+    return ` ORDER BY ${col} ${dir}, ${ARTIST_COL} ASC, ca.discogs_id ASC `;
+}
+// Prefix used by the split-schema variants of the preview / export
+// SQL. Callers build `${CACHE_ALL_CTE} SELECT ... FROM cache_all ca
+// ${whereSql} ${orderSql} LIMIT ... OFFSET ...`.
+const CACHE_ALL_CTE = `
+  WITH cache_all AS (
+    SELECT m.discogs_id, m.type, m.year, m.country, m.data, m.cached_at,
+           CASE WHEN m.type = 'master' THEN 0::smallint ELSE 1::smallint END AS bucket,
+           m.videos_count
+      FROM discogs_cache_masters_plus m
+    UNION ALL
+    SELECT p.discogs_id, 'release'::text AS type, p.year, p.country, p.data, p.cached_at,
+           2::smallint AS bucket,
+           p.videos_count
+      FROM discogs_cache_pressings p
+  )
+`;
 function _releaseCacheOrderBy(q) {
     // Default changed: year ASC then artist ASC so an exported file
     // reads as a chronological catalog with stable per-year grouping
@@ -10023,9 +10122,21 @@ app.get("/api/admin/release-cache/preview", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     try {
+        // ?reader=v1|v2 picks source. Defaults to V2 when the global
+        // split-cache flag is on so the export UI stays consistent with
+        // the rest of the admin.
+        const forcedReader = String(req.query.reader || "").toLowerCase();
+        const useV2 = forcedReader === "v2" ||
+            (forcedReader !== "v1" && (await isSplitCacheReaderEnabled()));
+        if (useV2) {
+            const { sql, args } = _buildSplitCacheWhere(req.query);
+            const r = await getPool().query(`${CACHE_ALL_CTE} SELECT COUNT(*)::bigint AS n FROM cache_all ca ${sql}`, args);
+            res.json({ count: Number(r.rows[0]?.n ?? 0), reader: "v2" });
+            return;
+        }
         const { sql, args } = _buildReleaseCacheWhere(req.query);
         const r = await getPool().query(`SELECT COUNT(*)::bigint AS n FROM release_cache rc ${sql}`, args);
-        res.json({ count: Number(r.rows[0]?.n ?? 0) });
+        res.json({ count: Number(r.rows[0]?.n ?? 0), reader: "v1" });
     }
     catch (err) {
         console.error("[release-cache preview]", err);
@@ -10042,8 +10153,72 @@ app.post("/api/admin/release-cache/delete", express.json({ limit: "2kb" }), asyn
     if (!await requireAdmin(req, res))
         return;
     try {
-        // Build from body so the filter payload survives a POST cleanly.
-        const { sql: whereSql, args } = _buildReleaseCacheWhere(req.body || {});
+        const body = req.body || {};
+        const forcedReader = String(body.reader || "").toLowerCase();
+        const useV2 = forcedReader === "v2" ||
+            (forcedReader !== "v1" && (await isSplitCacheReaderEnabled()));
+        if (useV2) {
+            const { sql: whereSql, args } = _buildSplitCacheWhere(body);
+            if (!whereSql) {
+                res.status(400).json({ error: "At least one filter required — refusing to DELETE the entire cache." });
+                return;
+            }
+            // Delete from BOTH split tables + release_cache in one go so the
+            // caller doesn't have to think about which bucket owns a row.
+            // Matching row keys come from the same cache_all CTE so the
+            // filter semantics are identical to what /preview counted.
+            const clientDel = await getPool().connect();
+            let deleted = 0;
+            try {
+                await clientDel.query("BEGIN");
+                const keys = await clientDel.query(`${CACHE_ALL_CTE}
+           SELECT discogs_id, type, bucket FROM cache_all ca ${whereSql}`, args);
+                if (keys.rows.length > 0) {
+                    const ids = keys.rows.map(r => Number(r.discogs_id));
+                    const types = keys.rows.map(r => String(r.type));
+                    // masters_plus: (discogs_id, type) tuples
+                    const dr1 = await clientDel.query(`DELETE FROM discogs_cache_masters_plus mp
+              USING unnest($1::int[], $2::text[]) AS t(id, ty)
+              WHERE mp.discogs_id = t.id AND mp.type = t.ty`, [ids, types]);
+                    // pressings: keyed by discogs_id (type is always 'release')
+                    const dr2 = await clientDel.query(`DELETE FROM discogs_cache_pressings p
+              USING unnest($1::int[], $2::text[]) AS t(id, ty)
+              WHERE p.discogs_id = t.id AND t.ty = 'release'`, [ids, types]);
+                    const dr3 = await clientDel.query(`DELETE FROM release_cache rc
+              USING unnest($1::int[], $2::text[]) AS t(id, ty)
+              WHERE rc.discogs_id = t.id AND rc.type = t.ty`, [ids, types]);
+                    // Side tables cascade via matching (discogs_id, bucket).
+                    const buckets = keys.rows.map(r => Number(r.bucket));
+                    await clientDel.query(`DELETE FROM release_labels rl
+              USING unnest($1::int[], $2::int[]) AS t(id, b)
+              WHERE rl.discogs_id = t.id AND rl.bucket = t.b`, [ids, buckets]);
+                    await clientDel.query(`DELETE FROM release_artists ra
+              USING unnest($1::int[], $2::int[]) AS t(id, b)
+              WHERE ra.discogs_id = t.id AND ra.bucket = t.b`, [ids, buckets]);
+                    await clientDel.query(`DELETE FROM release_tags rt
+              USING unnest($1::int[], $2::int[]) AS t(id, b)
+              WHERE rt.discogs_id = t.id AND rt.bucket = t.b`, [ids, buckets]);
+                    deleted = (dr1.rowCount ?? 0) + (dr2.rowCount ?? 0) + (dr3.rowCount ?? 0);
+                }
+                await clientDel.query("COMMIT");
+            }
+            catch (e) {
+                try {
+                    await clientDel.query("ROLLBACK");
+                }
+                catch { }
+                throw e;
+            }
+            finally {
+                clientDel.release();
+            }
+            console.log(`[split-cache delete] matched=${deleted} whereSql=${whereSql} args=${JSON.stringify(args)}`);
+            _invalidateCwStats();
+            res.json({ deleted, reader: "v2" });
+            return;
+        }
+        // V1 path — original behaviour, targets release_cache only.
+        const { sql: whereSql, args } = _buildReleaseCacheWhere(body);
         if (!whereSql) {
             res.status(400).json({ error: "At least one filter required — refusing to DELETE the entire cache." });
             return;
@@ -10051,10 +10226,8 @@ app.post("/api/admin/release-cache/delete", express.json({ limit: "2kb" }), asyn
         const r = await getPool().query(`DELETE FROM release_cache rc ${whereSql}`, args);
         const deleted = r.rowCount ?? 0;
         console.log(`[release-cache delete] ${deleted} rows whereSql=${whereSql} args=${JSON.stringify(args)}`);
-        // Invalidate the cache-warm stats cache so the per-combo grid
-        // reflects the new totals on its next refresh, not 5 min later.
         _invalidateCwStats();
-        res.json({ deleted });
+        res.json({ deleted, reader: "v1" });
     }
     catch (err) {
         console.error("[release-cache delete]", err);
@@ -10064,26 +10237,28 @@ app.post("/api/admin/release-cache/delete", express.json({ limit: "2kb" }), asyn
 app.get("/api/admin/release-cache/export", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
-    // Read the OUTPUT format from `out` rather than `format` — the
-    // form's "Format contains" filter (Vinyl/CD/etc.) also uses
-    // `format`, and the collision was making every download silently
-    // apply `formats CONTAINS "csv"` which matches 0 rows. Keep
-    // legacy ?format= as a fallback for any external caller.
     const format = String(req.query.out || req.query.format || "csv").toLowerCase();
     if (!["csv", "json", "ndjson"].includes(format)) {
         res.status(400).json({ error: "format must be csv | json | ndjson" });
         return;
     }
-    const { sql: whereSql, args } = _buildReleaseCacheWhere(req.query);
-    const orderSql = _releaseCacheOrderBy(req.query);
+    // Dispatch by ?reader=. Default to V2 when the split-cache flag is
+    // on so the admin panel picks the fastest source automatically.
+    const forcedReader = String(req.query.reader || "").toLowerCase();
+    const useV2 = forcedReader === "v2" ||
+        (forcedReader !== "v1" && (await isSplitCacheReaderEnabled()));
+    const { sql: whereSql, args } = useV2
+        ? _buildSplitCacheWhere(req.query)
+        : _buildReleaseCacheWhere(req.query);
+    const orderSql = useV2 ? _splitCacheOrderBy(req.query) : _releaseCacheOrderBy(req.query);
     const limit = Math.max(1, Math.min(parseInt(String(req.query.limit ?? "1000000"), 10) || 1000000, 1000000));
-    console.log(`[release-cache export] query={${Object.entries(req.query).map(([k, v]) => `${k}=${v}`).join(", ")}} whereSql=${whereSql} args=${JSON.stringify(args)} limit=${limit}`);
+    console.log(`[release-cache export ${useV2 ? "v2" : "v1"}] query={${Object.entries(req.query).map(([k, v]) => `${k}=${v}`).join(", ")}} whereSql=${whereSql} args=${JSON.stringify(args)} limit=${limit}`);
     const date = new Date().toISOString().slice(0, 10);
     const ext = format === "json" ? "json" : (format === "ndjson" ? "ndjson" : "csv");
     res.setHeader("Content-Type", format === "csv" ? "text/csv; charset=utf-8"
         : format === "ndjson" ? "application/x-ndjson; charset=utf-8"
             : "application/json; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-${date}.${ext}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-${useV2 ? "split-cache" : "release-cache"}-${date}.${ext}"`);
     const CSV_COLS = [
         "discogs_id", "type", "master_id", "main_release",
         "title", "artist", "year", "released", "country", "label", "catno",
@@ -10104,7 +10279,16 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     // wider SELECT. The narrow path drops PG→Node transfer from
     // hundreds of MB to single-digit MB for a 50k-row export.
     const CHUNK = 5000;
-    const SELECT_FULL = `rc.discogs_id, rc.type, rc.cached_at, rc.data`;
+    // Source alias / from clause. V2 wraps everything in the cache_all
+    // CTE (UNION of masters_plus + pressings); V1 hits release_cache
+    // directly. The SELECT column list and downstream row iterator
+    // stay identical between the two paths.
+    const srcAlias = useV2 ? "ca" : "rc";
+    const fromClause = useV2
+        ? `${CACHE_ALL_CTE} SELECT `
+        : `SELECT `;
+    const fromTable = useV2 ? "cache_all ca" : "release_cache rc";
+    const SELECT_FULL = `${srcAlias}.discogs_id, ${srcAlias}.type, ${srcAlias}.cached_at, ${srcAlias}.data`;
     // For CSV, enrich master rows from their cached main_release when
     // present — masters legitimately lack country / formats /
     // community.want/have (those are pressing-specific on Discogs), so
@@ -10113,7 +10297,13 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     // we just project the row's own fields. NULLIF on year='0' lets
     // the fallback kick in when Discogs stamped year=0 for an old
     // master whose recording date is uncertain.
-    const SELECT_CSV = `rc.discogs_id, rc.type, rc.cached_at,
+    // V1 CSV enriches master rows from their cached main_release
+    // pressing (masters legitimately lack country/formats/community).
+    // V2 skips this LATERAL JOIN — masters_plus rows carry enough for
+    // the CSV columns we need. If we later find CSV masters look
+    // half-empty, we can add a LEFT JOIN LATERAL over
+    // discogs_cache_pressings (main_release id is scalar there too).
+    const SELECT_CSV_V1 = `rc.discogs_id, rc.type, rc.cached_at,
     CASE WHEN rc.type = 'master' THEN rc.discogs_id
          ELSE NULLIF(rc.data->>'master_id','')::bigint END AS master_id,
     CASE WHEN rc.type = 'master' THEN NULLIF(rc.data->>'main_release','')::bigint
@@ -10134,10 +10324,33 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     rc.data->>'num_for_sale' AS num_for_sale,
     rc.data->>'data_quality' AS data_quality,
     COALESCE(NULLIF(rc.data->>'notes',''), mr.data->>'notes') AS notes`;
-    const CSV_JOIN = `LEFT JOIN release_cache mr
+    const SELECT_CSV_V2 = `ca.discogs_id, ca.type, ca.cached_at,
+    CASE WHEN ca.type = 'master' THEN ca.discogs_id
+         ELSE NULLIF(ca.data->>'master_id','')::bigint END AS master_id,
+    CASE WHEN ca.type = 'master' THEN NULLIF(ca.data->>'main_release','')::bigint
+         ELSE NULL END AS main_release,
+    ca.data->>'title'                       AS title,
+    COALESCE(ca.year::text, NULLIF(ca.data->>'year','0')) AS year,
+    ca.data->>'released'                    AS released,
+    COALESCE(ca.country, ca.data->>'country') AS country,
+    ca.data->'artists'                      AS artists_j,
+    ca.data->'labels'                       AS labels_j,
+    ca.data->'formats'                      AS formats_j,
+    ca.data->'genres'                       AS genres_j,
+    ca.data->'styles'                       AS styles_j,
+    ca.data->'tracklist'                    AS tracklist_j,
+    ca.data->'videos'                       AS videos_j,
+    ca.data->'community'                    AS community_j,
+    ca.data->>'lowest_price'                AS lowest_price,
+    ca.data->>'num_for_sale'                AS num_for_sale,
+    ca.data->>'data_quality'                AS data_quality,
+    ca.data->>'notes'                       AS notes`;
+    const SELECT_CSV = useV2 ? SELECT_CSV_V2 : SELECT_CSV_V1;
+    const CSV_JOIN_V1 = `LEFT JOIN release_cache mr
        ON rc.type = 'master'
       AND mr.type = 'release'
       AND mr.discogs_id = NULLIF(rc.data->>'main_release','')::int`;
+    const CSV_JOIN = useV2 ? "" : CSV_JOIN_V1;
     const selectCols = format === "csv" ? SELECT_CSV : SELECT_FULL;
     const joinSql = format === "csv" ? CSV_JOIN : "";
     let written = 0;
@@ -10146,8 +10359,8 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
         for (let offset = 0; offset < limit; offset += CHUNK) {
             const take = Math.min(CHUNK, limit - offset);
             const argsWithPaging = args.concat([take, offset]);
-            const sqlText = `SELECT ${selectCols}
-           FROM release_cache rc
+            const sqlText = `${fromClause}${selectCols}
+           FROM ${fromTable}
            ${joinSql}
            ${whereSql}
            ${orderSql}
@@ -10219,6 +10432,66 @@ app.get("/api/admin/release-cache/export", async (req, res) => {
     }
     catch (err) {
         console.error("[release-cache export]", err);
+        if (!res.headersSent)
+            res.status(500).json({ error: err?.message ?? String(err) });
+        else
+            res.end();
+    }
+});
+// ── Whole split-cache dump ─────────────────────────────────────────
+// Streams every row across all 5 split-cache tables as NDJSON, one
+// row per line, with a `__table` field so an ingester can route
+// each line back to its origin table. Runs in bounded batches so
+// server memory stays flat even at 10M+ rows.
+app.get("/api/admin/release-cache/dump-split", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const CHUNK = 5000;
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-split-cache-full-${date}.ndjson"`);
+    let written = 0;
+    const dumpTable = async (table, label, orderKey) => {
+        let lastKey = null;
+        while (true) {
+            const args = [CHUNK];
+            let where = "";
+            if (lastKey != null) {
+                args.push(lastKey);
+                where = `WHERE ${orderKey} > $2`;
+            }
+            const q = `SELECT * FROM ${table} ${where} ORDER BY ${orderKey} ASC LIMIT $1`;
+            const r = await getPool().query(q, args);
+            if (!r.rows.length)
+                return;
+            for (const row of r.rows) {
+                // Serialise cached_at / seen_at / applied_at as ISO strings.
+                const clean = { __table: label };
+                for (const [k, v] of Object.entries(row)) {
+                    clean[k] = v instanceof Date ? v.toISOString() : v;
+                }
+                res.write(JSON.stringify(clean) + "\n");
+                written++;
+            }
+            const last = r.rows[r.rows.length - 1];
+            lastKey = last[orderKey.replace(/^"|"$/g, "")];
+            if (r.rows.length < CHUNK)
+                return;
+        }
+    };
+    try {
+        // Primary tables first (biggest blobs, most useful on their own),
+        // then side tables. Order key is the natural primary key of each.
+        await dumpTable("discogs_cache_masters_plus", "masters_plus", "discogs_id");
+        await dumpTable("discogs_cache_pressings", "pressings", "discogs_id");
+        await dumpTable("release_labels", "labels", "id");
+        await dumpTable("release_artists", "artists", "id");
+        await dumpTable("release_tags", "tags", "id");
+        res.end();
+        console.log(`[split-cache dump] streamed ${written} rows`);
+    }
+    catch (err) {
+        console.error("[split-cache dump]", err);
         if (!res.headersSent)
             res.status(500).json({ error: err?.message ?? String(err) });
         else

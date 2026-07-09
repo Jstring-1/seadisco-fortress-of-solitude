@@ -245,12 +245,22 @@
                 <input id="rcx-has-yt" type="checkbox"> Only rows with YouTube videos
               </label>
               <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
+                <label style="font-size:0.78rem;color:var(--muted);display:inline-flex;gap:0.3rem;align-items:center"
+                       title="V2 reads from the projected split schema (discogs_cache_masters_plus + pressings + release_labels/artists/tags). Fastest, but only complete once the projection backfill has drained + reprojection filled the promoted columns. Auto picks V2 when the global split-cache readers flag is on.">Source
+                  <select id="rcx-reader" style="padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <option value="">(auto)</option>
+                    <option value="v2">Split cache (V2)</option>
+                    <option value="v1">release_cache (V1)</option>
+                  </select>
+                </label>
                 <button class="admin-btn" type="button" onclick="rcxPreview()">Preview row count</button>
                 <select id="rcx-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                   <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option>
                 </select>
                 <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
-                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every release_cache row matching these filters. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
+                <button class="admin-btn" type="button" onclick="rcxDumpSplit()"
+                        title="Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file, one row per line, with a __table field. Ignores the filters — this is a full DB dump.">📦 Dump whole split cache</button>
+                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every row matching these filters — from release_cache AND the split schema tables when Source=V2. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
                 <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>
             </div>
@@ -3025,8 +3035,22 @@ function _rcxBuildParams() {
   add("sort",  document.getElementById("rcx-sort")?.value);
   add("order", document.getElementById("rcx-order")?.value);
   add("limit", document.getElementById("rcx-limit")?.value);
+  // ?reader= override for the export panel — empty means "let the
+  // server decide based on the global split-cache readers flag".
+  add("reader", document.getElementById("rcx-reader")?.value);
   return q;
 }
+
+async function rcxDumpSplit() {
+  if (!confirm("Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file?\n\nFilters are ignored. Uncompressed — file size scales with your cache; expect gigabytes at millions of rows.")) return;
+  const link = document.createElement("a");
+  link.href = "/api/admin/release-cache/dump-split";
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
+}
+window.rcxDumpSplit = rcxDumpSplit;
 
 // ── Labels multi-select picker ────────────────────────────────────
 window._rcxSelectedLabels = window._rcxSelectedLabels || new Set();
