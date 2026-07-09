@@ -313,6 +313,13 @@
           <summary title="Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later." style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
           <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
+
+        <!-- ── Coverage-boosting sweeps beyond label + genre ───────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details>
+          <summary title="Angles beyond year × genre and per-label sweeps for pushing pre-1970 coverage closer to comprehensive. Each of these is a singleflight worker with a persisted cursor — safe to stop / resume / redeploy through." style="cursor:pointer;font-weight:600;font-size:0.95rem">🕸 Coverage sweeps</summary>
+          <div id="coverage-sweeps-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
       </div>
 
       <!-- All Blues background worker: walks release_cache for the
@@ -635,7 +642,7 @@ const _adminGroups = {
   },
   'labels': {
     panels: ['panel-labels'],
-    load: () => { loadLabelDirectory(); },
+    load: () => { loadLabelDirectory(); loadCoverageSweeps(); },
   },
   'all-blues': {
     panels: ['panel-all-blues'],
@@ -707,7 +714,7 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, mvR, facR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
@@ -715,6 +722,9 @@ async function loadAdminWorkerStatus() {
       apiFetch('/api/admin/yt-review/status').catch(() => null),
       apiFetch('/api/admin/label-directory/bulk-sweep/status').catch(() => null),
       apiFetch('/api/admin/cache-projection/status').catch(() => null),
+      apiFetch('/api/admin/artist-sweep/status').catch(() => null),
+      apiFetch('/api/admin/master-versions-walk/status').catch(() => null),
+      apiFetch('/api/admin/faceted-sweep/status').catch(() => null),
     ]);
     const badges = [];
     if (bulkR?.ok) {
@@ -762,6 +772,28 @@ async function loadAdminWorkerStatus() {
         const pending = j?.counts?.pending;
         const suffix  = Number.isFinite(pending) ? ` (${pending} pending)` : '';
         badges.push({ label: `YT review${suffix}`, tab: 'yt-review' });
+      }
+    }
+    if (artR?.ok) {
+      const j = await artR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        badges.push({ label: `Artist sweep${pos}`, tab: 'labels' });
+      }
+    }
+    if (mvR?.ok) {
+      const j = await mvR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        badges.push({ label: `Master versions${pos}`, tab: 'labels' });
+      }
+    }
+    if (facR?.ok) {
+      const j = await facR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
+        badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, tab: 'labels' });
       }
     }
     if (badges.length === 0) {
@@ -2099,6 +2131,244 @@ async function _labelDirBulkSweepForceClear() {
     if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
     loadLabelDirectory();
   } catch (err) { alert(String(err)); }
+}
+
+// ── Coverage sweeps (artist / master-versions / faceted / sublabels)
+let _covArtist = null, _covMasterVer = null, _covFaceted = null;
+async function loadCoverageSweeps() {
+  const el = document.getElementById("coverage-sweeps-content");
+  if (!el) return;
+  try {
+    const [aR, mR, fR] = await Promise.all([
+      apiFetch("/api/admin/artist-sweep/status").catch(() => null),
+      apiFetch("/api/admin/master-versions-walk/status").catch(() => null),
+      apiFetch("/api/admin/faceted-sweep/status").catch(() => null),
+    ]);
+    _covArtist    = aR?.ok ? await aR.json() : null;
+    _covMasterVer = mR?.ok ? await mR.json() : null;
+    _covFaceted   = fR?.ok ? await fR.json() : null;
+    _renderCoverageSweeps();
+    clearTimeout(window._covPollTimer);
+    const anyRunning = _covArtist?.running || _covMasterVer?.running || _covFaceted?.running;
+    if (anyRunning && document.getElementById("panel-labels")?.style.display !== "none") {
+      window._covPollTimer = setTimeout(loadCoverageSweeps, 5000);
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+window.loadCoverageSweeps = loadCoverageSweeps;
+
+function _renderCoverageSweeps() {
+  const el = document.getElementById("coverage-sweeps-content");
+  if (!el) return;
+  const a = _covArtist  || {}, m = _covMasterVer || {}, f = _covFaceted || {};
+  const pct = (cur, tot) => tot > 0 ? Math.round((cur / tot) * 100) : 0;
+  el.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0.7rem">
+
+      <!-- Artist sweep -->
+      <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+          <strong>🎤 Artist masters+ sweep</strong>
+          <span style="font-size:0.72rem;color:var(--muted)">
+            iterates blues_artists rows with a Discogs ID, caching each artist's masters + orphan releases up to yearMax
+          </span>
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
+          <label style="font-size:0.78rem;color:var(--muted)">yearMax
+            <input id="cov-artist-yearmax" type="number" value="${a.yearMax ?? 1970}" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          ${a.running
+            ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${a.cursor}/${a.total} (${pct(a.cursor,a.total)}%) · ✓${a.hits} · ⏭${a.skipped} · ⚠${a.errors}</span>
+               <button class="admin-btn" type="button" onclick="_covArtistStop()" style="background:#a33;color:#fff">■ Stop</button>
+               <button class="admin-btn" type="button" onclick="_covArtistForceClear()">⚠ Force clear</button>`
+            : `<button class="admin-btn" type="button" onclick="_covArtistStart(false)">⏵ Start / resume</button>
+               <button class="admin-btn" type="button" onclick="_covArtistStart(true)" title="Rebuild the queue from blues_artists and start from cursor 0.">↻ Restart from top</button>
+               ${a.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: ${a.hits ?? 0} hits · ${a.skipped ?? 0} skipped</span>` : ""}`}
+        </div>
+        ${a.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(a.lastError)}</div>` : ""}
+      </div>
+
+      <!-- Master → versions walk -->
+      <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+          <strong>🔁 Master → versions walk</strong>
+          <span style="font-size:0.72rem;color:var(--muted)">
+            for every cached master, fetches /masters/{id}/versions to catch regional / promo / reissue pressings
+          </span>
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
+          <label style="font-size:0.78rem;color:var(--muted)">yearMax
+            <input id="cov-mv-yearmax" type="number" value="${m.yearMax ?? 1970}" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          ${m.running
+            ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${m.cursor}/${m.total} (${pct(m.cursor,m.total)}%) · ✓${m.hits} · ⏭${m.skipped} · ⚠${m.errors}</span>
+               <button class="admin-btn" type="button" onclick="_covMasterVerStop()" style="background:#a33;color:#fff">■ Stop</button>
+               <button class="admin-btn" type="button" onclick="_covMasterVerForceClear()">⚠ Force clear</button>`
+            : `<button class="admin-btn" type="button" onclick="_covMasterVerStart(false)">⏵ Start / resume</button>
+               <button class="admin-btn" type="button" onclick="_covMasterVerStart(true)" title="Rebuild the master queue and start from cursor 0.">↻ Restart from top</button>
+               ${m.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: ${m.hits ?? 0} hits · ${m.skipped ?? 0} skipped</span>` : ""}`}
+        </div>
+        ${m.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(m.lastError)}</div>` : ""}
+      </div>
+
+      <!-- Faceted (year × format / country) -->
+      <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+          <strong>🗓 Year × facet sweep</strong>
+          <span style="font-size:0.72rem;color:var(--muted)">
+            /database/search?type=master&amp;year=YYYY&amp;(format|country)=X — surfaces records the year × genre + label sweeps miss under Discogs pagination cap
+          </span>
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
+          <label style="font-size:0.78rem;color:var(--muted)">mode
+            <select id="cov-fc-mode" style="padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+              <option value="format" ${f.mode === "format" ? "selected" : ""}>format</option>
+              <option value="country" ${f.mode === "country" ? "selected" : ""}>country</option>
+            </select>
+          </label>
+          <label style="font-size:0.78rem;color:var(--muted)">yearFrom
+            <input id="cov-fc-yfrom" type="number" value="1900" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <label style="font-size:0.78rem;color:var(--muted)">yearTo
+            <input id="cov-fc-yto" type="number" value="1970" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <label style="font-size:0.78rem;color:var(--muted)" title="Comma-separated. Empty uses defaults: Shellac/7&quot;/10&quot;/12&quot;/LP for format; US/UK/France/Germany/Italy/Japan/Jamaica/Brazil/Nigeria for country.">values
+            <input id="cov-fc-values" type="text" placeholder="(defaults)" style="width:16rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          ${f.running
+            ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${f.cursor}/${f.total} (${pct(f.cursor,f.total)}%)${f.currentSlot ? ` · slot: ${_eHtml(f.currentSlot.value)}/${f.currentSlot.year}` : ""} · ✓${f.hits} · ⏭${f.skipped} · ⚠${f.errors}</span>
+               <button class="admin-btn" type="button" onclick="_covFacetedStop()" style="background:#a33;color:#fff">■ Stop</button>
+               <button class="admin-btn" type="button" onclick="_covFacetedForceClear()">⚠ Force clear</button>`
+            : `<button class="admin-btn" type="button" onclick="_covFacetedStart(false)">⏵ Start / resume</button>
+               <button class="admin-btn" type="button" onclick="_covFacetedStart(true)" title="Rebuild the (year, value) queue and start from cursor 0.">↻ Restart from top</button>
+               ${f.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: ${f.hits ?? 0} hits · ${f.skipped ?? 0} skipped</span>` : ""}`}
+        </div>
+        ${f.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(f.lastError)}</div>` : ""}
+      </div>
+
+      <!-- Sublabel discovery (one-shot) -->
+      <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
+          <strong>🏷 Sublabel discovery</strong>
+          <span style="font-size:0.72rem;color:var(--muted)">
+            one-shot: fetches /labels/&#123;id&#125; for each cached label with pad rows ≥ threshold, inserts every sublabel[] as a new external_discography row so it shows up in the label directory (unswept). Kick a bulk masters+ sweep afterwards.
+          </span>
+        </div>
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
+          <label style="font-size:0.78rem;color:var(--muted)">min pad rows
+            <input id="cov-sub-min" type="number" value="1" style="width:4rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          </label>
+          <button class="admin-btn" type="button" onclick="_covSublabelsRun()">⏵ Discover sublabels</button>
+          <span id="cov-sub-status" style="font-size:0.72rem;color:var(--muted)"></span>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+async function _covArtistStart(reset) {
+  const yearMax = Number(document.getElementById("cov-artist-yearmax")?.value || 1970);
+  if (!confirm(`Start artist sweep (yearMax ${yearMax})?\n\nIterates every blues_artists row with a Discogs ID, caching that artist's masters + orphan releases up to ${yearMax}. Rate-limited to 1 request/sec.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/artist-sweep/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ yearMax, resetCursor: !!reset }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadCoverageSweeps();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _covArtistStop() {
+  if (!confirm("Stop artist sweep? Cursor is persisted; ⏵ Resume picks up where it stops.")) return;
+  const r = await apiFetch("/api/admin/artist-sweep/stop", { method: "POST" });
+  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+async function _covArtistForceClear() {
+  if (!confirm("Force-clear artist sweep state? Only if Stop didn't take.")) return;
+  const r = await apiFetch("/api/admin/artist-sweep/force-clear", { method: "POST" });
+  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+
+async function _covMasterVerStart(reset) {
+  const yearMax = Number(document.getElementById("cov-mv-yearmax")?.value || 1970);
+  if (!confirm(`Start master → versions walk (yearMax ${yearMax})?\n\nFor every cached master with year ≤ ${yearMax}, fetches versions and caches each pressing.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/master-versions-walk/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ yearMax, resetCursor: !!reset }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadCoverageSweeps();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _covMasterVerStop() {
+  if (!confirm("Stop master → versions walk?")) return;
+  const r = await apiFetch("/api/admin/master-versions-walk/stop", { method: "POST" });
+  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+async function _covMasterVerForceClear() {
+  if (!confirm("Force-clear master → versions walk state?")) return;
+  const r = await apiFetch("/api/admin/master-versions-walk/force-clear", { method: "POST" });
+  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+
+async function _covFacetedStart(reset) {
+  const mode = document.getElementById("cov-fc-mode")?.value || "format";
+  const yearFrom = Number(document.getElementById("cov-fc-yfrom")?.value || 1900);
+  const yearTo   = Number(document.getElementById("cov-fc-yto")?.value   || 1970);
+  const rawVals  = (document.getElementById("cov-fc-values")?.value || "").trim();
+  const values   = rawVals ? rawVals.split(",").map(s => s.trim()).filter(Boolean) : undefined;
+  if (!confirm(`Start year × ${mode} sweep from ${yearFrom} to ${yearTo}${values ? ` for [${values.join(", ")}]` : " (defaults)"}?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/faceted-sweep/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode, yearFrom, yearTo, values, resetCursor: !!reset }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadCoverageSweeps();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _covFacetedStop() {
+  if (!confirm("Stop faceted sweep?")) return;
+  const r = await apiFetch("/api/admin/faceted-sweep/stop", { method: "POST" });
+  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+async function _covFacetedForceClear() {
+  if (!confirm("Force-clear faceted sweep state?")) return;
+  const r = await apiFetch("/api/admin/faceted-sweep/force-clear", { method: "POST" });
+  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+  loadCoverageSweeps();
+}
+
+async function _covSublabelsRun() {
+  const minCount = Number(document.getElementById("cov-sub-min")?.value || 1);
+  if (!confirm(`Fetch /labels/{id} for every cached label with ≥${minCount} pad rows and expand sublabels into the directory?\n\nRate-limited to ~1 req/sec so this can take several minutes on a busy directory. Errors are logged per-label and don't stop the run.`)) return;
+  const statusEl = document.getElementById("cov-sub-status");
+  if (statusEl) statusEl.textContent = "Working…";
+  try {
+    const r = await apiFetch("/api/admin/sublabels/expand", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minExternalCount: minCount }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (statusEl) statusEl.textContent = `Failed: ${j.error || r.status}`; return; }
+    if (statusEl) statusEl.textContent = `queried ${j.queried} labels · discovered ${j.discovered} sublabels · inserted ${j.inserted} new · ⚠${j.errors}`;
+    if (typeof loadLabelDirectory === "function") loadLabelDirectory();
+  } catch (err) { if (statusEl) statusEl.textContent = String(err); }
 }
 
 async function _labelDirStopSweep() {

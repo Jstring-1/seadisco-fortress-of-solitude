@@ -16,6 +16,9 @@ import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, reque
 import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
 import { initBulkLabelSweepModule, startBulkLabelSweep, requestBulkLabelSweepStop, forceClearBulkLabelSweep, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
 import { initCacheProjectionBackfillModule, startCacheProjectionBackfill, requestCacheProjectionBackfillStop, forceClearCacheProjectionBackfill, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
+import { initArtistSweepModule, startArtistSweep, requestArtistSweepStop, forceClearArtistSweep, getArtistSweepStatus, } from "./artist-sweep-worker.js";
+import { initMasterVersionsWalkModule, startMasterVersionsWalk, requestMasterVersionsWalkStop, forceClearMasterVersionsWalk, getMasterVersionsWalkStatus, } from "./master-versions-worker.js";
+import { initFacetedSweepModule, startFacetedSweep, requestFacetedSweepStop, forceClearFacetedSweep, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
 import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
@@ -9806,6 +9809,231 @@ app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// ── Artist masters+ sweep ────────────────────────────────────────
+app.post("/api/admin/artist-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const yearMax = Number.isFinite(Number(body.yearMax)) ? Number(body.yearMax) : undefined;
+    const resetCursor = !!body.resetCursor;
+    try {
+        const r = await startArtistSweep({ yearMax, resetCursor });
+        if (!r.ok) {
+            res.status(409).json(r);
+            return;
+        }
+        res.json(r);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/artist-sweep/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestArtistSweepStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/artist-sweep/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearArtistSweep();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/artist-sweep/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getArtistSweepStatus());
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Master → versions walk ───────────────────────────────────────
+app.post("/api/admin/master-versions-walk/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const yearMax = Number.isFinite(Number(body.yearMax)) ? Number(body.yearMax) : undefined;
+    const resetCursor = !!body.resetCursor;
+    try {
+        const r = await startMasterVersionsWalk({ yearMax, resetCursor });
+        if (!r.ok) {
+            res.status(409).json(r);
+            return;
+        }
+        res.json(r);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/master-versions-walk/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestMasterVersionsWalkStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/master-versions-walk/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearMasterVersionsWalk();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/master-versions-walk/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getMasterVersionsWalkStatus());
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Year × facet (format / country) sweep ────────────────────────
+app.post("/api/admin/faceted-sweep/start", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const mode = String(body.mode || "").toLowerCase();
+    if (mode !== "format" && mode !== "country") {
+        res.status(400).json({ error: "mode must be 'format' or 'country'" });
+        return;
+    }
+    const yearFrom = Number.isFinite(Number(body.yearFrom)) ? Number(body.yearFrom) : undefined;
+    const yearTo = Number.isFinite(Number(body.yearTo)) ? Number(body.yearTo) : undefined;
+    const values = Array.isArray(body.values) ? body.values.map(String).filter(Boolean) : undefined;
+    const resetCursor = !!body.resetCursor;
+    try {
+        const r = await startFacetedSweep({ mode: mode, yearFrom, yearTo, values, resetCursor });
+        if (!r.ok) {
+            res.status(409).json(r);
+            return;
+        }
+        res.json(r);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/faceted-sweep/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestFacetedSweepStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/faceted-sweep/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearFacetedSweep();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/faceted-sweep/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getFacetedSweepStatus());
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Sublabel discovery ───────────────────────────────────────────
+// One-shot: for every label in the directory with a Discogs ID, hit
+// /labels/{id} to fetch sublabels[], and insert placeholder rows
+// into external_discography so the sublabels show up as unassigned
+// entries in the label directory. Bulk label sweep can then pick
+// them up naturally after we tag each with its own Discogs ID.
+app.post("/api/admin/sublabels/expand", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const minCount = Number.isFinite(Number(body.minExternalCount)) ? Number(body.minExternalCount) : 1;
+    try {
+        if (!ADMIN_CLERK_ID) {
+            res.status(500).json({ error: "ADMIN_CLERK_ID unset" });
+            return;
+        }
+        const oauth = await getOAuthCredentials(ADMIN_CLERK_ID);
+        if (!oauth || !process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) {
+            res.status(500).json({ error: "Admin Discogs OAuth not connected" });
+            return;
+        }
+        const dc = new DiscogsClient({
+            consumerKey: process.env.DISCOGS_CONSUMER_KEY,
+            consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
+            accessToken: oauth.accessToken,
+            accessSecret: oauth.accessSecret,
+        });
+        const rows = await listLabelDirectory({ limit: 5000 });
+        const candidates = rows.filter(r => r.label_id && (r.external_count ?? 0) >= minCount);
+        let queried = 0, discovered = 0, inserted = 0, errors = 0, lastError = "";
+        for (const r of candidates) {
+            queried++;
+            try {
+                const payload = await dc.getLabel(r.label_id);
+                const subs = Array.isArray(payload?.sublabels) ? payload.sublabels : [];
+                for (const s of subs) {
+                    const subName = String(s?.name ?? "").trim();
+                    const subId = Number(s?.id);
+                    if (!subName)
+                        continue;
+                    discovered++;
+                    // external_discography.catno is NOT NULL — use an empty
+                    // string so the row satisfies the unique constraint and
+                    // still shows up in listLabelDirectory with 1 pad row.
+                    const ins = await getPool().query(`INSERT INTO external_discography
+               (source, label_name, label_id, catno)
+             VALUES ('discogs:sublabels', $1, $2, '')
+             ON CONFLICT DO NOTHING`, [subName, Number.isFinite(subId) ? subId : null]);
+                    inserted += ins.rowCount ?? 0;
+                }
+                await new Promise(r2 => setTimeout(r2, 1100));
+            }
+            catch (err) {
+                errors++;
+                lastError = `label=${r.label_id}: ${err?.message ?? String(err)}`;
+                console.warn(`[sublabels expand] ${lastError}`);
+            }
+        }
+        res.json({ ok: true, queried, discovered, inserted, errors, lastError: lastError || null });
+    }
+    catch (err) {
+        console.error("[sublabels expand]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // ── Split-cache projection backfill ──────────────────────────────
 // One-shot scan that projects every existing release_cache row into
 // the new discogs_cache_masters_plus / discogs_cache_pressings +
@@ -18664,6 +18892,24 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] cache-projection-backfill init failed:", e);
+        }
+        try {
+            initArtistSweepModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] artist-sweep init failed:", e);
+        }
+        try {
+            initMasterVersionsWalkModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] master-versions-walk init failed:", e);
+        }
+        try {
+            initFacetedSweepModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] faceted-sweep init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the
