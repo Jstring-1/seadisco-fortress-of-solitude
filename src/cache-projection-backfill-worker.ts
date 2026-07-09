@@ -13,14 +13,18 @@
 import {
   getAppSetting,
   setAppSetting,
-  writeProjectedCache,
+  writeProjectedCacheBatch,
   readReleaseCacheBatchForProjection,
   getProjectedCacheStats,
 } from "./db.js";
 
 const STATE_KEY = "cache_projection_backfill_state";
-const BATCH_SIZE = 200;
-const INTER_BATCH_MS = 100;
+// Batch size tuned for the batched writer: ~8 round trips per batch
+// regardless of size, so we can push a lot of rows per network hop.
+// Kept below the read helper's 1000-row cap to stay conservative on
+// TOAST + WAL amplification.
+const BATCH_SIZE = 500;
+const INTER_BATCH_MS = 50;
 
 interface BulkState {
   cursorId:      number;
@@ -123,17 +127,16 @@ async function _run(): Promise<void> {
         console.log(`[cache-project-backfill] queue drained at ${_state.processed} processed`);
         break;
       }
+      const result = await writeProjectedCacheBatch(batch);
+      _state.processed += result.ok;
+      _state.errors    += result.err;
+      if (result.lastError) _state.lastError = result.lastError;
+      // Cursor advances to the max discogs_id in the batch even when
+      // some rows failed — the per-row fallback inside the batched
+      // writer already retried them once; skipping avoids the loop
+      // getting stuck on a poison row.
       let maxIdInBatch = _state.cursorId;
       for (const row of batch) {
-        if (_stopRequested) break;
-        try {
-          await writeProjectedCache(row.discogs_id, row.type, row.data);
-          _state.processed++;
-        } catch (err: any) {
-          _state.errors++;
-          _state.lastError = `id=${row.discogs_id} type=${row.type}: ${err?.message ?? String(err)}`;
-          console.warn(`[cache-project-backfill] ${_state.lastError}`);
-        }
         if (row.discogs_id > maxIdInBatch) maxIdInBatch = row.discogs_id;
       }
       _state.cursorId = maxIdInBatch;

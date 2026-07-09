@@ -6654,6 +6654,170 @@ export async function writeProjectedCache(
   }
 }
 
+// Batched version of writeProjectedCache. Given N rows, executes ~8
+// round trips instead of ~8·N. Used by the backfill worker where
+// throughput matters more than isolation of a single row. If the
+// batched transaction fails, falls back to per-row writes so a
+// poison row doesn't sink the batch.
+export interface ProjectionBatchInput { discogs_id: number; type: DiscogsCacheType; data: any; }
+export interface ProjectionBatchResult { ok: number; err: number; lastError: string | null; }
+export async function writeProjectedCacheBatch(
+  batch: ProjectionBatchInput[],
+): Promise<ProjectionBatchResult> {
+  if (batch.length === 0) return { ok: 0, err: 0, lastError: null };
+  // Project all rows up front. Non-projectable rows (artist / master-
+  // versions in the input) are silently dropped.
+  const rows: Array<ProjectionBatchInput & { proj: ProjectedRelease }> = [];
+  for (const r of batch) {
+    const proj = projectReleaseData(r.type, r.data);
+    if (proj) rows.push({ ...r, proj });
+  }
+  if (rows.length === 0) return { ok: 0, err: 0, lastError: null };
+
+  const mastersPlus = rows.filter(r => r.proj.bucket !== "pressing");
+  const pressings   = rows.filter(r => r.proj.bucket === "pressing");
+
+  // Build side-table row lists with per-parent dedup so a single
+  // Discogs blob repeating an artist/tag doesn't multiply the row.
+  const labelRows:  Array<[number, number, number | null, string, string | null]> = [];
+  const artistRows: Array<[number, number, number, string]> = [];
+  const tagRows:    Array<[number, number, string, string]> = [];
+  for (const r of rows) {
+    for (const l of r.proj.labels) {
+      labelRows.push([r.discogs_id, r.proj.bucketNum, l.id, l.name, l.catno]);
+    }
+    const artistSeen = new Set<string>();
+    for (const a of r.proj.artists) {
+      const k = `${a.id}:${a.role}`;
+      if (artistSeen.has(k)) continue;
+      artistSeen.add(k);
+      artistRows.push([r.discogs_id, r.proj.bucketNum, a.id, a.role]);
+    }
+    const tagSeen = new Set<string>();
+    for (const t of r.proj.tags) {
+      const k = `${t.kind}:${t.value}`;
+      if (tagSeen.has(k)) continue;
+      tagSeen.add(k);
+      tagRows.push([r.discogs_id, r.proj.bucketNum, t.kind, t.value]);
+    }
+  }
+
+  // Chunk big INSERT VALUES to stay under Postgres's 65,535-parameter
+  // limit. Signature k = params per row; safe chunk = floor(60000/k).
+  const chunkedInsert = async (
+    client: any,
+    sql:    (rowsPh: string) => string,
+    rowsArr: any[][],
+    paramsPerRow: number,
+  ): Promise<void> => {
+    if (rowsArr.length === 0) return;
+    const maxRows = Math.max(1, Math.floor(60000 / paramsPerRow));
+    for (let i = 0; i < rowsArr.length; i += maxRows) {
+      const slice = rowsArr.slice(i, i + maxRows);
+      const params: any[] = [];
+      const placeholders: string[] = [];
+      for (const row of slice) {
+        const ph: string[] = [];
+        for (const v of row) {
+          params.push(v);
+          ph.push(`$${params.length}`);
+        }
+        placeholders.push(`(${ph.join(",")})`);
+      }
+      await client.query(sql(placeholders.join(",")), params);
+    }
+  };
+
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+
+    if (mastersPlus.length > 0) {
+      const rowsArr = mastersPlus.map(r => [
+        r.discogs_id, r.type, r.proj.year, r.proj.country, r.proj.primaryFormat, JSON.stringify(r.data),
+      ]);
+      await chunkedInsert(client,
+        ph => `INSERT INTO discogs_cache_masters_plus
+                 (discogs_id, type, year, country, primary_format, data, cached_at, seen_at)
+               SELECT v.discogs_id, v.type, v.year, v.country, v.primary_format,
+                      v.data::jsonb, NOW(), NOW()
+                 FROM (VALUES ${ph}) AS v(discogs_id, type, year, country, primary_format, data)
+               ON CONFLICT (discogs_id, type) DO UPDATE SET
+                 year           = EXCLUDED.year,
+                 country        = EXCLUDED.country,
+                 primary_format = EXCLUDED.primary_format,
+                 data           = EXCLUDED.data,
+                 cached_at      = NOW(),
+                 seen_at        = COALESCE(discogs_cache_masters_plus.seen_at, NOW())`,
+        rowsArr, 6);
+    }
+    if (pressings.length > 0) {
+      const rowsArr = pressings.map(r => [
+        r.discogs_id, r.proj.masterId, r.proj.year, r.proj.country, r.proj.primaryFormat, JSON.stringify(r.data),
+      ]);
+      await chunkedInsert(client,
+        ph => `INSERT INTO discogs_cache_pressings
+                 (discogs_id, master_id, year, country, primary_format, data, cached_at, seen_at)
+               SELECT v.discogs_id, v.master_id, v.year, v.country, v.primary_format,
+                      v.data::jsonb, NOW(), NOW()
+                 FROM (VALUES ${ph}) AS v(discogs_id, master_id, year, country, primary_format, data)
+               ON CONFLICT (discogs_id) DO UPDATE SET
+                 master_id      = EXCLUDED.master_id,
+                 year           = EXCLUDED.year,
+                 country        = EXCLUDED.country,
+                 primary_format = EXCLUDED.primary_format,
+                 data           = EXCLUDED.data,
+                 cached_at      = NOW(),
+                 seen_at        = COALESCE(discogs_cache_pressings.seen_at, NOW())`,
+        rowsArr, 6);
+    }
+
+    // Delete side-table rows for every (discogs_id, bucket) pair we're
+    // about to (re)insert. `= ANY($1::int[])` avoids the parameter
+    // explosion an IN (...) list would cause; small (discogs_id, bucket)
+    // index handles the seek.
+    for (const bucketNum of [0, 1, 2]) {
+      const ids = rows.filter(r => r.proj.bucketNum === bucketNum).map(r => r.discogs_id);
+      if (ids.length === 0) continue;
+      await client.query(`DELETE FROM release_labels  WHERE bucket = $1 AND discogs_id = ANY($2::int[])`, [bucketNum, ids]);
+      await client.query(`DELETE FROM release_artists WHERE bucket = $1 AND discogs_id = ANY($2::int[])`, [bucketNum, ids]);
+      await client.query(`DELETE FROM release_tags    WHERE bucket = $1 AND discogs_id = ANY($2::int[])`, [bucketNum, ids]);
+    }
+
+    await chunkedInsert(client,
+      ph => `INSERT INTO release_labels  (discogs_id, bucket, label_id, label_name, catno) VALUES ${ph}`,
+      labelRows,  5);
+    await chunkedInsert(client,
+      ph => `INSERT INTO release_artists (discogs_id, bucket, artist_id, role)              VALUES ${ph}`,
+      artistRows, 4);
+    await chunkedInsert(client,
+      ph => `INSERT INTO release_tags    (discogs_id, bucket, kind, value)                  VALUES ${ph}`,
+      tagRows,    4);
+
+    await client.query("COMMIT");
+    return { ok: rows.length, err: 0, lastError: null };
+  } catch (err: any) {
+    try { await client.query("ROLLBACK"); } catch {}
+    console.warn(`[cache-project] batch of ${rows.length} failed, falling back to per-row: ${err?.message ?? err}`);
+    // Per-row fallback — a poison row shouldn't sink the batch. This
+    // still uses the tx-per-row writeProjectedCache so the failure
+    // stays isolated.
+    let ok = 0, errCount = 0, lastError: string | null = null;
+    for (const r of rows) {
+      try {
+        await writeProjectedCache(r.discogs_id, r.type, r.data);
+        ok++;
+      } catch (e: any) {
+        errCount++;
+        lastError = `id=${r.discogs_id} type=${r.type}: ${e?.message ?? String(e)}`;
+      }
+    }
+    return { ok, err: errCount, lastError };
+  } finally {
+    client.release();
+  }
+}
+
 // Reports rough sizes of both sides of the split — used by the
 // backfill worker UI to show progress vs total.
 export async function getProjectedCacheStats(): Promise<{
