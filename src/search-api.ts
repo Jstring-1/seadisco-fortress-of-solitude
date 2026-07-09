@@ -40,6 +40,15 @@ import {
   getBulkLabelSweepStatus,
   isBulkLabelSweepRunning,
 } from "./label-bulk-sweep-worker.js";
+import {
+  initCacheProjectionBackfillModule,
+  startCacheProjectionBackfill,
+  requestCacheProjectionBackfillStop,
+  forceClearCacheProjectionBackfill,
+  getCacheProjectionBackfillStatus,
+  isCacheProjectionBackfillRunning,
+} from "./cache-projection-backfill-worker.js";
+import { getProjectedCacheStats } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9067,6 +9076,43 @@ app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
   catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// ── Split-cache projection backfill ──────────────────────────────
+// One-shot scan that projects every existing release_cache row into
+// the new discogs_cache_masters_plus / discogs_cache_pressings +
+// side-table schema. Idempotent; can be resumed / restarted.
+app.post("/api/admin/cache-projection/start", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const resetCursor = !!(req.body || {}).resetCursor;
+  try {
+    const result = await startCacheProjectionBackfill({ resetCursor });
+    if (!result.ok) { res.status(409).json(result); return; }
+    res.json(result);
+  } catch (err: any) {
+    console.error("[cache-projection start]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+app.post("/api/admin/cache-projection/stop", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { requestCacheProjectionBackfillStop(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.post("/api/admin/cache-projection/force-clear", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { forceClearCacheProjectionBackfill(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.get("/api/admin/cache-projection/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const [worker, stats] = await Promise.all([
+      Promise.resolve(getCacheProjectionBackfillStatus()),
+      getProjectedCacheStats().catch(() => null),
+    ]);
+    res.json({ ...worker, stats });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 // Merge one external_discography label into another. Typical use:
 // fold a scraped variant (e.g. "Excello") into the canonical Discogs
 // name ("Excello Records") so the directory shows them as one row.
@@ -17025,6 +17071,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initBulkLabelSweepModule(); } catch (e) {
       console.error("[startup] bulk-label-sweep init failed:", e);
+    }
+    try { initCacheProjectionBackfillModule(); } catch (e) {
+      console.error("[startup] cache-projection-backfill init failed:", e);
     }
     // Warm the cache-warm-runs stats cache out of band so the first
     // admin who opens the panel after deploy doesn't pay for the

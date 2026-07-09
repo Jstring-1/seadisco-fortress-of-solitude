@@ -161,6 +161,12 @@
           <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache</summary>
           <div id="cache-analytics-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)"></div>
         </details>
+        <!-- ── Split-cache projection backfill ─────────────────────── -->
+        <hr style="margin:1rem 0;border-color:var(--border)">
+        <details>
+          <summary title="Migrates release_cache into the new split schema: discogs_cache_masters_plus (masters + orphan releases — the hot browse table) and discogs_cache_pressings (specific-pressing releases), plus normalized release_labels / release_artists / release_tags side tables. Idempotent — safe to stop / resume. Runs in the background; nothing in the UI changes until readers are flipped over in a later phase." style="cursor:pointer;font-weight:600;font-size:0.95rem">🧬 Project into split cache</summary>
+          <div id="cache-projection-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
@@ -622,7 +628,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadYearBackfill(); loadCacheAnalytics(); },
+    load: () => { loadCacheWarm(); loadYearBackfill(); loadCacheAnalytics(); loadCacheProjection(); },
   },
   'labels': {
     panels: ['panel-labels'],
@@ -698,13 +704,14 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR, bulkR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
       apiFetch('/api/admin/cache-warm-runs/status').catch(() => null),
       apiFetch('/api/admin/yt-review/status').catch(() => null),
       apiFetch('/api/admin/label-directory/bulk-sweep/status').catch(() => null),
+      apiFetch('/api/admin/cache-projection/status').catch(() => null),
     ]);
     const badges = [];
     if (bulkR?.ok) {
@@ -713,6 +720,14 @@ async function loadAdminWorkerStatus() {
         const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
         const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
         badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
+      }
+    }
+    if (projR?.ok) {
+      const j = await projR.json().catch(() => null);
+      if (j?.running) {
+        const total = j.total ?? j.stats?.releaseCacheProjectable;
+        const pos = total ? ` (${j.processed}/${total})` : ` (${j.processed})`;
+        badges.push({ label: `Split-cache projection${pos}`, tab: 'cache' });
       }
     }
     if (catnoR?.ok) {
@@ -2260,6 +2275,101 @@ async function _labelDirCleanNames() {
     const summary = (j.renames || []).slice(0, 8).map(x => `  • "${x.from}" → "${x.to}" (${x.rows} rows)`).join("\n");
     alert(`Renamed ${j.renamed} rows · merged ${j.mergedDuplicates} duplicates.\n\n${summary || "(no changes)"}`);
     loadLabelDirectory();
+  } catch (err) { alert(String(err)); }
+}
+
+// ── Split-cache projection backfill ────────────────────────────
+let _cacheProjectionStatus = null;
+async function loadCacheProjection() {
+  const el = document.getElementById("cache-projection-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-projection/status");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    _cacheProjectionStatus = await r.json();
+    _renderCacheProjection();
+    clearTimeout(window._cacheProjectionPollTimer);
+    if (_cacheProjectionStatus?.running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+      window._cacheProjectionPollTimer = setTimeout(loadCacheProjection, 5000);
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+function _renderCacheProjection() {
+  const el = document.getElementById("cache-projection-content");
+  if (!el) return;
+  const s = _cacheProjectionStatus || {};
+  const stats = s.stats || {};
+  const running = !!s.running;
+  const total = Number.isFinite(s.total) ? s.total : (stats.releaseCacheProjectable ?? null);
+  const pct = total > 0 ? Math.round((s.processed / total) * 100) : 0;
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.4rem;margin-bottom:0.7rem">
+      ${_cpStat("release_cache (projectable)", stats.releaseCacheProjectable)}
+      ${_cpStat("masters + orphans", stats.mastersPlusRows)}
+      ${_cpStat("pressings", stats.pressingsRows)}
+      ${_cpStat("release_labels", stats.labelsRows)}
+      ${_cpStat("release_artists", stats.artistsRows)}
+      ${_cpStat("release_tags", stats.tagsRows)}
+    </div>
+    ${running ? `
+      <div style="display:flex;gap:0.5rem;align-items:center;padding:0.4rem 0.6rem;margin-bottom:0.5rem;background:rgba(60,120,200,0.15);border:1px solid #48a;border-radius:4px;flex-wrap:wrap">
+        <span style="font-size:0.82rem"><strong>Projecting:</strong> ${s.processed}${total ? ` / ${total}` : ""} (${pct}%)${s.errors ? ` · ⚠${s.errors}` : ""}</span>
+        <span style="font-size:0.72rem;color:var(--muted)">cursor id ${s.cursorId}</span>
+        <button class="admin-btn" type="button" onclick="_cacheProjectionStop()" style="background:#a33;color:#fff">■ Stop</button>
+        <button class="admin-btn" type="button" onclick="_cacheProjectionForceClear()" title="Only if Stop doesn't take. Wipes worker state (doesn't touch already-written projected rows).">⚠ Force clear</button>
+      </div>
+    ` : `
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
+        <button class="admin-btn" type="button" onclick="_cacheProjectionStart(false)">⏵ Start / resume backfill</button>
+        <button class="admin-btn" type="button" onclick="_cacheProjectionStart(true)" title="Reset cursor to 0 and rescan every row from the top. Idempotent — safe, just slower.">↻ Restart from top</button>
+        ${s.processed ? `<span style="font-size:0.78rem;color:var(--muted)">last: ${s.processed} processed, cursor id ${s.cursorId}${s.errors ? ` · ⚠${s.errors}` : ""}</span>` : ""}
+      </div>
+    `}
+    ${s.lastError ? `<div style="font-size:0.72rem;color:#e88;margin-top:0.3rem"><strong>Last error:</strong> ${_eHtml(s.lastError)}</div>` : ""}
+    <div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">
+      Dual-write is live: every new cacheRelease() call already writes to the split schema. This backfill just projects the existing rows.
+    </div>
+  `;
+}
+function _cpStat(label, n) {
+  const val = Number.isFinite(n) ? n.toLocaleString() : "—";
+  return `<div style="padding:0.3rem 0.5rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:3px">
+    <div style="font-size:0.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em">${_eHtml(label)}</div>
+    <div style="font-size:0.95rem;font-weight:600">${val}</div>
+  </div>`;
+}
+async function _cacheProjectionStart(reset) {
+  const msg = reset
+    ? "Restart the backfill from cursor 0? Every existing row will be reprojected (idempotent, but slower)."
+    : "Start (or resume) the projection backfill? Walks release_cache in 200-row batches, writing into the split schema.";
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-projection/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ resetCursor: !!reset }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
+    loadCacheProjection();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _cacheProjectionStop() {
+  if (!confirm("Stop the projection backfill? Cursor is persisted so you can resume later.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-projection/stop", { method: "POST" });
+    if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+    loadCacheProjection();
+  } catch (err) { alert(String(err)); }
+}
+async function _cacheProjectionForceClear() {
+  if (!confirm("Force-clear projection worker state?\n\nOnly use if Stop didn't take. Does NOT touch already-written projected rows — they stay in the split cache. A subsequent Start / Restart will re-scan from the top or use a fresh cursor.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-projection/force-clear", { method: "POST" });
+    if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+    loadCacheProjection();
   } catch (err) { alert(String(err)); }
 }
 

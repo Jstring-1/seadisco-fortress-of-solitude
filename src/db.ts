@@ -928,6 +928,102 @@ export async function initDb() {
        ON release_cache USING GIN ((data->'genres'))`,
   );
 
+  // ── Split release_cache into masters+ / pressings + side tables ────
+  // Migration target for the JSONB-heavy release_cache. Same source of
+  // truth (data JSONB) but split by usage pattern:
+  //   • discogs_cache_masters_plus  — masters AND orphan releases
+  //     (releases without a master_id). This is what feed / cards /
+  //     browse hit ~90% of the time, so it stays smaller and hotter.
+  //   • discogs_cache_pressings     — releases WITH a master_id
+  //     (specific pressings). Only read when a modal drills into one.
+  // Both tables promote the four scalars we query on constantly
+  // (year, country, master_id, primary_format) into indexed columns so
+  // no `data->>'year'` JSON traversal is needed at read time. Full
+  // Discogs blob stays in `data` for the modal / player.
+  //
+  // artist + master-versions cache types stay in the old release_cache
+  // — they're small lookup caches with a different query pattern.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_cache_masters_plus (
+      discogs_id     INTEGER      NOT NULL,
+      type           TEXT         NOT NULL,     -- 'master' | 'release' (orphan only)
+      year           SMALLINT,
+      country        TEXT,
+      primary_format TEXT,
+      data           JSONB        NOT NULL,
+      cached_at      TIMESTAMPTZ  DEFAULT NOW(),
+      seen_at        TIMESTAMPTZ,
+      UNIQUE (discogs_id, type)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_year_idx      ON discogs_cache_masters_plus (year)      WHERE year IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_country_idx   ON discogs_cache_masters_plus (country)   WHERE country IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_seen_at_idx   ON discogs_cache_masters_plus (seen_at DESC) WHERE seen_at IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_cached_at_idx ON discogs_cache_masters_plus (cached_at DESC)`);
+
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_cache_pressings (
+      discogs_id     INTEGER      PRIMARY KEY,  -- always type='release'
+      master_id      INTEGER      NOT NULL,
+      year           SMALLINT,
+      country        TEXT,
+      primary_format TEXT,
+      data           JSONB        NOT NULL,
+      cached_at      TIMESTAMPTZ  DEFAULT NOW(),
+      seen_at        TIMESTAMPTZ
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_master_id_idx  ON discogs_cache_pressings (master_id)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_year_idx       ON discogs_cache_pressings (year)     WHERE year IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_seen_at_idx    ON discogs_cache_pressings (seen_at DESC) WHERE seen_at IS NOT NULL`);
+
+  // Side tables. `bucket` is a small int denoting where the parent row
+  // lives: 0 = master, 1 = orphan (release without master_id), 2 =
+  // pressing (release with master_id). Baked in so aggregations don't
+  // need to join back to the primary tables just to know which bucket
+  // a row is in.
+  //
+  // Dedup is handled by the writer (DELETE-then-INSERT per (discogs_id,
+  // bucket)) so we don't need a natural-key PRIMARY KEY here — a plain
+  // SERIAL keeps schema simple and avoids expression-key limitations.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS release_labels (
+      id          BIGSERIAL PRIMARY KEY,
+      discogs_id  INTEGER   NOT NULL,
+      bucket      SMALLINT  NOT NULL,
+      label_id    INTEGER,
+      label_name  TEXT      NOT NULL,
+      catno       TEXT
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_by_release_idx ON release_labels (discogs_id, bucket)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_by_label_idx   ON release_labels (label_id) WHERE label_id IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_name_lower_idx ON release_labels (LOWER(label_name))`);
+
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS release_artists (
+      id          BIGSERIAL PRIMARY KEY,
+      discogs_id  INTEGER   NOT NULL,
+      bucket      SMALLINT  NOT NULL,
+      artist_id   INTEGER   NOT NULL,
+      role        TEXT      NOT NULL           -- 'main' | 'extra'
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_release_idx ON release_artists (discogs_id, bucket)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_artist_idx  ON release_artists (artist_id, role)`);
+
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS release_tags (
+      id          BIGSERIAL PRIMARY KEY,
+      discogs_id  INTEGER   NOT NULL,
+      bucket      SMALLINT  NOT NULL,
+      kind        TEXT      NOT NULL,          -- 'genre' | 'style' | 'format'
+      value       TEXT      NOT NULL
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_tags_by_release_idx ON release_tags (discogs_id, bucket)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_tags_by_value_idx   ON release_tags (kind, value)`);
+
   // ── Cache-fetch queue ───────────────────────────────────────────────
   // Generic backlog of "fetch this album from Discogs and cache it".
   // Multiple sources enqueue (suggestion generator, future hover-to-
@@ -6334,6 +6430,282 @@ export async function cacheRelease(
       [discogsId, type, JSON.stringify(data)]
     );
   }
+  // Dual-write into the new split schema. Fire-and-forget from the
+  // caller's perspective — a projection failure MUST NOT break the
+  // main cache write, since the old release_cache is still the
+  // source of truth until we flip readers over.
+  try { await writeProjectedCache(discogsId, type, data, { warmOnly }); }
+  catch (err: any) {
+    console.error(`[cache-project] dual-write failed id=${discogsId} type=${type}:`, err?.message ?? err);
+  }
+}
+
+// ── New split-cache projection ────────────────────────────────────
+// Turns a raw Discogs payload into the row shapes for
+// discogs_cache_masters_plus / discogs_cache_pressings + the
+// release_labels / release_artists / release_tags side tables. Used
+// by both the live dual-write path in cacheRelease and by the
+// backfill worker.
+export type ProjectionBucket = "master" | "orphan" | "pressing";
+export interface ProjectedRelease {
+  bucket:         ProjectionBucket;
+  bucketNum:      0 | 1 | 2;
+  masterId:       number | null;
+  year:           number | null;
+  country:        string | null;
+  primaryFormat:  string | null;
+  labels:         Array<{ id: number | null; name: string; catno: string | null }>;
+  artists:        Array<{ id: number; role: "main" | "extra" }>;
+  tags:           Array<{ kind: "genre" | "style" | "format"; value: string }>;
+}
+function _projCoerceInt(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number(String(v).trim());
+  return Number.isFinite(n) && n !== 0 ? Math.trunc(n) : null;
+}
+function _projCoerceStr(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+export function projectReleaseData(
+  type:  DiscogsCacheType,
+  data:  any,
+): ProjectedRelease | null {
+  // artist + master-versions caches don't belong in the split — skip.
+  if (type !== "release" && type !== "master") return null;
+  if (!data || typeof data !== "object") return null;
+
+  const masterId = type === "release" ? _projCoerceInt((data as any).master_id) : null;
+  const bucket: ProjectionBucket =
+    type === "master" ? "master" : (masterId ? "pressing" : "orphan");
+  const bucketNum: 0 | 1 | 2 = bucket === "master" ? 0 : bucket === "orphan" ? 1 : 2;
+
+  const year          = _projCoerceInt((data as any).year);
+  const country       = _projCoerceStr((data as any).country);
+  const rawFormats    = Array.isArray((data as any).formats) ? (data as any).formats : [];
+  const primaryFormat = _projCoerceStr(rawFormats[0]?.name);
+
+  const labels: ProjectedRelease["labels"] = [];
+  if (Array.isArray((data as any).labels)) {
+    for (const l of (data as any).labels) {
+      const name = _projCoerceStr(l?.name);
+      if (!name) continue;
+      labels.push({
+        id:    _projCoerceInt(l?.id),
+        name,
+        catno: _projCoerceStr(l?.catno),
+      });
+    }
+  }
+
+  const artists: ProjectedRelease["artists"] = [];
+  if (Array.isArray((data as any).artists)) {
+    for (const a of (data as any).artists) {
+      const id = _projCoerceInt(a?.id);
+      if (id != null) artists.push({ id, role: "main" });
+    }
+  }
+  if (Array.isArray((data as any).extraartists)) {
+    for (const a of (data as any).extraartists) {
+      const id = _projCoerceInt(a?.id);
+      if (id != null) artists.push({ id, role: "extra" });
+    }
+  }
+
+  const tags: ProjectedRelease["tags"] = [];
+  if (Array.isArray((data as any).genres)) {
+    for (const g of (data as any).genres) {
+      const v = _projCoerceStr(g);
+      if (v) tags.push({ kind: "genre", value: v });
+    }
+  }
+  if (Array.isArray((data as any).styles)) {
+    for (const s of (data as any).styles) {
+      const v = _projCoerceStr(s);
+      if (v) tags.push({ kind: "style", value: v });
+    }
+  }
+  for (const f of rawFormats) {
+    const v = _projCoerceStr(f?.name);
+    if (v) tags.push({ kind: "format", value: v });
+  }
+
+  return { bucket, bucketNum, masterId, year, country, primaryFormat, labels, artists, tags };
+}
+
+// Write a single release/master into the split schema. Runs inside
+// one transaction so a failure leaves nothing half-written; caller
+// decides whether to swallow or propagate.
+export async function writeProjectedCache(
+  discogsId: number,
+  type:      DiscogsCacheType,
+  data:      any,
+  opts:      { warmOnly?: boolean } = {},
+): Promise<void> {
+  const proj = projectReleaseData(type, data);
+  if (!proj) return;
+  const warmOnly = !!opts.warmOnly;
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+
+    if (proj.bucket === "pressing") {
+      await client.query(
+        `INSERT INTO discogs_cache_pressings
+           (discogs_id, master_id, year, country, primary_format, data, cached_at, seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), ${warmOnly ? "NULL" : "NOW()"})
+         ON CONFLICT (discogs_id) DO UPDATE SET
+           master_id      = EXCLUDED.master_id,
+           year           = EXCLUDED.year,
+           country        = EXCLUDED.country,
+           primary_format = EXCLUDED.primary_format,
+           data           = EXCLUDED.data,
+           cached_at      = NOW(),
+           seen_at        = ${warmOnly
+             ? "discogs_cache_pressings.seen_at"
+             : "COALESCE(discogs_cache_pressings.seen_at, NOW())"}`,
+        [discogsId, proj.masterId, proj.year, proj.country, proj.primaryFormat, JSON.stringify(data)],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO discogs_cache_masters_plus
+           (discogs_id, type, year, country, primary_format, data, cached_at, seen_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), ${warmOnly ? "NULL" : "NOW()"})
+         ON CONFLICT (discogs_id, type) DO UPDATE SET
+           year           = EXCLUDED.year,
+           country        = EXCLUDED.country,
+           primary_format = EXCLUDED.primary_format,
+           data           = EXCLUDED.data,
+           cached_at      = NOW(),
+           seen_at        = ${warmOnly
+             ? "discogs_cache_masters_plus.seen_at"
+             : "COALESCE(discogs_cache_masters_plus.seen_at, NOW())"}`,
+        [discogsId, type, proj.year, proj.country, proj.primaryFormat, JSON.stringify(data)],
+      );
+    }
+
+    // Refresh side tables: DELETE-then-INSERT keyed by (discogs_id,
+    // bucket). Cheap because both indexes are on that pair.
+    await client.query(`DELETE FROM release_labels  WHERE discogs_id = $1 AND bucket = $2`, [discogsId, proj.bucketNum]);
+    await client.query(`DELETE FROM release_artists WHERE discogs_id = $1 AND bucket = $2`, [discogsId, proj.bucketNum]);
+    await client.query(`DELETE FROM release_tags    WHERE discogs_id = $1 AND bucket = $2`, [discogsId, proj.bucketNum]);
+
+    if (proj.labels.length > 0) {
+      const params: any[] = [];
+      const rows:   string[] = [];
+      for (const l of proj.labels) {
+        params.push(discogsId, proj.bucketNum, l.id, l.name, l.catno);
+        const b = params.length;
+        rows.push(`($${b - 4}, $${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+      }
+      await client.query(
+        `INSERT INTO release_labels (discogs_id, bucket, label_id, label_name, catno) VALUES ${rows.join(",")}`,
+        params,
+      );
+    }
+    if (proj.artists.length > 0) {
+      // Dedup within input — Discogs sometimes lists the same artist
+      // as both main + extra, or duplicate ids in extraartists.
+      const seen = new Set<string>();
+      const params: any[] = [];
+      const rows:   string[] = [];
+      for (const a of proj.artists) {
+        const k = `${a.id}:${a.role}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        params.push(discogsId, proj.bucketNum, a.id, a.role);
+        const b = params.length;
+        rows.push(`($${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+      }
+      if (rows.length > 0) {
+        await client.query(
+          `INSERT INTO release_artists (discogs_id, bucket, artist_id, role) VALUES ${rows.join(",")}`,
+          params,
+        );
+      }
+    }
+    if (proj.tags.length > 0) {
+      const seen = new Set<string>();
+      const params: any[] = [];
+      const rows:   string[] = [];
+      for (const t of proj.tags) {
+        const k = `${t.kind}:${t.value}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        params.push(discogsId, proj.bucketNum, t.kind, t.value);
+        const b = params.length;
+        rows.push(`($${b - 3}, $${b - 2}, $${b - 1}, $${b})`);
+      }
+      if (rows.length > 0) {
+        await client.query(
+          `INSERT INTO release_tags (discogs_id, bucket, kind, value) VALUES ${rows.join(",")}`,
+          params,
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Reports rough sizes of both sides of the split — used by the
+// backfill worker UI to show progress vs total.
+export async function getProjectedCacheStats(): Promise<{
+  releaseCacheTotal:     number;
+  releaseCacheProjectable: number;
+  mastersPlusRows:       number;
+  pressingsRows:         number;
+  labelsRows:            number;
+  artistsRows:           number;
+  tagsRows:              number;
+}> {
+  const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM release_cache`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM release_cache WHERE type IN ('master','release')`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM discogs_cache_masters_plus`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM discogs_cache_pressings`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM release_labels`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM release_artists`),
+    getPool().query(`SELECT COUNT(*)::bigint AS c FROM release_tags`),
+  ]);
+  return {
+    releaseCacheTotal:       Number(r1.rows[0]?.c ?? 0),
+    releaseCacheProjectable: Number(r2.rows[0]?.c ?? 0),
+    mastersPlusRows:         Number(r3.rows[0]?.c ?? 0),
+    pressingsRows:           Number(r4.rows[0]?.c ?? 0),
+    labelsRows:              Number(r5.rows[0]?.c ?? 0),
+    artistsRows:             Number(r6.rows[0]?.c ?? 0),
+    tagsRows:                Number(r7.rows[0]?.c ?? 0),
+  };
+}
+
+// Streaming batch reader for the backfill worker. Returns the next
+// `limit` rows from release_cache with discogs_id > cursorId, only
+// for projectable types (release/master).
+export async function readReleaseCacheBatchForProjection(
+  cursorId: number,
+  limit:    number,
+): Promise<Array<{ discogs_id: number; type: DiscogsCacheType; data: any }>> {
+  const r = await getPool().query(
+    `SELECT discogs_id, type, data
+       FROM release_cache
+      WHERE type IN ('release','master')
+        AND discogs_id > $1
+      ORDER BY discogs_id ASC
+      LIMIT $2`,
+    [cursorId, Math.max(1, Math.min(1000, limit))],
+  );
+  return r.rows.map(row => ({
+    discogs_id: Number(row.discogs_id),
+    type:       row.type as DiscogsCacheType,
+    data:       row.data,
+  }));
 }
 
 /** Prune stale cache entries — masters/artists older than 30 days,
