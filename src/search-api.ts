@@ -9093,7 +9093,7 @@ app.post("/api/admin/external-discography/clean-label-names", async (req, res) =
 app.get("/api/admin/label-directory", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const search = String(req.query.q ?? "").trim().slice(0, 200);
-  const limit  = Math.max(1, Math.min(5000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
+  const limit  = Math.max(1, Math.min(50000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
   // reader=v1|v2 lets the UI compare old vs new during Phase 2. If
   // absent, listLabelDirectory picks based on the global flag.
   const rawReader = String(req.query.reader ?? "").toLowerCase();
@@ -9174,9 +9174,10 @@ app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1
   if (!await requireAdmin(req, res)) return;
   const body = req.body || {};
   const minExternalCount = Number.isFinite(Number(body.minExternalCount))
-    ? Number(body.minExternalCount) : 1;
+    ? Number(body.minExternalCount) : 0;
+  const resetCursor = !!body.resetCursor;
   try {
-    const result = await startBulkLabelSweep({ minExternalCount });
+    const result = await startBulkLabelSweep({ minExternalCount, resetCursor });
     if (!result.ok) { res.status(409).json(result); return; }
     res.json(result);
   } catch (err: any) {

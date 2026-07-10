@@ -90,8 +90,8 @@ export function forceClearBulkLabelSweep() {
 export async function startBulkLabelSweep(opts = {}) {
     if (_running)
         return { ok: false, error: "Bulk sweep already running" };
-    const minCount = Math.max(1, Number(opts.minExternalCount ?? 1));
-    const rows = await listLabelDirectory({ limit: 5000 });
+    const minCount = Math.max(0, Number(opts.minExternalCount ?? 0));
+    const rows = await listLabelDirectory({ limit: 20000 });
     const queue = rows
         .filter(r => Number.isFinite(r.label_id) && (r.label_id ?? 0) > 0 && r.external_count >= minCount)
         .sort((a, b) => (b.external_count - a.external_count))
@@ -103,18 +103,28 @@ export async function startBulkLabelSweep(opts = {}) {
     if (queue.length === 0) {
         return { ok: false, error: `No labels with a Discogs ID and ≥${minCount} pad rows` };
     }
-    _state = {
-        queue,
-        cursor: 0,
-        startedAt: new Date().toISOString(),
-        completed: 0,
-        errors: 0,
-        lastError: null,
-    };
+    // Resume if the persisted queue matches this one exactly (same
+    // ordering, same labels). Any drift and we rebuild from the top —
+    // otherwise the cursor would point into a stale queue and skip / repeat
+    // labels. Explicit resetCursor:true forces a fresh queue regardless.
+    const persisted = opts.resetCursor ? null : await _load();
+    const reusable = persisted
+        && persisted.queue.length === queue.length
+        && persisted.queue.every((q, i) => q.labelId === queue[i].labelId);
+    _state = reusable
+        ? persisted
+        : {
+            queue,
+            cursor: 0,
+            startedAt: new Date().toISOString(),
+            completed: 0,
+            errors: 0,
+            lastError: null,
+        };
     _running = true;
     _stopRequested = false;
     await _persist();
-    console.log(`[bulk-label-sweep] START queue=${queue.length} top=${queue.slice(0, 3).map(q => `${q.labelName}(${q.externalCount})`).join(", ")}`);
+    console.log(`[bulk-label-sweep] START queue=${queue.length} cursor=${_state.cursor} top=${queue.slice(0, 3).map(q => `${q.labelName}(${q.externalCount})`).join(", ")}`);
     _run().catch(err => console.error("[bulk-label-sweep] runner crashed:", err));
     return { ok: true, queued: queue.length };
 }

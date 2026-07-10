@@ -1757,8 +1757,10 @@ function _renderLabelDir() {
         Unassigned only
       </label>
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
-      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart()" ${_labelDirBulkStatus?.running ? "disabled" : ""}
-        title="Iterate every label with a Discogs ID and pad rows ≥1, top-down by pad-row count, firing a masters+orphans sweep at each in turn. Progress is persisted so a redeploy resumes cleanly.">⏵ Bulk masters+ sweep</button>
+      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(false)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
+        title="Iterate every label with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept, they just land at the end). Resumes from the persisted cursor if one exists.">⏵ Bulk masters+ sweep</button>
+      <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(true)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
+        title="Rebuild the queue and start from cursor 0. Use if the directory changed and you want the new labels included from the top.">↻ Restart from top</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     ${_labelDirBulkStatus?.running ? _labelDirBulkBannerHtml() : ""}
@@ -2080,24 +2082,25 @@ function _labelDirBulkBannerHtml() {
   `;
 }
 
-async function _labelDirBulkSweepStart() {
+async function _labelDirBulkSweepStart(resetCursor) {
   // One quick preview call so the confirm can show the queue size.
   let queueSize = null;
   try {
-    const r = await apiFetch("/api/admin/label-directory?limit=2000");
+    const r = await apiFetch("/api/admin/label-directory?limit=20000");
     if (r.ok) {
       const j = await r.json();
-      queueSize = (j.rows || []).filter(x => x.label_id && x.external_count > 0).length;
+      queueSize = (j.rows || []).filter(x => x.label_id).length;
     }
   } catch {}
+  const verb = resetCursor ? "Restart from top of" : "Start (or resume)";
   const msg = queueSize != null
-    ? `Start bulk masters+ sweep across ${queueSize} labels (with Discogs ID and ≥1 pad row), top-down by pad-row count?\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. Progress is persisted; a redeploy resumes cleanly. Stop bulk at any time.`
-    : `Start bulk masters+ sweep across every label with a Discogs ID and ≥1 pad row?`;
+    ? `${verb} bulk masters+ sweep across ${queueSize} labels with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept)?\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. ${resetCursor ? "Cursor resets to 0." : "Progress resumes from the persisted cursor."} Stop at any time.`
+    : `${verb} bulk masters+ sweep across every label with a Discogs ID?`;
   if (!confirm(msg)) return;
   try {
     const r = await apiFetch("/api/admin/label-directory/bulk-sweep/start", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ minExternalCount: 1 }),
+      body: JSON.stringify({ minExternalCount: 0, resetCursor: !!resetCursor }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Bulk start failed: ${j.error || r.status}`); return; }

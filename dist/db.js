@@ -10097,7 +10097,7 @@ export async function setSplitCacheReaderEnabled(v) {
     await setAppSetting(SPLIT_READERS_KEY, v ? "1" : "0");
 }
 export async function listLabelDirectory(opts = {}) {
-    const limit = Math.max(1, Math.min(5000, opts.limit ?? 1000));
+    const limit = Math.max(1, Math.min(50000, opts.limit ?? 1000));
     const reader = opts.forceReader ??
         ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
     const rawRows = reader === "v2"

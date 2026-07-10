@@ -12246,7 +12246,7 @@ export async function listLabelDirectory(opts: {
   limit?:       number;
   forceReader?: "v1" | "v2";           // for side-by-side compare in the UI
 } = {}): Promise<LabelDirectoryRow[]> {
-  const limit = Math.max(1, Math.min(5000, opts.limit ?? 1000));
+  const limit = Math.max(1, Math.min(50000, opts.limit ?? 1000));
   const reader: "v1" | "v2" =
     opts.forceReader ??
     ((await isSplitCacheReaderEnabled()) ? "v2" : "v1");
