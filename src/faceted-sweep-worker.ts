@@ -81,6 +81,10 @@ export function getFacetedSweepStatus() {
     currentSlot: null as QueueItem | null,
     lastError: null as string | null,
   };
+  // Distinct values in the queue — used by the admin UI to restore
+  // checkbox selections so a resumed sweep shows what it's actually
+  // sweeping, not the checkbox defaults.
+  const values = Array.from(new Set(_state.queue.map(q => q.value)));
   return {
     running:     _running,
     mode:        _state.mode,
@@ -92,6 +96,7 @@ export function getFacetedSweepStatus() {
     startedAt:   _state.startedAt,
     currentSlot: _state.queue[_state.cursor] ?? null,
     lastError:   _state.lastError ?? null,
+    values,
   };
 }
 

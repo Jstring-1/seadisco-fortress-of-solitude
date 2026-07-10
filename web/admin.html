@@ -2193,7 +2193,7 @@ function _renderCoverageSweeps() {
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
           <label style="font-size:0.78rem;color:var(--muted)">mode
-            <select id="cov-fc-mode" style="padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+            <select id="cov-fc-mode" onchange="_covFacetedSyncMode()" style="padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
               <option value="format" ${f.mode === "format" ? "selected" : ""}>format</option>
               <option value="country" ${f.mode === "country" ? "selected" : ""}>country</option>
             </select>
@@ -2204,9 +2204,6 @@ function _renderCoverageSweeps() {
           <label style="font-size:0.78rem;color:var(--muted)">yearTo
             <input id="cov-fc-yto" type="number" value="1970" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
           </label>
-          <label style="font-size:0.78rem;color:var(--muted)" title="Comma-separated. Empty uses defaults: Shellac/7&quot;/10&quot;/12&quot;/LP for format; US/UK/France/Germany/Italy/Japan/Jamaica/Brazil/Nigeria for country.">values
-            <input id="cov-fc-values" type="text" placeholder="(defaults)" style="width:16rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-          </label>
           ${f.running
             ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${f.cursor}/${f.total} (${pct(f.cursor,f.total)}%)${f.currentSlot ? ` · slot: ${_eHtml(f.currentSlot.value)}/${f.currentSlot.year}` : ""} · ✓${f.hits} · ⏭${f.skipped} · ⚠${f.errors}</span>
                <button class="admin-btn" type="button" onclick="_covFacetedStop()" style="background:#a33;color:#fff">■ Stop</button>
@@ -2214,6 +2211,15 @@ function _renderCoverageSweeps() {
             : `<button class="admin-btn" type="button" onclick="_covFacetedStart(false)">⏵ Start / resume</button>
                <button class="admin-btn" type="button" onclick="_covFacetedStart(true)" title="Rebuild the (year, value) queue and start from cursor 0.">↻ Restart from top</button>
                ${f.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: ${f.hits ?? 0} hits · ${f.skipped ?? 0} skipped</span>` : ""}`}
+        </div>
+        <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--muted)">values (leave all unchecked to use defaults · toggle-all buttons at right)</div>
+        <div id="cov-fc-values-format" style="display:${f.mode === "country" ? "none" : "flex"};flex-wrap:wrap;gap:0.25rem 0.6rem;margin-top:0.3rem;max-height:8rem;overflow:auto;padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:3px;background:var(--surface)">
+          ${_covFacetedRenderValueChecks("format", f)}
+          <div style="flex-basis:100%;display:flex;gap:0.4rem;margin-top:0.2rem"><button class="admin-btn" type="button" style="padding:0 0.5rem;font-size:0.7rem" onclick="_covFacetedToggleAll('format', true)">all</button><button class="admin-btn" type="button" style="padding:0 0.5rem;font-size:0.7rem" onclick="_covFacetedToggleAll('format', false)">none</button></div>
+        </div>
+        <div id="cov-fc-values-country" style="display:${f.mode === "country" ? "flex" : "none"};flex-wrap:wrap;gap:0.25rem 0.6rem;margin-top:0.3rem;max-height:8rem;overflow:auto;padding:0.3rem 0.4rem;border:1px solid var(--border);border-radius:3px;background:var(--surface)">
+          ${_covFacetedRenderValueChecks("country", f)}
+          <div style="flex-basis:100%;display:flex;gap:0.4rem;margin-top:0.2rem"><button class="admin-btn" type="button" style="padding:0 0.5rem;font-size:0.7rem" onclick="_covFacetedToggleAll('country', true)">all</button><button class="admin-btn" type="button" style="padding:0 0.5rem;font-size:0.7rem" onclick="_covFacetedToggleAll('country', false)">none</button></div>
         </div>
         ${f.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(f.lastError)}</div>` : ""}
       </div>
@@ -2249,17 +2255,67 @@ async function _covArtistForceClear() {
   loadCoverageSweeps();
 }
 
+// Discogs-supported facet values. Formats mirror what /database/search
+// accepts as the format= param; countries are common Discogs country
+// strings (name-cased, not ISO codes — Discogs matches on those).
+const _COV_FC_FORMAT_OPTS  = ["Shellac", "78 RPM", "7\"", "10\"", "12\"", "LP", "EP", "Single", "Album", "Compilation", "Vinyl", "Flexi-disc", "Reel-To-Reel", "Acetate", "Cassette", "CD"];
+const _COV_FC_COUNTRY_OPTS = ["US", "UK", "France", "Germany", "Italy", "Japan", "Jamaica", "Brazil", "Nigeria", "Canada", "Australia", "Netherlands", "Belgium", "Sweden", "Norway", "Denmark", "Spain", "Portugal", "Mexico", "Argentina", "Cuba", "South Africa", "Ghana", "India", "Trinidad & Tobago", "Congo", "Russia"];
+// Default-checked set for each mode (matches the worker's DEFAULT_* on
+// server side so "leave everything unchecked" and "check the defaults"
+// produce the same queue).
+const _COV_FC_FORMAT_DEFAULTS  = new Set(["Shellac", "7\"", "10\"", "12\"", "LP"]);
+const _COV_FC_COUNTRY_DEFAULTS = new Set(["US", "UK", "France", "Germany", "Italy", "Japan", "Jamaica", "Brazil", "Nigeria"]);
+
+function _covFacetedRenderValueChecks(mode, state) {
+  const opts     = mode === "country" ? _COV_FC_COUNTRY_OPTS     : _COV_FC_FORMAT_OPTS;
+  const defaults = mode === "country" ? _COV_FC_COUNTRY_DEFAULTS : _COV_FC_FORMAT_DEFAULTS;
+  // Restore prior selection from the running state's values, else defaults.
+  const active = new Set(Array.isArray(state?.values) && state.values.length ? state.values : Array.from(defaults));
+  return opts.map(v => {
+    const id = `cov-fc-${mode}-${v.replace(/[^a-z0-9]/gi, "_")}`;
+    const checked = active.has(v) ? "checked" : "";
+    return `<label style="display:inline-flex;align-items:center;gap:0.25rem;font-size:0.75rem;color:var(--text);white-space:nowrap;cursor:pointer">
+      <input type="checkbox" id="${id}" data-fc-mode="${mode}" data-fc-value="${_eHtml(v)}" value="${_eHtml(v)}" ${checked}> ${_eHtml(v)}
+    </label>`;
+  }).join("");
+}
+
+function _covFacetedSyncMode() {
+  const mode = document.getElementById("cov-fc-mode")?.value || "format";
+  const fmt = document.getElementById("cov-fc-values-format");
+  const cty = document.getElementById("cov-fc-values-country");
+  if (fmt) fmt.style.display = mode === "format" ? "flex" : "none";
+  if (cty) cty.style.display = mode === "country" ? "flex" : "none";
+}
+window._covFacetedSyncMode = _covFacetedSyncMode;
+
+function _covFacetedToggleAll(mode, on) {
+  const scope = document.getElementById(`cov-fc-values-${mode}`);
+  if (!scope) return;
+  scope.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = !!on; });
+}
+window._covFacetedToggleAll = _covFacetedToggleAll;
+
+function _covFacetedGatherValues(mode) {
+  const scope = document.getElementById(`cov-fc-values-${mode}`);
+  if (!scope) return [];
+  return Array.from(scope.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+
 async function _covFacetedStart(reset) {
   const mode = document.getElementById("cov-fc-mode")?.value || "format";
   const yearFrom = Number(document.getElementById("cov-fc-yfrom")?.value || 1900);
   const yearTo   = Number(document.getElementById("cov-fc-yto")?.value   || 1970);
-  const rawVals  = (document.getElementById("cov-fc-values")?.value || "").trim();
-  const values   = rawVals ? rawVals.split(",").map(s => s.trim()).filter(Boolean) : undefined;
-  if (!confirm(`Start year × ${mode} sweep from ${yearFrom} to ${yearTo}${values ? ` for [${values.join(", ")}]` : " (defaults)"}?`)) return;
+  const values   = _covFacetedGatherValues(mode);
+  // Server treats empty/undefined as "use worker defaults". Send them
+  // explicitly only when the user checked something so the confirm text
+  // reflects reality.
+  const useDefaults = values.length === 0;
+  if (!confirm(`Start year × ${mode} sweep from ${yearFrom} to ${yearTo}${useDefaults ? " (server defaults)" : ` for [${values.join(", ")}]`}?`)) return;
   try {
     const r = await apiFetch("/api/admin/faceted-sweep/start", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mode, yearFrom, yearTo, values, resetCursor: !!reset }),
+      body: JSON.stringify({ mode, yearFrom, yearTo, values: useDefaults ? undefined : values, resetCursor: !!reset }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
