@@ -17,9 +17,7 @@ import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, reque
 import { initBulkLabelSweepModule, startBulkLabelSweep, requestBulkLabelSweepStop, forceClearBulkLabelSweep, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
 import { initCacheProjectionBackfillModule, startCacheProjectionBackfill, requestCacheProjectionBackfillStop, forceClearCacheProjectionBackfill, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
 import { initArtistSweepModule, startArtistSweep, requestArtistSweepStop, forceClearArtistSweep, getArtistSweepStatus, } from "./artist-sweep-worker.js";
-import { initMasterVersionsWalkModule, startMasterVersionsWalk, requestMasterVersionsWalkStop, forceClearMasterVersionsWalk, getMasterVersionsWalkStatus, } from "./master-versions-worker.js";
 import { initFacetedSweepModule, startFacetedSweep, requestFacetedSweepStop, forceClearFacetedSweep, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
-import { initSublabelDiscoveryModule, startSublabelDiscovery, requestSublabelDiscoveryStop, forceClearSublabelDiscovery, getSublabelDiscoveryStatus, } from "./sublabel-discovery-worker.js";
 import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
@@ -9861,57 +9859,6 @@ app.get("/api/admin/artist-sweep/status", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// ── Master → versions walk ───────────────────────────────────────
-app.post("/api/admin/master-versions-walk/start", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const body = req.body || {};
-    const yearMax = Number.isFinite(Number(body.yearMax)) ? Number(body.yearMax) : undefined;
-    const resetCursor = !!body.resetCursor;
-    try {
-        const r = await startMasterVersionsWalk({ yearMax, resetCursor });
-        if (!r.ok) {
-            res.status(409).json(r);
-            return;
-        }
-        res.json(r);
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/master-versions-walk/stop", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        requestMasterVersionsWalkStop();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/master-versions-walk/force-clear", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        forceClearMasterVersionsWalk();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/master-versions-walk/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        res.json(getMasterVersionsWalkStatus());
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // ── Year × facet (format / country) sweep ────────────────────────
 app.post("/api/admin/faceted-sweep/start", express.json({ limit: "2kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
@@ -9965,65 +9912,6 @@ app.get("/api/admin/faceted-sweep/status", async (req, res) => {
         return;
     try {
         res.json(getFacetedSweepStatus());
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-// ── Sublabel discovery ───────────────────────────────────────────
-// Background worker: for every cached label with a Discogs ID and
-// pad rows ≥ threshold, hits /labels/{id} and inserts each
-// sublabels[] entry as an external_discography row so it surfaces
-// in the label directory as unassigned. Fire and forget — poll
-// /status for progress. Prior inline endpoint tripped the request
-// timeout on any run of realistic size (thousands of labels ×
-// 1 req/sec = minutes).
-app.post("/api/admin/sublabels/expand", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const body = req.body || {};
-    const minCount = Number.isFinite(Number(body.minExternalCount)) ? Number(body.minExternalCount) : 1;
-    const resetCursor = !!body.resetCursor;
-    try {
-        const r = await startSublabelDiscovery({ minExternalCount: minCount, resetCursor });
-        if (!r.ok) {
-            res.status(409).json(r);
-            return;
-        }
-        res.json(r);
-    }
-    catch (err) {
-        console.error("[sublabels expand]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/sublabels/stop", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        requestSublabelDiscoveryStop();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/sublabels/force-clear", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        forceClearSublabelDiscovery();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/sublabels/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        res.json(getSublabelDiscoveryStatus());
     }
     catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
@@ -18895,22 +18783,10 @@ app.listen(PORT, "0.0.0.0", async () => {
             console.error("[startup] artist-sweep init failed:", e);
         }
         try {
-            initMasterVersionsWalkModule(ADMIN_CLERK_ID);
-        }
-        catch (e) {
-            console.error("[startup] master-versions-walk init failed:", e);
-        }
-        try {
             initFacetedSweepModule(ADMIN_CLERK_ID);
         }
         catch (e) {
             console.error("[startup] faceted-sweep init failed:", e);
-        }
-        try {
-            initSublabelDiscoveryModule(ADMIN_CLERK_ID);
-        }
-        catch (e) {
-            console.error("[startup] sublabel-discovery init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the
