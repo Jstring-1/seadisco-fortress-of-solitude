@@ -1468,9 +1468,6 @@ async function _bindSortable() {
         // Tracked in _reorderInFlightPromise so any _queueLoad triggered
         // mid-flight (e.g. external play's POST→reload) waits and reads
         // the post-PATCH state instead of clobbering the optimistic order.
-        const orderedSnapshot = orderedItems.map(it => ({
-          source: it.source, externalId: it.externalId, data: it.data || {},
-        }));
         const p = (async () => {
           const send = () => apiFetch("/api/user/play-queue/reorder", {
             method: "PATCH",
@@ -1480,23 +1477,7 @@ async function _bindSortable() {
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               const r = await send();
-              if (r.ok) {
-                // If a playlist is currently loaded in the player, mirror
-                // the new order back to that playlist so reloading it
-                // later preserves what the user just arranged.
-                if (_loadedPlaylistId != null && _loadedPlaylistName) {
-                  try {
-                    await apiFetch(`/api/user/playlists/${_loadedPlaylistId}/replace`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ name: _loadedPlaylistName, items: orderedSnapshot }),
-                    });
-                  } catch (pe) {
-                    console.warn("[queue] playlist reorder auto-save threw:", pe);
-                  }
-                }
-                return;                               // success — keep optimistic order
-              }
+              if (r.ok) return;                       // success — keep optimistic order
               console.warn(`[queue] reorder attempt ${attempt} failed:`, r.status);
             } catch (e) {
               console.warn(`[queue] reorder attempt ${attempt} threw:`, e);
