@@ -187,6 +187,37 @@ function _findSeries(key: string): CatnoSeries | null {
   return CATNO_SERIES.find(s => s.key === key) ?? null;
 }
 
+// label_id → ISO timestamp of the most recent completed sweep, if any.
+// A "completed" sweep is a catno-runs row in phase label_sweep_done or
+// catno_done. Ad-hoc keys (`adhoc:{labelId}`) map directly; curated
+// series carry labelId inside CATNO_SERIES. Used by the label
+// directory endpoint AND the bulk sweep worker to skip labels that
+// were swept recently.
+export async function buildLabelSweptMap(): Promise<Map<number, string>> {
+  const { listCacheWarmCatnoRuns } = await import("./db.js");
+  const runs = await listCacheWarmCatnoRuns();
+  const map = new Map<number, string>();
+  const donePhases = new Set(["label_sweep_done", "catno_done"]);
+  for (const run of runs) {
+    if (!donePhases.has(run.phase) || !run.last_run_at) continue;
+    let labelId: number | null = null;
+    if (String(run.series_key).startsWith("adhoc:")) {
+      const n = Number(String(run.series_key).slice("adhoc:".length));
+      if (Number.isFinite(n) && n > 0) labelId = n;
+    } else {
+      const series = CATNO_SERIES.find(s => s.key === run.series_key);
+      if (series?.labelId) labelId = series.labelId;
+    }
+    if (labelId == null) continue;
+    const ts = run.last_run_at instanceof Date
+      ? run.last_run_at.toISOString()
+      : String(run.last_run_at);
+    const existing = map.get(labelId);
+    if (!existing || ts > existing) map.set(labelId, ts);
+  }
+  return map;
+}
+
 // Loose label match — Discogs returns the label string verbatim from
 // the release, which may include suffixes like " Records", "(2)", or
 // the parent group name. We just need the label term to appear as a

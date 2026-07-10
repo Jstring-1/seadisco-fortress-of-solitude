@@ -1758,9 +1758,14 @@ function _renderLabelDir() {
       </label>
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(false)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
-        title="Iterate every label with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept, they just land at the end). Resumes from the persisted cursor if one exists.">⏵ Bulk masters+ sweep</button>
+        title="Iterate every label with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept, they just land at the end). Labels swept within the 'skip' window are dropped from the queue. Resumes from the persisted cursor if one exists.">⏵ Bulk masters+ sweep</button>
       <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(true)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
         title="Rebuild the queue and start from cursor 0. Use if the directory changed and you want the new labels included from the top.">↻ Restart from top</button>
+      <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted);white-space:nowrap" title="Labels whose last successful sweep is newer than this window are dropped from the bulk queue entirely. Set to 0 to sweep every label regardless.">
+        skip if swept in last
+        <input id="bulk-skip-days" type="number" min="0" step="1" value="14" style="width:3.5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+        days
+      </label>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     ${_labelDirBulkStatus?.running ? _labelDirBulkBannerHtml() : ""}
@@ -2084,26 +2089,41 @@ function _labelDirBulkBannerHtml() {
 
 async function _labelDirBulkSweepStart(resetCursor) {
   // One quick preview call so the confirm can show the queue size.
-  let queueSize = null;
+  let totalWithId = null, alreadySwept = null;
+  const skipDaysRaw = Number(document.getElementById("bulk-skip-days")?.value);
+  const skipSweptSinceDays = Number.isFinite(skipDaysRaw) && skipDaysRaw >= 0 ? skipDaysRaw : 14;
+  const cutoffMs = skipSweptSinceDays > 0 ? Date.now() - skipSweptSinceDays * 86_400_000 : 0;
   try {
     const r = await apiFetch("/api/admin/label-directory?limit=20000");
     if (r.ok) {
       const j = await r.json();
-      queueSize = (j.rows || []).filter(x => x.label_id).length;
+      const rows = (j.rows || []).filter(x => x.label_id);
+      totalWithId = rows.length;
+      if (skipSweptSinceDays > 0) {
+        alreadySwept = rows.filter(x => x.swept_at && Date.parse(x.swept_at) >= cutoffMs).length;
+      }
     }
   } catch {}
   const verb = resetCursor ? "Restart from top of" : "Start (or resume)";
-  const msg = queueSize != null
-    ? `${verb} bulk masters+ sweep across ${queueSize} labels with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept)?\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. ${resetCursor ? "Cursor resets to 0." : "Progress resumes from the persisted cursor."} Stop at any time.`
-    : `${verb} bulk masters+ sweep across every label with a Discogs ID?`;
+  const skipLine = skipSweptSinceDays > 0
+    ? `\nSkipping labels swept in the last ${skipSweptSinceDays} day${skipSweptSinceDays === 1 ? "" : "s"}${alreadySwept != null ? ` (~${alreadySwept} of ${totalWithId} will drop)` : ""}.`
+    : `\nSweeping every label regardless of recent sweep history.`;
+  const msg = totalWithId != null
+    ? `${verb} bulk masters+ sweep across ${totalWithId} labels with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept)?${skipLine}\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. ${resetCursor ? "Cursor resets to 0." : "Progress resumes from the persisted cursor."} Stop at any time.`
+    : `${verb} bulk masters+ sweep across every label with a Discogs ID?${skipLine}`;
   if (!confirm(msg)) return;
   try {
     const r = await apiFetch("/api/admin/label-directory/bulk-sweep/start", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ minExternalCount: 0, resetCursor: !!resetCursor }),
+      body: JSON.stringify({ minExternalCount: 0, resetCursor: !!resetCursor, skipSweptSinceDays }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Bulk start failed: ${j.error || r.status}`); return; }
+    if (Number.isFinite(j?.skippedSwept) && j.skippedSwept > 0) {
+      // Non-blocking hint so the user knows the queue is smaller than
+      // the directory total by design, not by bug.
+      if (typeof showToast === "function") showToast(`Bulk sweep started — ${j.queued} queued (${j.skippedSwept} recently-swept labels skipped)`);
+    }
     loadLabelDirectory();
     if (typeof loadCacheWarmCatno === "function") loadCacheWarmCatno();
     if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();

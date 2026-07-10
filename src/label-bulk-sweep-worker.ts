@@ -21,6 +21,7 @@ import {
   isCacheWarmCatnoRunning,
   startAdHocLabelSweep,
   requestCacheWarmCatnoStop,
+  buildLabelSweptMap,
 } from "./cache-warm-catno.js";
 import { listLabelDirectory, getAppSetting, setAppSetting } from "./db.js";
 
@@ -118,14 +119,32 @@ export function forceClearBulkLabelSweep(): void {
 }
 
 export async function startBulkLabelSweep(opts: {
-  minExternalCount?: number;
-  resetCursor?:      boolean;
-} = {}): Promise<{ ok: boolean; error?: string; queued?: number }> {
+  minExternalCount?:   number;
+  resetCursor?:        boolean;
+  skipSweptSinceDays?: number;   // labels swept within this window are dropped from the queue; 0 disables
+} = {}): Promise<{ ok: boolean; error?: string; queued?: number; skippedSwept?: number }> {
   if (_running) return { ok: false, error: "Bulk sweep already running" };
   const minCount = Math.max(0, Number(opts.minExternalCount ?? 0));
-  const rows = await listLabelDirectory({ limit: 20000 });
+  const skipDays = Number.isFinite(opts.skipSweptSinceDays as number) && (opts.skipSweptSinceDays as number) >= 0
+    ? Number(opts.skipSweptSinceDays)
+    : 14;
+  const skipCutoff = skipDays > 0 ? Date.now() - skipDays * 86_400_000 : 0;
+  const [rows, sweptMap] = await Promise.all([
+    listLabelDirectory({ limit: 20000 }),
+    skipDays > 0 ? buildLabelSweptMap() : Promise.resolve(new Map<number, string>()),
+  ]);
+  let skippedSwept = 0;
   const queue: QueueItem[] = rows
     .filter(r => Number.isFinite(r.label_id as number) && (r.label_id ?? 0) > 0 && r.external_count >= minCount)
+    .filter(r => {
+      if (skipDays === 0) return true;
+      const ts = sweptMap.get(r.label_id as number);
+      if (!ts) return true;
+      const swept = Date.parse(ts);
+      if (!Number.isFinite(swept)) return true;
+      if (swept >= skipCutoff) { skippedSwept++; return false; }
+      return true;
+    })
     .sort((a, b) => (b.external_count - a.external_count))
     .map(r => ({
       labelId:       r.label_id as number,
@@ -158,9 +177,9 @@ export async function startBulkLabelSweep(opts: {
   _stopRequested = false;
   await _persist();
 
-  console.log(`[bulk-label-sweep] START queue=${queue.length} cursor=${_state.cursor} top=${queue.slice(0, 3).map(q => `${q.labelName}(${q.externalCount})`).join(", ")}`);
+  console.log(`[bulk-label-sweep] START queue=${queue.length} cursor=${_state.cursor} skippedSwept=${skippedSwept} (${skipDays}d) top=${queue.slice(0, 3).map(q => `${q.labelName}(${q.externalCount})`).join(", ")}`);
   _run().catch(err => console.error("[bulk-label-sweep] runner crashed:", err));
-  return { ok: true, queued: queue.length };
+  return { ok: true, queued: queue.length, skippedSwept };
 }
 
 async function _run(): Promise<void> {

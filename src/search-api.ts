@@ -9175,9 +9175,11 @@ app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1
   const body = req.body || {};
   const minExternalCount = Number.isFinite(Number(body.minExternalCount))
     ? Number(body.minExternalCount) : 0;
+  const skipSweptSinceDays = Number.isFinite(Number(body.skipSweptSinceDays))
+    ? Number(body.skipSweptSinceDays) : undefined;
   const resetCursor = !!body.resetCursor;
   try {
-    const result = await startBulkLabelSweep({ minExternalCount, resetCursor });
+    const result = await startBulkLabelSweep({ minExternalCount, resetCursor, skipSweptSinceDays });
     if (!result.ok) { res.status(409).json(result); return; }
     res.json(result);
   } catch (err: any) {
