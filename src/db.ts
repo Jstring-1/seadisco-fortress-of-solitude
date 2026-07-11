@@ -1550,6 +1550,21 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_sort ON external_discography(label_name, catno_sort)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS idx_external_disc_label_year ON external_discography(label_name, year)`);
 
+  // ── Label upstream stats ────────────────────────────────────────
+  // Discogs's total release count per label, fetched from
+  // /labels/{id}/releases?per_page=1 (a single API call reveals the
+  // `pagination.items` total). Lets the label directory show
+  // priorities before sweeping. Fetched by label-upstream-stats-worker
+  // and refreshed on a rolling window.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS label_upstream_stats (
+      label_id       INTEGER PRIMARY KEY,
+      total_releases INTEGER,
+      fetched_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS idx_label_upstream_fetched ON label_upstream_stats(fetched_at)`);
+
   // ── Label aliases ────────────────────────────────────────────────
   // Group multiple Discogs label IDs under one canonical for display
   // in the Label directory. Handles the "Excello / Excello (2) /
@@ -12223,6 +12238,75 @@ export interface LabelDirectoryRow {
   sources:         string[];
   aliases?:        LabelDirectoryAlias[];   // set only when this row is a canonical
   swept_at?:       string | null;           // ISO timestamp of most recent completed sweep, if any
+  upstream_total?:      number | null;      // Discogs's total release count for this label, if known
+  upstream_fetched_at?: string | null;      // when we last fetched upstream_total, if ever
+}
+
+// ── Label upstream stats helpers ─────────────────────────────────
+
+// Bulk lookup: label_id → { total, fetchedAtISO }. Used by the label
+// directory endpoint to enrich each row.
+export async function getLabelUpstreamStatsMap(): Promise<Map<number, { total: number | null; fetchedAt: string }>> {
+  const r = await getPool().query(
+    `SELECT label_id, total_releases, fetched_at FROM label_upstream_stats`,
+  );
+  const map = new Map<number, { total: number | null; fetchedAt: string }>();
+  for (const row of r.rows) {
+    map.set(Number(row.label_id), {
+      total: row.total_releases == null ? null : Number(row.total_releases),
+      fetchedAt: row.fetched_at instanceof Date ? row.fetched_at.toISOString() : String(row.fetched_at),
+    });
+  }
+  return map;
+}
+
+// Upsert one label's upstream total. `null` is valid (means Discogs
+// returned 404 or the label has no releases — we still record the
+// fetched_at so we don't keep retrying immediately).
+export async function setLabelUpstreamTotal(labelId: number, total: number | null): Promise<void> {
+  await getPool().query(
+    `INSERT INTO label_upstream_stats (label_id, total_releases, fetched_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (label_id) DO UPDATE
+       SET total_releases = EXCLUDED.total_releases,
+           fetched_at     = NOW()`,
+    [labelId, total],
+  );
+}
+
+// Return the ordered list of label_ids from external_discography that
+// need a fresh upstream fetch: missing entirely OR older than
+// staleCutoff. Sorted by external_count DESC so the highest-value
+// labels get counted first. Excludes label_ids we've already tried
+// within a short "retry cool-down" so a permanently-404ing label
+// doesn't get re-fetched every drain.
+export async function listLabelIdsNeedingUpstreamRefresh(opts: {
+  staleAfterDays?: number;
+  limit?:          number;
+} = {}): Promise<Array<{ label_id: number; label_name: string; external_count: number }>> {
+  const staleDays = Math.max(0, Number(opts.staleAfterDays ?? 30));
+  const limit     = Math.max(1, Math.min(50000, Number(opts.limit ?? 20000)));
+  const r = await getPool().query(
+    `WITH ext AS (
+       SELECT label_id, label_name, COUNT(*)::int AS external_count
+         FROM external_discography
+        WHERE label_id IS NOT NULL AND label_id > 0
+        GROUP BY label_id, label_name
+     )
+     SELECT e.label_id, e.label_name, e.external_count
+       FROM ext e
+       LEFT JOIN label_upstream_stats s ON s.label_id = e.label_id
+      WHERE s.label_id IS NULL
+         OR s.fetched_at < NOW() - ($1 || ' days')::interval
+      ORDER BY e.external_count DESC NULLS LAST, e.label_id ASC
+      LIMIT $2`,
+    [String(staleDays), limit],
+  );
+  return r.rows.map(row => ({
+    label_id: Number(row.label_id),
+    label_name: String(row.label_name),
+    external_count: Number(row.external_count ?? 0),
+  }));
 }
 
 // ── Split-cache reader feature flag ───────────────────────────────

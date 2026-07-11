@@ -16,6 +16,8 @@ import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, reque
 import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
 import { initBulkLabelSweepModule, startBulkLabelSweep, requestBulkLabelSweepStop, forceClearBulkLabelSweep, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
 import { initCacheProjectionBackfillModule, startCacheProjectionBackfill, requestCacheProjectionBackfillStop, forceClearCacheProjectionBackfill, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
+import { initLabelUpstreamStatsModule, startLabelUpstreamStats, requestLabelUpstreamStatsStop, forceClearLabelUpstreamStats, getLabelUpstreamStatsStatus, } from "./label-upstream-stats-worker.js";
+import { getLabelUpstreamStatsMap } from "./db.js";
 import { initArtistSweepModule, startArtistSweep, requestArtistSweepStop, forceClearArtistSweep, getArtistSweepStatus, } from "./artist-sweep-worker.js";
 import { initFacetedSweepModule, startFacetedSweep, requestFacetedSweepStop, forceClearFacetedSweep, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
 import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
@@ -9709,10 +9711,16 @@ app.get("/api/admin/label-directory", async (req, res) => {
             if (!existing || ts > existing)
                 sweptMap.set(labelId, ts);
         }
-        const enriched = rows.map(row => ({
-            ...row,
-            swept_at: row.label_id != null ? (sweptMap.get(row.label_id) ?? null) : null,
-        }));
+        const upstreamMap = await getLabelUpstreamStatsMap().catch(() => new Map());
+        const enriched = rows.map(row => {
+            const upstream = row.label_id != null ? upstreamMap.get(row.label_id) : undefined;
+            return {
+                ...row,
+                swept_at: row.label_id != null ? (sweptMap.get(row.label_id) ?? null) : null,
+                upstream_total: upstream ? upstream.total : null,
+                upstream_fetched_at: upstream ? upstream.fetchedAt : null,
+            };
+        });
         res.json({ rows: enriched, total: enriched.length });
     }
     catch (err) {
@@ -9915,6 +9923,61 @@ app.get("/api/admin/faceted-sweep/status", async (req, res) => {
         return;
     try {
         res.json(getFacetedSweepStatus());
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Label upstream stats ─────────────────────────────────────────
+// Background worker: for each known label (external_discography row
+// with a Discogs id), fetches /labels/{id}/releases?per_page=1 and
+// stores `pagination.items` in label_upstream_stats so the label
+// directory can show upstream totals before deciding what to sweep.
+app.post("/api/admin/label-upstream-stats/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const body = req.body || {};
+    const staleAfterDays = Number.isFinite(Number(body.staleAfterDays)) ? Number(body.staleAfterDays) : undefined;
+    const resetCursor = !!body.resetCursor;
+    try {
+        const r = await startLabelUpstreamStats({ staleAfterDays, resetCursor });
+        if (!r.ok) {
+            res.status(409).json(r);
+            return;
+        }
+        res.json(r);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/label-upstream-stats/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        requestLabelUpstreamStatsStop();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/admin/label-upstream-stats/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        forceClearLabelUpstreamStats();
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/admin/label-upstream-stats/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(getLabelUpstreamStatsStatus());
     }
     catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
@@ -18921,6 +18984,12 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] faceted-sweep init failed:", e);
+        }
+        try {
+            initLabelUpstreamStatsModule(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] label-upstream-stats init failed:", e);
         }
         // Warm the cache-warm-runs stats cache out of band so the first
         // admin who opens the panel after deploy doesn't pay for the
