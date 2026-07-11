@@ -15,8 +15,8 @@
 // 12000s, Bluebird B-5000s, etc. — so walking the range guarantees
 // every cataloged release gets a chance, regardless of how the
 // year/genre facet would have surfaced (or buried) it.
-import { DiscogsClient } from "./discogs-client.js";
-import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, backfillCachedMasterLabel, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, backfillCachedMasterLabel, } from "./db.js";
 const ACTIVE_KEY = "cache_warm_catno_active_run";
 async function _writeActiveRun(seriesKey) {
     try {
@@ -144,19 +144,7 @@ async function _withRetry(label, fn) {
     throw lastErr;
 }
 async function _adminClient() {
-    if (!_adminClerkIdForWorker)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkIdForWorker);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkIdForWorker);
 }
 function _findSeries(key) {
     return CATNO_SERIES.find(s => s.key === key) ?? null;

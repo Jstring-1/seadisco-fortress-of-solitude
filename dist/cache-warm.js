@@ -9,8 +9,8 @@
 // Rate limit: 1.0s between Discogs calls (Discogs's authed 60/min).
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
-import { DiscogsClient } from "./discogs-client.js";
-import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, bumpCacheWarmRunSkip, cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, bumpCacheWarmRunSkip, cacheRelease, getAppSetting, setAppSetting, } from "./db.js";
 // Persisted intent so a Railway restart can auto-resume the run.
 // Set when startCacheWarmRun fires, cleared by Stop or natural
 // completion. Crashes do NOT clear it — boot-resume picks up where
@@ -129,19 +129,7 @@ async function _withRetry(label, fn) {
     throw lastErr;
 }
 async function _adminClient() {
-    if (!_adminClerkIdForWorker)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkIdForWorker);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkIdForWorker);
 }
 // Public: kick off a manual run. Rejects if another run is in
 // progress. fromYear defaults to whatever cursor was last persisted

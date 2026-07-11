@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { logApiRequest } from "./db.js";
+import { logApiRequest, getOAuthCredentials } from "./db.js";
 const BASE_URL = "https://api.discogs.com";
 export class DiscogsClient {
     token;
@@ -237,4 +237,25 @@ export function signOAuthRequest(method, url, consumerKey, consumerSecret, token
     return "OAuth " + Object.keys(oauthParams).sort()
         .map(k => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
         .join(", ");
+}
+// Build an OAuth DiscogsClient for the given admin/user clerk id, or
+// null if we can't (no clerk id, no stored OAuth tokens, or the app's
+// consumer key/secret env vars aren't configured). Every background
+// worker used to inline an identical `_adminClient()` — this is the
+// single shared source of truth so the auth shape can't drift between
+// them.
+export async function getAdminDiscogsClient(clerkId) {
+    if (!clerkId)
+        return null;
+    const oauth = await getOAuthCredentials(clerkId);
+    if (!oauth)
+        return null;
+    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
+        return null;
+    return new DiscogsClient({
+        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
+        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
+        accessToken: oauth.accessToken,
+        accessSecret: oauth.accessSecret,
+    });
 }

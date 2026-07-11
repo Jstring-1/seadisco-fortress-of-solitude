@@ -11,8 +11,8 @@
 // Yield per API call is high for the pre-1970 corpus (a curated
 // blues/jazz/country artist set covers side-project releases, guest
 // spots, and one-off singles that year × genre / label sweeps miss).
-import { DiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getBluesArtistDiscogsIds, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { cacheRelease, getBluesArtistDiscogsIds, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "artist_sweep_state";
 const REQ_INTERVAL_MS = 1000;
@@ -42,19 +42,7 @@ async function _load() {
     }
 }
 async function _adminClient() {
-    if (!_adminClerkId)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkId);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkId);
 }
 export function isArtistSweepRunning() { return _running; }
 export function getArtistSweepStatus() {

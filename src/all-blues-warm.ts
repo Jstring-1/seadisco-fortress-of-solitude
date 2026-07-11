@@ -12,7 +12,7 @@
 // + all_blues_warm_state.running. Admin clicks Start, can Stop.
 // Boot-resume rehydrates a crashed run from the persisted intent.
 
-import { DiscogsClient, OAuthCredentials } from "./discogs-client.js";
+import { DiscogsClient, getAdminDiscogsClient } from "./discogs-client.js";
 import {
   getPool,
   getOAuthCredentials,
@@ -61,16 +61,7 @@ export function initAllBluesModule(adminClerkId: string) {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  if (!_adminClerkId) return null;
-  const oauth = await getOAuthCredentials(_adminClerkId);
-  if (!oauth) return null;
-  if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) return null;
-  return new DiscogsClient({
-    consumerKey:    process.env.DISCOGS_CONSUMER_KEY,
-    consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-    accessToken:    oauth.accessToken,
-    accessSecret:   oauth.accessSecret,
-  } as OAuthCredentials);
+  return getAdminDiscogsClient(_adminClerkId);
 }
 
 function _isTransientDiscogsError(err: any): boolean {

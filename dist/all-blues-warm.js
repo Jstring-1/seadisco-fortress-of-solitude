@@ -11,8 +11,8 @@
 // Resumable: cursor lives in all_blues_artist_queue (pending rows)
 // + all_blues_warm_state.running. Admin clicks Start, can Stop.
 // Boot-resume rehydrates a crashed run from the persisted intent.
-import { DiscogsClient } from "./discogs-client.js";
-import { getPool, getOAuthCredentials, getAppSetting, setAppSetting, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { getPool, getAppSetting, setAppSetting, } from "./db.js";
 const ACTIVE_KEY = "all_blues_warm_active";
 const REQ_INTERVAL_MS = 1100;
 const DEFAULT_FROM = 1900;
@@ -51,19 +51,7 @@ export function initAllBluesModule(adminClerkId) {
     }, 5000);
 }
 async function _adminClient() {
-    if (!_adminClerkId)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkId);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkId);
 }
 function _isTransientDiscogsError(err) {
     const msg = String(err?.message ?? err ?? "");

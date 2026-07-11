@@ -10,7 +10,7 @@
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 
-import { DiscogsClient, OAuthCredentials } from "./discogs-client.js";
+import { DiscogsClient, getAdminDiscogsClient } from "./discogs-client.js";
 import {
   getCacheWarmRun,
   upsertCacheWarmRun,
@@ -145,16 +145,7 @@ async function _withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  if (!_adminClerkIdForWorker) return null;
-  const oauth = await getOAuthCredentials(_adminClerkIdForWorker);
-  if (!oauth) return null;
-  if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) return null;
-  return new DiscogsClient({
-    consumerKey:    process.env.DISCOGS_CONSUMER_KEY,
-    consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-    accessToken:    oauth.accessToken,
-    accessSecret:   oauth.accessSecret,
-  } as OAuthCredentials);
+  return getAdminDiscogsClient(_adminClerkIdForWorker);
 }
 
 // Public: kick off a manual run. Rejects if another run is in

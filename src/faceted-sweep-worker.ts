@@ -11,7 +11,7 @@
 // (year, value) queue on start, walk it with a persisted cursor,
 // resume on boot.
 
-import { DiscogsClient, OAuthCredentials } from "./discogs-client.js";
+import { DiscogsClient, getAdminDiscogsClient } from "./discogs-client.js";
 import {
   cacheRelease,
   getOAuthCredentials,
@@ -59,16 +59,7 @@ async function _load(): Promise<State | null> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  if (!_adminClerkId) return null;
-  const oauth = await getOAuthCredentials(_adminClerkId);
-  if (!oauth) return null;
-  if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) return null;
-  return new DiscogsClient({
-    consumerKey:    process.env.DISCOGS_CONSUMER_KEY,
-    consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-    accessToken:    oauth.accessToken,
-    accessSecret:   oauth.accessSecret,
-  } as OAuthCredentials);
+  return getAdminDiscogsClient(_adminClerkId);
 }
 
 export function isFacetedSweepRunning(): boolean { return _running; }

@@ -11,8 +11,8 @@
 // Same singleflight pattern as the other coverage workers: build
 // the queue on start, walk it with a persisted cursor, resume on
 // boot.
-import { DiscogsClient } from "./discogs-client.js";
-import { getOAuthCredentials, getAppSetting, setAppSetting, listLabelIdsNeedingUpstreamRefresh, setLabelUpstreamTotal, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { getAppSetting, setAppSetting, listLabelIdsNeedingUpstreamRefresh, setLabelUpstreamTotal, } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "label_upstream_stats_state";
 const REQ_INTERVAL_MS = 1000;
@@ -42,19 +42,7 @@ async function _load() {
     }
 }
 async function _adminClient() {
-    if (!_adminClerkId)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkId);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkId);
 }
 export function isLabelUpstreamStatsRunning() { return _running; }
 export function getLabelUpstreamStatsStatus() {

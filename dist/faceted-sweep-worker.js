@@ -10,8 +10,8 @@
 // Same singleflight pattern as the other bulk workers: build a
 // (year, value) queue on start, walk it with a persisted cursor,
 // resume on boot.
-import { DiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getOAuthCredentials, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { getAdminDiscogsClient } from "./discogs-client.js";
+import { cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "faceted_sweep_state";
 const REQ_INTERVAL_MS = 1000;
@@ -41,19 +41,7 @@ async function _load() {
     }
 }
 async function _adminClient() {
-    if (!_adminClerkId)
-        return null;
-    const oauth = await getOAuthCredentials(_adminClerkId);
-    if (!oauth)
-        return null;
-    if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET)
-        return null;
-    return new DiscogsClient({
-        consumerKey: process.env.DISCOGS_CONSUMER_KEY,
-        consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-    });
+    return getAdminDiscogsClient(_adminClerkId);
 }
 export function isFacetedSweepRunning() { return _running; }
 export function getFacetedSweepStatus() {

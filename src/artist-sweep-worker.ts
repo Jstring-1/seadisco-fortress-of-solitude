@@ -12,7 +12,7 @@
 // blues/jazz/country artist set covers side-project releases, guest
 // spots, and one-off singles that year × genre / label sweeps miss).
 
-import { DiscogsClient, OAuthCredentials } from "./discogs-client.js";
+import { DiscogsClient, getAdminDiscogsClient } from "./discogs-client.js";
 import {
   cacheRelease,
   getBluesArtistDiscogsIds,
@@ -58,16 +58,7 @@ async function _load(): Promise<State | null> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  if (!_adminClerkId) return null;
-  const oauth = await getOAuthCredentials(_adminClerkId);
-  if (!oauth) return null;
-  if (!process.env.DISCOGS_CONSUMER_KEY || !process.env.DISCOGS_CONSUMER_SECRET) return null;
-  return new DiscogsClient({
-    consumerKey:    process.env.DISCOGS_CONSUMER_KEY,
-    consumerSecret: process.env.DISCOGS_CONSUMER_SECRET,
-    accessToken:    oauth.accessToken,
-    accessSecret:   oauth.accessSecret,
-  } as OAuthCredentials);
+  return getAdminDiscogsClient(_adminClerkId);
 }
 
 export function isArtistSweepRunning(): boolean { return _running; }
