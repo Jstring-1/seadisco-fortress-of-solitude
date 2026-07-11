@@ -13948,6 +13948,90 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// POST /api/admin/yt-review/custom-approve
+// Body: { id: number, url: string }
+// Pin a user-supplied YouTube URL to the track referenced by review
+// row `id`, overriding whatever the worker suggested. The row is
+// updated in-place so the Approved tab shows the URL the user chose
+// (not the worker's stale candidate).
+app.post("/api/admin/yt-review/custom-approve", express.json({ limit: "2kb" }), async (req, res) => {
+  const adminUserId = await requireAdmin(req, res);
+  if (!adminUserId) return;
+  const id = parseInt(String(req.body?.id ?? ""), 10);
+  const url = String(req.body?.url ?? "").trim();
+  if (!Number.isFinite(id) || !url) { res.status(400).json({ error: "bad_request" }); return; }
+  // Accept: full watch URL, youtu.be short URL, /embed/, /shorts/, or
+  // a bare 11-char video id. Ordering matters — the bare-id branch is
+  // last so a full URL matches its more specific pattern first.
+  const videoId = (() => {
+    const bareRe = /^[A-Za-z0-9_-]{11}$/;
+    if (bareRe.test(url)) return url;
+    try {
+      const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+      const host = u.hostname.replace(/^www\./, "");
+      if (host === "youtu.be") {
+        const m = u.pathname.slice(1).match(/^([A-Za-z0-9_-]{11})/);
+        return m ? m[1] : null;
+      }
+      if (host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) {
+        const v = u.searchParams.get("v");
+        if (v && bareRe.test(v)) return v;
+        const m = u.pathname.match(/\/(embed|shorts|v)\/([A-Za-z0-9_-]{11})/);
+        if (m) return m[2];
+      }
+    } catch { /* fall through */ }
+    return null;
+  })();
+  if (!videoId) { res.status(400).json({ error: "could_not_parse_video_id", detail: `Not a recognized YouTube URL or 11-char ID: ${url}` }); return; }
+  try {
+    const pool = getPool();
+    // Grab the row's identifying fields. Rejects re-approving an
+    // already-decided row so a stale click doesn't clobber a real
+    // decision.
+    const rowR = await pool.query(
+      `SELECT master_id, track_position, track_title, status
+         FROM track_yt_review_queue WHERE id = $1`,
+      [id],
+    );
+    const row = rowR.rows[0];
+    if (!row) { res.status(404).json({ error: "not_found" }); return; }
+    if (String(row.status) !== "pending") { res.status(409).json({ error: "already_decided", status: row.status }); return; }
+    // Replace any existing override for this (master, track). The
+    // per-track override table has ON CONFLICT DO NOTHING, so a plain
+    // suggest wouldn't overwrite a stale row from a prior approval.
+    await deleteTrackYtOverride(row.master_id, "master", row.track_position);
+    const inserted = await suggestTrackYtOverride({
+      releaseId:     row.master_id,
+      releaseType:   "master",
+      trackPosition: row.track_position,
+      trackTitle:    row.track_title ?? null,
+      videoId,
+      videoTitle:    "(custom URL)",
+      submittedBy:   adminUserId,
+    });
+    // Mirror the pinned videoId onto the queue row so the Approved tab
+    // shows what the user picked, not the worker's guess. Thumbnails
+    // come straight from YouTube's public CDN — no API call needed.
+    await pool.query(
+      `UPDATE track_yt_review_queue
+          SET status                  = 'approved',
+              reviewed_at             = NOW(),
+              reviewed_by             = $2,
+              candidate_video_id      = $3,
+              candidate_title         = '(custom URL)',
+              candidate_channel_title = NULL,
+              candidate_thumbnail_url = $4,
+              title_score             = NULL
+        WHERE id = $1`,
+      [id, adminUserId, videoId, `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`],
+    );
+    res.json({ ok: true, videoId, overrideInserted: inserted });
+  } catch (err: any) {
+    console.error("[yt-review custom-approve]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 app.get("/api/admin/yt-review/errors", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
