@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.ec92b1e3" />
+  <link rel="stylesheet" href="/style.css?v=260710.67d9d5eb" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.ec92b1e3"></script>
-<script defer src="/shared.js?v=260710.ec92b1e3"></script>
+<script defer src="/utils.js?v=260710.67d9d5eb"></script>
+<script defer src="/shared.js?v=260710.67d9d5eb"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.ec92b1e3"></script>
-<script defer src="/blues-admin.js?v=260710.ec92b1e3"></script>
+<script defer src="/modal.js?v=260710.67d9d5eb"></script>
+<script defer src="/blues-admin.js?v=260710.67d9d5eb"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1785,9 +1785,13 @@ function _renderLabelDir() {
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     ${_labelDirBulkStatus?.running ? _labelDirBulkBannerHtml() : ""}
-    ${_labelDirActiveSweepKey ? `
+    ${(_labelDirActiveSweepKey && !_labelDirBulkStatus?.running) ? `
       <div style="display:flex;gap:0.4rem;align-items:center;padding:0.4rem 0.6rem;margin-bottom:0.5rem;background:rgba(160,60,40,0.15);border:1px solid #a44;border-radius:4px;flex-wrap:wrap">
-        <span style="font-size:0.82rem"><strong>Sweep running:</strong> <code>${_eHtml(_labelDirActiveSweepKey)}</code></span>
+        <span style="font-size:0.82rem"><strong>Sweep running:</strong> ${
+          _labelDirActiveSweepKey.startsWith('adhoc:')
+            ? '<em>ad-hoc label sweep</em>'
+            : `<code>${_eHtml(_labelDirActiveSweepKey)}</code>`
+        }</span>
         <button class="admin-btn" type="button" onclick="_labelDirStopSweep()" style="background:#a33;color:#fff">■ Stop sweep</button>
         <button class="admin-btn" type="button" onclick="_labelDirForceClearSweep()" title="Only if Stop doesn't take. Clears the in-memory + persisted 'active' flag so a new sweep can start; the running IIFE may still be processing its current page.">⚠ Force clear</button>
       </div>` : ""}
