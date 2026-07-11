@@ -185,7 +185,9 @@ async function _run() {
                 _state.lastError = `${item.labelName}: ${started.error ?? "start failed"}`;
                 console.warn(`[bulk-label-sweep] start failed: ${_state.lastError}`);
                 _state.cursor++;
-                _currentLabel = null;
+                // Keep _currentLabel as this failed item so the status badge
+                // still shows something meaningful until we pick up the next
+                // one. Cleared in `finally` when the runner exits.
                 await _persist();
                 await _sleep(2000);
                 continue;
@@ -200,10 +202,12 @@ async function _run() {
             }
             _state.completed++;
             _state.cursor++;
-            _currentLabel = null;
             await _persist();
             // Small breather between labels — avoids hammering Discogs
             // and gives the singleflight lock a moment to fully release.
+            // _currentLabel intentionally kept — the next iteration will
+            // overwrite it — so the worker-status badge doesn't flicker
+            // to "no label" between iterations.
             await _sleep(1000);
         }
     }
