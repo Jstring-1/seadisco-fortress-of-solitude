@@ -447,6 +447,28 @@ function _queueVisibleList() {
 }
 window._queueVisibleList = _queueVisibleList;
 
+// Is this queue item unplayable? Two sources of truth:
+//   1. `it.source === "unavail"` — admin-only saved-track-with-no-video
+//      path; the item was inserted into the queue without a playable
+//      video from day one.
+//   2. `window._sdYtUnavailable` — set the player populates when YT
+//      throws on playback (deleted / geo-blocked / embed-disabled).
+//      Persists per-session so a reload before the server-side flag
+//      catches up still marks the row.
+// Used both by the drawer render (strikethrough + swap play-click for
+// open-album) and by _queuePlayNext (auto-skip past dead rows so the
+// player doesn't stop dead on an unavailable item).
+function _isItemUnavail(it) {
+  if (!it) return false;
+  if (it.source === "unavail") return true;
+  if (it.source === "yt") {
+    const set = window._sdYtUnavailable;
+    if (set instanceof Set && it.externalId != null && set.has(String(it.externalId))) return true;
+  }
+  return false;
+}
+window._isItemUnavail = _isItemUnavail;
+
 async function _queueShiftNext() {
   await _queueLoad();
   if (!_queue?.length) return null;
@@ -560,6 +582,23 @@ async function _queuePlayNext() {
   if (!next && _queueRepeat === "all" && vis.length) {
     next = vis[0];
   }
+  // Skip past unavailable rows. Since we now keep dead tracks visible
+  // in the drawer (instead of yanking them out on failure), the
+  // sequential pick above can land on one. Walk forward until we find
+  // a playable row — mirrors the "advance through empties" behavior
+  // users expect from queues. Falls through to end-of-queue if
+  // everything remaining is dead.
+  while (next && _isItemUnavail(next)) {
+    const idx = vis.findIndex(it =>
+      String(it.externalId) === String(next.externalId) && it.position === next.position);
+    if (idx < 0 || idx + 1 >= vis.length) {
+      next = _queueRepeat === "all"
+        ? vis.find(it => !_isItemUnavail(it)) ?? null
+        : null;
+      break;
+    }
+    next = vis[idx + 1];
+  }
   if (!next) {
     // End of queue, no repeat: clear playing mark but keep items.
     _queueCurrentPosition = null;
@@ -576,10 +615,17 @@ async function _queuePlayNext() {
     const curExt = _queuePlayingExternalId != null
       ? String(_queuePlayingExternalId)
       : (currentIdx >= 0 ? String(vis[currentIdx].externalId) : null);
-    const nextExt = _shufflePickNextExt(curExt);
-    if (nextExt != null) {
+    // Shuffle pick can land on an unavailable id (the deck holds every
+    // externalId). Redraw up to visible-list-length times before
+    // giving up so a run of dead rows doesn't stall the player.
+    let attempts = 0;
+    while (attempts++ < vis.length) {
+      const nextExt = _shufflePickNextExt(curExt);
+      if (nextExt == null) break;
       const found = vis.find(it => String(it.externalId) === nextExt);
-      if (found) next = found;
+      if (found && !_isItemUnavail(found)) { next = found; break; }
+      // else loop — the dead pick is already consumed by
+      // _shufflePickNextExt's history mutation.
     }
   }
   return _queuePlayItem(next);
@@ -1255,18 +1301,39 @@ async function _renderQueueDrawer() {
     const thumbHtml = thumbUrl
       ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" onerror="this.classList.add('thumb-broken')">`
       : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : (it.source === "unavail" ? "🔍" : "▶")}</span>`;
-    // Unavailable tracks (admin path) — no playable video. Render the
-    // title as an external YouTube search link instead of the play
-    // button so the curator can pull the track manually.
-    const isUnavail = it.source === "unavail";
-    const ytSearchHref = isUnavail
-      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`
+    // Unavailable rows come in two flavors:
+    //   * `source === "unavail"` — admin-only saved-track-with-no-video
+    //     path (curator pinned a lyric-only entry, etc.).
+    //   * regular YT items whose video died mid-session — the player
+    //     added them to window._sdYtUnavailable but we intentionally
+    //     leave them in the queue so the user can (a) see what
+    //     disappeared and (b) find a replacement.
+    // Either way: clicking the title opens the album modal so the
+    // user can search a replacement in-context; the play affordance
+    // goes away and the row gets strikethrough via CSS. The × on the
+    // right is still the only way to actually drop the row.
+    const isUnavail = _isItemUnavail(it);
+    const releaseType = String(it.data?.releaseType || "");
+    const releaseId   = String(it.data?.releaseId   || "");
+    const canOpenAlbum = !!(releaseType && releaseId);
+    // Fall-back label — if we don't know the release, still make the
+    // title a YouTube search so the user has SOMETHING actionable.
+    const ytSearchHref = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`;
+    const openAlbumJs = canOpenAlbum
+      ? (releaseType.toLowerCase() === "master"
+          ? `window.openMasterModal && window.openMasterModal(${JSON.stringify(releaseId)})`
+          : `window.openAlbumModal  && window.openAlbumModal(${JSON.stringify(releaseId)})`)
       : "";
     const titleCell = isUnavail
-      ? `<a class="queue-row-play queue-row-play-unavail" href="${escHtml(ytSearchHref)}" target="_blank" rel="noopener" title="Unavailable — open YouTube search in a new tab">
-          <span class="queue-row-title">${safeTitle}</span>
-          ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
-        </a>`
+      ? (canOpenAlbum
+          ? `<button class="queue-row-play queue-row-play-unavail" onclick="${openAlbumJs}" title="Unavailable — open the album to pick a replacement">
+              <span class="queue-row-title">${safeTitle}</span>
+              ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
+            </button>`
+          : `<a class="queue-row-play queue-row-play-unavail" href="${escHtml(ytSearchHref)}" target="_blank" rel="noopener" title="Unavailable — no album context saved; open YouTube search">
+              <span class="queue-row-title">${safeTitle}</span>
+              ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
+            </a>`)
       : `<button class="queue-row-play" onclick="queueJumpTo(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="${isPlaying ? "Currently playing" : "Play this now"}">
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
@@ -1884,7 +1951,12 @@ async function _queuePlayPrev() {
 // playing — used by the mini-player to decide whether to surface
 // itself as "queue-ready" when no audio is loaded yet.
 function _queueHasPlayable() {
-  return Array.isArray(_queue) && _queue.length > 0;
+  if (!Array.isArray(_queue) || _queue.length === 0) return false;
+  // Consider the queue "playable" only if at least one row isn't dead.
+  // Otherwise auto-advance would land on the album-track fallback (an
+  // entirely different discography path) after the last live row runs
+  // out, which is more surprising than just stopping.
+  return _queue.some(it => !_isItemUnavail(it));
 }
 
 // Whenever the queue mutates we invalidate the cache, then refresh the

@@ -2184,29 +2184,28 @@ function _ytPruneUnavailable(videoId, advance) {
   } catch (e) {
     console.warn("[yt-prune] popup-row cleanup failed:", e);
   }
-  // Snapshot the album-track fallback BEFORE queueRemove fires.
-  // queueRemove → playerClose → closeVideo synchronously WIPES
-  // window._videoQueue when the dead video was the only or last
-  // queued item. Without this snapshot, the album auto-advance
-  // fallback below has nothing to walk and the player just stops.
-  // NOTE: `let` (not `const`) so we can null these out at the tail
-  // of the deferred callback below — under fast prune cascades
-  // (chain of dead videos) multiple overlapping setTimeouts each
-  // retained a full slice of _videoQueue, which can be hundreds of
-  // entries for "play whole discography" cases.
+  // NEW behavior (2026-07): do NOT queueRemove the dead row. Users
+  // asked to keep unavailable tracks visible in the drawer so they
+  // (a) can see what died and (b) get a way to open the album and
+  // hunt a replacement. The row is now marked unavailable via
+  // window._sdYtUnavailable (populated above) — _isItemUnavail in
+  // queue.js picks it up on the next render, and _queuePlayNext
+  // skips past it during auto-advance. The × on the drawer row is
+  // still the only way to actually drop it.
+  //
+  // Snapshot the album-track fallback BEFORE we advance — the
+  // deferred playNextVideo path below still uses it.
   let savedVideoQueue      = Array.isArray(window._videoQueue)     ? window._videoQueue.slice()     : [];
   let savedVideoQueueIndex = window._videoQueueIndex;
   let savedVideoQueueMeta  = Array.isArray(window._videoQueueMeta) ? window._videoQueueMeta.slice() : [];
   const tokenAtSchedule = _ytVideoToken;
 
-  // Best-effort remove the dead video from the cross-source queue.
-  // queueRemove's sync path may auto-advance to the next queue item
-  // (which bumps _ytVideoToken — we detect below) OR call
-  // playerClose() if there's nothing to advance to.
+  // Re-render the drawer so the strikethrough / open-album affordance
+  // shows immediately. _sdYtUnavailable was mutated above.
   try {
-    if (typeof queueRemove === "function") queueRemove(null, String(videoId));
+    if (typeof _renderQueueDrawer === "function") _renderQueueDrawer();
   } catch (e) {
-    console.warn("[yt-prune] queueRemove threw:", e);
+    console.warn("[yt-prune] queue re-render failed:", e);
   }
   if (!advance) return;
 

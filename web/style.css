@@ -8293,6 +8293,28 @@ tr.ba-lyric-visited .ba-lyric-snippet { color: #555; opacity: 0.7; }
   padding-left: calc(0.55rem - 3px);
 }
 .queue-row.is-playing .queue-row-title { color: var(--accent); }
+
+/* Unavailable rows: strikethrough title + muted colors, but leave
+   the row fully clickable so users can hit the title (opens the
+   album) or × (removes). Thumbnail also dimmed as a secondary
+   signal so a fast scan of the drawer surfaces dead rows. */
+.queue-row.queue-row-unavail .queue-row-title,
+.queue-row.queue-row-unavail .queue-row-artist {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.3);
+}
+.queue-row.queue-row-unavail .queue-row-thumb,
+.queue-row.queue-row-unavail .queue-row-thumb-empty {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.queue-row.queue-row-unavail .queue-row-play-unavail {
+  cursor: pointer;
+}
+.queue-row.queue-row-unavail .queue-row-play-unavail:hover .queue-row-title {
+  color: var(--accent);
+}
 .queue-row-now-playing {
   font-size: 0.6rem;
   color: var(--accent);
