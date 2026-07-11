@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.a3cd2c48" />
+  <link rel="stylesheet" href="/style.css?v=260710.1342cd60" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.a3cd2c48"></script>
-<script defer src="/shared.js?v=260710.a3cd2c48"></script>
+<script defer src="/utils.js?v=260710.1342cd60"></script>
+<script defer src="/shared.js?v=260710.1342cd60"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.a3cd2c48"></script>
-<script defer src="/blues-admin.js?v=260710.a3cd2c48"></script>
+<script defer src="/modal.js?v=260710.1342cd60"></script>
+<script defer src="/blues-admin.js?v=260710.1342cd60"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3743,10 +3743,16 @@ function ytrRowHtml(r) {
       <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}</div>
     </div>
     ${showActions
-      ? `<div style="display:flex;gap:0.3rem;align-items:center">
-          <button class="admin-btn" onclick="ytrDecide(${r.id},'approve')" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
-          <button class="admin-btn" onclick="ytrDecide(${r.id},'reject')" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
-          <button class="admin-btn" onclick="ytrDecide(${r.id},'skip')" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+      ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
+          <div style="display:flex;gap:0.3rem;align-items:center">
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'approve')" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'reject')" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'skip')" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+          </div>
+          <div style="display:flex;gap:0.3rem;align-items:center">
+            <input type="text" id="ytr-custom-${r.id}" placeholder="paste YouTube URL or ID" style="width:14rem;padding:0.15rem 0.35rem;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrCustomApprove(${r.id});}">
+            <button class="admin-btn" onclick="ytrCustomApprove(${r.id})" title="Pin your own URL to this track instead of the worker's candidate. Overwrites any existing override.">↳ Use my URL</button>
+          </div>
         </div>`
       : showDelete
         ? `<div style="display:flex;gap:0.3rem;align-items:center">
@@ -3785,6 +3791,22 @@ async function ytrDecide(id, action) {
   } catch (e) { alert(`${action} failed: ${e?.message || e}`); }
 }
 window.ytrDecide = ytrDecide;
+async function ytrCustomApprove(id) {
+  const input = document.getElementById(`ytr-custom-${id}`);
+  const url = (input?.value || "").trim();
+  if (!url) { alert("Paste a YouTube URL or 11-char video ID first."); input?.focus(); return; }
+  try {
+    const r = await apiFetch("/api/admin/yt-review/custom-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, url }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Custom approve failed: ${body?.error || `HTTP ${r.status}`}${body?.detail ? "\n" + body.detail : ""}`); return; }
+    loadYtReview();
+  } catch (e) { alert(`Custom approve failed: ${e?.message || e}`); }
+}
+window.ytrCustomApprove = ytrCustomApprove;
 async function ytrDeleteApproval(id) {
   if (!confirm("Remove this approval? The pinned YouTube override will be deleted and the candidate marked rejected.")) return;
   try {
