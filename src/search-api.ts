@@ -13852,6 +13852,38 @@ app.post("/api/admin/yt-review/stop", async (req, res) => {
   res.json({ ok: true, wasRunning: _ytReviewRunning });
 });
 
+// Zero the walk cursor so the next Start begins at the earliest Blues
+// master again. Refuses while the worker is running (would race with
+// its own cursor writes). Does NOT touch the per-track searched-log
+// (track_yt_review_searched) — those still count as "already
+// considered" so the walk skips them on the way back down. If you want
+// to re-search everything, pass `alsoResetSearchLog:true`.
+app.post("/api/admin/yt-review/reset-cursor", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_ytReviewRunning) { res.status(409).json({ error: "cannot reset while worker is running — stop it first" }); return; }
+  const alsoResetSearchLog = !!(req.body && req.body.alsoResetSearchLog);
+  try {
+    await updateReviewState({
+      cursor_year: null,
+      cursor_master_id: null,
+      cursor_track_pos: null,
+      last_error: null,
+      message: alsoResetSearchLog
+        ? "Cursor + search log cleared — next Start walks every Blues master + retries every track."
+        : "Cursor cleared — next Start walks from the earliest Blues master (previously-searched tracks are still skipped).",
+    });
+    let clearedSearches = 0;
+    if (alsoResetSearchLog) {
+      const r = await getPool().query(`DELETE FROM track_yt_review_searched`);
+      clearedSearches = r.rowCount ?? 0;
+    }
+    res.json({ ok: true, alsoResetSearchLog, clearedSearches });
+  } catch (err: any) {
+    console.error("[yt-review reset-cursor]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 app.get("/api/admin/yt-review/status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const [state, counts] = await Promise.all([
