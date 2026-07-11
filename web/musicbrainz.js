@@ -240,7 +240,7 @@ function _mbSearchByTag(tag, entityType) {
 window._mbSearchByTag = _mbSearchByTag;
 
 function _mbEsc(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return escHtml(s);   // canonical escaper (shared.js) — escapes & < > " '
 }
 
 // Attribute-safe escape: strips backslashes (so single-quotes can't be

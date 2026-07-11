@@ -267,7 +267,7 @@ function bluesDbRenderList() {
     bluesDbRenderPager(visible.length);
     return;
   }
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const fmtRange = (a, b) => {
     if (a && b) return `${a} – ${b}`;
     if (a) return `b. ${a}`;
@@ -373,7 +373,7 @@ function _bluesHoverShow(target) {
   const id = parseInt(target.dataset.rowId, 10);
   const row = _bluesDbState.rows.find(r => r.id === id);
   if (!row) return;
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const type = target.dataset.hoverType;
   let html = "";
   // URL builders for cross-links into the main app (open in new tabs).
@@ -1203,7 +1203,7 @@ async function bluesDbRunDiscogsPicker() {
       results.innerHTML = `<div style="color:#777">No matches on Discogs for "${q.replace(/</g,"&lt;")}".</div>`;
       return;
     }
-    const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${items.map(it => {
       const thumbHtml = it.thumb
         ? `<img src="${esc(it.thumb)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:var(--border)" />`
@@ -1295,7 +1295,7 @@ async function bluesDbRunMergePicker() {
     // and silently swallow the click. Passing just the id keeps the
     // attribute boring; the click handler looks the name up here.
     window._bluesMergeNames = window._bluesMergeNames || {};
-    const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${rows.map((row) => {
       window._bluesMergeNames[row.id] = row.name;
       const lyricsCount = Number(row.lyrics_count ?? row.lyric_count ?? 0);
@@ -1497,7 +1497,7 @@ async function bluesDbLoadReferences(id) {
       if (statusEl) statusEl.textContent = "";
       return;
     }
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     listEl.innerHTML = rows.map(row => {
       const matched = (row.matched || []).join(", ") || "—";
       const btns = _BA_LINK_KINDS.map(k => {
@@ -1593,7 +1593,7 @@ function _bluesDbShowDiscogsConflict(payload, editingId) {
   document.getElementById("ba-discogs-conflict-overlay")?.remove();
   const existing = payload?.existing || null;
   const did = payload?.discogs_id;
-  const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   // Convert the editor's currently-open row name for display.
   const form = document.getElementById("blues-editor-form");
   const myName = form?.elements?.namedItem("name")?.value?.trim() || "this row";
@@ -1799,7 +1799,7 @@ async function _bluesDbMergePickerLoad(fromId) {
       el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches.</div>`;
       return;
     }
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     // JSON.stringify → JS-safe quoted literal; HTML-escape so it
     // survives sitting inside an onclick="" attribute. Handles
     // apostrophes (Ramblin' Thomas) that otherwise close the JS string.
@@ -1879,7 +1879,7 @@ function _bluesDbRenderLinks(rows) {
   const listEl = document.getElementById("blues-editor-links-list");
   if (!listEl) return;
   if (!rows.length) { listEl.innerHTML = `<span style="color:var(--muted);font-style:italic">No links yet.</span>`; return; }
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   listEl.innerHTML = rows.map(r => {
     const label = _BA_LINK_KINDS.includes(r.kind) ? r.kind : "pseudonym";
     return `<span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.45rem;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:rgba(255,255,255,0.03)">
@@ -1969,7 +1969,7 @@ async function _bluesDbLinkPickerLoad(fromId) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const { rows = [] } = await r.json();
     const choices = rows.filter(row => row.id !== fromId);
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     // Empty results + no query → nothing actionable; ask for a name.
     if (!choices.length && !q) {
       el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches. Type a name to add a new artist.</div>`;

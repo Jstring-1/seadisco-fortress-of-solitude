@@ -5052,8 +5052,7 @@ let _baLexiconSearchTimer = null;
 let _baLexiconLettersLoaded = false;
 
 function _baEscHtml(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  return escHtml(s);   // canonical escaper (shared.js) — escapes & < > " '
 }
 
 async function _baLexiconEnsureLetters() {

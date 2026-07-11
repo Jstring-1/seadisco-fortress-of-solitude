@@ -145,7 +145,7 @@ async function loadProfilePanel() {
     const avatar = p.avatarUrl || "";
     const loc = d.location || "";
     const joined = d.registered ? new Date(d.registered).toLocaleDateString(undefined, { year: "numeric", month: "short" }) : "";
-    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
 
     const fmt = (n) => (n == null ? "\u2014" : Number(n).toLocaleString());
     const stars = (n) => {

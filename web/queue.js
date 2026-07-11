@@ -2250,7 +2250,7 @@ async function _playlistSavePrompt() {
     }
   } catch { /* treat as none */ }
 
-  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const n = _queue.length;
   const list = _playlistSaveExisting.length
     ? `<div class="playlist-picker-subnote">Or overwrite an existing playlist (keeps its share link):</div>
@@ -2490,7 +2490,7 @@ async function _trackPlaylistAdd(btn) {
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
     const { items } = await r.json();
     const list = Array.isArray(items) ? items : [];
-    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const titleSafe = esc(item.data.title || "this track");
     // Default new-playlist name = the track title (handy starting point).
     const def = String(item.data.title || "New playlist").slice(0, 80);
@@ -2891,7 +2891,7 @@ async function _playlistRefreshPicker() {
     const r = await apiFetch("/api/user/playlists");
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
     const { items } = await r.json();
-    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     // JS-safe quoted literal for embedding the playlist name into an
     // onclick="" attribute. Previously the code HTML-encoded apostrophes,
     // which the HTML parser decoded back to ' before JS evaluation —

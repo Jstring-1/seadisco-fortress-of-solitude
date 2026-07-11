@@ -1222,8 +1222,13 @@ async function apiFetch(url, options = {}) {
 }
 
 // ── HTML escape ─────────────────────────────────────────────────────────
+// Canonical HTML escaper for the whole site. Escapes all five entities
+// (& < > " ') so it is safe in both text and attribute contexts, and
+// null/undefined coerce to "" (NOT the string "null") so it is a strict
+// superset of every ad-hoc `esc`/`_eHtml` helper the modules used to
+// define locally — those now alias to this. Do not weaken it.
 function escHtml(str) {
-  return String(str)
+  return String(str ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

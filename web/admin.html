@@ -1449,7 +1449,7 @@ async function loadCacheWarmCatno() {
     const series = Array.isArray(resp?.series) ? resp.series : [];
     const running = !!resp.running;
     const active = resp.active || null;
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const fmt = n => Number(n || 0).toLocaleString();
     if (!series.length) {
       el.innerHTML = `<div style="color:var(--muted)">No catalog series configured.</div>`;
@@ -1641,8 +1641,12 @@ async function loadExternalDiscography() {
     el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
 }
+// Delegates to the canonical escaper in shared.js (escapes & < > " ').
+// Kept as a hoisted function (not `const _eHtml = escHtml`) because
+// several admin functions reference _eHtml above this line; hoisting
+// keeps those safe regardless of execution order.
 function _eHtml(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return escHtml(s);
 }
 async function _extdiscStart(source) {
   try {
@@ -3006,7 +3010,7 @@ async function loadCacheWarm(opts) {
     // let (not const) on rows because the sort-headers helper
     // re-assigns it to the sorted copy before rendering tbody.
     let { rows = [], release_cache_total = 0, active = null, running = false } = resp;
-    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const fmt = n => Number(n || 0).toLocaleString();
     // Preserve form values across re-renders (poll, refresh).
     const prevGenre = document.getElementById("cw-form-genre")?.value;
@@ -3419,7 +3423,7 @@ function _rcxRenderLabelsList() {
   const filtered = q
     ? window._rcxLabelsAll.filter(it => String(it.name).toLowerCase().includes(q))
     : window._rcxLabelsAll;
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const rows = filtered.slice(0, 600).map(it => {
     const checked = window._rcxSelectedLabels.has(it.name) ? "checked" : "";
     return `<label style="display:flex;gap:0.4rem;align-items:center;padding:0.15rem 0;cursor:pointer">
@@ -3685,7 +3689,7 @@ async function loadYtReview() {
   // esc is a function-local const elsewhere in this file (loadCacheWarm
   // et al), not global — define our own here so the templates below
   // don't ReferenceError.
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   try {
     const r = await apiFetch("/api/admin/yt-review/status");
     if (!r.ok) { stEl.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
@@ -3782,7 +3786,7 @@ window.ytrStop = ytrStop;
 async function loadYtReviewQueue() {
   const el = document.getElementById("ytr-queue");
   if (!el) return;
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   try {
     const params = new URLSearchParams({ status: _ytrStatus, limit: String(_YTR_LIMIT), offset: String(_ytrPage * _YTR_LIMIT) });
     const r = await apiFetch(`/api/admin/yt-review/queue?${params}`);
@@ -3900,7 +3904,7 @@ async function ytrDeleteApproval(id) {
 }
 window.ytrDeleteApproval = ytrDeleteApproval;
 async function ytrShowErrors() {
-  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const existing = document.getElementById("ytr-errors-modal");
   if (existing) existing.remove();
   const overlay = document.createElement("div");
@@ -3955,7 +3959,7 @@ async function loadAllBluesAdmin() {
     if (startBtn) startBtn.style.display = s.running ? "none" : "";
     if (stopBtn)  stopBtn.style.display  = s.running ? "" : "none";
     const fmt = n => Number(n || 0).toLocaleString();
-    const esc = v => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const queue = s.queue || {};
     const kinds = s.links_by_kind || {};
     const totalLinks = Object.values(kinds).reduce((a, b) => a + b, 0);
@@ -4220,7 +4224,7 @@ async function _adminToggleJobHistory(jobKey, linkEl) {
     if (!r.ok) { box.textContent = "Could not load history."; return; }
     const { runs } = await r.json();
     if (!Array.isArray(runs) || !runs.length) { box.textContent = "No runs recorded yet."; return; }
-    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     box.innerHTML = `<ul style="list-style:none;margin:0;padding:0;font-size:0.74rem;color:var(--muted)">` +
       runs.map(x => {
         const when = x.ended_at || x.started_at;
@@ -4251,7 +4255,7 @@ async function loadApiHealth() {
       apiFetch(`/api/admin/api-health?hours=${hours}`).then(r => r.ok ? r.json() : null).catch(() => null),
       apiFetch(`/api/admin/loc-stats`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
-    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     let html = "";
     const svcs = Array.isArray(hr?.services) ? hr.services : [];
     if (svcs.length) {
@@ -4380,7 +4384,7 @@ async function loadAdminMediaStats() {
     const r = await apiFetch(`/api/admin/media-stats?topLimit=${_adminTopPlayedLimit}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const srcLabel = s => ({ yt: "YouTube", loc: "Library of Congress", archive: "Archive.org" }[s] || s);
     const trackUrl = (src, id) => {
       if (!id) return "";
