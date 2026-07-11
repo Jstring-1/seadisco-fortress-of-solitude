@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.8ecdc951" />
+  <link rel="stylesheet" href="/style.css?v=260710.724f20a0" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.8ecdc951"></script>
-<script defer src="/shared.js?v=260710.8ecdc951"></script>
+<script defer src="/utils.js?v=260710.724f20a0"></script>
+<script defer src="/shared.js?v=260710.724f20a0"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.8ecdc951"></script>
-<script defer src="/blues-admin.js?v=260710.8ecdc951"></script>
+<script defer src="/modal.js?v=260710.724f20a0"></script>
+<script defer src="/blues-admin.js?v=260710.724f20a0"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -714,7 +714,7 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, facR] = await Promise.all([
+    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, facR, upR] = await Promise.all([
       apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
       apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
       apiFetch('/api/admin/all-blues/status').catch(() => null),
@@ -724,6 +724,7 @@ async function loadAdminWorkerStatus() {
       apiFetch('/api/admin/cache-projection/status').catch(() => null),
       apiFetch('/api/admin/artist-sweep/status').catch(() => null),
       apiFetch('/api/admin/faceted-sweep/status').catch(() => null),
+      apiFetch('/api/admin/label-upstream-stats/status').catch(() => null),
     ]);
     const badges = [];
     // Track whether the bulk sweep is running so we can suppress the
@@ -802,6 +803,13 @@ async function loadAdminWorkerStatus() {
         const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
         const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
         badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, tab: 'labels' });
+      }
+    }
+    if (upR?.ok) {
+      const j = await upR.json().catch(() => null);
+      if (j?.running) {
+        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+        badges.push({ label: `Upstream totals${pos}`, tab: 'labels' });
       }
     }
     if (badges.length === 0) {
@@ -1782,6 +1790,7 @@ function _renderLabelDir() {
         <input id="bulk-skip-days" type="number" min="0" step="1" value="14" style="width:3.5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
         days
       </label>
+      <button class="admin-btn" type="button" onclick="_labelUpstreamStatsStart(false)" title="Fetch Discogs's total release count for labels missing it (or last fetched more than the stale window ago). One API call per label at ~1 req/sec; populates the 'Discogs total' column. Progress persists across redeploys.">📊 Fetch upstream totals</button>
       <span style="font-size:0.78rem;color:var(--muted)">${_labelDirRows.length} labels · ${withId} with ID · ${withoutId} unassigned</span>
     </div>
     ${_labelDirBulkStatus?.running ? _labelDirBulkBannerHtml() : ""}
@@ -1798,22 +1807,24 @@ function _renderLabelDir() {
     <div id="labeldir-scroll" style="overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:4px">
       <table style="width:100%;font-size:0.8rem;border-collapse:collapse;table-layout:fixed">
         <colgroup>
-          <col style="width:28%">
-          <col style="width:80px">
-          <col style="width:80px">
-          <col style="width:80px">
-          <col style="width:18%">
-          <col style="width:110px">
+          <col style="width:26%">
+          <col style="width:78px">
+          <col style="width:78px">
+          <col style="width:78px">
+          <col style="width:88px">
+          <col style="width:16%">
+          <col style="width:106px">
           <col style="width:170px">
         </colgroup>
         <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
           <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
-            ${_labelDirHeader("label_name",     "Label",     "left")}
-            ${_labelDirHeader("external_count", "Pad rows",  "right")}
-            ${_labelDirHeader("cache_releases", "Cache R",   "right")}
-            ${_labelDirHeader("cache_masters",  "Cache M",   "right")}
-            ${_labelDirHeader("sources",        "Sources",   "left")}
-            ${_labelDirHeader("label_id",       "Discogs ID","left")}
+            ${_labelDirHeader("label_name",     "Label",         "left")}
+            ${_labelDirHeader("external_count", "Pad rows",      "right")}
+            ${_labelDirHeader("cache_releases", "Cache R",       "right")}
+            ${_labelDirHeader("cache_masters",  "Cache M",       "right")}
+            ${_labelDirHeader("upstream_total", "Discogs total", "right")}
+            ${_labelDirHeader("sources",        "Sources",       "left")}
+            ${_labelDirHeader("label_id",       "Discogs ID",    "left")}
             <th style="padding:0.35rem 0.5rem"></th>
           </tr>
         </thead>
@@ -2036,6 +2047,7 @@ function _labelDirRowHtml(r) {
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.external_count.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_releases.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
+      <td style="padding:0.3rem 0.5rem;text-align:right${r.upstream_total == null ? ';color:var(--muted)' : ''}" title="${r.upstream_fetched_at ? `Fetched ${new Date(r.upstream_fetched_at).toLocaleString()}` : (r.label_id ? 'Not fetched yet — run Fetch upstream totals in the toolbar' : 'No Discogs ID assigned')}">${r.upstream_total == null ? '—' : Number(r.upstream_total).toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;color:var(--muted);font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml((r.sources || []).join(', '))}">${sources}</td>
       <td style="padding:0.3rem 0.5rem">${idCell}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
@@ -2167,6 +2179,40 @@ async function _labelDirBulkSweepForceClear() {
     loadLabelDirectory();
   } catch (err) { alert(String(err)); }
 }
+
+async function _labelUpstreamStatsStart(resetCursor) {
+  const staleDaysRaw = 30;   // matches the worker's default; server ignores if we omit
+  if (!confirm(`Fetch Discogs upstream release totals for labels missing them (or last fetched >${staleDaysRaw} days ago)?\n\nOne API call per label at ~1 req/sec; ~35min for the full universe. Progress persists across redeploys. Populates the 'Discogs total' column.`)) return;
+  try {
+    const r = await apiFetch("/api/admin/label-upstream-stats/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ staleAfterDays: staleDaysRaw, resetCursor: !!resetCursor }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = j?.error || `HTTP ${r.status}`;
+      // 409 with 'no labels need refresh' is a benign "everything's already fresh".
+      alert(String(msg).includes("no labels") ? `Nothing to fetch — every label already has a fresh upstream total.` : `Start failed: ${msg}`);
+      return;
+    }
+    loadLabelDirectory();
+    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+  } catch (err) { alert(String(err)); }
+}
+async function _labelUpstreamStatsStop() {
+  const r = await apiFetch("/api/admin/label-upstream-stats/stop", { method: "POST" });
+  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
+  if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+}
+async function _labelUpstreamStatsForceClear() {
+  if (!confirm("Force-clear upstream-stats worker state? Only if Stop didn't take.")) return;
+  const r = await apiFetch("/api/admin/label-upstream-stats/force-clear", { method: "POST" });
+  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
+  if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
+}
+window._labelUpstreamStatsStart = _labelUpstreamStatsStart;
+window._labelUpstreamStatsStop = _labelUpstreamStatsStop;
+window._labelUpstreamStatsForceClear = _labelUpstreamStatsForceClear;
 
 // ── Coverage sweeps (artist / faceted)
 let _covArtist = null, _covFaceted = null;
