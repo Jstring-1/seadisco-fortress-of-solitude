@@ -789,6 +789,28 @@ app.use((req, res, next) => {
 // move, HSTS / X-Frame-Options / Permissions-Policy never reached
 // the browser for the SPA HTML or any static asset.
 
+// ── Structural admin gate ────────────────────────────────────────────────
+// Every `/api/admin/*` route also calls requireAdmin() in its own body,
+// but that's per-route discipline: one forgotten call on a new route is
+// a silent auth hole. This blanket gate makes admin-only the DEFAULT for
+// the whole prefix — a route has to be moved out of /api/admin to be
+// reachable without admin credentials.
+//
+// Mounted here (before any /api/admin route is registered) so it covers
+// all of them; the later `app.use("/api/admin", ...)` rate limiter runs
+// after this. Express's mount-path boundary rule means this matches
+// `/api/admin` and `/api/admin/...` but NOT `/api/admin-favorites/...`
+// (the char after the mount path must be `/` or end-of-string), so the
+// intentionally-public admin-favorites sample endpoint is unaffected.
+//
+// OPTIONS preflight is already answered with 204 by the CORS middleware
+// above, so it never reaches this gate. requireAdmin sends its own
+// 401/403 on failure; we only call next() when it returns a userId.
+app.use("/api/admin", async (req, res, next) => {
+  const userId = await requireAdmin(req, res);
+  if (userId) next();
+});
+
 // ── Auth / account endpoints ──────────────────────────────────────────────
 
 // GET /api/config — public config for the frontend (always invite-only)
