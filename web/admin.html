@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.19e45c93" />
+  <link rel="stylesheet" href="/style.css?v=260710.a3cd2c48" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.19e45c93"></script>
-<script defer src="/shared.js?v=260710.19e45c93"></script>
+<script defer src="/utils.js?v=260710.a3cd2c48"></script>
+<script defer src="/shared.js?v=260710.a3cd2c48"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.19e45c93"></script>
-<script defer src="/blues-admin.js?v=260710.19e45c93"></script>
+<script defer src="/modal.js?v=260710.a3cd2c48"></script>
+<script defer src="/blues-admin.js?v=260710.a3cd2c48"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3635,7 +3635,8 @@ async function loadYtReview() {
         ${runPill}
         ${running
           ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
-          : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>`}
+          : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
+             <button class="admin-btn" onclick="ytrRestartFromTop()" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
         <span style="font-size:0.74rem;color:var(--muted)" title="Worker searches today / daily cap. Hard cap so manual searches always have budget left.">worker: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.searchesToday||0).toLocaleString()}</strong>/${Number(s.dailyBudget||9000).toLocaleString()}</span>
         <span style="font-size:0.74rem;color:var(--muted)" title="Project-wide YouTube quota units consumed today (worker + manual). Resets at UTC midnight.">project: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.projectUnitsToday||0).toLocaleString()}</strong>/${Number(s.projectUnitsCap||950000).toLocaleString()} u</span>
@@ -3679,6 +3680,23 @@ async function ytrStart() {
   } catch (e) { alert(`Start failed: ${e?.message || e}`); }
 }
 window.ytrStart = ytrStart;
+async function ytrRestartFromTop() {
+  if (!confirm("Reset the YT review walk cursor to the earliest Blues master?\n\nApproved / rejected rows are untouched. Tracks already searched will still be skipped, so the walk mostly races through until it finds new work.")) return;
+  const alsoResetSearchLog = confirm("Also wipe the per-track search log (every track will be re-searched — burns YouTube quota)?\n\nOK = wipe log too. Cancel = keep the search log (recommended).");
+  try {
+    const r = await apiFetch("/api/admin/yt-review/reset-cursor", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ alsoResetSearchLog }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Reset failed: ${j.error || r.status}`); return; }
+    if (alsoResetSearchLog) {
+      alert(`Cursor cleared. Also wiped ${j.clearedSearches ?? 0} per-track search log rows.`);
+    }
+    loadYtReview();
+  } catch (e) { alert(`Reset failed: ${e?.message || e}`); }
+}
+window.ytrRestartFromTop = ytrRestartFromTop;
 async function ytrStop() {
   try {
     await apiFetch("/api/admin/yt-review/stop", { method: "POST" });
