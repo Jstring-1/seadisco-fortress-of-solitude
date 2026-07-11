@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.d16577ec" />
+  <link rel="stylesheet" href="/style.css?v=260710.ec92b1e3" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.d16577ec"></script>
-<script defer src="/shared.js?v=260710.d16577ec"></script>
+<script defer src="/utils.js?v=260710.ec92b1e3"></script>
+<script defer src="/shared.js?v=260710.ec92b1e3"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.d16577ec"></script>
-<script defer src="/blues-admin.js?v=260710.d16577ec"></script>
+<script defer src="/modal.js?v=260710.ec92b1e3"></script>
+<script defer src="/blues-admin.js?v=260710.ec92b1e3"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -726,9 +726,14 @@ async function loadAdminWorkerStatus() {
       apiFetch('/api/admin/faceted-sweep/status').catch(() => null),
     ]);
     const badges = [];
+    // Track whether the bulk sweep is running so we can suppress the
+    // catno badge below — otherwise we get two badges for one activity
+    // (the outer queue runner + the inner per-label sweep it fired).
+    let bulkRunning = false;
     if (bulkR?.ok) {
       const j = await bulkR.json().catch(() => null);
       if (j?.running) {
+        bulkRunning = true;
         const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
         const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
         badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
@@ -742,9 +747,20 @@ async function loadAdminWorkerStatus() {
         badges.push({ label: `Split-cache projection${pos}`, tab: 'cache' });
       }
     }
-    if (catnoR?.ok) {
+    if (catnoR?.ok && !bulkRunning) {
+      // Suppress this badge while the bulk sweep is running — that
+      // badge already shows the current label name. Standalone catno
+      // runs (someone hit ▶ on a single row) still get a badge, but
+      // hide the raw series key when it's just "adhoc:<labelId>";
+      // curated series keep their human-readable key.
       const j = await catnoR.json().catch(() => null);
-      if (j?.running) badges.push({ label: `Sweep · ${j.active || '?'}`, tab: 'labels' });
+      if (j?.running) {
+        const active = String(j.active || '');
+        const label = active.startsWith('adhoc:')
+          ? 'Label sweep'
+          : `Sweep · ${active || '?'}`;
+        badges.push({ label, tab: 'labels' });
+      }
     }
     if (extR?.ok) {
       const j = await extR.json().catch(() => null);
