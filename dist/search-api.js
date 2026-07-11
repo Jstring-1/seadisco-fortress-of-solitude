@@ -10005,6 +10005,38 @@ app.get("/api/admin/label-upstream-stats/status", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// ── Aggregate worker status (for the persistent worker-status bar) ──
+// The admin dashboard's worker bar used to fan out 10 separate
+// /status requests every 8s (10 HTTP round-trips + 10 auth checks per
+// poll). This one endpoint returns every worker's status in a single
+// response. It deliberately reads ONLY the cheap in-memory running
+// state (plus the yt-review pending count, one small GROUP BY) — it
+// skips the memoized cache-warm CTE and the catno run-list DB scan
+// that the individual /status endpoints compute for their full panels,
+// because the bar only renders "running + a couple of fields". Path
+// ends in /status so it inherits the admin rate-limiter's poll exempt.
+app.get("/api/admin/workers/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const ytCounts = await getReviewQueueCounts().catch(() => null);
+        res.json({
+            catno: { running: isCacheWarmCatnoRunning(), active: getActiveCacheWarmCatnoKey() },
+            ext: getExternalDiscographyStatus(),
+            allBlues: { running: isAllBluesRunning() },
+            warm: { running: isCacheWarmRunning(), active: getActiveCacheWarmParams() },
+            yt: { running: _ytReviewRunning, counts: ytCounts },
+            bulk: getBulkLabelSweepStatus(),
+            projection: getCacheProjectionBackfillStatus(),
+            artist: getArtistSweepStatus(),
+            faceted: getFacetedSweepStatus(),
+            upstream: getLabelUpstreamStatsStatus(),
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // ── Split-cache projection backfill ──────────────────────────────
 // One-shot scan that projects every existing release_cache row into
 // the new discogs_cache_masters_plus / discogs_cache_pressings +

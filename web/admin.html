@@ -714,103 +714,71 @@ async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
   try {
-    const [catnoR, extR, blueR, warmR, ytR, bulkR, projR, artR, facR, upR] = await Promise.all([
-      apiFetch('/api/admin/cache-warm-catno/status').catch(() => null),
-      apiFetch('/api/admin/external-discography-worker/status').catch(() => null),
-      apiFetch('/api/admin/all-blues/status').catch(() => null),
-      apiFetch('/api/admin/cache-warm-runs/status').catch(() => null),
-      apiFetch('/api/admin/yt-review/status').catch(() => null),
-      apiFetch('/api/admin/label-directory/bulk-sweep/status').catch(() => null),
-      apiFetch('/api/admin/cache-projection/status').catch(() => null),
-      apiFetch('/api/admin/artist-sweep/status').catch(() => null),
-      apiFetch('/api/admin/faceted-sweep/status').catch(() => null),
-      apiFetch('/api/admin/label-upstream-stats/status').catch(() => null),
-    ]);
+    // One aggregate request instead of 10 per poll — see
+    // /api/admin/workers/status. Response is keyed by worker.
+    const wr = await apiFetch('/api/admin/workers/status').catch(() => null);
+    const w = (wr?.ok ? await wr.json().catch(() => null) : null) || {};
     const badges = [];
     // Track whether the bulk sweep is running so we can suppress the
     // catno badge below — otherwise we get two badges for one activity
     // (the outer queue runner + the inner per-label sweep it fired).
     let bulkRunning = false;
-    if (bulkR?.ok) {
-      const j = await bulkR.json().catch(() => null);
-      if (j?.running) {
-        bulkRunning = true;
-        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-        const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
-        badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
-      }
+    if (w.bulk?.running) {
+      const j = w.bulk;
+      bulkRunning = true;
+      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+      const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
+      badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
     }
-    if (projR?.ok) {
-      const j = await projR.json().catch(() => null);
-      if (j?.running) {
-        const total = j.total ?? j.stats?.releaseCacheProjectable;
-        const pos = total ? ` (${j.processed}/${total})` : ` (${j.processed})`;
-        badges.push({ label: `Split-cache projection${pos}`, tab: 'cache' });
-      }
+    if (w.projection?.running) {
+      const j = w.projection;
+      const total = j.total ?? j.stats?.releaseCacheProjectable;
+      const pos = total ? ` (${j.processed}/${total})` : ` (${j.processed})`;
+      badges.push({ label: `Split-cache projection${pos}`, tab: 'cache' });
     }
-    if (catnoR?.ok && !bulkRunning) {
+    if (w.catno?.running && !bulkRunning) {
       // Suppress this badge while the bulk sweep is running — that
       // badge already shows the current label name. Standalone catno
       // runs (someone hit ▶ on a single row) still get a badge, but
       // hide the raw series key when it's just "adhoc:<labelId>";
       // curated series keep their human-readable key.
-      const j = await catnoR.json().catch(() => null);
-      if (j?.running) {
-        const active = String(j.active || '');
-        const label = active.startsWith('adhoc:')
-          ? 'Label sweep'
-          : `Sweep · ${active || '?'}`;
-        badges.push({ label, tab: 'labels' });
-      }
+      const active = String(w.catno.active || '');
+      const label = active.startsWith('adhoc:')
+        ? 'Label sweep'
+        : `Sweep · ${active || '?'}`;
+      badges.push({ label, tab: 'labels' });
     }
-    if (extR?.ok) {
-      const j = await extR.json().catch(() => null);
-      if (j?.running) {
-        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-        badges.push({ label: `Ext scrape · ${j.source || 'unknown'}${pos}`, tab: 'labels' });
-      }
+    if (w.ext?.running) {
+      const j = w.ext;
+      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+      badges.push({ label: `Ext scrape · ${j.source || 'unknown'}${pos}`, tab: 'labels' });
     }
-    if (blueR?.ok) {
-      const j = await blueR.json().catch(() => null);
-      if (j?.running) badges.push({ label: 'All Blues worker', tab: 'all-blues' });
+    if (w.allBlues?.running) badges.push({ label: 'All Blues worker', tab: 'all-blues' });
+    if (w.warm?.running) {
+      const p = w.warm.active || {};
+      const label = p.genreKey ? `Cache-warm · ${p.genreKey}${p.styleKey ? '/' + p.styleKey : ''}` : 'Cache-warm run';
+      badges.push({ label, tab: 'cache' });
     }
-    if (warmR?.ok) {
-      const j = await warmR.json().catch(() => null);
-      if (j?.running) {
-        const p = j.active || {};
-        const label = p.genreKey ? `Cache-warm · ${p.genreKey}${p.styleKey ? '/' + p.styleKey : ''}` : 'Cache-warm run';
-        badges.push({ label, tab: 'cache' });
-      }
+    if (w.yt?.running) {
+      const pending = w.yt?.counts?.pending;
+      const suffix  = Number.isFinite(pending) ? ` (${pending} pending)` : '';
+      badges.push({ label: `YT review${suffix}`, tab: 'yt-review' });
     }
-    if (ytR?.ok) {
-      const j = await ytR.json().catch(() => null);
-      if (j?.running) {
-        const pending = j?.counts?.pending;
-        const suffix  = Number.isFinite(pending) ? ` (${pending} pending)` : '';
-        badges.push({ label: `YT review${suffix}`, tab: 'yt-review' });
-      }
+    if (w.artist?.running) {
+      const j = w.artist;
+      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+      badges.push({ label: `Artist sweep${pos}`, tab: 'labels' });
     }
-    if (artR?.ok) {
-      const j = await artR.json().catch(() => null);
-      if (j?.running) {
-        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-        badges.push({ label: `Artist sweep${pos}`, tab: 'labels' });
-      }
+    if (w.faceted?.running) {
+      const j = w.faceted;
+      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+      const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
+      badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, tab: 'labels' });
     }
-    if (facR?.ok) {
-      const j = await facR.json().catch(() => null);
-      if (j?.running) {
-        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-        const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
-        badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, tab: 'labels' });
-      }
-    }
-    if (upR?.ok) {
-      const j = await upR.json().catch(() => null);
-      if (j?.running) {
-        const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-        badges.push({ label: `Upstream totals${pos}`, tab: 'labels' });
-      }
+    if (w.upstream?.running) {
+      const j = w.upstream;
+      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
+      badges.push({ label: `Upstream totals${pos}`, tab: 'labels' });
     }
     if (badges.length === 0) {
       bar.style.display = 'none';
