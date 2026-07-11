@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260710.1342cd60" />
+  <link rel="stylesheet" href="/style.css?v=260710.b731808a" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=260710.1342cd60"></script>
-<script defer src="/shared.js?v=260710.1342cd60"></script>
+<script defer src="/utils.js?v=260710.b731808a"></script>
+<script defer src="/shared.js?v=260710.b731808a"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -556,8 +556,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=260710.1342cd60"></script>
-<script defer src="/blues-admin.js?v=260710.1342cd60"></script>
+<script defer src="/modal.js?v=260710.b731808a"></script>
+<script defer src="/blues-admin.js?v=260710.b731808a"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3681,7 +3681,7 @@ async function ytrStart() {
 }
 window.ytrStart = ytrStart;
 async function ytrRestartFromTop() {
-  if (!confirm("Reset the YT review walk cursor to the earliest Blues master?\n\nApproved / rejected rows are untouched. Tracks already searched will still be skipped, so the walk mostly races through until it finds new work.")) return;
+  if (!confirm("Reset the YT review walk cursor to the earliest Blues master and start the worker?\n\nApproved / rejected rows are untouched. Tracks already searched will still be skipped, so the walk mostly races through until it finds new work.")) return;
   const alsoResetSearchLog = confirm("Also wipe the per-track search log (every track will be re-searched — burns YouTube quota)?\n\nOK = wipe log too. Cancel = keep the search log (recommended).");
   try {
     const r = await apiFetch("/api/admin/yt-review/reset-cursor", {
@@ -3690,8 +3690,17 @@ async function ytrRestartFromTop() {
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Reset failed: ${j.error || r.status}`); return; }
+    // Fire the worker off immediately. Prior version left the cursor
+    // reset but idle, which surprised users who read "restart" as
+    // "reset AND start" — matches how other bulk workers behave.
+    const startR = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
+    if (startR.status === 409) {
+      // Rare — someone else clicked Start in the ~1s gap. Not worth alerting.
+    } else if (!startR.ok) {
+      alert(`Cursor reset but Start failed: HTTP ${startR.status}. Click ▶ Start to run.`);
+    }
     if (alsoResetSearchLog) {
-      alert(`Cursor cleared. Also wiped ${j.clearedSearches ?? 0} per-track search log rows.`);
+      alert(`Cursor cleared and worker started. Also wiped ${j.clearedSearches ?? 0} per-track search log rows.`);
     }
     loadYtReview();
   } catch (e) { alert(`Reset failed: ${e?.message || e}`); }
