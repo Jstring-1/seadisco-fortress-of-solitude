@@ -12,17 +12,24 @@ import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUs
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
-import { initExternalDiscographyWorkerModule, getExternalDiscographyStatus, parseExcelloXlsxBuffer, } from "./external-discography-worker.js";
+import { initExternalDiscographyWorkerModule, getExternalDiscographyStatus, // used by /api/admin/workers/status aggregate
+parseExcelloXlsxBuffer, // used by the upload-xlsx route (still here)
+ } from "./external-discography-worker.js";
 import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
-import { initBulkLabelSweepModule, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
-import { initCacheProjectionBackfillModule, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
-import { initLabelUpstreamStatsModule, getLabelUpstreamStatsStatus, } from "./label-upstream-stats-worker.js";
+import { initBulkLabelSweepModule, getBulkLabelSweepStatus, // used by /api/admin/workers/status aggregate
+ } from "./label-bulk-sweep-worker.js";
+import { initCacheProjectionBackfillModule, getCacheProjectionBackfillStatus, // used by /api/admin/workers/status aggregate
+ } from "./cache-projection-backfill-worker.js";
+import { initLabelUpstreamStatsModule, getLabelUpstreamStatsStatus, // used by /api/admin/workers/status aggregate
+ } from "./label-upstream-stats-worker.js";
 import { registerAdminWorkerSweepRoutes } from "./routes/admin-worker-sweeps.js";
 import { registerAdminCacheProjectionRoutes } from "./routes/admin-cache-projection.js";
 import { registerAdminExternalDiscographyRoutes } from "./routes/admin-external-discography.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
-import { initArtistSweepModule, getArtistSweepStatus, } from "./artist-sweep-worker.js";
-import { initFacetedSweepModule, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
+import { initArtistSweepModule, getArtistSweepStatus, // used by /api/admin/workers/status aggregate
+ } from "./artist-sweep-worker.js";
+import { initFacetedSweepModule, getFacetedSweepStatus, // used by /api/admin/workers/status aggregate
+ } from "./faceted-sweep-worker.js";
 import { isSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
