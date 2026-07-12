@@ -14,14 +14,15 @@ import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWa
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
 import { initExternalDiscographyWorkerModule, startExternalDiscographyRun, requestExternalDiscographyStop, getExternalDiscographyStatus, isExternalDiscographyRunning, parseExcelloXlsxBuffer, } from "./external-discography-worker.js";
 import { startCacheWarmCatnoRun, startLabelSweepRun, startAdHocLabelSweep, requestCacheWarmCatnoStop, isCacheWarmCatnoRunning, getActiveCacheWarmCatnoKey, forceClearCacheWarmCatnoRunning, CATNO_SERIES, } from "./cache-warm-catno.js";
-import { initBulkLabelSweepModule, startBulkLabelSweep, requestBulkLabelSweepStop, forceClearBulkLabelSweep, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
-import { initCacheProjectionBackfillModule, startCacheProjectionBackfill, requestCacheProjectionBackfillStop, forceClearCacheProjectionBackfill, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
+import { initBulkLabelSweepModule, getBulkLabelSweepStatus, } from "./label-bulk-sweep-worker.js";
+import { initCacheProjectionBackfillModule, getCacheProjectionBackfillStatus, } from "./cache-projection-backfill-worker.js";
 import { initLabelUpstreamStatsModule, getLabelUpstreamStatsStatus, } from "./label-upstream-stats-worker.js";
 import { registerAdminWorkerSweepRoutes } from "./routes/admin-worker-sweeps.js";
+import { registerAdminCacheProjectionRoutes } from "./routes/admin-cache-projection.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
 import { initArtistSweepModule, getArtistSweepStatus, } from "./artist-sweep-worker.js";
 import { initFacetedSweepModule, getFacetedSweepStatus, } from "./faceted-sweep-worker.js";
-import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled } from "./db.js";
+import { isSplitCacheReaderEnabled } from "./db.js";
 import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRunning, getAllBluesActiveParams, forceClearAllBluesRunning } from "./all-blues-warm.js";
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
@@ -9784,64 +9785,8 @@ app.post("/api/admin/label-directory/start-sweep", express.json({ limit: "4kb" }
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// ── Bulk masters+ sweep queue runner ─────────────────────────────
-// Walks the label directory top-down by pad-row count, firing an
-// ad-hoc masters+ sweep at each label in turn. Owned by the
-// label-bulk-sweep-worker module.
-app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const body = req.body || {};
-    const minExternalCount = Number.isFinite(Number(body.minExternalCount))
-        ? Number(body.minExternalCount) : 0;
-    const skipSweptSinceDays = Number.isFinite(Number(body.skipSweptSinceDays))
-        ? Number(body.skipSweptSinceDays) : undefined;
-    const resetCursor = !!body.resetCursor;
-    try {
-        const result = await startBulkLabelSweep({ minExternalCount, resetCursor, skipSweptSinceDays });
-        if (!result.ok) {
-            res.status(409).json(result);
-            return;
-        }
-        res.json(result);
-    }
-    catch (err) {
-        console.error("[bulk-label-sweep start]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/label-directory/bulk-sweep/stop", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        requestBulkLabelSweepStop();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/label-directory/bulk-sweep/force-clear", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        forceClearBulkLabelSweep();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        res.json(getBulkLabelSweepStatus());
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
+// Bulk-label-sweep routes were moved to ./routes/admin-worker-sweeps.ts
+// (registered via registerAdminWorkerSweepRoutes just below).
 // Coverage-sweep worker routes (artist / faceted / label-upstream)
 // were extracted to ./routes/admin-worker-sweeps.ts. Registered here
 // so their position in the route chain is unchanged.
@@ -9878,80 +9823,10 @@ app.get("/api/admin/workers/status", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// ── Split-cache projection backfill ──────────────────────────────
-// One-shot scan that projects every existing release_cache row into
-// the new discogs_cache_masters_plus / discogs_cache_pressings +
-// side-table schema. Idempotent; can be resumed / restarted.
-app.post("/api/admin/cache-projection/start", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const resetCursor = !!(req.body || {}).resetCursor;
-    try {
-        const result = await startCacheProjectionBackfill({ resetCursor });
-        if (!result.ok) {
-            res.status(409).json(result);
-            return;
-        }
-        res.json(result);
-    }
-    catch (err) {
-        console.error("[cache-projection start]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/cache-projection/stop", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        requestCacheProjectionBackfillStop();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/cache-projection/force-clear", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        forceClearCacheProjectionBackfill();
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/cache-projection/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const [worker, stats, splitReaders] = await Promise.all([
-            Promise.resolve(getCacheProjectionBackfillStatus()),
-            getProjectedCacheStats().catch(() => null),
-            isSplitCacheReaderEnabled().catch(() => false),
-        ]);
-        res.json({ ...worker, stats, splitReadersEnabled: splitReaders });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-// Global toggle for the split-cache reader path. When on, admin
-// panels (label directory today; cache analytics + feed later) read
-// from the projected schema instead of unrolling JSONB. Flip only
-// after the projection backfill has drained.
-app.post("/api/admin/cache-projection/set-reader-flag", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const enabled = !!(req.body || {}).enabled;
-    try {
-        await setSplitCacheReaderEnabled(enabled);
-        res.json({ ok: true, enabled });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
+// Split-cache projection + reader-flag routes were extracted to
+// ./routes/admin-cache-projection.ts. Registered at the same chain
+// position so route order is unchanged.
+registerAdminCacheProjectionRoutes(app, requireAdmin);
 // Merge one external_discography label into another. Typical use:
 // fold a scraped variant (e.g. "Excello") into the canonical Discogs
 // name ("Excello Records") so the directory shows them as one row.

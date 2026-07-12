@@ -30,6 +30,12 @@ import {
   forceClearLabelUpstreamStats,
   getLabelUpstreamStatsStatus,
 } from "../label-upstream-stats-worker.js";
+import {
+  startBulkLabelSweep,
+  requestBulkLabelSweepStop,
+  forceClearBulkLabelSweep,
+  getBulkLabelSweepStatus,
+} from "../label-bulk-sweep-worker.js";
 
 type RequireAdmin = (req: Request, res: Response) => Promise<string | null>;
 
@@ -125,6 +131,43 @@ export function registerAdminWorkerSweepRoutes(app: Express, requireAdmin: Requi
   app.get("/api/admin/label-upstream-stats/status", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try { res.json(getLabelUpstreamStatsStatus()); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+
+  // ── Bulk label sweep ─────────────────────────────────────────────
+  // Walks the label directory top-down by pad-row count, firing an
+  // ad-hoc masters+ sweep at each label in turn. Owned by the
+  // label-bulk-sweep-worker module.
+  app.post("/api/admin/label-directory/bulk-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const body = req.body || {};
+    const minExternalCount = Number.isFinite(Number(body.minExternalCount))
+      ? Number(body.minExternalCount) : 0;
+    const skipSweptSinceDays = Number.isFinite(Number(body.skipSweptSinceDays))
+      ? Number(body.skipSweptSinceDays) : undefined;
+    const resetCursor = !!body.resetCursor;
+    try {
+      const result = await startBulkLabelSweep({ minExternalCount, resetCursor, skipSweptSinceDays });
+      if (!result.ok) { res.status(409).json(result); return; }
+      res.json(result);
+    } catch (err: any) {
+      console.error("[bulk-label-sweep start]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+  });
+  app.post("/api/admin/label-directory/bulk-sweep/stop", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try { requestBulkLabelSweepStop(); res.json({ ok: true }); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.post("/api/admin/label-directory/bulk-sweep/force-clear", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try { forceClearBulkLabelSweep(); res.json({ ok: true }); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try { res.json(getBulkLabelSweepStatus()); }
     catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
 }
