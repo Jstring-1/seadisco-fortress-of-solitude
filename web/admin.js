@@ -1193,7 +1193,7 @@ function _renderLabelDir() {
       </label>
       <button class="admin-btn" type="button" onclick="_labelDirCleanNames()" title="Strip HTML/whitespace from any label_name that has it (one-shot fix for dirty seed entries).">🧼 Clean names</button>
       <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(false)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
-        title="Iterate every label with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept, they just land at the end). Labels swept within the 'skip' window are dropped from the queue. Resumes from the persisted cursor if one exists.">⏵ Bulk masters+ sweep</button>
+        title="Iterate every label with a Discogs ID, biggest Discogs catalog first (labels whose upstream total hasn't been fetched fall back to pad-row order and land after the known ones — run 📊 Fetch upstream totals first). Labels swept within the 'skip' window are dropped from the queue. Resumes from the persisted cursor if one exists.">⏵ Bulk masters+ sweep</button>
       <button class="admin-btn" type="button" onclick="_labelDirBulkSweepStart(true)" ${_labelDirBulkStatus?.running ? "disabled" : ""}
         title="Rebuild the queue and start from cursor 0. Use if the directory changed and you want the new labels included from the top.">↻ Restart from top</button>
       <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted);white-space:nowrap" title="Labels whose last successful sweep is newer than this window are dropped from the bulk queue entirely. Set to 0 to sweep every label regardless.">
@@ -1552,7 +1552,7 @@ async function _labelDirBulkSweepStart(resetCursor) {
     ? `\nSkipping labels swept in the last ${skipSweptSinceDays} day${skipSweptSinceDays === 1 ? "" : "s"}${alreadySwept != null ? ` (~${alreadySwept} of ${totalWithId} will drop)` : ""}.`
     : `\nSweeping every label regardless of recent sweep history.`;
   const msg = totalWithId != null
-    ? `${verb} bulk masters+ sweep across ${totalWithId} labels with a Discogs ID, top-down by pad-row count (labels with 0 pad rows still swept)?${skipLine}\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. ${resetCursor ? "Cursor resets to 0." : "Progress resumes from the persisted cursor."} Stop at any time.`
+    ? `${verb} bulk masters+ sweep across ${totalWithId} labels with a Discogs ID, biggest Discogs catalog first (un-fetched totals fall back to pad-row order, last)?${skipLine}\n\nEach label runs the same masters + orphans sweep as the per-row ▶ button. ${resetCursor ? "Cursor resets to 0." : "Progress resumes from the persisted cursor."} Stop at any time.`
     : `${verb} bulk masters+ sweep across every label with a Discogs ID?${skipLine}`;
   if (!confirm(msg)) return;
   try {

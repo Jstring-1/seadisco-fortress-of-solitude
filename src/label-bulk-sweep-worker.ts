@@ -23,12 +23,13 @@ import {
   requestCacheWarmCatnoStop,
   buildLabelSweptMap,
 } from "./cache-warm-catno.js";
-import { listLabelDirectory, getAppSetting, setAppSetting } from "./db.js";
+import { listLabelDirectory, getAppSetting, setAppSetting, getLabelUpstreamStatsMap } from "./db.js";
 
 interface QueueItem {
   labelId:        number;
   labelName:      string;
   externalCount:  number;
+  upstreamTotal?: number | null;   // Discogs release count, if fetched
 }
 
 interface BulkState {
@@ -129,10 +130,15 @@ export async function startBulkLabelSweep(opts: {
     ? Number(opts.skipSweptSinceDays)
     : 14;
   const skipCutoff = skipDays > 0 ? Date.now() - skipDays * 86_400_000 : 0;
-  const [rows, sweptMap] = await Promise.all([
+  const [rows, sweptMap, upstreamMap] = await Promise.all([
     listLabelDirectory({ limit: 20000 }),
     skipDays > 0 ? buildLabelSweptMap() : Promise.resolve(new Map<number, string>()),
+    getLabelUpstreamStatsMap().catch(() => new Map<number, { total: number | null; fetchedAt: string }>()),
   ]);
+  const upstreamOf = (labelId: number): number | null => {
+    const s = upstreamMap.get(labelId);
+    return s && typeof s.total === "number" ? s.total : null;
+  };
   let skippedSwept = 0;
   const queue: QueueItem[] = rows
     .filter(r => Number.isFinite(r.label_id as number) && (r.label_id ?? 0) > 0 && r.external_count >= minCount)
@@ -145,11 +151,24 @@ export async function startBulkLabelSweep(opts: {
       if (swept >= skipCutoff) { skippedSwept++; return false; }
       return true;
     })
-    .sort((a, b) => (b.external_count - a.external_count))
+    // Order by Discogs upstream total (biggest catalogs first) so the
+    // sweep front-loads the labels with the most to cache. Labels whose
+    // upstream total hasn't been fetched yet sort AFTER all known ones,
+    // ordered among themselves by pad-row count (the old heuristic).
+    // Run "📊 Fetch upstream totals" first to populate the totals.
+    .sort((a, b) => {
+      const ua = upstreamOf(a.label_id as number);
+      const ub = upstreamOf(b.label_id as number);
+      if (ua != null && ub != null) return ub - ua;
+      if (ua != null) return -1;
+      if (ub != null) return 1;
+      return b.external_count - a.external_count;
+    })
     .map(r => ({
       labelId:       r.label_id as number,
       labelName:     r.label_name,
       externalCount: r.external_count,
+      upstreamTotal: upstreamOf(r.label_id as number),
     }));
   if (queue.length === 0) {
     return { ok: false, error: `No labels with a Discogs ID and ≥${minCount} pad rows` };
@@ -177,7 +196,7 @@ export async function startBulkLabelSweep(opts: {
   _stopRequested = false;
   await _persist();
 
-  console.log(`[bulk-label-sweep] START queue=${queue.length} cursor=${_state.cursor} skippedSwept=${skippedSwept} (${skipDays}d) top=${queue.slice(0, 3).map(q => `${q.labelName}(${q.externalCount})`).join(", ")}`);
+  console.log(`[bulk-label-sweep] START queue=${queue.length} cursor=${_state.cursor} skippedSwept=${skippedSwept} (${skipDays}d) top=${queue.slice(0, 3).map(q => `${q.labelName}(discogs:${q.upstreamTotal ?? "?"},pad:${q.externalCount})`).join(", ")}`);
   _run().catch(err => console.error("[bulk-label-sweep] runner crashed:", err));
   return { ok: true, queued: queue.length, skippedSwept };
 }
