@@ -166,9 +166,13 @@ async function _sweepArtist(client, artistId, yearMax) {
                 continue;
             if (kind !== "master" && kind !== "release")
                 continue;
-            const yr = Number(r?.year);
-            if (Number.isFinite(yr) && yr > yearMax)
-                continue;
+            // yearMax <= 0 means "all years" — cache every release + master
+            // credited to the artist regardless of year.
+            if (yearMax > 0) {
+                const yr = Number(r?.year);
+                if (Number.isFinite(yr) && yr > yearMax)
+                    continue;
+            }
             candidates.push({ id, kind: kind });
         }
         if (candidates.length === 0) {

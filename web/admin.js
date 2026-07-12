@@ -1662,12 +1662,15 @@ function _renderCoverageSweeps() {
         <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
           <strong>🎤 Artist masters+ sweep</strong>
           <span style="font-size:0.72rem;color:var(--muted)">
-            iterates blues_artists rows with a Discogs ID, caching each artist's masters + orphan releases up to yearMax
+            iterates blues_artists rows with a Discogs ID, caching EVERY release + master credited to each artist (all years, unless you set a yearMax cap)
           </span>
         </div>
         <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
+          <label style="font-size:0.78rem;color:var(--muted);white-space:nowrap" title="Cache every release + master regardless of year. Uncheck to cap at a yearMax.">
+            <input id="cov-artist-allyears" type="checkbox" ${(a.yearMax == null || a.yearMax <= 0) ? "checked" : ""} onchange="var y=document.getElementById('cov-artist-yearmax'); if(y) y.disabled=this.checked"> all years
+          </label>
           <label style="font-size:0.78rem;color:var(--muted)">yearMax
-            <input id="cov-artist-yearmax" type="number" value="${a.yearMax ?? 1970}" style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+            <input id="cov-artist-yearmax" type="number" value="${a.yearMax && a.yearMax > 0 ? a.yearMax : 1970}" ${(a.yearMax == null || a.yearMax <= 0) ? "disabled" : ""} style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
           </label>
           ${a.running
             ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${a.cursor}/${a.total} (${pct(a.cursor,a.total)}%) · ✓${a.hits} · ⏭${a.skipped} · ⚠${a.errors}</span>
@@ -1726,8 +1729,10 @@ function _renderCoverageSweeps() {
 }
 
 async function _covArtistStart(reset) {
-  const yearMax = Number(document.getElementById("cov-artist-yearmax")?.value || 1970);
-  if (!confirm(`Start artist sweep (yearMax ${yearMax})?\n\nIterates every blues_artists row with a Discogs ID, caching that artist's masters + orphan releases up to ${yearMax}. Rate-limited to 1 request/sec.`)) return;
+  const allYears = !!document.getElementById("cov-artist-allyears")?.checked;
+  const yearMax = allYears ? 0 : Number(document.getElementById("cov-artist-yearmax")?.value || 1970);
+  const scope = allYears ? "EVERY release + master (all years)" : `masters + releases up to ${yearMax}`;
+  if (!confirm(`Start artist sweep — ${scope}?\n\nIterates every blues_artists row with a Discogs ID, caching ${scope} credited to each artist. Rate-limited to 1 request/sec.`)) return;
   try {
     const r = await apiFetch("/api/admin/artist-sweep/start", {
       method: "POST", headers: { "content-type": "application/json" },
