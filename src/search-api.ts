@@ -56,6 +56,7 @@ import {
   getLabelUpstreamStatsStatus,
   isLabelUpstreamStatsRunning,
 } from "./label-upstream-stats-worker.js";
+import { registerAdminWorkerSweepRoutes } from "./routes/admin-worker-sweeps.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
 import {
   initArtistSweepModule,
@@ -9240,99 +9241,10 @@ app.get("/api/admin/label-directory/bulk-sweep/status", async (req, res) => {
   catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-// ── Artist masters+ sweep ────────────────────────────────────────
-app.post("/api/admin/artist-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const body = req.body || {};
-  const yearMax = Number.isFinite(Number(body.yearMax)) ? Number(body.yearMax) : undefined;
-  const resetCursor = !!body.resetCursor;
-  try {
-    const r = await startArtistSweep({ yearMax, resetCursor });
-    if (!r.ok) { res.status(409).json(r); return; }
-    res.json(r);
-  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/artist-sweep/stop", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { requestArtistSweepStop(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/artist-sweep/force-clear", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { forceClearArtistSweep(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.get("/api/admin/artist-sweep/status", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { res.json(getArtistSweepStatus()); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-
-// ── Year × facet (format / country) sweep ────────────────────────
-app.post("/api/admin/faceted-sweep/start", express.json({ limit: "2kb" }), async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const body = req.body || {};
-  const mode = String(body.mode || "").toLowerCase();
-  if (mode !== "format" && mode !== "country") {
-    res.status(400).json({ error: "mode must be 'format' or 'country'" }); return;
-  }
-  const yearFrom = Number.isFinite(Number(body.yearFrom)) ? Number(body.yearFrom) : undefined;
-  const yearTo   = Number.isFinite(Number(body.yearTo))   ? Number(body.yearTo)   : undefined;
-  const values   = Array.isArray(body.values) ? body.values.map(String).filter(Boolean) : undefined;
-  const resetCursor = !!body.resetCursor;
-  try {
-    const r = await startFacetedSweep({ mode: mode as "format" | "country", yearFrom, yearTo, values, resetCursor });
-    if (!r.ok) { res.status(409).json(r); return; }
-    res.json(r);
-  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/faceted-sweep/stop", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { requestFacetedSweepStop(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/faceted-sweep/force-clear", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { forceClearFacetedSweep(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.get("/api/admin/faceted-sweep/status", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { res.json(getFacetedSweepStatus()); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-
-// ── Label upstream stats ─────────────────────────────────────────
-// Background worker: for each known label (external_discography row
-// with a Discogs id), fetches /labels/{id}/releases?per_page=1 and
-// stores `pagination.items` in label_upstream_stats so the label
-// directory can show upstream totals before deciding what to sweep.
-app.post("/api/admin/label-upstream-stats/start", express.json({ limit: "1kb" }), async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const body = req.body || {};
-  const staleAfterDays = Number.isFinite(Number(body.staleAfterDays)) ? Number(body.staleAfterDays) : undefined;
-  const resetCursor = !!body.resetCursor;
-  try {
-    const r = await startLabelUpstreamStats({ staleAfterDays, resetCursor });
-    if (!r.ok) { res.status(409).json(r); return; }
-    res.json(r);
-  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/label-upstream-stats/stop", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { requestLabelUpstreamStatsStop(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.post("/api/admin/label-upstream-stats/force-clear", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { forceClearLabelUpstreamStats(); res.json({ ok: true }); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
-app.get("/api/admin/label-upstream-stats/status", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  try { res.json(getLabelUpstreamStatsStatus()); }
-  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-});
+// Coverage-sweep worker routes (artist / faceted / label-upstream)
+// were extracted to ./routes/admin-worker-sweeps.ts. Registered here
+// so their position in the route chain is unchanged.
+registerAdminWorkerSweepRoutes(app, requireAdmin);
 
 // ── Aggregate worker status (for the persistent worker-status bar) ──
 // The admin dashboard's worker bar used to fan out 10 separate
