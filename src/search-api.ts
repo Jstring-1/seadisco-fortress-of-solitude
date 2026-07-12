@@ -58,6 +58,7 @@ import {
 } from "./label-upstream-stats-worker.js";
 import { registerAdminWorkerSweepRoutes } from "./routes/admin-worker-sweeps.js";
 import { registerAdminCacheProjectionRoutes } from "./routes/admin-cache-projection.js";
+import { registerAdminExternalDiscographyRoutes } from "./routes/admin-external-discography.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
 import {
   initArtistSweepModule,
@@ -9014,37 +9015,10 @@ app.get("/api/admin/external-discography/labels", async (req, res) => {
   }
 });
 
-// ── External discography server-side worker endpoints ───────────
-// One singleflight worker for wirz / Abrams scrapes. Polite 2s delay
-// per page; cursor persists in app_settings so a Railway restart
-// resumes from the last completed seed. Admin-gated.
-
-app.get("/api/admin/external-discography-worker/status", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  res.json(getExternalDiscographyStatus());
-});
-
-app.post("/api/admin/external-discography-worker/start", express.json({ limit: "8kb" }), async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const source = String((req.body || {}).source ?? "").trim().toLowerCase();
-  if (source !== "wirz" && source !== "abrams") {
-    res.status(400).json({ error: "source must be 'wirz' or 'abrams'" });
-    return;
-  }
-  const result = await startExternalDiscographyRun(source as "wirz" | "abrams");
-  if (!result.ok) { res.status(409).json(result); return; }
-  res.json(result);
-});
-
-app.post("/api/admin/external-discography-worker/stop", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  if (!isExternalDiscographyRunning()) {
-    res.json({ ok: true, message: "not running" });
-    return;
-  }
-  requestExternalDiscographyStop();
-  res.json({ ok: true, message: "stop requested" });
-});
+// External-discography worker start/stop/status moved to
+// ./routes/admin-external-discography.ts. The xlsx-upload endpoint
+// below stays here (couples to the parser + db inserts).
+registerAdminExternalDiscographyRoutes(app, requireAdmin);
 
 // POST /api/admin/external-discography/upload-xlsx
 // Body: raw .xlsx bytes (application/octet-stream).
