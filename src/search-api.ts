@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry, type BluesWordEntryInput, type BluesWordCitationInput } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry, type BluesWordEntryInput, type BluesWordCitationInput } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import {
@@ -75,6 +75,14 @@ const authPk      = process.env.AUTH_PK ?? "";
 // Cached at boot — hot-path functions (requireAdmin + 20-odd admin routes)
 // previously re-read this env var per request.
 const ADMIN_CLERK_ID = process.env.ADMIN_CLERK_ID ?? "";
+// Copyright cutoff for the PUBLIC lyric viewer. Lyric text is shown to
+// non-admins only when a lyric's first_release_year is known AND <= this
+// year (works published this long ago are safely in the US public
+// domain). The 📜 match badge still appears for any matched lyric
+// regardless of year — only the text is gated — and admins bypass this
+// entirely via the /api/admin/lyrics/:id editor. Bump this as the PD
+// horizon advances (it rolls forward one year each Jan 1).
+const LYRICS_PUBLIC_MAX_YEAR = 1930;
 // SeaDisco is invite-only — Clerk waitlist gates all sign-ups. Every API
 // endpoint that touches user data or external services requires a valid
 // Clerk session via requireUser(). The admin tab is additionally gated by
@@ -14052,6 +14060,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
     const pinned    = req.query.pinned    === "1" || req.query.pinned    === "true";
     const favorites = req.query.favorites === "1" || req.query.favorites === "true";
     const titlePunct = req.query.titlePunct === "1" || req.query.titlePunct === "true";
+    const noYear    = req.query.noYear    === "1" || req.query.noYear    === "true";
     // Sort column (whitelisted server-side) + direction. Anything else
     // is ignored / falls back to the default in listLyrics.
     const sort  = String(req.query.sort  ?? "").trim().slice(0, 30);
@@ -14071,6 +14080,7 @@ app.get("/api/admin/lyrics", async (req, res) => {
       favoritesOnly: favorites,
       favoriteUserId: favorites ? adminUserId : null,
       titleHasPunct: titlePunct,
+      noYearOnly: noYear,
       sort: sort || undefined,
       order,
       limit, offset,
@@ -14166,6 +14176,29 @@ app.post("/api/admin/lyrics/resolve-years-cheap", async (req, res) => {
     res.json({ ok: true, updated: out.updated, stillMissing: missing.rows[0]?.n ?? 0 });
   } catch (err: any) {
     console.error("[lyrics resolve-years-cheap]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// POST /api/admin/lyrics/resolve-years-cache — fill first_release_year
+// by matching year-less lyrics against the big release_cache (title +
+// artist). Zero Discogs API calls; one scan of release_cache. Runs
+// synchronously — it's a single set-based UPDATE, seconds even over a
+// large cache. Idempotent; ?force=1 re-resolves rows this path already
+// set. Complements resolve-years-cheap (per-artist JSONB) and the
+// slower resolve-years-discogs (live API) — run this one first now that
+// the masters+ sweeps have cached so much early blues.
+app.post("/api/admin/lyrics/resolve-years-cache", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const force = req.query.force === "1" || req.query.force === "true";
+    const out = await resolveLyricFirstReleaseYearsFromCache({ force });
+    const missing = await getPool().query(
+      `SELECT COUNT(*)::int AS n FROM blues_lyrics WHERE first_release_year IS NULL`,
+    );
+    res.json({ ok: true, updated: out.updated, stillMissing: missing.rows[0]?.n ?? 0 });
+  } catch (err: any) {
+    console.error("[lyrics resolve-years-cache]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
   }
 });
@@ -15449,7 +15482,16 @@ app.get("/api/blues-archive/artists/:id", async (req, res) => {
 // Lookups are case-insensitive on TRIM(LOWER(...)) to match the same
 // normalization used by the merge / import code paths.
 app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+  // Public, but admin-aware. The 📜 lyric-match half is exposed to
+  // everyone so all users get the lyric badge on album / player titles;
+  // the 🎸 artist / release / 🎼 tuning archive half stays admin-only.
+  // Non-admins get a stripped response: just `tracks`, each annotated
+  // with `viewable` (first_release_year present and <= the public
+  // cutoff). We DON'T filter unviewable tracks out — the badge shows on
+  // reissues and post-cutoff songs alike; only the lyric TEXT is gated,
+  // enforced server-side by GET /api/lyrics/:id/public.
+  const probeUserId = await getClerkUserId(req);
+  const isAdmin = !!probeUserId && !!ADMIN_CLERK_ID && probeUserId === ADMIN_CLERK_ID;
   try {
     const body = req.body || {};
     const artistNames: string[] = Array.isArray(body.artistNames)
@@ -15473,8 +15515,9 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
 
     // Artists by name (lowercase TRIM match) — covers the common case
     // where the album popup has a name string but no resolved internal
-    // archive id.
-    if (artistNames.length) {
+    // archive id. Admin-only surface; also feeds the artist_id lyric
+    // path below, so we still populate it for admins.
+    if (isAdmin && artistNames.length) {
       const r = await getPool().query(
         `SELECT id, name FROM blues_artists
           WHERE LOWER(TRIM(name)) = ANY($1::text[])`,
@@ -15487,7 +15530,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
     // Artists by Discogs ID — when the modal has a resolved Discogs
     // artist id, a direct id match is more reliable than name match
     // (handles "Smith (4)" disambiguation cleanly).
-    if (artistIds.length) {
+    if (isAdmin && artistIds.length) {
       const r = await getPool().query(
         `SELECT id, name, discogs_id FROM blues_artists
           WHERE discogs_id = ANY($1::int[])`,
@@ -15502,7 +15545,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
     // and look for any object whose id matches. The JSONB stores both
     // release and master entries (each row has a type discriminator),
     // so we'll match either flavor against the corresponding id.
-    if (Number.isFinite(releaseId) && releaseId > 0) {
+    if (isAdmin && Number.isFinite(releaseId) && releaseId > 0) {
       const r = await getPool().query(
         `SELECT a.id, a.name
            FROM blues_artists a,
@@ -15515,7 +15558,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
         out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name };
       }
     }
-    if (!out.release.inArchive && Number.isFinite(masterId) && masterId > 0) {
+    if (isAdmin && !out.release.inArchive && Number.isFinite(masterId) && masterId > 0) {
       const r = await getPool().query(
         `SELECT a.id, a.name
            FROM blues_artists a,
@@ -15557,7 +15600,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       // common noise tokens and accept exact-or-containment matches.
       if ((Number.isFinite(releaseId) && releaseId > 0) || (Number.isFinite(masterId) && masterId > 0)) {
         const r = await getPool().query(
-          `SELECT id, page_title, artist, artist_id,
+          `SELECT id, page_title, artist, artist_id, first_release_year,
                   discogs_release_id, discogs_master_id
              FROM blues_lyrics
             WHERE ($1::bigint IS NOT NULL AND discogs_release_id = $1::bigint)
@@ -15608,17 +15651,19 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
               // Key by the submitted title so the client's lookup by
               // sent-title finds the hit. First match wins; later
               // paths (artist match etc.) only fill empty slots.
-              out.tracks[raw] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+              out.tracks[raw] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, first_release_year: row.first_release_year, pinned: true };
               break;
             }
           }
         }
       }
 
-      // Path 3: artist_id match (canonical post-FK).
+      // Path 3: artist_id match (canonical post-FK). Admin-only: it
+      // depends on archiveArtistIds, which are resolved from the
+      // admin-gated blues_artists lookups above.
       if (archiveArtistIds.length) {
         const r = await getPool().query(
-          `SELECT id, page_title, artist, artist_id
+          `SELECT id, page_title, artist, artist_id, first_release_year
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
               AND artist_id = ANY($2::int[])`,
@@ -15626,14 +15671,16 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
         );
         for (const row of r.rows) {
           const k = String(row.page_title).trim().toLowerCase();
-          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, first_release_year: row.first_release_year };
         }
       }
 
-      // Path 4: legacy artist-string match.
+      // Path 4: legacy artist-string match — works for everyone (no
+      // blues_artists dependency), so this is the primary lyric-match
+      // path for public users on album modals that carry an artist.
       if (artistNames.length) {
         const r = await getPool().query(
-          `SELECT id, page_title, artist, artist_id
+          `SELECT id, page_title, artist, artist_id, first_release_year
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
               AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($2::text[])`,
@@ -15641,7 +15688,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
         );
         for (const row of r.rows) {
           const k = String(row.page_title).trim().toLowerCase();
-          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, first_release_year: row.first_release_year };
         }
       }
 
@@ -15649,14 +15696,14 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       // context at all (e.g. mini-player bar with a "Topic" channel).
       if (!artistNames.length && !archiveArtistIds.length) {
         const r = await getPool().query(
-          `SELECT id, page_title, artist, artist_id
+          `SELECT id, page_title, artist, artist_id, first_release_year
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])`,
           [titlesLc],
         );
         for (const row of r.rows) {
           const k = String(row.page_title).trim().toLowerCase();
-          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, first_release_year: row.first_release_year };
         }
       }
 
@@ -15666,7 +15713,7 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       // Johnson's or Sonny Boy's, and the position/pitch differ. Key
       // is lowercase title to mirror the tracks map.
       out.tunings = {} as Record<string, any>;
-      if (artistNames.length) {
+      if (isAdmin && artistNames.length) {
         const namesLc = artistNames.map(n => n.trim().toLowerCase());
         const r = await getPool().query(
           `SELECT id, artist, title, position, pitch, notes
@@ -15685,9 +15732,76 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       }
     }
 
-    res.json(out);
+    if (isAdmin) {
+      res.json(out);
+      return;
+    }
+    // Public response: lyric matches only, each tagged `viewable` so the
+    // client knows whether the 📜 opens the text or the gated notice.
+    // Strip artist_id / archive internals — non-admins get nothing but
+    // what's needed to render + open a public lyric.
+    const publicTracks: Record<string, any> = {};
+    for (const [k, v] of Object.entries(out.tracks as Record<string, any>)) {
+      const yr = Number(v.first_release_year);
+      const viewable = Number.isFinite(yr) && yr <= LYRICS_PUBLIC_MAX_YEAR;
+      publicTracks[k] = {
+        id: v.id,
+        artist: v.artist ?? null,
+        first_release_year: Number.isFinite(yr) ? yr : null,
+        viewable,
+        pinned: !!v.pinned,
+      };
+    }
+    res.json({ tracks: publicTracks });
   } catch (err) {
     console.error("[blues-archive check]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/lyrics/:id/public — read-only lyric viewer for ALL users.
+// The copyright gate lives HERE, server-side: text is returned only when
+// first_release_year is known AND <= LYRICS_PUBLIC_MAX_YEAR. For a lyric
+// that fails the gate we still return its title / artist / year with
+// `viewable:false` and NO text, so the client can show a "not public
+// yet" notice rather than leaking the words. No auth required; returns
+// only display fields (never wikitext / page_url / internal ids).
+app.get("/api/lyrics/:id/public", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
+    const r = await getPool().query(
+      `SELECT id, page_title, artist, tuning, plaintext, first_release_year
+         FROM blues_lyrics WHERE id = $1`,
+      [id],
+    );
+    const row = r.rows[0];
+    if (!row) { res.status(404).json({ error: "not_found" }); return; }
+    const yr = Number(row.first_release_year);
+    const viewable = Number.isFinite(yr) && yr <= LYRICS_PUBLIC_MAX_YEAR;
+    res.setHeader("Cache-Control", "public, max-age=300");
+    if (!viewable) {
+      res.json({
+        id: row.id,
+        page_title: row.page_title,
+        artist: row.artist ?? null,
+        first_release_year: Number.isFinite(yr) ? yr : null,
+        viewable: false,
+        maxYear: LYRICS_PUBLIC_MAX_YEAR,
+      });
+      return;
+    }
+    res.json({
+      id: row.id,
+      page_title: row.page_title,
+      artist: row.artist ?? null,
+      tuning: row.tuning ?? null,
+      plaintext: row.plaintext ?? "",
+      first_release_year: yr,
+      viewable: true,
+    });
+  } catch (err) {
+    console.error("[lyrics public get]", err);
     res.status(500).json({ error: String(err) });
   }
 });

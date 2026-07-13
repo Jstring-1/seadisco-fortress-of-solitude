@@ -46,6 +46,7 @@ function _baPersistViewState() {
         unpinned:  _baLyricsUnpinned,
         empty:     _baLyricsEmpty,
         noArtist:  _baLyricsNoArtist,
+        noYear:    _baLyricsNoYear,
         pinned:    _baLyricsPinned,
         favorites: _baLyricsFavorites,
         page:      _baLyricsPage,
@@ -327,6 +328,7 @@ function initBluesArchiveView() {
       _baLyricsUnpinned  = !!saved.lyrics.unpinned;
       _baLyricsEmpty     = !!saved.lyrics.empty;
       _baLyricsNoArtist  = !!saved.lyrics.noArtist;
+      _baLyricsNoYear    = !!saved.lyrics.noYear;
       _baLyricsPinned    = !!saved.lyrics.pinned;
       _baLyricsFavorites = !!saved.lyrics.favorites;
       _baLyricsPage      = Number(saved.lyrics.page) || 0;
@@ -348,6 +350,8 @@ function initBluesArchiveView() {
       if (em) em.checked = !!saved.lyrics.empty;
       const na = document.getElementById("blues-archive-lyrics-no-artist");
       if (na) na.checked = !!saved.lyrics.noArtist;
+      const ny = document.getElementById("blues-archive-lyrics-no-year");
+      if (ny) ny.checked = !!saved.lyrics.noYear;
       const pn = document.getElementById("blues-archive-lyrics-pinned");
       if (pn) pn.checked = !!saved.lyrics.pinned;
       const fv = document.getElementById("blues-archive-lyrics-favorites");
@@ -1969,6 +1973,7 @@ let _baLyricsNoArtist = false;
 let _baLyricsPinned = false;     // only rows with a release/master pin
 let _baLyricsFavorites = false;  // only rows the user has favorited
 let _baLyricsTitlePunct = false; // only rows whose title has '-' or '('
+let _baLyricsNoYear = false;     // only rows with no first_release_year
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", first_release_year: "num" };
@@ -2110,6 +2115,16 @@ function _baLyricsApplyTitlePunct() {
 }
 window._baLyricsApplyTitlePunct = _baLyricsApplyTitlePunct;
 
+// "No year" — surfaces lyrics with no resolved first_release_year. This
+// is the resolver worklist: a lyric's text stays out of the public
+// viewer until a year lands (public viewing gates on the PD cutoff).
+function _baLyricsApplyNoYear() {
+  _baLyricsNoYear = !!document.getElementById("blues-archive-lyrics-no-year")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyNoYear = _baLyricsApplyNoYear;
+
 // Cheap pass: set every lyric's first_release_year from its linked
 // artist's discogs_releases (title match). Zero Discogs API calls.
 // Reports the rows updated and how many still have no year — the
@@ -2140,6 +2155,37 @@ async function _baResolveYearsCheap() {
   }
 }
 window._baResolveYearsCheap = _baResolveYearsCheap;
+
+// Cache pass: set each year-less lyric's first_release_year by matching
+// its title + artist against the big release_cache (everything the
+// masters+ sweeps pulled in). Zero Discogs API calls — one DB pass.
+// Run this before the per-artist "Resolve years" or the slow Discogs
+// worker; with a heavily-swept early-blues cache it resolves the most.
+async function _baResolveYearsCache() {
+  const btn = document.getElementById("blues-archive-lyrics-resolve-years-cache-btn");
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
+  try {
+    const r = await apiFetch("/api/admin/lyrics/resolve-years-cache", { method: "POST", timeoutMs: 120000 });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Resolve failed: " + (err?.error ?? r.status));
+      return;
+    }
+    const { updated = 0, stillMissing = 0 } = await r.json();
+    const msg = `Resolved ${updated} year${updated === 1 ? "" : "s"} from the release cache.\n\n` +
+      (stillMissing
+        ? `${stillMissing.toLocaleString()} lyric${stillMissing === 1 ? "" : "s"} still have no year — try "Resolve years" (per-artist) or "Resolve via Discogs" (live API) next, or enter one manually.`
+        : `All lyrics now have a first_release_year.`);
+    alert(msg);
+    _baLoadLyrics();
+  } catch (e) {
+    alert("Resolve failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || "Resolve via cache"; }
+  }
+}
+window._baResolveYearsCache = _baResolveYearsCache;
 
 // Slow Discogs-search resolver. POSTs to the background-job endpoint
 // then polls /status every 4s until done. Button stays disabled while
@@ -2580,6 +2626,7 @@ function _baLyricsClearFilters() {
   const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
   const empty     = document.getElementById("blues-archive-lyrics-empty");
   const noArtist  = document.getElementById("blues-archive-lyrics-no-artist");
+  const noYear    = document.getElementById("blues-archive-lyrics-no-year");
   const pinned    = document.getElementById("blues-archive-lyrics-pinned");
   const favorites = document.getElementById("blues-archive-lyrics-favorites");
   if (search)    search.value = "";
@@ -2589,6 +2636,7 @@ function _baLyricsClearFilters() {
   if (unpinned)  unpinned.checked  = false;
   if (empty)     empty.checked     = false;
   if (noArtist)  noArtist.checked  = false;
+  if (noYear)    noYear.checked    = false;
   if (pinned)    pinned.checked    = false;
   if (favorites) favorites.checked = false;
   _baLyricsTuning    = "";
@@ -2597,6 +2645,7 @@ function _baLyricsClearFilters() {
   _baLyricsUnpinned  = false;
   _baLyricsEmpty     = false;
   _baLyricsNoArtist  = false;
+  _baLyricsNoYear    = false;
   _baLyricsPinned    = false;
   _baLyricsFavorites = false;
   _baLyricsTitlePunct = false;
@@ -2666,10 +2715,11 @@ async function _baLoadLyrics() {
   if (_baLyricsPinned)    params.set("pinned",    "1");
   if (_baLyricsFavorites) params.set("favorites", "1");
   if (_baLyricsTitlePunct) params.set("titlePunct", "1");
+  if (_baLyricsNoYear)    params.set("noYear",    "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsTuningLike || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites || _baLyricsTitlePunct) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsTuningLike || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty || _baLyricsNoArtist || _baLyricsPinned || _baLyricsFavorites || _baLyricsTitlePunct || _baLyricsNoYear) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current

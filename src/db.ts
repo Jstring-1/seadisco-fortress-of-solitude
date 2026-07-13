@@ -2783,6 +2783,67 @@ export async function resolveLyricFirstReleaseYearsCheap(opts: { force?: boolean
   return { updated: r.rowCount ?? 0 };
 }
 
+// ── Lyric first_release_year resolver: release_cache path ────────────
+// Richer sibling of resolveLyricFirstReleaseYearsCheap. That one only
+// consults each linked artist's own discogs_releases JSONB (small, and
+// needs artist_id). This one scans the big release_cache — where the
+// masters+ sweeps have cached tens of thousands of early-blues releases
+// and masters — matching a lyric to any cached release whose title AND
+// one of whose credited artists match. MIN(year) over matches becomes
+// first_release_year. Zero Discogs API calls; one sequential scan of
+// release_cache, hash-joined to the (small) set of year-less lyrics.
+//
+// Matching is deliberately conservative to avoid stamping a wrong year:
+//   • title: normalized (parens stripped, then [a-z0-9] only) equality,
+//     OR either side of a "A / B" 78rpm coupling.
+//   • artist: normalized equality against ANY name in the release's
+//     data->'artists' array. Requiring an artist match is what keeps a
+//     common title ("Crossroads") from grabbing a different act's year.
+// Lyrics with a blank artist can't satisfy the artist test, so they're
+// left for manual entry (surface them via the "No artist" grid filter).
+export async function resolveLyricFirstReleaseYearsFromCache(opts: { force?: boolean } = {}): Promise<{ updated: number }> {
+  const guard = opts.force
+    ? ""
+    : `AND (l.first_release_year IS NULL OR l.first_release_source IN ('artist_releases', 'release_cache'))`;
+  // norm() = lower, drop parenthetical asides, keep [a-z0-9] only — so
+  // "Don't You Lie to Me" == "Dont You Lie To Me". Applied identically
+  // to lyric titles, cache titles, and both artist name sides.
+  const r = await getPool().query(`
+    WITH lyr AS (
+      SELECT l.id,
+             LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g')) AS ntitle,
+             LOWER(regexp_replace(COALESCE(l.artist, ''), '[^a-zA-Z0-9]', '', 'g'))                              AS nartist
+        FROM blues_lyrics l
+       WHERE (l.first_release_year IS NULL OR $1::bool)
+         AND l.artist IS NOT NULL AND LENGTH(TRIM(l.artist)) > 0
+         AND LENGTH(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g')) >= 3
+    ),
+    cand AS (
+      SELECT lyr.id AS lyric_id, MIN((rc.data->>'year')::int) AS year
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(rc.data->'artists', '[]'::jsonb)) AS art
+        JOIN lyr ON (
+          lyr.ntitle = LOWER(regexp_replace(regexp_replace(COALESCE(rc.data->>'title',''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+          OR lyr.ntitle = LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rc.data->>'title','/',1),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+          OR lyr.ntitle = LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rc.data->>'title','/',2),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+        )
+       WHERE (rc.data->>'year') ~ '^[0-9]+$'
+         AND (rc.data->>'year')::int >= 1850
+         AND lyr.nartist = LOWER(regexp_replace(COALESCE(art->>'name',''), '[^a-zA-Z0-9]', '', 'g'))
+       GROUP BY lyr.id
+    )
+    UPDATE blues_lyrics l
+       SET first_release_year       = c.year,
+           first_release_source     = 'release_cache',
+           first_release_checked_at = NOW()
+      FROM cand c
+     WHERE c.lyric_id = l.id
+       ${guard}
+       AND (l.first_release_year IS DISTINCT FROM c.year OR l.first_release_source IS DISTINCT FROM 'release_cache')
+  `, [!!opts.force]);
+  return { updated: r.rowCount ?? 0 };
+}
+
 // Return blues_lyrics ids missing first_release_year — feed for the
 // (future) Discogs-search worker. Capped to keep payloads sane.
 export async function getLyricsMissingFirstReleaseYear(limit = 1000): Promise<Array<{ id: number; page_title: string; artist: string | null; artist_id: number | null }>> {
@@ -10441,6 +10502,11 @@ export async function listLyrics(opts: {
    *  version)") and dash-separated variants that often pile up across
    *  multiple takes of the same song. */
   titleHasPunct?: boolean;
+  /** True → only return rows with no resolved first_release_year. The
+   *  worklist for the year resolvers: these are the lyrics whose text
+   *  can't go public until a year lands (public viewing gates on
+   *  first_release_year <= the public cutoff). */
+  noYearOnly?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -10525,6 +10591,9 @@ export async function listLyrics(opts: {
   }
   if (opts.titleHasPunct) {
     where.push(`(page_title LIKE '%-%' OR page_title LIKE '%(%')`);
+  }
+  if (opts.noYearOnly) {
+    where.push(`first_release_year IS NULL`);
   }
   if (opts.favoritesOnly && opts.favoriteUserId) {
     params.push(opts.favoriteUserId);

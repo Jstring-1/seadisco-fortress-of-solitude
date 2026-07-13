@@ -2327,7 +2327,7 @@ function _createYTPlayer(id) {
                   track:  vd.title,
                   artist: ytAuthorClean,
                 });
-                if (window._isAdmin) _baStampMiniPlayer();
+                _baStampMiniPlayer();
                 if (!msTitle) msTitle = vd.title;
                 if (!msArtist) msArtist = ytAuthorClean;
               }
@@ -2514,8 +2514,8 @@ function updateVideoNavButtons() {
         fallback: "Playing",
       });
     }
-    // Admin-only: re-probe + stamp 🎸 / 📜 against the new title.
-    if (window._isAdmin) _baStampMiniPlayer();
+    // Re-probe + stamp 📜 (all users) / 🎸 (admin) against the new title.
+    _baStampMiniPlayer();
   }
   // Show/hide album + share buttons. Engine-aware: YT needs a release
   // ID, LOC needs a loaded item. See openPlayerRelease for the
@@ -2640,7 +2640,9 @@ window._npTitleClick = _npTitleClick;
 // fast-forward / scrub. Idempotent — already-stamped pairs are skipped.
 let _baPlayerStampTimer = null;
 function _baStampMiniPlayer() {
-  if (!window._isAdmin) return;
+  // Runs for all users: the 📜 lyric badge is public. Admin-only 🎸
+  // artist badges only appear when the /check response carries `artists`
+  // (withheld from non-admins), so no extra gate is needed here.
   if (_baPlayerStampTimer) clearTimeout(_baPlayerStampTimer);
   _baPlayerStampTimer = setTimeout(_baStampMiniPlayerNow, 350);
 }
@@ -5170,9 +5172,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
       try { await window._ensureAdminFlag(); } catch {}
     }
-    if (window._isAdmin) {
-      _baStampArchiveIndicators(targetId, d, searchResult).catch(() => {});
-    }
+    // Runs for everyone now: the /check probe returns lyric-match data
+    // (📜) publicly, and only the admin-only 🎸 / 🎼 / release archive
+    // half is withheld server-side. For non-admins the response carries
+    // no artist/release/tuning keys, so those loops stamp nothing and
+    // only the 📜 lyric badge lands.
+    _baStampArchiveIndicators(targetId, d, searchResult).catch(() => {});
   })();
 }
 
@@ -5333,10 +5338,13 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
   });
 }
 
-// Click 📜 → open the lyric viewer popup. Lazy-loads blues-archive.js
-// if needed so the viewer is available even when the user hasn't
-// visited the archive view yet this session.
+// Click 📜 → open the lyric viewer popup.
+//   • Admin: the full editor viewer in blues-archive.js (lazy-loaded).
+//   • Everyone else: the read-only public viewer below, which fetches
+//     the copyright-gated /api/lyrics/:id/public endpoint. The gate is
+//     enforced server-side, so this client branch is just UX.
 function _baOpenLyricFromBadge(lyricId) {
+  if (!window._isAdmin) { _baOpenLyricPublic(lyricId); return; }
   const tryOpen = () => {
     if (typeof window._baOpenLyric === "function") {
       window._baOpenLyric(lyricId);
@@ -5352,6 +5360,58 @@ function _baOpenLyricFromBadge(lyricId) {
   }
 }
 window._baOpenLyricFromBadge = _baOpenLyricFromBadge;
+
+// Read-only public lyric viewer. Lives in modal.js (loaded on every
+// page) so it's available to signed-out visitors who never touch the
+// admin-only blues-archive.js module. Renders the words only when the
+// server says the lyric is viewable (first_release_year <= public
+// cutoff); otherwise shows a short "not public yet" notice. No edit,
+// favorite, delete, or pin controls — purely display.
+async function _baOpenLyricPublic(lyricId) {
+  let overlay = document.getElementById("ba-lyric-public-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-lyric-public-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "320", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  const shell = (inner) => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(680px,100%)">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.3rem">
+        <button class="archive-btn" onclick="document.getElementById('ba-lyric-public-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem" aria-label="Close">×</button>
+      </div>
+      ${inner}
+    </div>`;
+  overlay.innerHTML = shell(`<div style="color:var(--muted);padding:1rem 0">Loading…</div>`);
+  try {
+    const r = await apiFetch(`/api/lyrics/${lyricId}/public`);
+    if (!r.ok) { overlay.innerHTML = shell(`<div style="color:#e88;padding:0.5rem 0">Couldn't load this lyric.</div>`); return; }
+    const row = await r.json();
+    const meta = [row.artist, row.first_release_year].filter(Boolean).join(" · ");
+    const head = `
+      <div style="font-size:1.1rem;font-weight:600;color:var(--text)">${escHtml(row.page_title || "(untitled)")}</div>
+      ${meta ? `<div style="color:var(--muted);font-size:0.82rem;margin-top:0.15rem">${escHtml(meta)}${row.tuning ? ` · ${escHtml(row.tuning)}` : ""}</div>` : ""}`;
+    if (!row.viewable) {
+      overlay.innerHTML = shell(`
+        ${head}
+        <div style="margin-top:0.9rem;padding:0.8rem 0.9rem;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02);color:var(--muted);font-size:0.86rem;line-height:1.5">
+          These lyrics aren't public yet. To respect copyright, full lyrics are shown only for songs first released in ${row.maxYear ?? 1930} or earlier${row.first_release_year ? ` (this one dates to ${row.first_release_year})` : (row.first_release_year === null ? " (release year not yet confirmed)" : "")}.
+        </div>`);
+      return;
+    }
+    overlay.innerHTML = shell(`
+      ${head}
+      <pre style="margin-top:0.9rem;white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:0.92rem;line-height:1.55;color:var(--text)">${escHtml(row.plaintext || "")}</pre>`);
+  } catch {
+    overlay.innerHTML = shell(`<div style="color:#e88;padding:0.5rem 0">Couldn't load this lyric.</div>`);
+  }
+}
+window._baOpenLyricPublic = _baOpenLyricPublic;
 window._baStampArchiveIndicators = _baStampArchiveIndicators;
 
 // Helper: open the archive artist popup overlay in place. The overlay
