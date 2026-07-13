@@ -16966,11 +16966,20 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
             // Path 4: legacy artist-string match — works for everyone (no
             // blues_artists dependency), so this is the primary lyric-match
             // path for public users on album modals that carry an artist.
-            if (artistNames.length) {
+            // The artist comparison is punctuation-insensitive (both sides
+            // reduced to [a-z0-9]) so Discogs name variants match the archive
+            // spelling — e.g. the media bar's "Ed. Andrews*" (ANV asterisk +
+            // period) resolves to the lyric's "Ed Andrews". Blank normalized
+            // names are dropped so an all-punctuation artist can't match every
+            // artist-less lyric.
+            const artistNamesNorm = artistNames
+                .map(n => n.toLowerCase().replace(/[^a-z0-9]/g, ""))
+                .filter(Boolean);
+            if (artistNamesNorm.length) {
                 const r = await getPool().query(`SELECT id, page_title, artist, artist_id, first_release_year
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
-              AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($2::text[])`, [titlesLc, artistNames.map(n => n.trim().toLowerCase())]);
+              AND regexp_replace(LOWER(COALESCE(artist, '')), '[^a-z0-9]', '', 'g') = ANY($2::text[])`, [titlesLc, artistNamesNorm]);
                 for (const row of r.rows) {
                     const k = String(row.page_title).trim().toLowerCase();
                     if (!out.tracks[k])

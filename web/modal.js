@@ -2581,7 +2581,15 @@ window.playerBarClick = playerBarClick;
 // clicking the artist link actually searches for the artist instead
 // of nothing.
 function _normalizeYtArtist(s) {
-  return String(s || "").replace(/\s*[-–—·•]\s*Topic\s*$/i, "").trim();
+  return String(s || "")
+    // YouTube auto-channel suffix.
+    .replace(/\s*[-–—·•]\s*Topic\s*$/i, "")
+    // Discogs disambiguator "(4)" and ANV/variant asterisk "Ed. Andrews*"
+    // — neither belongs in a display name, and stripping them lets the
+    // media-bar lyric badge match the archive's canonical spelling.
+    .replace(/\s*\(\d+\)\s*$/, "")
+    .replace(/\*+$/, "")
+    .trim();
 }
 window._normalizeYtArtist = _normalizeYtArtist;
 
@@ -2668,12 +2676,19 @@ async function _baStampMiniPlayerNow() {
   const playerRelIdN  = Number(window._playerReleaseId);
   const releaseId = (playerRelType === "release" && Number.isFinite(playerRelIdN) && playerRelIdN > 0) ? playerRelIdN : undefined;
   const masterId  = (playerRelType === "master"  && Number.isFinite(playerRelIdN) && playerRelIdN > 0) ? playerRelIdN : undefined;
+  // Discogs artist id for the currently-playing track (threaded through
+  // _videoQueueMeta from the album modal's play button). Sending it lets
+  // the server match lyrics by artist_id — robust against name variants
+  // like "Ed. Andrews*" that the display-string paths miss.
+  const metaArtistIdN = Number(window._videoQueueMeta?.[window._videoQueueIndex]?.artistId);
+  const artistIds = (Number.isFinite(metaArtistIdN) && metaArtistIdN > 0) ? [metaArtistIdN] : [];
   try {
     const r = await apiFetch("/api/blues-archive/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         artistNames: artistLbl ? [artistLbl] : [],
+        artistIds,
         trackTitles: trackLbl  ? [trackLbl]  : [],
         releaseId,
         masterId,
@@ -3384,11 +3399,16 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const trackArtist = (root?.querySelector?.(".album-artist .modal-artist-link")?.dataset?.lkLabel
         || root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]
         || "").trim();
+      // Discogs artist id from the album-artist link — threaded onto the
+      // play button so the media bar can send it to /blues-archive/check
+      // and match lyrics by artist_id (formatting-proof) instead of
+      // relying on the punctuated display name ("Ed. Andrews*").
+      const trackArtistId = root?.querySelector?.(".album-artist .modal-artist-link")?.dataset?.lkId || "";
       const albumTitle  = (root?.querySelector?.("h2 .modal-title-link")?.dataset?.lkLabel
         || root?.querySelector?.("h2")?.textContent
         || "").trim();
       const entityType  = isMaster ? "master" : "release";
-      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
+      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-artist-id="${escHtml(String(trackArtistId || ""))}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
       // ＋ queue button sits immediately after ▶ in the play-cell so
       // the play / queue affordances stay grouped together (matches
       // the static render at <span class="track-play-cell">${playCell}${queueAdd}</span>).
@@ -4016,9 +4036,10 @@ function openVideo(event, url) {
     trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
     window._videoQueue      = trackLinks.map(a => a.dataset.video);
     window._videoQueueMeta  = trackLinks.map(a => ({
-      track:  a.dataset.track  || "",
-      album:  a.dataset.album  || "",
-      artist: a.dataset.artist || "",
+      track:    a.dataset.track    || "",
+      album:    a.dataset.album    || "",
+      artist:   a.dataset.artist   || "",
+      artistId: a.dataset.artistId || "",   // Discogs artist id, for the 📜 badge match
     }));
   }
   // Use the clicked element's position in the list (not indexOf, which fails with duplicate URLs)
