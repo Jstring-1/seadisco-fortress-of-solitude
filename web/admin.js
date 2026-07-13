@@ -1233,7 +1233,7 @@ let _labelDirSearchOpen = null;        // label_name currently expanded
 let _labelDirSearchResults = null;     // {[label_name]: [...candidates]}
 let _labelDirSearchLoading = false;
 let _labelDirQueryTimer = null;
-let _labelDirSortKey = "external_count";
+let _labelDirSortKey = "upstream_total";
 let _labelDirSortDir = "desc";
 let _labelDirUnassignedOnly = false;
 let _labelDirActiveSweepKey = null;    // cache_warm_catno_runs.series_key currently running
@@ -1328,7 +1328,6 @@ function _renderLabelDir() {
           <col style="width:26%">
           <col style="width:78px">
           <col style="width:78px">
-          <col style="width:78px">
           <col style="width:88px">
           <col style="width:16%">
           <col style="width:106px">
@@ -1337,7 +1336,6 @@ function _renderLabelDir() {
         <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
           <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
             ${_labelDirHeader("label_name",     "Label",         "left")}
-            ${_labelDirHeader("external_count", "Pad rows",      "right")}
             ${_labelDirHeader("cache_releases", "Cache R",       "right")}
             ${_labelDirHeader("cache_masters",  "Cache M",       "right")}
             ${_labelDirHeader("upstream_total", "Discogs total", "right")}
@@ -1562,7 +1560,6 @@ function _labelDirRowHtml(r) {
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_eHtml(displayName)}${dirtyHint}</div>
         ${aliasesLine}
       </td>
-      <td style="padding:0.3rem 0.5rem;text-align:right">${r.external_count.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_releases.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right">${r.cache_masters.toLocaleString()}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right${r.upstream_total == null ? ';color:var(--muted)' : ''}" title="${r.upstream_fetched_at ? `Fetched ${new Date(r.upstream_fetched_at).toLocaleString()}` : (r.label_id ? 'Not fetched yet — run Fetch upstream totals in the toolbar' : 'No Discogs ID assigned')}">${r.upstream_total == null ? '—' : Number(r.upstream_total).toLocaleString()}</td>
