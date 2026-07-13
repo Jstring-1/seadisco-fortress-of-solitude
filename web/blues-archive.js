@@ -232,6 +232,11 @@ function _baClearVisitedLyrics() {
 window._baClearVisitedLyrics = _baClearVisitedLyrics;
 const _baReleasesSort = { key: "year", dir: "asc" };
 const _BA_RELEASES_TYPES = { year: "num", title: "str", label: "str", type: "str" };
+// Free-text filter for the artist-popup releases section. Kept in a
+// module var (not just the DOM input) so it survives the full-popup
+// re-render that a sort-header click triggers. Reset to "" on each fresh
+// artist open in _baOpenArtist so it doesn't bleed across artists.
+let _baPopupReleasesFilter = "";
 
 // Tiny self-contained sort helpers — admin.html's _adminSort* lives
 // in admin.html only; blues-archive.js loads on the main site so
@@ -622,6 +627,7 @@ function _baCachePut(id, data) {
 
 async function _baOpenArtist(id) {
   _baCurrentArtistId = id;
+  _baPopupReleasesFilter = ""; // fresh artist — clear any prior filter
   // Reuse overlay if already there (e.g. opened twice in a row).
   let overlay = document.getElementById("ba-artist-overlay");
   if (!overlay) {
@@ -847,7 +853,7 @@ function _baRenderArtistDetail(a) {
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No lyrics matched this artist's name. (Try Import from lyrics on the list page if you've just scraped.)</p>`;
   const releasesHtml = releasesRaw.length
-    ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
+    ? `<table id="ba-popup-releases-table" class="api-log-table" style="font-size:0.84rem;width:100%">
         <thead><tr>
           ${_baSortTh("Year",  "year",  RS, "_baSortReleases")}
           ${_baSortTh("Title", "title", RS, "_baSortReleases")}
@@ -856,6 +862,9 @@ function _baRenderArtistDetail(a) {
         </tr></thead>
         <tbody>${releases.map(rel => {
           const type = String(rel.type || "release");
+          // Lowercased haystack for the in-place popup filter — matches
+          // across year, title, label, and type in one substring test.
+          const relFilter = escHtml([rel.year, rel.title, rel.label, type].filter(Boolean).join(" ").toLowerCase());
           const url  = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${rel.id}`;
           const safeUrl = url.replace(/'/g, "\\'");
           const titleHtml = (typeof entityLookupLinkHtml === "function" && rel.title)
@@ -868,7 +877,7 @@ function _baRenderArtistDetail(a) {
           // release/album popup.
           const typeSafe = escHtml(type).replace(/'/g, "\\'");
           const typeLinkHtml = `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')" style="color:var(--accent);text-decoration:none;text-transform:uppercase" title="Open ${type} popup">${escHtml(type)} ↗</a>`;
-          return `<tr style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')">
+          return `<tr data-relfilter="${relFilter}" style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')">
             <td style="white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums">${rel.year || "—"}</td>
             <td style="font-weight:600;color:var(--text)">${titleHtml}</td>
             <td style="color:#888;font-size:0.78rem">${escHtml(rel.label || "")}</td>
@@ -877,6 +886,20 @@ function _baRenderArtistDetail(a) {
         }).join("")}</tbody>
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No releases stored. Use the existing "Get all info from Discogs" button on the Blues DB tab to populate them.</p>`;
+  // Free-text filter for the releases table. Only worth showing once the
+  // list is long enough to scroll; short lists are faster to eyeball.
+  // stopPropagation on click so focusing the field doesn't toggle the
+  // parent <details>. Filtering is in-place (_baApplyPopupReleasesFilter)
+  // so typing keeps focus and doesn't re-render the popup.
+  const releasesFilterBar = releasesRaw.length > 5
+    ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+         <input id="ba-popup-releases-filter" type="search" placeholder="Filter releases: title, label, year, type…"
+                value="${escHtml(_baPopupReleasesFilter)}" oninput="_baApplyPopupReleasesFilter()"
+                onclick="event.stopPropagation()"
+                style="flex:1;min-width:180px;padding:0.35rem 0.55rem;font-size:0.82rem">
+         <span id="ba-popup-releases-count" style="font-size:0.76rem;color:var(--muted);white-space:nowrap"></span>
+       </div>`
+    : "";
   // Collapsible-section state. Each <details> reads its `open` from the
   // persisted map (default = open) and writes back on toggle. The state
   // is keyed by section name so all artist popups share the user's
@@ -984,10 +1007,36 @@ function _baRenderArtistDetail(a) {
     </details>
     <details ${isOpen("releases") ? "open" : ""} ${onToggle("releases")} style="${sectionStyle}">
       <summary style="${summaryStyle}">Releases — oldest to newest (${releases.length})</summary>
-      <div style="margin-top:0.5rem">${releasesHtml}</div>
+      <div style="margin-top:0.5rem">${releasesFilterBar}${releasesHtml}</div>
     </details>
   `;
+  // Re-apply the persisted release filter after the innerHTML swap so it
+  // survives sort re-renders (which rebuild the whole popup). No-op when
+  // the filter bar isn't present or the filter string is empty.
+  try { _baApplyPopupReleasesFilter(); } catch {}
 }
+
+// In-place filter for the artist-popup releases table. Reads the field,
+// stashes the value in the module var (so a sort re-render can restore
+// it), and shows/hides rows by substring match against each row's
+// data-relfilter haystack. Updates the "N of M" count beside the input.
+function _baApplyPopupReleasesFilter() {
+  const input = document.getElementById("ba-popup-releases-filter");
+  const table = document.getElementById("ba-popup-releases-table");
+  if (input) _baPopupReleasesFilter = input.value;
+  if (!table) return;
+  const q = (_baPopupReleasesFilter || "").trim().toLowerCase();
+  const rows = table.querySelectorAll("tbody tr[data-relfilter]");
+  let shown = 0;
+  rows.forEach(tr => {
+    const match = !q || (tr.getAttribute("data-relfilter") || "").includes(q);
+    tr.style.display = match ? "" : "none";
+    if (match) shown++;
+  });
+  const countEl = document.getElementById("ba-popup-releases-count");
+  if (countEl) countEl.textContent = q ? `${shown} of ${rows.length}` : `${rows.length}`;
+}
+window._baApplyPopupReleasesFilter = _baApplyPopupReleasesFilter;
 
 // Cascade-delete an artist AND every lyric tied to them. Two-step
 // confirm (the count of affected lyrics is shown after we look it
