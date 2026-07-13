@@ -1115,6 +1115,19 @@ e.g.  miles davis | coltrane
   <div id="labels-pagination" style="display:flex;gap:0.5rem;justify-content:center;margin:1rem 0 2rem"></div>
 </div>
 
+<!-- Admin view (admin-only). Empty shell — the dashboard markup is
+     fetched on demand from the requireAdmin-gated /admin-panel.html
+     fragment and admin.js is lazy-loaded the first time the view
+     opens (switchView('admin')), so non-admin visitors never download
+     any admin code or markup. Living inside the SPA means entering
+     the admin no longer kills the playing playlist. -->
+<div id="admin-view" style="display:none">
+  <div class="account-box admin-box">
+    <div id="admin-inline-status" style="color:var(--muted);font-size:0.9rem"></div>
+    <div id="admin-content" style="display:none"></div>
+  </div>
+</div>
+
 <!-- All Blues view: public network of inferred relationships across
      cached Discogs blues artists. Hybrid layout — title + toolbar
      sit inside a content-narrow 900px column matching every other

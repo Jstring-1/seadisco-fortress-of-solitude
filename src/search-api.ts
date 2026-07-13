@@ -723,6 +723,25 @@ app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
 // Route it through _sendHtml like the other HTML entry points.
 app.get("/admin", (_req, res, next) => { if (!_sendHtml(res, "admin.html")) next(); });
 
+// Admin dashboard markup fragment — fetched by admin.js into
+// #admin-content on both /admin and the inline /?v=admin SPA view.
+// requireAdmin-gated so non-admins never download the admin UI. Must
+// be registered BEFORE express.static (which would otherwise serve
+// web/admin-panel.html to anyone); the bare /admin-panel variant is
+// covered too because static's `extensions:["html"]` would resolve it.
+app.get(["/admin-panel.html", "/admin-panel"], async (req, res) => {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+  try {
+    const html = fs.readFileSync(path.join(__dirname, "../web/admin-panel.html"), "utf8");
+    res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+  } catch {
+    res.status(500).json({ error: "admin_panel_unreadable" });
+  }
+});
+
 // Cache headers for static assets (versioned files get long cache, HTML short)
 app.use(express.static(path.join(__dirname, "../web"), {
   extensions: ["html"],

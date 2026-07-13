@@ -4,6 +4,45 @@
 // Loaded last among admin.html's deferred scripts (after shared/modal/blues-admin).
 let clerk = null;
 
+// ── Dual-surface boot ─────────────────────────────────────────────
+// admin.js runs on two surfaces:
+//   standalone — /admin (admin.html thin shell; this script is a
+//     deferred tag there, so the shell markers below exist by the
+//     time we evaluate).
+//   inline — /?v=admin on index.html; the script is lazy-loaded by
+//     switchView long after DOMContentLoaded, no shell markers.
+// Both fetch the dashboard markup from the requireAdmin-gated
+// /admin-panel.html fragment into #admin-content, so there is exactly
+// one copy of the admin markup.
+const _ADMIN_STANDALONE = !!document.getElementById("admin-denied-section");
+
+// True while the admin content is actually on screen. Every poll loop
+// checks this so the inline view stops all admin fetches while hidden
+// behind another SPA view (music playing, admin idle in background).
+// Poll chains that die while hidden are restarted by _adminInlineOpen
+// on re-entry.
+function _adminPanelVisible() {
+  const host = document.getElementById("admin-content");
+  return !!host && host.offsetParent !== null;
+}
+
+// Fetch /admin-panel.html into #admin-content once. Returns the HTTP
+// status (200 on success, 401/403 when not admin, 0 on network error).
+// The fetch doubles as the auth probe on the inline surface.
+let _adminDomReady = false;
+async function _adminEnsureDom() {
+  if (_adminDomReady) return 200;
+  const host = document.getElementById("admin-content");
+  if (!host) return 0;
+  try {
+    const r = await apiFetch("/admin-panel.html");
+    if (!r.ok) return r.status;
+    host.innerHTML = await r.text();
+    _adminDomReady = true;
+    return 200;
+  } catch { return 0; }
+}
+
 // Convenience entry point for refresh buttons. Looks up the matching
 // status element by id convention (<btnId>.replace("-btn","-status"))
 // and runs the loader inside _adminWithRefresh — gives every refresh
@@ -117,10 +156,14 @@ function _adminSyncViewBtn() {
   b.classList.toggle("admin-btn-extras", on);
 }
 const _adminTabLoaded = {};
+// Current group — used by _adminInlineOpen to restart the active
+// tab's poll chains when the inline view is re-entered.
+let _adminActiveGroup = null;
 
 function switchAdminTab(group) {
   const g = _adminGroups[group];
   if (!g) return;
+  _adminActiveGroup = group;
   document.querySelectorAll('.admin-tab-panel').forEach(p => p.style.display = 'none');
   g.panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
   document.querySelectorAll('.admin-tab').forEach(b => {
@@ -152,6 +195,9 @@ window.addEventListener('hashchange', _adminBootTabFromHash);
 async function loadAdminWorkerStatus() {
   const bar = document.getElementById('admin-worker-status');
   if (!bar) return;
+  // Inline view hidden (or standalone pre-auth) — skip the fetch; the
+  // interval keeps ticking and resumes polling once visible again.
+  if (!_adminPanelVisible()) return;
   try {
     // One aggregate request instead of 10 per poll — see
     // /api/admin/workers/status. Response is keyed by worker.
@@ -250,8 +296,27 @@ if (!window._adminWorkerStatusTimer) {
 }
 
 function showDenied() {
-  document.getElementById("loading-section").style.display = "none";
-  document.getElementById("denied-section").style.display = "block";
+  const l = document.getElementById("admin-loading-section");
+  const d = document.getElementById("admin-denied-section");
+  if (l) l.style.display = "none";
+  if (d) d.style.display = "block";
+}
+
+// Post-auth boot shared by both surfaces: render the feedback probe
+// result, pick the boot tab, start the kill-switch check.
+function _adminBootContent(items) {
+  renderFeedback(items);
+  _adminUpdateFeedbackDot(Array.isArray(items) ? items.length : 0);
+  _adminSyncViewBtn();
+  // Boot tab: URL hash wins (e.g. /admin#labels reloads to Labels),
+  // otherwise default to Overview.
+  const bootHash = (location.hash || '').replace(/^#/, '');
+  if (bootHash && _adminGroups[bootHash]) {
+    switchAdminTab(bootHash);
+  } else {
+    switchAdminTab('overview');
+  }
+  checkKillStatus();
 }
 
 async function verifyAdmin(c) {
@@ -274,22 +339,17 @@ async function verifyAdmin(c) {
       console.warn("[verifyAdmin] feedback fetch failed:", r.status);
     }
 
-    document.getElementById("loading-section").style.display = "none";
-    document.getElementById("denied-section").style.display = "none";
+    const st = await _adminEnsureDom();
+    if (st !== 200) {
+      document.getElementById("admin-loading-section").innerHTML =
+        `<p style="color:#e88;padding:1rem">Couldn't load the admin panel (${st || "network error"}). Refresh to retry.</p>`;
+      return;
+    }
+    document.getElementById("admin-loading-section").style.display = "none";
+    document.getElementById("admin-denied-section").style.display = "none";
     document.getElementById("admin-content").style.display = "block";
 
-    renderFeedback(items);
-    _adminUpdateFeedbackDot(Array.isArray(items) ? items.length : 0);
-    _adminSyncViewBtn();
-    // Boot tab: URL hash wins (e.g. /admin#labels reloads to Labels),
-    // otherwise default to Overview.
-    const bootHash = (location.hash || '').replace(/^#/, '');
-    if (bootHash && _adminGroups[bootHash]) {
-      switchAdminTab(bootHash);
-    } else {
-      switchAdminTab('overview');
-    }
-    checkKillStatus();
+    _adminBootContent(items);
   } catch (e) {
     // Network / timeout / abort. Distinguish from real auth denial:
     // if the user has a Clerk session, they're at least signed in —
@@ -297,13 +357,53 @@ async function verifyAdmin(c) {
     // than the denied screen.
     console.warn("[verifyAdmin] threw:", e);
     if (clerk?.user) {
-      document.getElementById("loading-section").innerHTML =
+      document.getElementById("admin-loading-section").innerHTML =
         `<p style="color:#e88;padding:1rem">Couldn't reach the admin API. Check your connection and refresh.</p>`;
     } else {
       showDenied();
     }
   }
 }
+
+// ── Inline SPA entry ──────────────────────────────────────────────
+// Called by switchView('admin') on index.html after lazy-loading
+// blues-admin.js + admin.js. First call fetches the fragment (which
+// doubles as the auth probe) and boots; later calls just restart the
+// active tab's poll chains, which stop themselves while hidden.
+let _adminInlineBooted = false;
+window._adminInlineOpen = async function () {
+  const host = document.getElementById("admin-content");
+  const status = document.getElementById("admin-inline-status");
+  if (!host) return;
+  clerk = clerk || window._clerk || null;
+  if (_adminInlineBooted) {
+    host.style.display = "block";
+    loadAdminWorkerStatus();
+    if (_adminActiveGroup && _adminGroups[_adminActiveGroup]) {
+      try { _adminGroups[_adminActiveGroup].load(); } catch {}
+    }
+    return;
+  }
+  if (status) status.textContent = "Loading admin…";
+  const st = await _adminEnsureDom();
+  if (st === 401 || st === 403) {
+    if (status) status.textContent = "Access denied. Admin only.";
+    return;
+  }
+  if (st !== 200) {
+    if (status) status.textContent = "Couldn't load the admin panel. Leave and re-enter the view to retry.";
+    return;
+  }
+  if (status) status.textContent = "";
+  host.style.display = "block";
+  let items = [];
+  try {
+    const r = await apiFetch("/api/admin/feedback", { signal: AbortSignal.timeout(10000) });
+    if (r.ok) { try { items = (await r.json()).items ?? []; } catch {} }
+  } catch {}
+  _adminInlineBooted = true;
+  _adminBootContent(items);
+};
 
 
 
@@ -318,6 +418,9 @@ let _syncStatusConsecFail = 0;
 
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
+  // Inline view hidden — skip this tick; the interval keeps ticking
+  // and resumes fetching when the view is back on screen.
+  if (!_adminPanelVisible()) return;
   try {
     const r = await apiFetch("/api/admin/sync-status");
     if (!r.ok) {
@@ -936,7 +1039,7 @@ async function loadCacheWarmCatno() {
       ${recentBlock}
     `;
     // Auto-poll while the worker is running so progress visibly moves.
-    if (running && document.getElementById("panel-labels")?.style.display !== "none") {
+    if (running && _adminPanelVisible() && document.getElementById("panel-labels")?.style.display !== "none") {
       clearTimeout(window._cwcPollTimer);
       window._cwcPollTimer = setTimeout(loadCacheWarmCatno, 5000);
     }
@@ -1041,7 +1144,7 @@ async function loadExternalDiscography() {
     `;
 
     clearTimeout(window._extdiscPollTimer);
-    if (running && document.getElementById("panel-labels")?.style.display !== "none") {
+    if (running && _adminPanelVisible() && document.getElementById("panel-labels")?.style.display !== "none") {
       window._extdiscPollTimer = setTimeout(loadExternalDiscography, 5000);
     }
   } catch (err) {
@@ -1164,7 +1267,7 @@ async function loadLabelDirectory() {
     // Auto-poll while any sweep or bulk queue is running.
     clearTimeout(window._labelDirPollTimer);
     const anyRunning = _labelDirActiveSweepKey || _labelDirBulkStatus?.running;
-    if (anyRunning && document.getElementById("panel-labels")?.style.display !== "none") {
+    if (anyRunning && _adminPanelVisible() && document.getElementById("panel-labels")?.style.display !== "none") {
       window._labelDirPollTimer = setTimeout(loadLabelDirectory, 5000);
     }
   } catch (err) {
@@ -1640,7 +1743,7 @@ async function loadCoverageSweeps() {
     _renderCoverageSweeps();
     clearTimeout(window._covPollTimer);
     const anyRunning = _covArtist?.running || _covFaceted?.running;
-    if (anyRunning && document.getElementById("panel-labels")?.style.display !== "none") {
+    if (anyRunning && _adminPanelVisible() && document.getElementById("panel-labels")?.style.display !== "none") {
       window._covPollTimer = setTimeout(loadCoverageSweeps, 5000);
     }
   } catch (err) {
@@ -2030,7 +2133,7 @@ async function loadCacheProjection() {
     _cacheProjectionStatus = await r.json();
     _renderCacheProjection();
     clearTimeout(window._cacheProjectionPollTimer);
-    if (_cacheProjectionStatus?.running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+    if (_cacheProjectionStatus?.running && _adminPanelVisible() && document.getElementById("panel-cache-warm")?.style.display !== "none") {
       window._cacheProjectionPollTimer = setTimeout(loadCacheProjection, 5000);
     }
   } catch (err) {
@@ -2603,7 +2706,7 @@ async function loadCacheWarm(opts) {
     `;
 
     if (_cwPollTimer) { clearTimeout(_cwPollTimer); _cwPollTimer = null; }
-    if (running && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+    if (running && _adminPanelVisible() && document.getElementById("panel-cache-warm")?.style.display !== "none") {
       _cwPollTimer = setTimeout(loadCacheWarm, 20000);
     }
   } catch (e) {
@@ -3138,7 +3241,7 @@ async function loadYtReview() {
     `;
     // Poll while running so the cursor + counters stay live.
     if (_ytrPollTimer) { clearTimeout(_ytrPollTimer); _ytrPollTimer = null; }
-    if (running && document.getElementById("panel-yt-review")?.style.display !== "none") {
+    if (running && _adminPanelVisible() && document.getElementById("panel-yt-review")?.style.display !== "none") {
       _ytrPollTimer = setTimeout(loadYtReview, 5000);
     }
     await loadYtReviewQueue();
@@ -3908,18 +4011,20 @@ async function loadCollectionStats() {
   } catch { el.textContent = "Could not load collection stats."; }
 }
 
-// shared.js is now deferred, so wait for DOMContentLoaded before calling
-// initAuth (which lives in shared.js). Deferred scripts execute before DCL
-// in document order, so initAuth is guaranteed to be defined by the time
-// this listener fires.
-document.addEventListener("DOMContentLoaded", () => initAuth({
-  onSignedIn: verifyAdmin,
-  onSignedOut: showDenied,
-  onError: (msg) => {
-    document.getElementById("loading-section").innerHTML =
-      `<p style="color:#e88">Failed to load auth: ${escHtml(msg)}</p>`;
-  },
-}));
+// Standalone /admin only. shared.js is deferred there, so wait for
+// DOMContentLoaded before calling initAuth (which lives in shared.js).
+// On the inline surface Clerk is already resolved by app.js and the
+// entry point is window._adminInlineOpen instead.
+if (_ADMIN_STANDALONE) {
+  document.addEventListener("DOMContentLoaded", () => initAuth({
+    onSignedIn: verifyAdmin,
+    onSignedOut: showDenied,
+    onError: (msg) => {
+      document.getElementById("admin-loading-section").innerHTML =
+        `<p style="color:#e88">Failed to load auth: ${escHtml(msg)}</p>`;
+    },
+  }));
+}
 
 // ── User items popup (collection/wantlist viewer) ────────────────────
 let _adminItemsUser = "";

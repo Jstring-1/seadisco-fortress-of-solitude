@@ -299,7 +299,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues" || view === "labels") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues" || view === "labels" || view === "admin") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -333,6 +333,8 @@ function switchView(view, skipPushState = false) {
   if (musicbrainzView) musicbrainzView.style.display = "none";
   const labelsView = document.getElementById("labels-view");
   if (labelsView) labelsView.style.display = "none";
+  const adminView = document.getElementById("admin-view");
+  if (adminView) adminView.style.display = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -549,6 +551,34 @@ function switchView(view, skipPushState = false) {
     if (typeof window.initLabelsView === "function") window.initLabelsView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/labels.js").then(() => window.initLabelsView?.()).catch(() => {});
+    }
+  } else if (view === "admin") {
+    // Admin dashboard, inline. Markup comes from the requireAdmin-
+    // gated /admin-panel.html fragment; admin.js (plus blues-admin.js,
+    // which admin.js's sortable tables depend on) is lazy-loaded on
+    // first entry. Living in the SPA keeps the playing playlist alive
+    // while the admin works. Server gates every endpoint AND the
+    // fragment itself, so this client gate is just UX.
+    if (!_sdGateSignedInView()) return;
+    if (!window._isAdmin) {
+      if (typeof showToast === "function") showToast("Admin is admin-only.", "info");
+      switchView("search", true);
+      return;
+    }
+    if (adminView) adminView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof window._adminInlineOpen === "function") {
+      window._adminInlineOpen();
+    } else if (typeof window._sdLoadModule === "function") {
+      // Order matters: _sdLoadModule injects with async=false, so
+      // blues-admin.js evaluates before admin.js.
+      window._sdLoadModule("/blues-admin.js").catch(() => {});
+      window._sdLoadModule("/admin.js").then(() => window._adminInlineOpen?.()).catch(() => {
+        const s = document.getElementById("admin-inline-status");
+        if (s) s.textContent = "Couldn't load the admin module. Leave and re-enter the view to retry.";
+      });
     }
   } else if (view === "musicbrainz") {
     // Admin-only — proxied MB API search with full caching. Server

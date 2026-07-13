@@ -2090,7 +2090,20 @@ function renderSharedFooter(opts) {
       }
       if (window._serverIsAdmin) {
         const adminA = document.getElementById("footer-admin-link");
-        if (adminA) adminA.style.display = "";
+        if (adminA) {
+          adminA.style.display = "";
+          // On the SPA (index has #admin-view) open the admin inline
+          // via switchView so the playing playlist survives; the /admin
+          // href stays as fallback for account.html / admin.html pages
+          // and middle-click/new-tab.
+          if (document.getElementById("admin-view") && typeof window.switchView === "function") {
+            adminA.onclick = (e) => {
+              if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+              e.preventDefault();
+              window.switchView("admin");
+            };
+          }
+        }
         // When viewing-as-user, drop a small fixed chip in the corner
         // so the admin can see they're impersonating + restore with
         // one click. Hidden in any other state. Only injected once.
