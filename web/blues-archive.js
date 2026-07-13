@@ -14,6 +14,12 @@ let _baCurrentArtistId = null;
 // (server still owns pagination); the detail page sorts whichever
 // inner table the user clicks (full lists).
 let _baListRowsCache = [];
+// Bulk-select state for the artist list. A Set of artist ids that
+// survives pagination (rows re-bind to it every render); the
+// "Select all matching" fan-out can push in ids beyond the current
+// page. Capped flag mirrors the lyrics bulk editor.
+const _baArtistsSelectedIds = new Set();
+let _baArtistsSelectedCapped = false;
 // Category filter — set by the stats-strip chips, cleared by clicking
 // "Artists" (or the × on the filter indicator). One of:
 //   "", "with_both", "with_lyrics_only", "with_releases_only", "empty"
@@ -476,6 +482,7 @@ function _baRenderListTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.86rem;width:100%;table-layout:fixed">
       <colgroup>
+        <col style="width:32px">
         <col style="width:52px">
         <col>
         <col style="width:110px">
@@ -486,6 +493,7 @@ function _baRenderListTable() {
         <col style="width:60px">
       </colgroup>
       <thead><tr>
+        <th style="width:32px;text-align:center"><input type="checkbox" id="ba-artists-cb-all" onclick="_baArtistsToggleAllOnPage(this.checked)" title="Select every artist on this page"></th>
         ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
         ${_baSortTh("Name",       "name",               S, "_baSortList")}
         ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
@@ -566,7 +574,9 @@ function _baRenderListTable() {
         const wikiHtml = wikiSuffix
           ? `<a href="https://en.wikipedia.org/wiki/${encodeURIComponent(wikiSuffix)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Wikipedia: ${escHtml(wikiSuffix)}" style="color:#7bc77b;text-decoration:none">✓</a>`
           : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="No Wikipedia link — click to edit this artist and add one" style="color:#666;text-decoration:none">—</a>`;
+        const cbChecked = _baArtistsSelectedIds.has(Number(row.id)) ? " checked" : "";
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
+          <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="ba-artist-cb" data-artist-cb="${row.id}" onclick="event.stopPropagation();_baArtistsToggleRow(${row.id}, this.checked)"${cbChecked}></td>
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
           <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${strictBadge}${discogsSearchHtml}${wikiSearchHtml}${editorHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
@@ -578,6 +588,10 @@ function _baRenderListTable() {
         </tr>`;
       }).join("")}</tbody>
     </table>`;
+  // Re-sync the header checkbox + bulk bar against the persistent
+  // selection Set (which survives pagination). Per-row boxes were
+  // already stamped inline via cbChecked above.
+  _baArtistsSyncSelectionUI();
 }
 
 function _baRenderPager() {
@@ -598,6 +612,141 @@ function _baGoToPage(p) {
   _baLoadList();
 }
 window._baGoToPage = _baGoToPage;
+
+// ── Bulk artist select + delete ──────────────────────────────────────
+// Mirrors the lyrics bulk editor: per-row checkboxes bind to a Set that
+// persists across pagination; a bulk bar appears once anything's picked.
+function _baArtistsToggleRow(id, checked) {
+  const n = Number(id);
+  if (!Number.isFinite(n)) return;
+  if (checked) _baArtistsSelectedIds.add(n);
+  else         _baArtistsSelectedIds.delete(n);
+  _baArtistsSelectedCapped = false; // any manual edit invalidates the cap flag
+  _baArtistsSyncSelectionUI();
+}
+window._baArtistsToggleRow = _baArtistsToggleRow;
+
+function _baArtistsToggleAllOnPage(checked) {
+  for (const r of (_baListRowsCache || [])) {
+    const n = Number(r.id);
+    if (!Number.isFinite(n)) continue;
+    if (checked) _baArtistsSelectedIds.add(n);
+    else         _baArtistsSelectedIds.delete(n);
+  }
+  _baArtistsSelectedCapped = false;
+  document.querySelectorAll(".ba-artist-cb").forEach(cb => {
+    cb.checked = _baArtistsSelectedIds.has(Number(cb.getAttribute("data-artist-cb")));
+  });
+  _baArtistsSyncSelectionUI();
+}
+window._baArtistsToggleAllOnPage = _baArtistsToggleAllOnPage;
+
+// Refresh the header tri-state checkbox + bulk bar from the Set. Called
+// after each table render and every selection change.
+function _baArtistsSyncSelectionUI() {
+  const hdr = document.getElementById("ba-artists-cb-all");
+  if (hdr) {
+    const pageIds = (_baListRowsCache || []).map(r => Number(r.id));
+    const sel = pageIds.filter(id => _baArtistsSelectedIds.has(id)).length;
+    const allOnPage = pageIds.length > 0 && sel === pageIds.length;
+    hdr.checked = allOnPage;
+    hdr.indeterminate = sel > 0 && !allOnPage;
+  }
+  _baArtistsRenderBulkBar();
+}
+
+async function _baArtistsSelectAllMatching() {
+  const params = new URLSearchParams();
+  const q = (document.getElementById("blues-archive-search")?.value || "").trim();
+  if (q) params.set("q", q);
+  if (_baListCategory) params.set("category", _baListCategory);
+  if (document.getElementById("blues-archive-no-wiki")?.checked)    params.set("no_wiki", "1");
+  if (document.getElementById("blues-archive-no-discogs")?.checked) params.set("no_discogs", "1");
+  const strictMode = document.getElementById("blues-archive-strict-filter")?.value || "";
+  if (strictMode === "has") params.set("has_strict", "1");
+  else if (strictMode === "no") params.set("no_strict", "1");
+  try {
+    const r = await apiFetch(`/api/admin/blues/matching-ids?${params}`);
+    if (!r.ok) { alert(`Select-all failed: HTTP ${r.status}`); return; }
+    const { ids = [], capped = false } = await r.json();
+    for (const id of ids) { const n = Number(id); if (Number.isFinite(n)) _baArtistsSelectedIds.add(n); }
+    _baArtistsSelectedCapped = !!capped;
+    document.querySelectorAll(".ba-artist-cb").forEach(cb => {
+      cb.checked = _baArtistsSelectedIds.has(Number(cb.getAttribute("data-artist-cb")));
+    });
+    _baArtistsSyncSelectionUI();
+  } catch (e) {
+    alert(`Select-all failed: ${String(e?.message || e)}`);
+  }
+}
+window._baArtistsSelectAllMatching = _baArtistsSelectAllMatching;
+
+function _baArtistsClearSelection() {
+  _baArtistsSelectedIds.clear();
+  _baArtistsSelectedCapped = false;
+  document.querySelectorAll(".ba-artist-cb").forEach(cb => { cb.checked = false; });
+  _baArtistsSyncSelectionUI();
+}
+window._baArtistsClearSelection = _baArtistsClearSelection;
+
+function _baArtistsRenderBulkBar() {
+  const el = document.getElementById("blues-archive-artists-bulkbar");
+  if (!el) return;
+  const n = _baArtistsSelectedIds.size;
+  if (!n) { el.style.display = "none"; el.innerHTML = ""; return; }
+  el.style.display = "";
+  const capNote = _baArtistsSelectedCapped
+    ? ` <span style="color:#e88" title="Server capped the matching-ids response at 10k; matches beyond that aren't selected.">(capped at 10k)</span>`
+    : "";
+  el.innerHTML = `
+    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+      <strong>${n.toLocaleString()} artist${n === 1 ? "" : "s"} selected</strong>${capNote}
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baArtistsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching filter</a>
+      <span style="color:var(--muted)">·</span>
+      <a href="#" onclick="event.preventDefault();_baArtistsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
+      <span style="margin-left:auto;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <label style="display:inline-flex;align-items:center;gap:0.3rem;color:var(--muted)" title="Also hard-delete every lyric tied to these artists (FK-linked + legacy name-matched). Off = lyrics are kept but their artist link is cleared.">
+          <input type="checkbox" id="ba-artists-bulk-lyrics"> delete their lyrics too
+        </label>
+        <button type="button" class="archive-btn" onclick="_baArtistsBulkDelete()" title="Permanently delete every selected artist. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
+      </span>
+    </div>`;
+}
+window._baArtistsRenderBulkBar = _baArtistsRenderBulkBar;
+
+async function _baArtistsBulkDelete() {
+  const ids = Array.from(_baArtistsSelectedIds);
+  if (!ids.length) return;
+  const n = ids.length;
+  const withLyrics = !!document.getElementById("ba-artists-bulk-lyrics")?.checked;
+  const lyricsNote = withLyrics ? " AND every lyric tied to them" : " (their lyrics are kept, just unlinked)";
+  if (!confirm(`Permanently delete ${n.toLocaleString()} artist${n === 1 ? "" : "s"}${lyricsNote}?\n\nThis cannot be undone.`)) return;
+  // Big-batch second confirm — same guard as the lyrics bulk delete.
+  if (n > 25) {
+    const typed = prompt(`Type "delete ${n}" to confirm:`);
+    if (typed !== `delete ${n}`) { alert("Confirmation didn't match — cancelled."); return; }
+  }
+  try {
+    const r = await apiFetch("/api/admin/blues/bulk-delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids, withLyrics }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(`Bulk delete failed: ${j?.error || r.status}`); return; }
+    if (typeof showToast === "function") {
+      const ly = withLyrics ? ` · ${(j.lyricsDeleted ?? 0).toLocaleString()} lyric${j.lyricsDeleted === 1 ? "" : "s"}` : "";
+      showToast(`Deleted ${(j.deleted ?? 0).toLocaleString()} artist${j.deleted === 1 ? "" : "s"}${ly}`, "info");
+    }
+    _baArtistsClearSelection();
+    if (typeof _baLoadStats === "function") _baLoadStats();
+    _baLoadList();
+  } catch (e) {
+    alert(`Bulk delete failed: ${String(e?.message || e)}`);
+  }
+}
+window._baArtistsBulkDelete = _baArtistsBulkDelete;
 
 // Open an artist as an overlay popup. Was previously a page swap that
 // hid .blues-archive-list and rendered into #blues-archive-detail; the

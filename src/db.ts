@@ -14119,3 +14119,114 @@ export async function getQueryableSchema(): Promise<Record<string, Array<{ colum
   }
   return out;
 }
+
+// ── Bulk artist delete + filter-match ids (Blues Archive) ────────────
+// Batched sibling of deleteBluesArtistAndLyrics for the checkbox-driven
+// "Delete selected" action. One transaction: optionally cascade every
+// lyric linked to the selected artists (FK-linked + legacy name-matched
+// orphans), then drop the artist rows. withLyrics=false leaves lyrics
+// in place (their artist_id nulls out via ON DELETE SET NULL) — matches
+// the single-delete endpoint's default.
+export async function bulkDeleteBluesArtists(
+  ids: number[],
+  opts: { withLyrics?: boolean } = {},
+): Promise<{ deleted: number; lyricsDeleted: number }> {
+  const clean = Array.from(new Set(
+    (ids || []).map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0),
+  ));
+  if (!clean.length) return { deleted: 0, lyricsDeleted: 0 };
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    let lyricsDeleted = 0;
+    if (opts.withLyrics) {
+      // Grab the names up front so the legacy name-match orphan sweep
+      // still works after the artist rows are gone.
+      const namesR = await client.query(
+        `SELECT name FROM blues_artists WHERE id = ANY($1::int[])`, [clean],
+      );
+      const names = namesR.rows
+        .map((r: any) => String(r.name || "").trim().toLowerCase())
+        .filter(Boolean);
+      const r1 = await client.query(
+        `DELETE FROM blues_lyrics WHERE artist_id = ANY($1::int[])`, [clean],
+      );
+      lyricsDeleted += r1.rowCount ?? 0;
+      if (names.length) {
+        const r2 = await client.query(
+          `DELETE FROM blues_lyrics
+            WHERE artist_id IS NULL
+              AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($1::text[])`,
+          [names],
+        );
+        lyricsDeleted += r2.rowCount ?? 0;
+      }
+    }
+    const rd = await client.query(
+      `DELETE FROM blues_artists WHERE id = ANY($1::int[])`, [clean],
+    );
+    await client.query("COMMIT");
+    return { deleted: rd.rowCount ?? 0, lyricsDeleted };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// Every blues_artists id matching the same filters the Blues Archive
+// list endpoint uses. Powers "Select all matching" on the bulk-delete
+// bar so a filtered set can be actioned beyond the current page. Capped
+// at 10k; `capped` signals the caller that matches beyond the cap exist.
+// WHERE clauses mirror listBluesArchive — keep the two in sync.
+export async function listBluesArtistIdsMatching(opts: {
+  search?: string;
+  category?: "with_both" | "with_lyrics_only" | "with_releases_only" | "empty";
+  noWiki?: boolean;
+  noDiscogsId?: boolean;
+  hasStrict?: boolean;
+  noStrict?: boolean;
+  limit?: number;
+} = {}): Promise<{ ids: number[]; capped: boolean }> {
+  const cap = Math.max(1, Math.min(10_000, Math.trunc(opts.limit ?? 10_000)));
+  const params: any[] = [];
+  const where: string[] = [];
+  if (opts.search) {
+    const raw = opts.search.trim();
+    params.push(`%${raw}%`);
+    const likePh = `$${params.length}`;
+    const nameOrNotes = `(a.name ILIKE ${likePh} OR a.notes ILIKE ${likePh})`;
+    if (/^\d+$/.test(raw)) {
+      params.push(parseInt(raw, 10));
+      where.push(`(${nameOrNotes} OR a.discogs_id = $${params.length})`);
+    } else {
+      where.push(nameOrNotes);
+    }
+  }
+  if (opts.category) {
+    const HAS_LYRICS = `EXISTS (
+      SELECT 1 FROM blues_lyrics l
+       WHERE l.artist_id = a.id
+          OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(a.name))
+    )`;
+    const HAS_RELEASES = `COALESCE(jsonb_array_length(a.discogs_releases), 0) > 0`;
+    if      (opts.category === "with_both")          where.push(`${HAS_LYRICS} AND ${HAS_RELEASES}`);
+    else if (opts.category === "with_lyrics_only")   where.push(`${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+    else if (opts.category === "with_releases_only") where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
+    else if (opts.category === "empty")              where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+  }
+  if (opts.noWiki)      where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
+  if (opts.noDiscogsId) where.push(`a.discogs_id IS NULL`);
+  if (opts.hasStrict)   where.push(`a.seed_strict_count > 0`);
+  if (opts.noStrict)    where.push(`COALESCE(a.seed_strict_count, 0) = 0`);
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  params.push(cap + 1);
+  const r = await getPool().query(
+    `SELECT a.id FROM blues_artists a ${whereSql} ORDER BY a.id LIMIT $${params.length}`,
+    params,
+  );
+  const all = r.rows.map((x: any) => Number(x.id));
+  const capped = all.length > cap;
+  return { ids: capped ? all.slice(0, cap) : all, capped };
+}
