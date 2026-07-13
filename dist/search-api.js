@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, bulkDeleteBluesArtists, listBluesArtistIdsMatching, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, bulkDeleteBluesArtists, listBluesArtistIdsMatching, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
@@ -35,7 +35,6 @@ import { initAllBluesModule, startAllBluesRun, requestAllBluesStop, isAllBluesRu
 import { mbFetch, mbBuildLuceneQuery } from "./musicbrainz-client.js";
 import { mbCacheGet, mbCacheSet, listMbSaves, listMbSaveIds, addMbSave, removeMbSave } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
 const discogsConsumerKey = process.env.DISCOGS_CONSUMER_KEY ?? "";
 const discogsConsumerSecret = process.env.DISCOGS_CONSUMER_SECRET ?? "";
@@ -15204,76 +15203,6 @@ app.get("/api/admin/query/schema", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// POST /api/admin/query/nl — English → SQL draft via Claude.
-// Body: { prompt: string }. Returns { sql }. The client drops the draft
-// into the editor for the admin to review before running — nothing runs
-// automatically.
-app.post("/api/admin/query/nl", express.json({ limit: "8kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    if (!anthropicKey) {
-        res.status(503).json({ error: "AI not configured (ANTHROPIC_API_KEY unset)." });
-        return;
-    }
-    const prompt = String(req.body?.prompt ?? "").trim().slice(0, 2000);
-    if (!prompt) {
-        res.status(400).json({ error: "Empty request." });
-        return;
-    }
-    try {
-        const schema = await getQueryableSchema();
-        const schemaText = Object.entries(schema)
-            .map(([t, cols]) => `${t}(${cols.map(c => `${c.column} ${c.type}`).join(", ")})`)
-            .join("\n");
-        const system = `You translate a data question into ONE read-only PostgreSQL SELECT for the SeaDisco music cache.
-
-Schema (only these tables):
-${schemaText}
-
-Domain notes:
-- "strict" / "strict blues" artists = blues_artists rows with seed_strict_count > 0 (they have at least one strictly-Blues master in the cache).
-- An artist's year = blues_artists.first_recording_year. A lyric/song's year = blues_lyrics.first_release_year. A release's year = release_cache/discogs_cache_masters_plus year (or (data->>'year')::int in release_cache).
-- release_cache.data is the full Discogs JSONB: data->>'title', (data->>'year')::int, data->'artists' (array of {name,id}), data->'genres', data->'styles', data->>'country', data->'labels' (array of {name,catno}). discogs_cache_masters_plus has promoted scalar columns year/country/primary_format plus the same data JSONB.
-- blues_artists.aliases and collaborators are jsonb arrays; discogs_releases is a jsonb array of {id,title,year,label,type,role}.
-
-Rules:
-- Output ONLY the SQL. No markdown, no code fences, no explanation.
-- Exactly one statement, SELECT (or WITH … SELECT) only. Never write.
-- Prefer explicit column lists over SELECT *. Add a sane ORDER BY.
-- If the question implies a lot of rows, add LIMIT 1000.`;
-        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "x-api-key": anthropicKey,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "claude-sonnet-5",
-                max_tokens: 1024,
-                system,
-                messages: [{ role: "user", content: prompt }],
-            }),
-            context: "admin query NL→SQL",
-        });
-        const data = await r.json();
-        if (!r.ok) {
-            res.status(502).json({ error: `AI error: ${data?.error?.message ?? r.status}` });
-            return;
-        }
-        let sql = String(data?.content?.[0]?.text ?? "").trim();
-        // Strip any code fences the model added despite instructions.
-        sql = sql.replace(/^```(?:sql)?\s*/i, "").replace(/\s*```$/, "").trim();
-        if (!sql) {
-            res.status(502).json({ error: "AI returned no SQL." });
-            return;
-        }
-        res.json({ sql });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/admin/lyrics/tunings — distinct tunings + counts
 app.get("/api/admin/lyrics/tunings", async (req, res) => {
     if (!await requireAdmin(req, res))
@@ -17097,121 +17026,6 @@ app.get("/api/lyrics/:id/public", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-// POST /api/ai-search — Claude music recommendations
-app.post("/api/ai-search", express.json(), async (req, res) => {
-    const userId = await getClerkUserId(req);
-    if (!userId) {
-        res.status(401).json({ error: "no_token" });
-        return;
-    }
-    if (!anthropicKey) {
-        res.status(503).json({ error: "AI not configured" });
-        return;
-    }
-    const q = (req.body.q ?? "").trim();
-    if (!q) {
-        res.status(400).json({ error: "Query required" });
-        return;
-    }
-    // Pull a compact list of titles the user already owns (collection)
-    // or wants (wantlist) so we can tell Claude to avoid those — and
-    // ideally avoid recommending other albums by artists already deeply
-    // represented in the user's library. Capped at 200 lines so the
-    // prompt stays within token budget. Best-effort: empty array if
-    // the lookup fails or the user has no synced library.
-    const exclusionTitles = await getAiExclusionTitles(userId, 200).catch(() => []);
-    const exclusionBlock = exclusionTitles.length
-        ? `\n\nUSER LIBRARY (DO NOT RECOMMEND THESE):
-The user already owns or has on their wantlist the following ${exclusionTitles.length} releases${exclusionTitles.length >= 200 ? " (sample of a larger library)" : ""}. Skip every one of them, AND avoid the most obvious other releases by artists who appear here multiple times — they're already familiar.
-
-${exclusionTitles.map(t => `- ${t}`).join("\n")}\n`
-        : "";
-    const prompt = `You are a deep-catalog music expert — a record-shop digger, not a radio programmer.
-The user is searching for: "${q}"
-
-Your job: surface LESSER-KNOWN, scene-accurate recommendations. Treat this like a crate-digging session, not a "best of" list.
-
-Anchoring rules:
-1. First, silently identify the specific scene, era, region, and sub-genre of the query (e.g. "Hi-Heel Sneakers" by Tommy Tucker = mid-1960s post-war US electric blues / R&B 12-bar). Stay inside that pocket.
-2. STRONGLY AVOID household names and crossover hits. No Beatles, Stones, Big Bopper, Elvis, Dylan, Hendrix, Marley, Miles Davis, etc., unless the query is literally about them.
-3. Prefer regional contemporaries, B-sides, single-album acts, label-mates, session players who cut their own records, and obscure scene peers.
-4. If the query is a specific song/release, lean into other artists who recorded that exact style/era — not generic "similar artists".
-5. Mix artist and release types. Releases should be specific records, not greatest-hits comps.
-6. Hard exclusion: never recommend anything from the USER LIBRARY block below.${exclusionBlock}
-
-Return a JSON object with two fields:
-- blurb: one sentence (max 30 words) naming the scene/era/sound these picks share — concrete, no filler.
-- items: array of 12 recommendations.
-
-Each item must include:
-- name: artist name, or "Album Title by Artist"
-- type: "artist" or "release"
-- artist: the artist or band name (always present, even for releases)
-- album: the album/release title (only for type "release", omit for "artist")
-- label: a record label most associated with this entity if relevant (optional)
-- description: one sentence — name the scene/era and why this is a deeper cut than the obvious answer
-- discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year). year must be a single 4-digit year, never a range.
-
-Return ONLY a valid JSON object, no markdown, no explanation.`;
-    try {
-        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "x-api-key": anthropicKey,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "claude-haiku-4-5-20251001",
-                // 12 items × structured JSON with richer descriptions blew past 1700;
-                // 2800 leaves headroom so the JSON never truncates mid-array.
-                max_tokens: 2800,
-                messages: [{ role: "user", content: prompt }],
-            }),
-            context: "ai-search suggestions",
-        });
-        const data = await r.json();
-        if (!r.ok) {
-            console.error("Anthropic API error:", data);
-            res.status(502).json({ error: `AI error: ${data.error?.message ?? r.status}` });
-            return;
-        }
-        let text = (data.content?.[0]?.text ?? "{}").trim();
-        // Strip markdown code fences if present
-        text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-        let parsed;
-        try {
-            parsed = JSON.parse(text);
-        }
-        catch (parseErr) {
-            // Defensive: if the model truncated mid-array (max_tokens hit, network
-            // hiccup, etc.), salvage the well-formed prefix instead of returning
-            // a generic 500. Trim back to the last complete `},` then close the
-            // array+object brackets.
-            console.warn("[ai-search] JSON parse failed, attempting salvage. stop_reason=", data.stop_reason);
-            const lastClosed = text.lastIndexOf("},");
-            if (lastClosed > 0) {
-                const salvaged = text.slice(0, lastClosed + 1) + "]}";
-                try {
-                    parsed = JSON.parse(salvaged);
-                }
-                catch { /* fall through */ }
-            }
-            if (!parsed) {
-                res.status(502).json({ error: "AI returned malformed JSON", stop_reason: data.stop_reason });
-                return;
-            }
-        }
-        // Support both new { blurb, items } format and legacy bare array
-        const recommendations = Array.isArray(parsed) ? parsed : (parsed.items ?? []);
-        const blurb = Array.isArray(parsed) ? "" : (parsed.blurb ?? "");
-        res.json({ recommendations, blurb });
-    }
-    catch (err) {
-        console.error("AI search error:", err);
-        res.status(500).json({ error: "AI search failed: " + err.message });
-    }
-});
 // GET /api/wikipedia/search?q=X[&limit=N&offset=N] — list-style search for
 // the wiki SPA page. Returns matching articles with title + HTML snippet
 // (Wikipedia's <span class="searchmatch"> highlight markup preserved).
@@ -17369,56 +17183,6 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
     catch (err) {
         console.error("[wikipedia/lookup] error:", err);
         res.status(500).json({ error: "Wikipedia lookup failed" });
-    }
-});
-// POST /api/result-quality — Claude gives a short phrase on result relevance
-app.post("/api/result-quality", express.json(), async (req, res) => {
-    if (!await requireUser(req, res))
-        return;
-    if (!anthropicKey) {
-        res.json({ phrase: null });
-        return;
-    }
-    const { query, titles } = req.body ?? {};
-    if (!query || !Array.isArray(titles) || !titles.length) {
-        res.json({ phrase: null });
-        return;
-    }
-    const titleList = titles.slice(0, 6).map((t, i) => `${i + 1}. ${t}`).join("\n");
-    const prompt = `A user searched Discogs for: "${query}"
-
-Top results returned:
-${titleList}
-
-In 4–7 words, give a single honest phrase describing how well these results match the query. Be direct, like a librarian — e.g. "Strong match", "Partial match, try narrowing", "Loose results, refine your search", "Exact artist found", "Mixed bag, add more filters". No punctuation at the end. Return ONLY the phrase, nothing else.`;
-    try {
-        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "x-api-key": anthropicKey,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "claude-haiku-4-5-20251001",
-                max_tokens: 24,
-                messages: [{ role: "user", content: prompt }],
-            }),
-            context: "result-quality rating",
-        });
-        const data = await r.json();
-        if (!r.ok) {
-            console.error("[result-quality] Anthropic API error:", JSON.stringify(data));
-            res.json({ phrase: null });
-            return;
-        }
-        const phrase = (data.content?.[0]?.text ?? "").trim().replace(/[.!?]+$/, "") || null;
-        console.log("[result-quality] phrase:", phrase);
-        res.json({ phrase });
-    }
-    catch (err) {
-        console.error("[result-quality] fetch error:", err);
-        res.json({ phrase: null });
     }
 });
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
@@ -18114,47 +17878,6 @@ app.get("/label-bio", async (req, res) => {
         res.json({ profile: null });
     }
 });
-// GET /genre-info?genre=Jazz — returns a factual AI-generated genre description
-app.get("/genre-info", async (req, res) => {
-    if (!await requireUser(req, res))
-        return;
-    res.setHeader("Cache-Control", "private, max-age=86400"); // 24 hours
-    const genre = req.query.genre;
-    if (!genre || !genre.trim()) {
-        res.status(400).json({ error: "Missing required query parameter: genre" });
-        return;
-    }
-    if (!anthropicKey) {
-        res.json({ profile: null });
-        return;
-    }
-    try {
-        const response = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "x-api-key": anthropicKey,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "claude-haiku-4-5-20251001",
-                max_tokens: 220,
-                messages: [{
-                        role: "user",
-                        content: `Write 2–3 sentences describing "${genre}" as a music genre. State only well-established, verifiable facts: its geographic or cultural origins, defining musical characteristics, and time period it emerged. Do not name specific artists or albums. Do not speculate.`,
-                    }],
-            }),
-            context: "genre profile",
-        });
-        const data = await response.json();
-        const profile = data?.content?.[0]?.text?.trim() ?? null;
-        res.json({ profile, name: genre });
-    }
-    catch (err) {
-        console.error(err);
-        res.json({ profile: null });
-    }
-});
 // GET /marketplace-stats/:id?type=release|master
 app.get("/marketplace-stats/:id", async (req, res) => {
     if (!await requireUser(req, res))
@@ -18579,10 +18302,10 @@ app.get("/api/admin/media-stats", async (req, res) => {
         // Feature usage proxy: upstream calls per service over 7d. These
         // map ~1:1 to user-driven feature use (a Gutenberg search hits
         // gutendex, a Wikipedia open hits wikipedia, etc.).
-        const want = ["discogs", "gutendex", "wikipedia", "loc", "archive", "youtube", "anthropic"];
+        const want = ["discogs", "gutendex", "wikipedia", "loc", "archive", "youtube"];
         const labels = {
             discogs: "Discogs", gutendex: "Gutenberg", wikipedia: "Wikipedia",
-            loc: "Library of Congress", archive: "Archive.org", youtube: "YouTube", anthropic: "AI (Anthropic)",
+            loc: "Library of Congress", archive: "Archive.org", youtube: "YouTube",
         };
         const feature7d = want
             .map(s => {

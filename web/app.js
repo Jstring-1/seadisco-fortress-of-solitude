@@ -667,25 +667,6 @@ new MutationObserver(() => {
   });
 }).observe(document.body, { childList: true, subtree: true });
 
-// ── Grey out advanced toggle when AI mode selected ───────────────────────
-document.querySelectorAll('input[name="result-type"]').forEach(radio => {
-  radio.addEventListener("change", () => {
-    const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
-    if (isAi) {
-      const panel = document.getElementById("advanced-panel");
-      const arrow = document.getElementById("advanced-arrow");
-      panel.dataset.open = "false";
-      arrow.textContent = "▶";
-      arrow.classList.remove("is-open");
-    }
-    const toggleBtn = document.getElementById("advanced-toggle");
-    if (toggleBtn) {
-      toggleBtn.style.opacity  = isAi ? "0.35" : "";
-      toggleBtn.style.cursor   = isAi ? "default" : "";
-    }
-  });
-});
-
 // ── Clerk auth init ──────────────────────────────────────────────────────
 // Search remains publicly accessible (anon visitors can search Discogs
 // and play YouTube previews). The home strip (Recent / Suggestions /

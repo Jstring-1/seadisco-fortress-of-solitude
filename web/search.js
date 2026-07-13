@@ -29,21 +29,6 @@ function _sortMerged(arr, sortStr) {
 
 // ── Advanced panel toggle ─────────────────────────────────────────────────
 function toggleAdvanced(forceOpen) {
-  const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
-  if (isAi) {
-    const btn = document.getElementById("advanced-toggle");
-    const existing = document.getElementById("ai-adv-hint");
-    if (!existing) {
-      const hint = document.createElement("span");
-      hint.id = "ai-adv-hint";
-      hint.textContent = "Not available in AI mode";
-      hint.style.cssText = "font-size:0.72rem;color:#888;margin-left:0.5rem;transition:opacity 1.5s";
-      btn.parentNode.insertBefore(hint, btn.nextSibling);
-      setTimeout(() => hint.style.opacity = "0", 1500);
-      setTimeout(() => hint.remove(), 3000);
-    }
-    return;
-  }
   const panel = document.getElementById("advanced-panel");
   const arrow = document.getElementById("advanced-arrow");
   const open  = forceOpen !== undefined ? forceOpen : panel.dataset.open !== "true";
@@ -136,30 +121,6 @@ function clearFormFieldsOnly() {
 
 function clearForm() {
   clearFormFieldsOnly();
-  // The clear-form ✕ explicitly dismisses the AI results panel too.
-  if (typeof closeAiPanel === "function") closeAiPanel();
-}
-
-// AI panel entry-point: clear fields, fill the right one, run the search,
-// keep the AI panel visible so the user can pick another row afterward.
-// Search results render below the AI panel (the panel is inserted above
-// #blurb, which is above #results).
-function searchFromAiPanel(field, value) {
-  clearFormFieldsOnly();
-  if (field === "f-artist") {
-    document.getElementById("f-artist").value = value;
-    if (typeof applyEntityLinkDefaults === "function") applyEntityLinkDefaults();
-    if (typeof toggleAdvanced === "function") toggleAdvanced(true);
-  } else if (field === "f-label") {
-    document.getElementById("f-label").value = value;
-    if (typeof applyEntityLinkDefaults === "function") applyEntityLinkDefaults();
-    if (typeof toggleAdvanced === "function") toggleAdvanced(true);
-  } else {
-    const q = document.getElementById("query");
-    if (q) q.value = value;
-  }
-  // Third arg = keepAiPanel: true → doSearch skips its closeAiPanel call.
-  doSearch(1, false, true);
 }
 
 // Prefilled-search entry-point used by the 🔍 shortcuts on the Blues
@@ -220,13 +181,7 @@ function _sdRunBarcodeSearch(barcode) {
 }
 window._sdRunBarcodeSearch = _sdRunBarcodeSearch;
 
-async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
-  // A fresh, user-initiated search dismisses the AI results panel. Calls
-  // from inside the AI panel pass keepAiPanel=true via searchFromAiPanel
-  // so the panel stays put and the new results render below it.
-  if (!keepAiPanel && typeof closeAiPanel === "function") {
-    closeAiPanel();
-  }
+async function doSearch(page = 1, skipPushState = false) {
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
   const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
@@ -348,8 +303,6 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         bioFetch = apiFetch(bioUrl).catch(() => null);
       } else if (label) {
         bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`).catch(() => null);
-      } else if (genre) {
-        bioFetch = apiFetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`).catch(() => null);
       }
     }
 
@@ -1618,252 +1571,6 @@ function renderPagination() {
   btn.classList.remove("loading");
   btn.textContent = "Load more results";
 }
-
-// ── AI search ─────────────────────────────────────────────────────────────
-// AI results render into a dedicated, persistent panel (#ai-results-panel)
-// instead of the shared #blurb. The panel survives subsequent regular
-// searches so the user can read suggestions while pursuing them. It closes
-// only when the form's clear button (X) is pressed or the panel's own X
-// (top corner) is pressed.
-function _aiPanelEl() {
-  let el = document.getElementById("ai-results-panel");
-  if (el) return el;
-  el = document.createElement("div");
-  el.id = "ai-results-panel";
-  el.className = "ai-results-panel";
-  el.style.display = "none";
-  // Insert just above #blurb so it lives at the top of the search content
-  const blurb = document.getElementById("blurb");
-  if (blurb && blurb.parentNode) blurb.parentNode.insertBefore(el, blurb);
-  else document.getElementById("search-view")?.prepend(el);
-  return el;
-}
-function closeAiPanel() {
-  const el = document.getElementById("ai-results-panel");
-  if (el) { el.style.display = "none"; el.innerHTML = ""; el.classList.remove("is-minimized"); }
-  try {
-    const u = new URL(window.location.href);
-    u.searchParams.delete("ai");
-    history.replaceState({}, "", u.toString());
-  } catch {}
-}
-
-// Toggle minimized state — collapses the body to a thin clickable header bar.
-// Content and ai= URL state are preserved so the user can re-expand instantly.
-function toggleAiPanelMinimize(ev) {
-  if (ev) ev.stopPropagation();
-  const el = document.getElementById("ai-results-panel");
-  if (!el) return;
-  const nowMin = !el.classList.contains("is-minimized");
-  el.classList.toggle("is-minimized", nowMin);
-  const btn = el.querySelector(".ai-panel-min");
-  if (btn) {
-    btn.textContent = nowMin ? "+" : "–";
-    btn.title = nowMin ? "Expand AI results" : "Minimize AI results";
-  }
-}
-
-// Build a single AI item row. Each entity (artist/album/label) gets a trio
-// of links: new SeaDisco search, your-records search (orange ⌕), Wikipedia (W).
-function _aiEntityLinks(name, kind) {
-  if (!name) return "";
-  const safe = String(name).replace(/'/g, "\\'");
-  const safeEsc = escHtml(safe);
-  // SeaDisco new search — kind controls which field gets populated.
-  // Routes through searchFromAiPanel so the AI panel stays open and the
-  // search results render below it.
-  let newSearch = "";
-  if (kind === "artist") {
-    newSearch = `event.preventDefault();searchFromAiPanel('f-artist','${safeEsc}')`;
-  } else if (kind === "label") {
-    newSearch = `event.preventDefault();searchFromAiPanel('f-label','${safeEsc}')`;
-  } else {
-    // release/album/general — put into main query
-    newSearch = `event.preventDefault();searchFromAiPanel('query','${safeEsc}')`;
-  }
-  const cwField = kind === "artist" ? "cw-artist" : kind === "label" ? "cw-label" : "cw-query";
-  // Quote the entity name for Wikipedia so we get an exact-phrase match;
-  // for labels add the unquoted "record label" hint as extra search context.
-  const wikiQ = kind === "label" ? `"${name}" record label` : `"${name}"`;
-  return `<a href="#" class="ai-entity-link" onclick="${newSearch}" title="New SeaDisco search for ${escHtml(name)}">${escHtml(name)}</a>` +
-    ` <a href="#" class="track-search-icon ai-entity-icon" onclick="event.preventDefault();searchCollectionFor('${cwField}','${safeEsc}')" title="Search your records for ${escHtml(name)}">⌕</a>` +
-    ` <a href="#" class="wiki-icon ai-entity-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(String(wikiQ).replace(/'/g, "\\'"))}')" title="Wikipedia: ${escHtml(name)}">W</a>`;
-}
-
-// Build a Set of "artist|album" normalized keys from items already
-// rendered in the user's session — primarily _lastResults (search
-// results they've seen), recents, and the home strip cards. This is
-// a coarse fingerprint, not a full library scan, but combined with
-// the server-side prompt instruction it dampens the LLM's tendency
-// to recommend things the user clearly already knows about.
-function _sdAiBuildLibraryFingerprintSet() {
-  const set = new Set();
-  const add = (item) => {
-    const key = _sdAiNormalizeItemKey(item);
-    if (key) set.add(key);
-  };
-  // Local recents (history) — already-opened albums.
-  try {
-    const hist = (typeof _readHistory === "function") ? _readHistory() : [];
-    for (const h of hist) add(h);
-  } catch {}
-  // Last search results — passive but useful signal.
-  if (Array.isArray(window._lastResults)) {
-    for (const it of window._lastResults) add(it);
-  }
-  return set;
-}
-
-// Normalize an album card item shape ({ title, ... } where title is
-// either "Artist - Album" or just the album name) to a stable key.
-function _sdAiNormalizeItemKey(item) {
-  if (!item) return "";
-  const raw = String(item.title || "");
-  const idx = raw.indexOf(" - ");
-  let artist = idx > 0 ? raw.slice(0, idx) : "";
-  let album  = idx > 0 ? raw.slice(idx + 3) : raw;
-  // Some shapes carry artist separately.
-  if (Array.isArray(item.artists) && item.artists[0]?.name) artist = item.artists[0].name;
-  return _sdAiNormalize(artist) + "|" + _sdAiNormalize(album);
-}
-
-// Same shape but for an AI recommendation { artist, album, name, type }.
-function _sdAiNormalizeRecKey(rec) {
-  if (!rec) return "";
-  const artist = rec.artist || "";
-  let album = rec.album || "";
-  if (!album && rec.name) {
-    // "Album by Artist" → split
-    const m = /^(.*?)\s+by\s+(.*)$/i.exec(rec.name);
-    if (m) album = m[1];
-    else album = rec.name;
-  }
-  return _sdAiNormalize(artist) + "|" + _sdAiNormalize(album);
-}
-
-// Lowercase, strip parens/brackets, collapse whitespace, drop
-// punctuation that varies (apostrophes, hyphens). Aggressive but
-// good enough for fuzzy fingerprinting.
-function _sdAiNormalize(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/\(.*?\)/g, "")
-    .replace(/\[.*?\]/g, "")
-    .replace(/[''""`.,!?\-_]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-async function doAiSearch(q) {
-  if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
-  // Stash the query into #query first so saveSearchHistory("main") below
-  // captures it into the existing per-field history (sd_search_history)
-  // — same dropdown that surfaces general searches.
-  const qInput = document.getElementById("query");
-  if (qInput && qInput.value.trim() !== q.trim()) qInput.value = q;
-  saveSearchHistory("main");
-  // Only call switchView when we aren't already on the search view —
-  // when we are, switchView's else-branch tears down and rebuilds the
-  // Recent grid (loadRandomRecords does grid.innerHTML = ...) which
-  // causes a noticeable flash on every AI submit. The Recent grid
-  // already shows correctly; AI search just floats a panel over it.
-  const searchVisible = document.getElementById("search-view")?.style.display !== "none";
-  if (!searchVisible) {
-    switchView("search", true);
-    setActiveTab("search");
-  }
-  document.getElementById("results").innerHTML = "";
-  document.getElementById("pagination").style.display = "none";
-  document.getElementById("search-load-more").style.display = "none";
-  document.getElementById("artist-alts").innerHTML = "";
-  const blurbEl = document.getElementById("blurb");
-  if (blurbEl) blurbEl.style.display = "none";
-  setStatus("Asking Claude…");
-  document.getElementById("search-btn").disabled = true;
-  try {
-    const r = await apiFetch("/api/ai-search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }) });
-    if (r.status === 401) { setStatus("Sign in and connect your Discogs account to use AI search.", false); return; }
-    if (!r.ok) { setStatus("AI search failed. Try again.", false); return; }
-    let { recommendations, blurb } = await r.json();
-    if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
-    // Belt-and-suspenders post-filter: the server-side prompt asks
-    // Claude to skip the user's library, but the LLM doesn't always
-    // obey perfectly. Drop any recommendation whose normalized
-    // "artist - album" string fuzzy-matches a known collection /
-    // wantlist title. We don't have id-based mapping for AI picks
-    // (Claude returns titles, not Discogs ids) so name match is the
-    // best we can do client-side.
-    try {
-      const seen = _sdAiBuildLibraryFingerprintSet();
-      if (seen.size) {
-        const keep = [];
-        for (const rec of recommendations) {
-          const key = _sdAiNormalizeRecKey(rec);
-          if (key && seen.has(key)) continue;
-          keep.push(rec);
-        }
-        if (keep.length !== recommendations.length) {
-          recommendations = keep;
-        }
-      }
-    } catch { /* filter is best-effort */ }
-    if (!recommendations.length) { setStatus("All recommendations were already in your library — try a different query.", false); return; }
-    setStatus("");
-
-    // Reflect in URL so AI results are shareable.
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set("ai", q);
-      history.replaceState({}, "", u.toString());
-    } catch {}
-
-    const panel = _aiPanelEl();
-    panel.classList.remove("is-minimized");
-    panel.innerHTML = `
-      <button class="ai-panel-min" onclick="toggleAiPanelMinimize(event)" title="Minimize AI results">–</button>
-      <button class="ai-panel-close" onclick="closeAiPanel()" title="Close AI results">×</button>
-      <div class="ai-panel-head" onclick="if(document.getElementById('ai-results-panel')?.classList.contains('is-minimized')) toggleAiPanelMinimize(event)">
-        <div class="ai-panel-eyebrow">✦ AI Recommendations for "${escHtml(q)}"</div>
-        ${blurb ? `<div class="ai-panel-blurb">${escHtml(blurb)}</div>` : ""}
-      </div>
-      <div class="ai-panel-scroll">
-        ${recommendations.map(rec => {
-          const artist = rec.artist || "";
-          const album = rec.album || (rec.type === "release" && rec.name ? rec.name : "");
-          const label = rec.label || "";
-          // Prefer structured fields. Row title is the primary entity link.
-          let titleHtml;
-          if (rec.type === "artist" && artist) {
-            titleHtml = _aiEntityLinks(artist, "artist");
-          } else if (album) {
-            titleHtml = (artist ? `${_aiEntityLinks(artist, "artist")} <span class="ai-sep">·</span> ` : "") + _aiEntityLinks(album, "release");
-          } else {
-            titleHtml = _aiEntityLinks(rec.name || "", rec.type === "artist" ? "artist" : "release");
-          }
-          const labelHtml = label ? `<div class="ai-row-label"><span class="ai-row-label-tag">Label</span> ${_aiEntityLinks(label, "label")}</div>` : "";
-          return `<div class="ai-row">
-            <div class="ai-row-title">${titleHtml}</div>
-            <div class="ai-row-desc">${escHtml(rec.description || "")}</div>
-            ${labelHtml}
-          </div>`;
-        }).join("")}
-      </div>`;
-    panel.style.display = "block";
-
-    if (typeof gtag === "function") {
-      gtag("event", "page_view", {
-        page_location: window.location.href,
-        page_title: document.title
-      });
-      gtag("event", "ai_search", { search_term: q });
-    }
-  } catch (err) {
-    setStatus("AI search error: " + err.message, false);
-  } finally {
-    document.getElementById("search-btn").disabled = false;
-  }
-}
-
 
 // ── Random records for search page default ──────────────────────────────
 

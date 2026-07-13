@@ -356,22 +356,12 @@
 
       <!-- ── Query tab ──────────────────────────────────────────────
            Ad-hoc read-only SELECTs against the cache / blues tables.
-           English box drafts SQL via Claude into the editor; nothing
-           runs until the admin hits Run. Server enforces read-only
+           Nothing runs until the admin hits Run. Server enforces read-only
            (READ ONLY txn + SELECT-only + timeout + row cap). -->
       <div class="admin-tab-panel admin-grp-query" id="panel-query" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Query</h2>
           <span style="font-size:0.78rem;color:var(--muted)">Read-only SELECTs over the cache &amp; blues tables. Writes are blocked server-side.</span>
-        </div>
-
-        <!-- English → SQL draft -->
-        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
-          <input id="query-nl-input" type="text" placeholder="Ask in English, e.g. names of all strict blues artists from 1930 or before"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();queryNlToSql();}"
-                 style="flex:1;min-width:260px;padding:0.45rem 0.6rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px">
-          <button class="admin-btn" onclick="queryNlToSql()" id="query-nl-btn" title="Claude drafts SQL from your request into the editor below. Review it, then Run.">✨ Draft SQL</button>
-          <span id="query-nl-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
 
         <!-- SQL editor -->
@@ -428,7 +418,6 @@
           <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="">All Services</option>
             <option value="discogs">Discogs</option>
-            <option value="anthropic">Anthropic</option>
           </select>
           <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="24">Last 24 hours</option>

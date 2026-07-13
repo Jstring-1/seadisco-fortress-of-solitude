@@ -3605,7 +3605,7 @@ async function loadApiLog() {
 
     const statsEl = document.getElementById("api-stats-summary");
     if (stats.length) {
-      const svcColors = { discogs: "#7eb8da", anthropic: "#d4a0ff" };
+      const svcColors = { discogs: "#7eb8da" };
       statsEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.4rem 1.2rem">` + stats.map(s => {
         const failRate = s.total_requests ? Math.round((s.failures / s.total_requests) * 100) : 0;
         const failColor = failRate > 20 ? "#ff6b35" : failRate > 5 ? "#e8d44d" : "#6b8f71";
@@ -3624,7 +3624,7 @@ async function loadApiLog() {
     const listEl = document.getElementById("api-log-list");
     if (!items.length) { listEl.textContent = "No log entries found."; return; }
 
-    const svcColors = { discogs: "#7eb8da", anthropic: "#d4a0ff" };
+    const svcColors = { discogs: "#7eb8da" };
 
     const rows = items.map(item => {
       const time = new Date(item.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -4715,7 +4715,7 @@ window.adminOpenDbTablePopup = adminOpenDbTablePopup;
 
 
 // ── Query tab: ad-hoc read-only SQL over the cache / blues tables ─────
-// English box drafts SQL via Claude; Run executes a read-only SELECT
+// Run executes a read-only SELECT
 // (server enforces READ ONLY txn + SELECT-only + timeout + row cap).
 let _querySchemaLoaded = false;
 async function loadQuerySchema() {
@@ -4754,33 +4754,6 @@ function _queryShortType(t) {
   if (s === "double precision") return "float8";
   return s;
 }
-
-async function queryNlToSql() {
-  const input = document.getElementById("query-nl-input");
-  const status = document.getElementById("query-nl-status");
-  const btn = document.getElementById("query-nl-btn");
-  const prompt = (input?.value || "").trim();
-  if (!prompt) { if (status) status.textContent = "Type a request first."; return; }
-  if (btn) { btn.disabled = true; }
-  if (status) { status.textContent = "Drafting…"; status.style.color = "var(--muted)"; }
-  try {
-    const r = await apiFetch("/api/admin/query/nl", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { if (status) { status.textContent = "Failed: " + (j?.error || r.status); status.style.color = "#e88"; } return; }
-    const ta = document.getElementById("query-sql");
-    if (ta && j.sql) { ta.value = j.sql; }
-    if (status) { status.textContent = "Drafted — review, then Run."; status.style.color = "var(--muted)"; }
-  } catch (e) {
-    if (status) { status.textContent = "Failed: " + (e?.message || e); status.style.color = "#e88"; }
-  } finally {
-    if (btn) { btn.disabled = false; }
-  }
-}
-window.queryNlToSql = queryNlToSql;
 
 function _queryCell(v) {
   if (v === null || v === undefined) return `<span style="color:#555">NULL</span>`;
