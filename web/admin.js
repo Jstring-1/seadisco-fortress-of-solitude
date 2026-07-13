@@ -130,6 +130,10 @@ const _adminGroups = {
     panels: ['panel-yt-review'],
     load: () => { loadYtReview(); },
   },
+  'query': {
+    panels: ['panel-query'],
+    load: () => { loadQuerySchema(); },
+  },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
   // entries are gone too, so a stale URL hash like /admin#blues-db
@@ -4712,3 +4716,162 @@ async function adminOpenDbTablePopup(tableName) {
 }
 window.adminOpenDbTablePopup = adminOpenDbTablePopup;
 
+
+// ── Query tab: ad-hoc read-only SQL over the cache / blues tables ─────
+// English box drafts SQL via Claude; Run executes a read-only SELECT
+// (server enforces READ ONLY txn + SELECT-only + timeout + row cap).
+let _querySchemaLoaded = false;
+async function loadQuerySchema() {
+  if (_querySchemaLoaded) return;
+  const el = document.getElementById("query-schema");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/query/schema");
+    if (!r.ok) { el.textContent = "Couldn't load schema."; return; }
+    const { tables } = await r.json();
+    const names = Object.keys(tables || {}).sort();
+    if (!names.length) { el.textContent = "No tables."; return; }
+    el.innerHTML = names.map(t => `
+      <div style="margin-bottom:0.5rem">
+        <span style="color:var(--accent);font-weight:600;font-family:ui-monospace,monospace">${escHtml(t)}</span>
+        <div style="margin-left:0.8rem;line-height:1.5">${
+          (tables[t] || []).map(c =>
+            `<span title="${escHtml(c.type)}" style="display:inline-block;margin-right:0.6rem;font-family:ui-monospace,monospace;font-size:0.74rem">${escHtml(c.column)}<span style="color:#666"> ${escHtml(_queryShortType(c.type))}</span></span>`
+          ).join("")
+        }</div>
+      </div>`).join("");
+    _querySchemaLoaded = true;
+  } catch (e) {
+    el.textContent = "Couldn't load schema: " + (e?.message || e);
+  }
+}
+function _queryShortType(t) {
+  const s = String(t || "");
+  if (s === "integer") return "int";
+  if (s === "smallint") return "int2";
+  if (s === "bigint") return "int8";
+  if (s === "character varying") return "text";
+  if (s === "timestamp with time zone") return "timestamptz";
+  if (s === "timestamp without time zone") return "timestamp";
+  if (s === "boolean") return "bool";
+  if (s === "double precision") return "float8";
+  return s;
+}
+
+async function queryNlToSql() {
+  const input = document.getElementById("query-nl-input");
+  const status = document.getElementById("query-nl-status");
+  const btn = document.getElementById("query-nl-btn");
+  const prompt = (input?.value || "").trim();
+  if (!prompt) { if (status) status.textContent = "Type a request first."; return; }
+  if (btn) { btn.disabled = true; }
+  if (status) { status.textContent = "Drafting…"; status.style.color = "var(--muted)"; }
+  try {
+    const r = await apiFetch("/api/admin/query/nl", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { if (status) { status.textContent = "Failed: " + (j?.error || r.status); status.style.color = "#e88"; } return; }
+    const ta = document.getElementById("query-sql");
+    if (ta && j.sql) { ta.value = j.sql; }
+    if (status) { status.textContent = "Drafted — review, then Run."; status.style.color = "var(--muted)"; }
+  } catch (e) {
+    if (status) { status.textContent = "Failed: " + (e?.message || e); status.style.color = "#e88"; }
+  } finally {
+    if (btn) { btn.disabled = false; }
+  }
+}
+window.queryNlToSql = queryNlToSql;
+
+function _queryCell(v) {
+  if (v === null || v === undefined) return `<span style="color:#555">NULL</span>`;
+  const s = (typeof v === "object") ? JSON.stringify(v) : String(v);
+  // Truncate very long cells for display; full value stays in the title.
+  const disp = s.length > 200 ? s.slice(0, 200) + "…" : s;
+  return `<span title="${escHtml(s)}">${escHtml(disp)}</span>`;
+}
+
+async function queryRun() {
+  const status = document.getElementById("query-run-status");
+  const btn = document.getElementById("query-run-btn");
+  const out = document.getElementById("query-results");
+  const sql = (document.getElementById("query-sql")?.value || "").trim();
+  if (!sql) { if (status) status.textContent = "Write a query first."; return; }
+  const maxRows = Math.max(1, Math.min(5000, Number(document.getElementById("query-maxrows")?.value) || 1000));
+  if (btn) btn.disabled = true;
+  if (status) { status.textContent = "Running…"; status.style.color = "var(--muted)"; }
+  try {
+    const r = await apiFetch("/api/admin/query/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql, maxRows }),
+      timeoutMs: 30000,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (out) out.innerHTML = `<pre style="color:#e88;white-space:pre-wrap;font-size:0.8rem;padding:0.5rem 0">${escHtml(j?.error || ("HTTP " + r.status))}</pre>`;
+      if (status) { status.textContent = "Error"; status.style.color = "#e88"; }
+      return;
+    }
+    const { columns = [], rows = [], rowCount = 0, truncated = false, elapsedMs = 0 } = j;
+    if (status) {
+      status.style.color = "var(--muted)";
+      status.textContent = `${rowCount} row${rowCount === 1 ? "" : "s"}${truncated ? " (capped)" : ""} · ${elapsedMs}ms`;
+    }
+    if (!columns.length) { if (out) out.innerHTML = `<div style="color:var(--muted);padding:0.5rem 0">No columns.</div>`; return; }
+    if (out) {
+      out.innerHTML = `
+        <table class="api-log-table" style="font-size:0.78rem;width:100%;margin-top:0.5rem">
+          <thead><tr>${columns.map(c => `<th style="white-space:nowrap">${escHtml(c)}</th>`).join("")}</tr></thead>
+          <tbody>${rows.map(row => `<tr>${row.map(cell => `<td style="vertical-align:top;max-width:32rem">${_queryCell(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+        </table>
+        ${truncated ? `<div style="color:#e8a;font-size:0.76rem;margin-top:0.4rem">Showing first ${rowCount} rows — add a tighter WHERE/LIMIT or use CSV for the full set.</div>` : ""}`;
+    }
+  } catch (e) {
+    if (out) out.innerHTML = `<pre style="color:#e88;white-space:pre-wrap;padding:0.5rem 0">${escHtml(String(e?.message || e))}</pre>`;
+    if (status) { status.textContent = "Error"; status.style.color = "#e88"; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.queryRun = queryRun;
+
+async function queryDownloadCsv() {
+  const status = document.getElementById("query-run-status");
+  const btn = document.getElementById("query-csv-btn");
+  const sql = (document.getElementById("query-sql")?.value || "").trim();
+  if (!sql) { if (status) status.textContent = "Write a query first."; return; }
+  if (btn) btn.disabled = true;
+  if (status) { status.textContent = "Building CSV…"; status.style.color = "var(--muted)"; }
+  try {
+    const r = await apiFetch("/api/admin/query/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql, format: "csv", maxRows: 50000 }),
+      timeoutMs: 60000,
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      if (status) { status.textContent = "Failed: " + (j?.error || r.status); status.style.color = "#e88"; }
+      return;
+    }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `seadisco-query-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (status) { status.textContent = "CSV downloaded."; status.style.color = "var(--muted)"; }
+  } catch (e) {
+    if (status) { status.textContent = "Failed: " + (e?.message || e); status.style.color = "#e88"; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.queryDownloadCsv = queryDownloadCsv;
+window.loadQuerySchema = loadQuerySchema;

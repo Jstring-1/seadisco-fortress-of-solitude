@@ -14038,3 +14038,84 @@ export async function promoteOrphanLyricToArtist(lyricId: number): Promise<{
     client.release();
   }
 }
+
+// ── Ad-hoc read-only query runner (admin Query tab) ──────────────────
+// Runs an arbitrary caller-supplied SELECT against the DB with hard
+// guardrails so it can never mutate anything:
+//   1. A dedicated pooled client held for the life of the query.
+//   2. START TRANSACTION READ ONLY — Postgres rejects any write (INSERT/
+//      UPDATE/DELETE/DDL, even one smuggled through a CTE) at execution
+//      time, SQLSTATE 25006. This is the real guarantee; the SELECT-only
+//      string check in the route layer is just friendlier-error sugar.
+//   3. SET LOCAL statement_timeout so a runaway query self-aborts.
+//   4. A server-side cursor (DECLARE … FETCH FORWARD n+1). The cursor
+//      preserves the query's own ORDER BY exactly and caps rows without
+//      the "column specified more than once" failure that wrapping the
+//      query in `SELECT * FROM (…)` would hit on duplicate column names.
+// rowMode:"array" returns each row as a positional array so duplicate
+// column names survive (an object would collapse them).
+export interface ReadonlyQueryResult {
+  columns:   string[];
+  rows:      any[][];
+  rowCount:  number;
+  truncated: boolean;   // true → more rows existed than the cap returned
+  elapsedMs: number;
+}
+export async function runReadonlyQuery(
+  sql: string,
+  opts: { maxRows?: number; timeoutMs?: number } = {},
+): Promise<ReadonlyQueryResult> {
+  const maxRows   = Math.max(1, Math.min(200_000, Math.trunc(opts.maxRows ?? 1000)));
+  const timeoutMs = Math.max(1000, Math.min(60_000, Math.trunc(opts.timeoutMs ?? 15_000)));
+  const client = await getPool().connect();
+  const t0 = Date.now();
+  let inTxn = false;
+  try {
+    await client.query("START TRANSACTION READ ONLY");
+    inTxn = true;
+    // statement_timeout takes a bare integer as milliseconds. timeoutMs is
+    // a clamped integer, so this interpolation is injection-safe.
+    await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+    // The user SQL is embedded in the cursor declaration. It's validated
+    // upstream as a single SELECT/WITH statement, and the READ ONLY txn
+    // makes writes impossible regardless — arbitrary reads are the point.
+    await client.query(`DECLARE _sdq NO SCROLL CURSOR FOR ${sql}`);
+    const res = await client.query({ text: `FETCH FORWARD ${maxRows + 1} FROM _sdq`, rowMode: "array" });
+    const columns = (res.fields ?? []).map(f => f.name);
+    const all = (res.rows ?? []) as any[][];
+    const truncated = all.length > maxRows;
+    const rows = truncated ? all.slice(0, maxRows) : all;
+    return { columns, rows, rowCount: rows.length, truncated, elapsedMs: Date.now() - t0 };
+  } finally {
+    if (inTxn) { try { await client.query("ROLLBACK"); } catch { /* ignore */ } }
+    client.release();
+  }
+}
+
+// Tables the Query tab advertises in its schema cheat-sheet and feeds to
+// the NL→SQL prompt. Read-only queries can still SELECT from anything
+// (per the user's "everything" scope), but we only surface the cache /
+// blues / label / lyrics tables here — user-account + OAuth tables stay
+// out of the advertised surface and the AI context.
+const _QUERYABLE_TABLES = [
+  "release_cache", "discogs_cache_masters_plus", "discogs_cache_pressings",
+  "release_labels", "release_artists", "release_tags",
+  "blues_artists", "blues_lyrics", "blues_tunings_grid",
+  "blues_words", "blues_word_citations",
+  "external_discography", "all_blues_links", "musicbrainz_cache",
+];
+export async function getQueryableSchema(): Promise<Record<string, Array<{ column: string; type: string }>>> {
+  const r = await getPool().query(
+    `SELECT table_name, column_name, data_type
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+      ORDER BY table_name, ordinal_position`,
+    [_QUERYABLE_TABLES],
+  );
+  const out: Record<string, Array<{ column: string; type: string }>> = {};
+  for (const row of r.rows) {
+    (out[row.table_name] ||= []).push({ column: row.column_name, type: row.data_type });
+  }
+  return out;
+}

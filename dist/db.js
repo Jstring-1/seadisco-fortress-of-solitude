@@ -11575,3 +11575,60 @@ export async function promoteOrphanLyricToArtist(lyricId) {
         client.release();
     }
 }
+export async function runReadonlyQuery(sql, opts = {}) {
+    const maxRows = Math.max(1, Math.min(200_000, Math.trunc(opts.maxRows ?? 1000)));
+    const timeoutMs = Math.max(1000, Math.min(60_000, Math.trunc(opts.timeoutMs ?? 15_000)));
+    const client = await getPool().connect();
+    const t0 = Date.now();
+    let inTxn = false;
+    try {
+        await client.query("START TRANSACTION READ ONLY");
+        inTxn = true;
+        // statement_timeout takes a bare integer as milliseconds. timeoutMs is
+        // a clamped integer, so this interpolation is injection-safe.
+        await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
+        // The user SQL is embedded in the cursor declaration. It's validated
+        // upstream as a single SELECT/WITH statement, and the READ ONLY txn
+        // makes writes impossible regardless — arbitrary reads are the point.
+        await client.query(`DECLARE _sdq NO SCROLL CURSOR FOR ${sql}`);
+        const res = await client.query({ text: `FETCH FORWARD ${maxRows + 1} FROM _sdq`, rowMode: "array" });
+        const columns = (res.fields ?? []).map(f => f.name);
+        const all = (res.rows ?? []);
+        const truncated = all.length > maxRows;
+        const rows = truncated ? all.slice(0, maxRows) : all;
+        return { columns, rows, rowCount: rows.length, truncated, elapsedMs: Date.now() - t0 };
+    }
+    finally {
+        if (inTxn) {
+            try {
+                await client.query("ROLLBACK");
+            }
+            catch { /* ignore */ }
+        }
+        client.release();
+    }
+}
+// Tables the Query tab advertises in its schema cheat-sheet and feeds to
+// the NL→SQL prompt. Read-only queries can still SELECT from anything
+// (per the user's "everything" scope), but we only surface the cache /
+// blues / label / lyrics tables here — user-account + OAuth tables stay
+// out of the advertised surface and the AI context.
+const _QUERYABLE_TABLES = [
+    "release_cache", "discogs_cache_masters_plus", "discogs_cache_pressings",
+    "release_labels", "release_artists", "release_tags",
+    "blues_artists", "blues_lyrics", "blues_tunings_grid",
+    "blues_words", "blues_word_citations",
+    "external_discography", "all_blues_links", "musicbrainz_cache",
+];
+export async function getQueryableSchema() {
+    const r = await getPool().query(`SELECT table_name, column_name, data_type
+       FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+      ORDER BY table_name, ordinal_position`, [_QUERYABLE_TABLES]);
+    const out = {};
+    for (const row of r.rows) {
+        (out[row.table_name] ||= []).push({ column: row.column_name, type: row.data_type });
+    }
+    return out;
+}

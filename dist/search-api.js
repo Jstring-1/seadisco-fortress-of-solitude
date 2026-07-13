@@ -8,7 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, previewYearBackfill, applyYearBackfill, listYearBackfillBatches, rollbackYearBackfillBatch, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching, ingestBluesWords, listBluesWords, getBluesWordLetterCounts, updateBluesWord, deleteBluesWord, saveBluesWordEntry } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
@@ -15064,6 +15064,158 @@ app.post("/api/admin/lyrics/resolve-years-cache", async (req, res) => {
     }
     catch (err) {
         console.error("[lyrics resolve-years-cache]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Ad-hoc read-only query tool (admin Query tab) ────────────────────
+// Lets the admin run arbitrary SELECTs against the cache / blues tables.
+// Writes are impossible (runReadonlyQuery uses a READ ONLY transaction);
+// this validator is defense-in-depth + friendly errors for the common
+// mistakes (multi-statement, non-SELECT).
+function _validateReadonlySql(raw) {
+    let sql = String(raw ?? "").trim();
+    if (!sql)
+        return { ok: false, error: "Empty query." };
+    // Drop a single trailing semicolon, then reject any that remain — a
+    // leftover ';' means a second statement (or an injected write). This
+    // also rejects semicolons inside string literals, which cache queries
+    // essentially never need; the tradeoff buys a simple, robust gate.
+    sql = sql.replace(/;\s*$/, "");
+    if (sql.includes(";"))
+        return { ok: false, error: "Only one statement is allowed (remove the ';')." };
+    // Must begin with SELECT or WITH once leading comments/whitespace are
+    // stripped. The READ ONLY txn is the hard guarantee; this is the nice
+    // error for someone pasting an UPDATE by accident.
+    const head = sql.replace(/^(?:\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)+/, "").trimStart();
+    if (!/^(select|with)\b/i.test(head)) {
+        return { ok: false, error: "Only SELECT / WITH queries are allowed (this tool is read-only)." };
+    }
+    return { ok: true, sql };
+}
+// CSV cell escaping — quote when the value contains comma / quote /
+// newline; embedded quotes are doubled. Objects/arrays (jsonb, Postgres
+// arrays) are JSON-stringified so the cell stays on one line.
+function _csvCell(v) {
+    if (v === null || v === undefined)
+        return "";
+    let s = (typeof v === "object") ? JSON.stringify(v) : String(v);
+    if (/[",\n\r]/.test(s))
+        s = `"${s.replace(/"/g, '""')}"`;
+    return s;
+}
+// POST /api/admin/query/run — run a read-only SELECT.
+// Body: { sql: string, maxRows?: number, format?: "json" | "csv" }
+// JSON → { columns, rows, rowCount, truncated, elapsedMs }.
+// CSV  → text/csv attachment (higher row cap).
+app.post("/api/admin/query/run", express.json({ limit: "64kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const v = _validateReadonlySql(req.body?.sql);
+    if (!v.ok) {
+        res.status(400).json({ error: v.error });
+        return;
+    }
+    const format = req.body?.format === "csv" ? "csv" : "json";
+    const cap = format === "csv"
+        ? Math.max(1, Math.min(200_000, Math.trunc(Number(req.body?.maxRows) || 50_000)))
+        : Math.max(1, Math.min(5_000, Math.trunc(Number(req.body?.maxRows) || 1_000)));
+    try {
+        const out = await runReadonlyQuery(v.sql, { maxRows: cap, timeoutMs: 15_000 });
+        if (format === "csv") {
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+            res.setHeader("Content-Type", "text/csv; charset=utf-8");
+            res.setHeader("Content-Disposition", `attachment; filename="seadisco-query-${stamp}.csv"`);
+            const header = out.columns.map(_csvCell).join(",");
+            const body = out.rows.map(r => r.map(_csvCell).join(",")).join("\n");
+            res.send(header + "\n" + body + "\n");
+            return;
+        }
+        res.json(out);
+    }
+    catch (err) {
+        // Surface the Postgres error text (syntax error, read-only violation,
+        // statement timeout, etc.) so the admin can fix the query.
+        res.status(400).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/admin/query/schema — column list for the cheat-sheet panel.
+app.get("/api/admin/query/schema", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json({ tables: await getQueryableSchema() });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/admin/query/nl — English → SQL draft via Claude.
+// Body: { prompt: string }. Returns { sql }. The client drops the draft
+// into the editor for the admin to review before running — nothing runs
+// automatically.
+app.post("/api/admin/query/nl", express.json({ limit: "8kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (!anthropicKey) {
+        res.status(503).json({ error: "AI not configured (ANTHROPIC_API_KEY unset)." });
+        return;
+    }
+    const prompt = String(req.body?.prompt ?? "").trim().slice(0, 2000);
+    if (!prompt) {
+        res.status(400).json({ error: "Empty request." });
+        return;
+    }
+    try {
+        const schema = await getQueryableSchema();
+        const schemaText = Object.entries(schema)
+            .map(([t, cols]) => `${t}(${cols.map(c => `${c.column} ${c.type}`).join(", ")})`)
+            .join("\n");
+        const system = `You translate a data question into ONE read-only PostgreSQL SELECT for the SeaDisco music cache.
+
+Schema (only these tables):
+${schemaText}
+
+Domain notes:
+- "strict" / "strict blues" artists = blues_artists rows with seed_strict_count > 0 (they have at least one strictly-Blues master in the cache).
+- An artist's year = blues_artists.first_recording_year. A lyric/song's year = blues_lyrics.first_release_year. A release's year = release_cache/discogs_cache_masters_plus year (or (data->>'year')::int in release_cache).
+- release_cache.data is the full Discogs JSONB: data->>'title', (data->>'year')::int, data->'artists' (array of {name,id}), data->'genres', data->'styles', data->>'country', data->'labels' (array of {name,catno}). discogs_cache_masters_plus has promoted scalar columns year/country/primary_format plus the same data JSONB.
+- blues_artists.aliases and collaborators are jsonb arrays; discogs_releases is a jsonb array of {id,title,year,label,type,role}.
+
+Rules:
+- Output ONLY the SQL. No markdown, no code fences, no explanation.
+- Exactly one statement, SELECT (or WITH … SELECT) only. Never write.
+- Prefer explicit column lists over SELECT *. Add a sane ORDER BY.
+- If the question implies a lot of rows, add LIMIT 1000.`;
+        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+                "x-api-key": anthropicKey,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            body: JSON.stringify({
+                model: "claude-sonnet-5",
+                max_tokens: 1024,
+                system,
+                messages: [{ role: "user", content: prompt }],
+            }),
+            context: "admin query NL→SQL",
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            res.status(502).json({ error: `AI error: ${data?.error?.message ?? r.status}` });
+            return;
+        }
+        let sql = String(data?.content?.[0]?.text ?? "").trim();
+        // Strip any code fences the model added despite instructions.
+        sql = sql.replace(/^```(?:sql)?\s*/i, "").replace(/\s*```$/, "").trim();
+        if (!sql) {
+            res.status(502).json({ error: "AI returned no SQL." });
+            return;
+        }
+        res.json({ sql });
+    }
+    catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });

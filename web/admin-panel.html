@@ -36,6 +36,7 @@
         <button class="admin-tab" onclick="switchAdminTab('labels')">Labels</button>
         <button class="admin-tab" onclick="switchAdminTab('all-blues')">All Blues</button>
         <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
+        <button class="admin-tab" onclick="switchAdminTab('query')">Query</button>
       </div>
 
       <!-- Persistent worker-status bar. Populated by
@@ -351,6 +352,50 @@
         <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
         <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>
         <div id="ytr-pager" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.6rem;font-size:0.8rem"></div>
+      </div>
+
+      <!-- ── Query tab ──────────────────────────────────────────────
+           Ad-hoc read-only SELECTs against the cache / blues tables.
+           English box drafts SQL via Claude into the editor; nothing
+           runs until the admin hits Run. Server enforces read-only
+           (READ ONLY txn + SELECT-only + timeout + row cap). -->
+      <div class="admin-tab-panel admin-grp-query" id="panel-query" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Query</h2>
+          <span style="font-size:0.78rem;color:var(--muted)">Read-only SELECTs over the cache &amp; blues tables. Writes are blocked server-side.</span>
+        </div>
+
+        <!-- English → SQL draft -->
+        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
+          <input id="query-nl-input" type="text" placeholder="Ask in English, e.g. names of all strict blues artists from 1930 or before"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();queryNlToSql();}"
+                 style="flex:1;min-width:260px;padding:0.45rem 0.6rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px">
+          <button class="admin-btn" onclick="queryNlToSql()" id="query-nl-btn" title="Claude drafts SQL from your request into the editor below. Review it, then Run.">✨ Draft SQL</button>
+          <span id="query-nl-status" style="font-size:0.78rem;color:var(--muted)"></span>
+        </div>
+
+        <!-- SQL editor -->
+        <textarea id="query-sql" spellcheck="false" placeholder="SELECT name, first_recording_year FROM blues_artists WHERE seed_strict_count > 0 AND first_recording_year <= 1930 ORDER BY name;"
+                  onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();queryRun();}"
+                  style="width:100%;min-height:8.5rem;padding:0.6rem 0.7rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.82rem;line-height:1.5;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;resize:vertical"></textarea>
+
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0.5rem 0">
+          <button class="admin-btn admin-btn-sync" onclick="queryRun()" id="query-run-btn" title="Run the SELECT (Ctrl/Cmd+Enter). Read-only; capped rows.">▶ Run</button>
+          <label style="font-size:0.78rem;color:var(--muted);display:inline-flex;align-items:center;gap:0.3rem">Max rows
+            <input id="query-maxrows" type="number" value="1000" min="1" max="5000" style="width:5.5rem;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          </label>
+          <button class="admin-btn" onclick="queryDownloadCsv()" id="query-csv-btn" title="Re-run the query and download the full result set (up to 50k rows) as CSV.">⭳ CSV</button>
+          <button class="admin-btn" onclick="document.getElementById('query-sql').value='';document.getElementById('query-results').innerHTML='';" title="Clear the editor + results">Clear</button>
+          <span id="query-run-status" style="font-size:0.78rem;color:var(--muted)"></span>
+        </div>
+
+        <div id="query-results" style="overflow:auto;font-size:0.8rem"></div>
+
+        <!-- Schema cheat-sheet -->
+        <details style="margin-top:1rem">
+          <summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--accent)">📖 Tables &amp; columns</summary>
+          <div id="query-schema" style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">Loading…</div>
+        </details>
       </div>
 
       <!-- Style suggestions per Discogs genre. The genre dropdown
