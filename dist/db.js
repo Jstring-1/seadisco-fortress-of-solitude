@@ -5092,12 +5092,21 @@ export async function logApiRequest(opts) {
     catch {
         // Don't let logging failures break the app
     }
-    // Auto-prune: keep only last 10,000 rows
-    try {
-        await getPool().query(`DELETE FROM api_request_log WHERE id NOT IN (SELECT id FROM api_request_log ORDER BY created_at DESC LIMIT 10000)`);
+    // Auto-prune: keep only last 10,000 rows. This DELETE is a full anti-
+    // join scan, so running it on EVERY api call (thousands/min during a
+    // sweep) both hammered Postgres and — because logApiRequest is fired
+    // un-awaited from loggedFetch — let these slow queries pile up in the
+    // pg pool's in-memory queue, ballooning RSS. Throttle to at most once
+    // per minute; the table drifting a few hundred rows over 10k is fine.
+    if (Date.now() - _lastApiLogPruneAt > 60_000) {
+        _lastApiLogPruneAt = Date.now();
+        try {
+            await getPool().query(`DELETE FROM api_request_log WHERE id NOT IN (SELECT id FROM api_request_log ORDER BY created_at DESC LIMIT 10000)`);
+        }
+        catch { }
     }
-    catch { }
 }
+let _lastApiLogPruneAt = 0;
 export async function getApiRequestLog(opts) {
     const params = [];
     let where = "WHERE 1=1";

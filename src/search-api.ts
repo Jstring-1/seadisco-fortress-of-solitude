@@ -6515,6 +6515,9 @@ app.get("/api/youtube/search", async (req, res) => {
 // working when the daily search.list cap is hit.
 const _ytVideoInfoCache = new Map<string, { ts: number; body: any }>();
 const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// Hard cap so the map can't grow unbounded over the process lifetime —
+// every distinct videoId ever fetched used to stick around forever.
+const _YT_VIDEO_INFO_CACHE_MAX = 5000;
 app.get("/api/youtube/video-info", async (req, res) => {
   // Open to every signed-in user while the YT auto-search is
   // suspended — the per-video info call is only 1 quota unit
@@ -6581,6 +6584,12 @@ app.get("/api/youtube/video-info", async (req, res) => {
       durationSec:       sec,
       durationFormatted: sec != null ? _formatDurationSec(sec) : "",
     };
+    // Evict oldest (insertion-ordered) once over the cap so the map
+    // stays bounded — Map iteration order is insertion order.
+    if (_ytVideoInfoCache.size >= _YT_VIDEO_INFO_CACHE_MAX) {
+      const firstKey = _ytVideoInfoCache.keys().next().value;
+      if (firstKey !== undefined) _ytVideoInfoCache.delete(firstKey);
+    }
     _ytVideoInfoCache.set(videoId, { ts: Date.now(), body });
     res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(body);
