@@ -1668,7 +1668,7 @@ function renderSharedHeader(opts) {
   // you're on one. data-view is set to "discover" so syncDiscoverTabActive
   // (defined below) can flip the active class when any of the four
   // sub-views is active.
-  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz"]);
+  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"]);
   // Last-visited sub-view inside the Discover group. Persisted by
   // _sdRememberDiscoverView on every switchView call so the top-nav
   // Discover button drops the user back where they left off (LOC by
@@ -1900,7 +1900,6 @@ function renderSharedFooter(opts) {
     dig:         "Long-tail vinyl that nobody on SeaDisco has opened yet",
     // Extras tabs (admin / demo)
     "blues-archive": "Blues Archive — admin-only artist browser (lyrics + releases)",
-    musicbrainz:   "MusicBrainz — proxied entity search with caching",
     labels:        "Labels — chronological browse of cached label catalogs",
   };
   // data-sd-view marks the link for the live href-sync system below.
@@ -1975,7 +1974,6 @@ function renderSharedFooter(opts) {
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
-        <a id="footer-musicbrainz-link" href="${_seaDiscoBuildViewHref("musicbrainz")}" data-sd-view="musicbrainz" title="${escHtml(HINTS.musicbrainz)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('musicbrainz');return false"` : ""}>MusicBrainz</a>
         <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="Constellations — network of inferred relationships across cached Discogs blues artists" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>Constellations</a>
         <a id="footer-blues-archive-link" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Blues Archive</a>
         <a id="footer-labels-link" href="${_seaDiscoBuildViewHref("labels")}" data-sd-view="labels" title="${escHtml(HINTS.labels)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('labels');return false"` : ""}>Labels</a>
@@ -2177,11 +2175,6 @@ function renderSharedFooter(opts) {
       if (window._isAdmin) {
         const lbA = document.getElementById("footer-labels-link");
         if (lbA) lbA.style.display = "";
-      }
-      // MusicBrainz — admin + demo allowlist (server gate is source of truth).
-      if (window._isAdmin || window._sdIsDemo) {
-        const mbA = document.getElementById("footer-musicbrainz-link");
-        if (mbA) mbA.style.display = "";
       }
       if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the
@@ -2431,14 +2424,6 @@ function openLookupPopup(ev, scope, label, ctx) {
   // skip — Archive's index isn't well-suited to those.
   if (scope === "track" || scope === "artist" || scope === "release") {
     internal.push({ key: "archive", icon: "📼", text: "Archive.org" });
-  }
-  // MusicBrainz — admin-only. MB indexes every scope we care about
-  // (artist / release / recording / work / label / release-group), so
-  // the option shows up regardless of which entity the popup was
-  // opened for. The handler translates SeaDisco's "track" scope to
-  // MB's "recording" and "release"-style scopes stay literal.
-  if (window._isAdmin && scope !== "catno") {
-    internal.push({ key: "mb", icon: "M", text: "Search MusicBrainz" });
   }
 
   // YouTube is now an IN-APP search — popup overlay so users don't
@@ -2770,42 +2755,6 @@ function openLookupPopup(ev, scope, label, ctx) {
             ? `"${label}" "${trackArtist}"`
             : `"${label}"`;
           if (typeof openArchivePopup === "function") openArchivePopup(archiveQ);
-        }
-        else if (b.key === "mb") {
-          // Switch to the MB Discovery view and pre-fill the search
-          // form with this entity's name + best-fit MB entity type.
-          // Lazy-loads musicbrainz.js if not already in memory, then
-          // calls _mbRunSearch to fire the query without a page
-          // reload (mini-player stays alive). SeaDisco's "track"
-          // scope maps to MB's "recording"; release/release-group
-          // both make sense for a release-scoped popup so we default
-          // to release-group (the canonical "album" entity).
-          const mbEntity = scope === "artist" ? "artist"
-                         : scope === "label"  ? "label"
-                         : scope === "track"  ? "recording"
-                         : "release-group";
-          const fire = () => {
-            try {
-              if (typeof switchView === "function") switchView("musicbrainz", false);
-              setTimeout(() => {
-                try {
-                  const sel = document.getElementById("mb-entity");
-                  if (sel) { sel.value = mbEntity; if (typeof window._mbToggleEntityFilters === "function") window._mbToggleEntityFilters(); }
-                  const qEl = document.getElementById("mb-q");
-                  if (qEl) qEl.value = label;
-                  if (scope === "track" && trackArtist) {
-                    const aEl = document.getElementById("mb-artist");
-                    if (aEl) aEl.value = trackArtist;
-                  }
-                  if (typeof window._mbRunSearch === "function") window._mbRunSearch();
-                } catch {}
-              }, 60);
-            } catch {}
-          };
-          if (typeof window._mbRunSearch === "function") fire();
-          else if (typeof window._sdLoadModule === "function") {
-            window._sdLoadModule("/musicbrainz.js").then(fire).catch(() => {});
-          } else { fire(); }
         }
       } catch (err) { console.error("lookup action failed:", err); }
     });

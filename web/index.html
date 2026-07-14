@@ -768,12 +768,6 @@ e.g.  miles davis | coltrane
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
-    <!-- MusicBrainz tab — admin-only proxied search across MB's
-         artist / release / recording / work / label entity types.
-         All responses cached server-side. Mirrors the blues-archive
-         gating. -->
-    <span id="extras-tab-musicbrainz-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-musicbrainz" class="rr-tab rr-tab-restricted" onclick="switchView('musicbrainz')" title="MusicBrainz — proxied entity search with caching (admin/demo only)" style="display:none">MusicBrainz</span>
     <!-- All Blues tab — admin-only network view of inferred artist
          relationships from cached Discogs profiles. -->
     <span id="extras-tab-all-blues-sep" class="rr-tab-sep" style="display:none">/</span>
@@ -1021,82 +1015,6 @@ e.g.  miles davis | coltrane
      containers (loc-view, gutenberg-view, chronam-view) before the
      footer — when it was below the footer the footer rendered above
      the archive content. -->
-<!-- MusicBrainz view (admin-only). Search artist / release /
-     release-group / recording / work / label with Lucene-flavoured
-     filter fields. Every upstream MB call is cached server-side via
-     musicbrainz_cache so re-running the same query is local. -->
-<div id="musicbrainz-view" class="content-narrow" style="display:none">
-  <div class="loc-header">
-    <h2 class="loc-title">MusicBrainz</h2>
-    <div class="loc-tabs" id="musicbrainz-tabs">
-      <button type="button" class="loc-tab loc-tab-search active" data-mb-tab="search" onclick="_mbSwitchTab('search')">Search</button>
-      <button type="button" class="loc-tab" data-mb-tab="saved" onclick="_mbSwitchTab('saved')">Saved</button>
-    </div>
-  </div>
-
-  <div class="musicbrainz-panel-search">
-    <!-- Layout mirrors the main search form: prominent query row at
-         top, secondary controls strip below (entity selector +
-         Advanced toggle + sort), expandable advanced filter grid. -->
-    <form id="mb-search-form" onsubmit="event.preventDefault();_mbRunSearch()">
-      <div class="search-row" style="display:flex;gap:0.5rem;align-items:center">
-        <input id="mb-q" type="search" placeholder="Search MusicBrainz" autocomplete="off" style="flex:1;min-width:0;padding:0.55rem 0.75rem;font-size:0.95rem">
-        <button type="submit" class="loc-submit" style="flex-shrink:0">Search</button>
-      </div>
-      <div id="mb-advanced-panel" style="margin-top:0.5rem">
-        <!-- Entity selector + entity-aware filter grid on the same row.
-             Each label sets data-mb-filter so _mbToggleEntityFilters can
-             hide fields the selected MB index doesn't honour. -->
-        <div class="filters-grid mb-filters">
-          <label>Entity
-            <select id="mb-entity" onchange="_mbToggleEntityFilters();_mbPersistState()">
-              <option value="artist">Artist</option>
-              <option value="release-group">Release group</option>
-              <option value="release">Release</option>
-              <option value="recording">Recording</option>
-              <option value="work">Work</option>
-              <option value="label">Label</option>
-            </select>
-          </label>
-          <label data-mb-filter="artist">Artist <input id="mb-artist" type="text" placeholder="exact / partial"></label>
-          <label data-mb-filter="release">Release <input id="mb-release" type="text" placeholder="title"></label>
-          <label data-mb-filter="recording">Recording <input id="mb-recording" type="text" placeholder="track"></label>
-          <label data-mb-filter="label">Label <input id="mb-label" type="text" placeholder="name"></label>
-          <label data-mb-filter="country">Country <input id="mb-country" type="text" placeholder="US / GB / …" maxlength="2" style="text-transform:uppercase"></label>
-          <label data-mb-filter="year">Year <input id="mb-year" type="text" placeholder="1968 or 1965 TO 1972"></label>
-          <label data-mb-filter="tag">Tag <input id="mb-tag" type="text" placeholder="blues, rock, …"></label>
-          <label data-mb-filter="type">Type <input id="mb-type" type="text" placeholder="album / single / live"></label>
-        </div>
-      </div>
-    </form>
-    <div id="mb-status" class="loc-status" style="margin-top:0.7rem"></div>
-    <div id="mb-results" class="musicbrainz-results-list"></div>
-    <div id="mb-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
-  </div>
-
-  <div class="musicbrainz-panel-saved" style="display:none">
-    <!-- Saved tab: per-admin starred MB entities, grouped by type.
-         Filter strip lets the curator narrow by entity type without
-         re-fetching; sorted newest-saved-first by default. -->
-    <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap;font-size:0.82rem;color:var(--muted)">
-      <label>Type
-        <select id="mb-saved-type" onchange="_mbLoadSaved()">
-          <option value="">All</option>
-          <option value="artist">Artists</option>
-          <option value="release-group">Release groups</option>
-          <option value="release">Releases</option>
-          <option value="recording">Recordings</option>
-          <option value="work">Works</option>
-          <option value="label">Labels</option>
-        </select>
-      </label>
-      <input id="mb-saved-filter" type="search" placeholder="Filter saved…" oninput="_mbRenderSaved()" style="flex:1;min-width:200px;padding:0.35rem 0.55rem;font-size:0.82rem">
-      <span id="mb-saved-count" style="margin-left:auto;color:var(--muted)"></span>
-    </div>
-    <div id="mb-saved-results" class="musicbrainz-results-list"><div class="loc-empty">Loading saves…</div></div>
-  </div>
-</div>
-
 <!-- Labels view: admin-only chronological browse of the release
      cache, grouped by record label. Loaded lazily by
      switchView('labels'). Source is release_cache only. -->
@@ -1650,13 +1568,11 @@ e.g.  miles davis | coltrane
       <span style="color:var(--muted)">Lookup:</span>
       <a id="blues-editor-link-discogs" href="#" target="_blank" rel="noopener">Discogs ↗</a>
       <a id="blues-editor-link-wikipedia" href="#" target="_blank" rel="noopener">Wikipedia ↗</a>
-      <a id="blues-editor-link-musicbrainz" href="#" target="_blank" rel="noopener">MusicBrainz ↗</a>
       <a id="blues-editor-link-wikidata" href="#" target="_blank" rel="noopener">Wikidata ↗</a>
     </div>
     <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" oninput="_bluesDbUpdateEditorLinks()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
       <label style="grid-column:1/-1">Name <input name="name" required style="width:100%"></label>
       <label>Wikidata QID <input name="wikidata_qid" placeholder="Q123456"></label>
-      <label>MusicBrainz MBID <input name="musicbrainz_mbid" placeholder="uuid"></label>
       <label>Discogs ID <input name="discogs_id" type="number"></label>
       <label>Wikipedia suffix <input name="wikipedia_suffix" placeholder="/wiki/Charley_Patton"></label>
       <label>Birth date <input name="birth_date" placeholder="YYYY-MM-DD"></label>
@@ -1720,7 +1636,6 @@ e.g.  miles davis | coltrane
       <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
       <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
         <button type="button" class="archive-btn" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none;color:#e88">Delete</button>
-        <button type="button" class="archive-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
         <button type="button" class="archive-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
         <button type="button" class="archive-btn" id="blues-editor-discogs" onclick="bluesDbOpenDiscogsPicker()" title="Search Discogs by name and let YOU pick the right match (vs. silently taking the top result)" style="display:none">Pick Discogs match</button>
         <button type="button" class="archive-btn" id="blues-editor-discogs-refresh" onclick="bluesDbRefreshFromDiscogs()" title="Pull the full Discogs artist record into the form (bio, releases, photo, aliases, etc.). Works in three modes: (1) new-artist form + Discogs ID typed → fetches that exact ID; (2) saved row with discogs_id → preview/refresh; (3) saved row, no ID → server takes the top name match. For ambiguous names use 'Pick Discogs match' instead." style="display:none">Fetch from Discogs</button>

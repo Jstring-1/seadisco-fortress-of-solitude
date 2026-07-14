@@ -696,122 +696,9 @@ async function _bluesResumeSeedPollIfRunning() {
   } catch {}
 }
 
-// MusicBrainz enrichment.
-//   id = N    → single row, runs synchronously (~3-5s).
-//   id = null → bulk, fires a background job and polls status every 5s
-//               (avoids the 502 timeout we'd otherwise hit at ~5 min).
-let _bluesMbPollTimer = null;
-
-async function bluesDbEnrichMb(id) {
-  if (id != null) return _bluesEnrichMbSingleRow(id);
-  return _bluesEnrichMbBulk();
-}
-
-async function _bluesEnrichMbSingleRow(id) {
-  const btn = document.getElementById("blues-editor-mb");
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = "Enriching…";
-  try {
-    const r = await apiFetch("/api/admin/blues/enrich-mb?id=" + id, { method: "POST" });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      alert("Enrich failed: " + (err.error ?? r.status));
-      return;
-    }
-    const out = await r.json();
-    const summary = `${out.enriched}/${out.attempted} enriched in ${(out.durationMs/1000).toFixed(1)}s` +
-      (out.skipped ? ` · ${out.skipped} skipped (no MBID)` : "") +
-      (out.errors?.length ? ` · ${out.errors.length} errors` : "");
-    // Patch the cache from the fresh row server returned, then re-
-    // render the list and refresh the editor. No full re-list fetch.
-    await _bluesDbRefreshRow(id);
-    bluesDbOpenEditor(id);
-    bluesDbRenderList();
-    alert(summary);
-  } catch (e) { alert("Enrich failed: " + e); }
-  finally { btn.disabled = false; btn.textContent = orig; }
-}
-
-async function _bluesEnrichMbBulk() {
-  const btn = document.getElementById("blues-enrich-mb-btn");
-  if (!confirm("Pull first/last recording year + title from MusicBrainz for every row?\n\nRate-limited 1 req/s — bulk pass takes ~7-10 min. Runs in the background; you can leave this page and come back. Idempotent.")) return;
-  btn.disabled = true; btn.textContent = "Starting…";
-  try {
-    const r = await apiFetch("/api/admin/blues/enrich-mb", { method: "POST" });
-    if (r.status === 409) {
-      const j = await r.json().catch(() => ({}));
-      alert("MB enrichment already running (started " + (j.startedAt ?? "earlier") + "). Watching progress.");
-    } else if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      alert("Could not start: " + (err.error ?? r.status));
-      btn.disabled = false; btn.textContent = "Enrich from MB";
-      return;
-    }
-  } catch (e) {
-    alert("Could not start: " + e);
-    btn.disabled = false; btn.textContent = "Enrich from MB";
-    return;
-  }
-  _bluesPollMbStatus();
-}
-
-function _bluesPollMbStatus() {
-  const btn = document.getElementById("blues-enrich-mb-btn");
-  if (_bluesMbPollTimer) { clearInterval(_bluesMbPollTimer); _bluesMbPollTimer = null; }
-  const tick = async () => {
-    try {
-      const r = await apiFetch("/api/admin/blues/enrich-mb/status");
-      if (!r.ok) return;
-      const job = await r.json();
-      if (job.status === "running") {
-        const p = job.progress;
-        if (p) {
-          btn.textContent = `MB: ${p.processed}/${p.total} · ${p.enriched} hit · ${p.skipped} skip` + (p.errors ? ` · ${p.errors} err` : "");
-        } else {
-          btn.textContent = "Enriching…";
-        }
-        return;
-      }
-      clearInterval(_bluesMbPollTimer); _bluesMbPollTimer = null;
-      btn.disabled = false; btn.textContent = "Enrich from MB";
-      bluesDbLoadStats();
-      bluesDbLoadList();
-      if (job.status === "done" && job.result) {
-        const o = job.result;
-        alert(`MB enrichment done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
-          `· ${o.enriched}/${o.attempted} enriched\n` +
-          `· ${o.skipped} skipped (no confident match)\n` +
-          (o.errors?.length ? `· ${o.errors.length} errors` : "· no errors"));
-      } else if (job.status === "error") {
-        alert("MB enrichment errored: " + (job.error ?? "unknown"));
-      }
-    } catch { /* network blip — next tick */ }
-  };
-  tick();
-  _bluesMbPollTimer = setInterval(tick, 5000);
-}
-
-async function _bluesResumeMbPollIfRunning() {
-  try {
-    const r = await apiFetch("/api/admin/blues/enrich-mb/status");
-    if (!r.ok) return;
-    const job = await r.json();
-    if (job.status === "running") {
-      const btn = document.getElementById("blues-enrich-mb-btn");
-      if (btn) btn.disabled = true;
-      _bluesPollMbStatus();
-    }
-  } catch {}
-}
-
-function bluesDbEnrichEditorRow() {
-  const id = _bluesDbState.editingId;
-  if (!id) return;
-  bluesDbEnrichMb(id);
-}
 
 // Generic helper for the three remaining enrichers — same shape as
-// bluesDbEnrichMb but parameterised so we don't repeat ourselves four
+// the enrichers but parameterised so we don't repeat ourselves
 // times. label + slow-warning + endpoint differ; everything else is
 // identical (button disable + reload + summary alert).
 async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmMsg, urlExtras, idAsPath }) {
@@ -1409,7 +1296,6 @@ async function bluesDbOpenEditor(id) {
   const form = document.getElementById("blues-editor-form");
   const title = document.getElementById("blues-editor-title");
   const delBtn = document.getElementById("blues-editor-delete");
-  const mbBtn = document.getElementById("blues-editor-mb");
   const wikiBtn = document.getElementById("blues-editor-wiki");
   const discogsBtn = document.getElementById("blues-editor-discogs");
   const discogsRefreshBtn = document.getElementById("blues-editor-discogs-refresh");
@@ -1419,7 +1305,6 @@ async function bluesDbOpenEditor(id) {
   if (id) {
     title.textContent = "Edit artist";
     delBtn.style.display = "";
-    mbBtn.style.display = "";
     wikiBtn.style.display = "";
     discogsBtn.style.display = "";
     if (discogsRefreshBtn) discogsRefreshBtn.style.display = "";
@@ -1456,7 +1341,6 @@ async function bluesDbOpenEditor(id) {
   } else {
     title.textContent = "Add artist";
     delBtn.style.display = "none";
-    mbBtn.style.display = "none";
     wikiBtn.style.display = "none";
     discogsBtn.style.display = "none";
     // Fetch from Discogs IS shown for new rows — it now supports the
@@ -1555,10 +1439,9 @@ function _bluesDbUpdateEditorLinks() {
   const get = (n) => (form.elements.namedItem(n)?.value || "").trim();
   const name = get("name");
   const discogsId = get("discogs_id");
-  const mbid = get("musicbrainz_mbid");
   const qid = get("wikidata_qid");
   const wikiSuffix = get("wikipedia_suffix");
-  if (!name && !discogsId && !mbid && !qid && !wikiSuffix) {
+  if (!name && !discogsId && !qid && !wikiSuffix) {
     bar.style.display = "none";
     return;
   }
@@ -1570,15 +1453,11 @@ function _bluesDbUpdateEditorLinks() {
   const wiki = wikiSuffix
     ? "https://en.wikipedia.org" + (wikiSuffix.startsWith("/") ? wikiSuffix : "/wiki/" + wikiSuffix)
     : "https://en.wikipedia.org/w/index.php?search=" + enc(name);
-  const mb = mbid
-    ? "https://musicbrainz.org/artist/" + enc(mbid)
-    : "https://musicbrainz.org/search?type=artist&query=" + enc(name);
   const wd = qid
     ? "https://www.wikidata.org/wiki/" + enc(qid)
     : "https://www.wikidata.org/w/index.php?search=" + enc(name);
   document.getElementById("blues-editor-link-discogs").href = discogs;
   document.getElementById("blues-editor-link-wikipedia").href = wiki;
-  document.getElementById("blues-editor-link-musicbrainz").href = mb;
   document.getElementById("blues-editor-link-wikidata").href = wd;
 }
 function bluesDbCloseEditor() {

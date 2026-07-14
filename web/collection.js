@@ -257,7 +257,7 @@ function switchView(view, skipPushState = false) {
   // (populated by renderSharedHeader in shared.js) so we don't have
   // to keep two sets in sync.
   const _discoverSet = window._sdDiscoverViews
-    || new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz"]);
+    || new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"]);
   document.querySelectorAll(".nav-tab-top").forEach(btn => {
     if (btn.dataset.rtab) {
       // Record tab — active when in records view and matching the current sub-tab
@@ -299,7 +299,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "musicbrainz" || view === "all-blues" || view === "labels" || view === "admin") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "all-blues" || view === "labels" || view === "admin") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -329,8 +329,6 @@ function switchView(view, skipPushState = false) {
   if (chronamView) chronamView.style.display = "none";
   if (bluesArchiveView) bluesArchiveView.style.display = "none";
   if (allBluesView) allBluesView.style.display = "none";
-  const musicbrainzView = document.getElementById("musicbrainz-view");
-  if (musicbrainzView) musicbrainzView.style.display = "none";
   const labelsView = document.getElementById("labels-view");
   if (labelsView) labelsView.style.display = "none";
   const adminView = document.getElementById("admin-view");
@@ -580,26 +578,6 @@ function switchView(view, skipPushState = false) {
         if (s) s.textContent = "Couldn't load the admin module. Leave and re-enter the view to retry.";
       });
     }
-  } else if (view === "musicbrainz") {
-    // Admin-only — proxied MB API search with full caching. Server
-    // double-gates via requireAdmin on every /api/musicbrainz/* path.
-    if (!_sdGateSignedInView()) return;
-    if (!window._isAdmin) {
-      if (typeof showToast === "function") {
-        showToast("MusicBrainz search is admin-only.", "info");
-      }
-      switchView("search", true);
-      return;
-    }
-    const mbView = document.getElementById("musicbrainz-view");
-    if (mbView) mbView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    if (typeof initMusicbrainzView === "function") initMusicbrainzView();
-    else if (typeof window._sdLoadModule === "function") {
-      window._sdLoadModule("/musicbrainz.js").then(() => window.initMusicbrainzView?.()).catch(() => {});
-    }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
@@ -778,7 +756,7 @@ function switchView(view, skipPushState = false) {
   // whenever the current view is one of those four; mark the
   // active tab; otherwise hide the strip. YouTube tab is only
   // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
-  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "musicbrainz", "all-blues"];
+  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive", "all-blues"];
   const _extrasTabs = document.getElementById("extras-tabs");
   if (_extrasTabs) {
     if (_extrasViews.includes(view)) {
@@ -791,7 +769,6 @@ function switchView(view, skipPushState = false) {
         gutenberg: document.getElementById("extras-tab-gutenberg"),
         chronam:   document.getElementById("extras-tab-chronam"),
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
-        musicbrainz:    document.getElementById("extras-tab-musicbrainz"),
         "all-blues":    document.getElementById("extras-tab-all-blues"),
         labels:         document.getElementById("extras-tab-labels"),
       };
@@ -835,14 +812,6 @@ function switchView(view, skipPushState = false) {
         if (baTab) baTab.style.display = baAccess ? "" : "none";
         if (baSep) baSep.style.display = baAccess ? "" : "none";
       };
-      // MusicBrainz: admin + demo (server-side gate is requireMusicbrainzAccess).
-      const _syncMusicbrainz = () => {
-        const mbAccess = !!(window._isAdmin || window._sdIsDemo);
-        const mbSep = document.getElementById("extras-tab-musicbrainz-sep");
-        const mbTab = tabs["musicbrainz"];
-        if (mbTab) mbTab.style.display = mbAccess ? "" : "none";
-        if (mbSep) mbSep.style.display = mbAccess ? "" : "none";
-      };
       // All Blues: admin-only.
       const _syncAllBlues = () => {
         const abAccess = !!window._isAdmin;
@@ -863,15 +832,13 @@ function switchView(view, skipPushState = false) {
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
-      _syncMusicbrainz();
       _syncAllBlues();
       _syncLabels();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
-        // / MusicBrainz tabs pop in for admin/demo without requiring
-        // a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncMusicbrainz(); _syncAllBlues(); _syncLabels(); }).catch(() => {});
+        // tabs pop in for admin/demo without requiring a page reload.
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncAllBlues(); _syncLabels(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";

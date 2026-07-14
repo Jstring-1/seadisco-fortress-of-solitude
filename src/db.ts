@@ -854,43 +854,11 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_extra_gin ON release_cache USING gin ((data->'extraartists'))`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_genres_gin ON release_cache USING gin ((data->'genres'))`);
 
-  // ── MusicBrainz cache ──────────────────────────────────────────────
-  // Mirrors the release_cache shape, but keyed by (entity_type, key).
-  // For entity lookups, `key` is the MBID. For search responses, it's
-  // a sha256 of the query+params so identical searches collapse onto
-  // one row. JSONB blob holds the upstream MB response verbatim.
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS musicbrainz_cache (
-      entity_type TEXT NOT NULL,
-      key         TEXT NOT NULL,
-      data        JSONB NOT NULL,
-      cached_at   TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(entity_type, key)
-    )
-  `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_type_key_idx ON musicbrainz_cache (entity_type, key)`);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_cache_cached_at_idx ON musicbrainz_cache (cached_at DESC)`);
-
-  // ── MusicBrainz saves (per-user ★ bookmarks for the Saved tab) ────
-  // entity_type is the MB type (artist / release / release-group /
-  // recording / work / label); mbid is the canonical UUID. `meta`
-  // carries a small snapshot (name, sort-name, disambiguation,
-  // country, life-span / date) so the Saved list can render rows
-  // without hitting the cache on first paint.
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS musicbrainz_saves (
-      id              SERIAL PRIMARY KEY,
-      clerk_user_id   TEXT NOT NULL,
-      entity_type     TEXT NOT NULL,
-      mbid            TEXT NOT NULL,
-      name            TEXT NOT NULL,
-      meta            JSONB,
-      saved_at        TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(clerk_user_id, entity_type, mbid)
-    )
-  `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_saves_user_idx ON musicbrainz_saves (clerk_user_id, saved_at DESC)`);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS musicbrainz_saves_user_type_idx ON musicbrainz_saves (clerk_user_id, entity_type, saved_at DESC)`);
+  // MusicBrainz removed entirely — drop its cache + saves tables on boot
+  // (idempotent; no-ops once already gone). The blues_artists.musicbrainz_mbid
+  // column is dropped just after that table is (re)ensured, below.
+  await getPool().query(`DROP TABLE IF EXISTS musicbrainz_cache`);
+  await getPool().query(`DROP TABLE IF EXISTS musicbrainz_saves`);
   // seen_at: NULL = pre-warmed-only (cache-warm job pulled it but no
   // human has opened the modal yet). Set to NOW() on the first user
   // click. Feed queries filter WHERE seen_at IS NOT NULL so warmed-
@@ -1206,13 +1174,12 @@ export async function initDb() {
 
   // ── Pre-1930 blues artists database (admin-curated) ───────────────────
   // Seeded from Wikidata SPARQL; enriched manually + via future jobs from
-  // MusicBrainz, Wikipedia, Discogs, YouTube. The wikidata_qid is the
+  // Wikipedia, Discogs, YouTube. The wikidata_qid is the
   // canonical key — re-running the seeder upserts on it.
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS blues_artists (
       id                       SERIAL PRIMARY KEY,
       wikidata_qid             TEXT UNIQUE,
-      musicbrainz_mbid         TEXT UNIQUE,
       discogs_id               INTEGER UNIQUE,
       name                     TEXT NOT NULL,
       aliases                  JSONB DEFAULT '[]'::jsonb,
@@ -1241,6 +1208,8 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artists_name_idx ON blues_artists (lower(name))`);
+  // MusicBrainz removed — drop the now-unused mbid column (idempotent).
+  await getPool().query(`ALTER TABLE blues_artists DROP COLUMN IF EXISTS musicbrainz_mbid`);
   // Phase-1.5 add-on: per-artist list of Discogs master/release IDs
   // (Masters+) discovered by the year-walk seeder. JSONB array of
   // { id, type:"master"|"release", title, year, label }.
@@ -2196,7 +2165,7 @@ export async function getOrCreateBluesArtistByName(rawName: string): Promise<{
 // Field whitelist used by upsert/update so the admin UI can't smuggle
 // arbitrary columns. Keep this list aligned with the table schema above.
 const _BLUES_FIELDS = [
-  "wikidata_qid", "musicbrainz_mbid", "discogs_id", "name",
+  "wikidata_qid", "discogs_id", "name",
   "aliases", "birth_date", "birth_place", "death_date", "death_place",
   "death_cause", "hometown_region",
   "first_recording_year", "first_recording_title",
@@ -6521,76 +6490,6 @@ async function _getCachedReleaseV2(
  *  from a user click (or any path where surfacing in the feed is
  *  appropriate). Pass `warmOnly: true` for the cache-warm job so
  *  the row stays out of the feed until a user actually opens it. */
-// ── MusicBrainz cache helpers ──────────────────────────────────────
-// (Mirror cacheRelease / getCacheEnrichmentBatch but for MB rows.)
-export async function mbCacheGet(entityType: string, key: string): Promise<any | null> {
-  try {
-    const r = await getPool().query(
-      `SELECT data FROM musicbrainz_cache WHERE entity_type = $1 AND key = $2 LIMIT 1`,
-      [entityType, key],
-    );
-    return r.rows[0]?.data ?? null;
-  } catch { return null; }
-}
-
-export async function mbCacheSet(entityType: string, key: string, data: object): Promise<void> {
-  await getPool().query(
-    `INSERT INTO musicbrainz_cache (entity_type, key, data, cached_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (entity_type, key)
-     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
-    [entityType, key, JSON.stringify(data)],
-  );
-}
-
-// MB Saves CRUD — per-user star/bookmark list for the MB view's
-// Saved tab. listMbSaves returns rows newest-first; filter by
-// entity_type optionally so the UI can group/segment without a
-// client-side filter pass.
-export async function listMbSaves(clerkUserId: string, entityType?: string): Promise<any[]> {
-  const params: any[] = [clerkUserId];
-  let where = "clerk_user_id = $1";
-  if (entityType) { params.push(entityType); where += ` AND entity_type = $${params.length}`; }
-  const r = await getPool().query(
-    `SELECT id, entity_type, mbid, name, meta, saved_at
-       FROM musicbrainz_saves
-      WHERE ${where}
-      ORDER BY saved_at DESC`,
-    params,
-  );
-  return r.rows;
-}
-
-export async function listMbSaveIds(clerkUserId: string): Promise<string[]> {
-  // Compact key list ("artist:<mbid>") for the client's "am I
-  // already saved?" lookup. The UI uses a Set so star state
-  // renders synchronously on a fresh search render.
-  const r = await getPool().query(
-    `SELECT entity_type, mbid FROM musicbrainz_saves WHERE clerk_user_id = $1`,
-    [clerkUserId],
-  );
-  return r.rows.map((row: any) => `${row.entity_type}:${row.mbid}`);
-}
-
-export async function addMbSave(clerkUserId: string, entityType: string, mbid: string, name: string, meta: object | null): Promise<boolean> {
-  const r = await getPool().query(
-    `INSERT INTO musicbrainz_saves (clerk_user_id, entity_type, mbid, name, meta)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (clerk_user_id, entity_type, mbid) DO NOTHING
-     RETURNING id`,
-    [clerkUserId, entityType, mbid, name, meta ? JSON.stringify(meta) : null],
-  );
-  return (r.rowCount ?? 0) > 0;
-}
-
-export async function removeMbSave(clerkUserId: string, entityType: string, mbid: string): Promise<boolean> {
-  const r = await getPool().query(
-    `DELETE FROM musicbrainz_saves WHERE clerk_user_id = $1 AND entity_type = $2 AND mbid = $3`,
-    [clerkUserId, entityType, mbid],
-  );
-  return (r.rowCount ?? 0) > 0;
-}
-
 export async function cacheRelease(
   discogsId: number,
   type: DiscogsCacheType,
@@ -14111,7 +14010,7 @@ const _QUERYABLE_TABLES = [
   "release_labels", "release_artists", "release_tags",
   "blues_artists", "blues_lyrics", "blues_tunings_grid",
   "blues_words", "blues_word_citations",
-  "external_discography", "all_blues_links", "musicbrainz_cache",
+  "external_discography", "all_blues_links",
 ];
 export async function getQueryableSchema(): Promise<Record<string, Array<{ column: string; type: string }>>> {
   const r = await getPool().query(
