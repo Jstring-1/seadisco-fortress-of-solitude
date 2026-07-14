@@ -9284,6 +9284,12 @@ function _catnoSortNum(label, catno) {
 }
 const _LABELS_CAROUSEL_CACHE = new Map();
 const _LABELS_CAROUSEL_TTL_MS = 60_000;
+// Hard cap: the key is {label,type,yFrom,yTo,vinylOnly} and each entry
+// holds every cache row for that label (potentially thousands of
+// objects). Arbitrary year-range combos make the key space unbounded,
+// so without a cap an admin browsing the Labels tab accretes many large
+// entries that the read-side TTL never actually deletes. LRU-evict.
+const _LABELS_CAROUSEL_MAX = 48;
 // TEMP: external_discography stub cards are disabled in the labels
 // carousel until catno/format matching against the Discogs cache is
 // more reliable — surfacing unverified scraped matches next to real
@@ -9530,6 +9536,15 @@ app.get("/api/admin/labels/releases", async (req, res) => {
                 externalCount: externalItems.length,
                 externalSources,
             };
+            // Refreshing an existing key: delete first so re-insert moves it
+            // to the newest slot (LRU recency). Then evict the oldest if over
+            // the cap. Map iteration order is insertion order.
+            _LABELS_CAROUSEL_CACHE.delete(cacheKey);
+            if (_LABELS_CAROUSEL_CACHE.size >= _LABELS_CAROUSEL_MAX) {
+                const oldest = _LABELS_CAROUSEL_CACHE.keys().next().value;
+                if (oldest !== undefined)
+                    _LABELS_CAROUSEL_CACHE.delete(oldest);
+            }
             _LABELS_CAROUSEL_CACHE.set(cacheKey, cached);
         }
         const start = (page - 1) * perPage;
