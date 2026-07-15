@@ -2267,7 +2267,11 @@ async function _cacheProjectionForceClear() {
 let _cacheAnalyticsFilters = { label:"", artist:"", genre:"", style:"", country:"", yearFrom:"", yearTo:"", type:"" };
 let _cacheAnalyticsResult = null;
 let _cacheAnalyticsLoading = false;
-let _cacheAnalyticsReader = "";  // "" = auto (follows split-cache flag), "v1", "v2"
+// Default to V1 (release_cache) — it's the complete dual-write source
+// of truth, so broad genre/style searches always resolve even when the
+// split projection (release_tags etc.) is behind. Selector still offers
+// Auto / V2 for comparison against what the live site reads.
+let _cacheAnalyticsReader = "v1";  // "" = auto (follows split-cache flag), "v1", "v2"
 
 function loadCacheAnalytics() {
   // Just render the form on first tab open — running the query is
