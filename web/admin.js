@@ -2458,9 +2458,17 @@ async function loadYearBackfill() {
           <ul style="margin:0.2rem 0 0.4rem 1.2rem;font-size:0.78rem;color:var(--muted)">
             ${(_ybfPreview.bySource || []).map(s => `<li>${_eHtml(s.donor_source)} — ${s.n}</li>`).join("")}
           </ul>
-          ${_ybfPreview.sample?.length ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem">Sample (first 20):</div>
-          <ul style="margin:0.2rem 0 0 1.2rem;font-size:0.75rem;color:var(--muted);max-height:160px;overflow-y:auto">
-            ${_ybfPreview.sample.map(s => `<li>${_eHtml(s.type)} <code>${s.discogs_id}</code> — ${_eHtml(s.label_name)} ${_eHtml(s.catno)} → <strong>${s.new_year}</strong> · ${_eHtml(s.donor_source)}</li>`).join("")}
+          ${_ybfPreview.sample?.length ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem">Sample (first 20) — click the id to verify against Discogs, compare against the donor row:</div>
+          <ul style="margin:0.2rem 0 0 1.2rem;font-size:0.75rem;color:var(--muted);max-height:260px;overflow-y:auto">
+            ${_ybfPreview.sample.map(s => {
+              const dUrl = `https://www.discogs.com/${s.type === "master" ? "master" : "release"}/${s.discogs_id}`;
+              const donorBits = [s.donor_catno, [s.donor_artist, s.donor_title].filter(Boolean).join(" – ")].filter(Boolean).map(_eHtml).join(" · ");
+              return `<li style="margin-bottom:0.25rem">
+                ${_eHtml(s.type)} <a href="${dUrl}" target="_blank" rel="noopener" style="color:var(--accent)"><code>${s.discogs_id}</code></a>
+                — ${_eHtml(s.label_name)} <strong>${_eHtml(s.catno)}</strong> → <strong>${s.new_year}</strong>
+                <div style="color:var(--muted);opacity:0.85">↳ donor (${_eHtml(s.donor_source)}): ${donorBits || "—"}</div>
+              </li>`;
+            }).join("")}
           </ul>` : ""}
         </div>`
       : "";

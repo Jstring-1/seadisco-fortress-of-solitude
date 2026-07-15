@@ -10694,6 +10694,9 @@ const _YEAR_BACKFILL_DONORS_BODY = `
       year,
       'external:' || id::text AS donor_ref,
       source AS donor_source,
+      catno              AS donor_catno,
+      artist             AS donor_artist,
+      title              AS donor_title,
       0 AS priority
     FROM external_discography
     WHERE year IS NOT NULL AND catno_sort IS NOT NULL
@@ -10708,6 +10711,9 @@ const _YEAR_BACKFILL_DONORS_BODY = `
       NULLIF(rc.data->>'year','')::int                                   AS year,
       'release_cache:' || rc.discogs_id::text                            AS donor_ref,
       'release_cache'                                                    AS donor_source,
+      lbl->>'catno'                                                      AS donor_catno,
+      rc.data->'artists'->0->>'name'                                     AS donor_artist,
+      rc.data->>'title'                                                  AS donor_title,
       1 AS priority
       FROM release_cache rc,
            jsonb_array_elements(COALESCE(rc.data->'labels','[]'::jsonb)) lbl
@@ -10717,7 +10723,8 @@ const _YEAR_BACKFILL_DONORS_BODY = `
   ),
   donors AS (
     SELECT DISTINCT ON (label_name, catno_sort)
-      label_name, catno_sort, year, donor_ref, donor_source
+      label_name, catno_sort, year, donor_ref, donor_source,
+      donor_catno, donor_artist, donor_title
     FROM donors_raw
     WHERE label_name IS NOT NULL AND catno_sort IS NOT NULL
     ORDER BY label_name, catno_sort, priority ASC, year ASC
@@ -10745,7 +10752,10 @@ const _YEAR_BACKFILL_DONOR_CTE = `
       d.donor_ref,
       d.donor_source,
       t.label_name_raw AS label_name,
-      t.catno_raw      AS catno
+      t.catno_raw      AS catno,
+      d.donor_catno,
+      d.donor_artist,
+      d.donor_title
     FROM target_label_pairs t
     JOIN donors d
       ON d.label_name = t.label_name
@@ -10793,7 +10803,8 @@ export async function previewYearBackfill() {
     const totalQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
      SELECT COUNT(*)::int AS n FROM matches`);
     const sampleQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
-     SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref
+     SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref,
+            donor_catno, donor_artist, donor_title
        FROM matches ORDER BY new_year ASC, discogs_id ASC LIMIT 20`);
     // Phase 2 estimate: year-less masters that gain a year from either a
     // cached version's year OR an external donor matched via a version's
@@ -10812,6 +10823,9 @@ export async function previewYearBackfill() {
             catno: String(r.catno ?? ""),
             donor_source: String(r.donor_source),
             donor_ref: String(r.donor_ref),
+            donor_catno: String(r.donor_catno ?? ""),
+            donor_artist: String(r.donor_artist ?? ""),
+            donor_title: String(r.donor_title ?? ""),
         })),
     };
 }
