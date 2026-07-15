@@ -11688,6 +11688,7 @@ app.get("/api/all-blues/artist", async (req, res) => {
         id: r.discogs_id, type: r.type,
         title: d.title || `Release ${r.discogs_id}`,
         year: d.year || null,
+        year_estimated_from: d._year_backfilled_from ? String(d._year_backfilled_from) : null,
         thumb: t,
         primary_artists: credit,
       };
@@ -11857,6 +11858,7 @@ app.get("/api/all-blues/edge", async (req, res) => {
           type: r.type,
           title: d.title || `Release ${r.discogs_id}`,
           year:  d.year || null,
+          year_estimated_from: d._year_backfilled_from ? String(d._year_backfilled_from) : null,
           thumb,
           primary_artists: primaries,
         };
