@@ -10391,13 +10391,13 @@ async function _computeCacheAnalyticsV1(f) {
                         WHERE LOWER(art->>'name') LIKE LOWER(${push('%' + f.artist + '%')}))`);
     }
     if (f.genre) {
-        // jsonb key-exists (?) on the genres array — the proven pattern
-        // used everywhere else in this file. (The old @> to_jsonb(ARRAY[…])
-        // form matched nothing here.)
-        where.push(`rc.data->'genres' ? ${push(f.genre)}`);
+        // jsonb_exists = the ? key-exists operator, function form. Explicit
+        // so there's no operator-resolution ambiguity with the bound param
+        // (the old @> to_jsonb(ARRAY[…]) form matched nothing here).
+        where.push(`jsonb_exists(rc.data->'genres', ${push(f.genre)})`);
     }
     if (f.style) {
-        where.push(`rc.data->'styles' ? ${push(f.style)}`);
+        where.push(`jsonb_exists(rc.data->'styles', ${push(f.style)})`);
     }
     if (f.country) {
         where.push(`rc.data->>'country' = ${push(f.country)}`);
