@@ -2050,18 +2050,12 @@ function _baSwitchSubtab(tab) {
     b.classList.toggle("is-active", on);
     b.classList.toggle("active", on);
   });
-  const ap = document.getElementById("blues-archive-artists-panel");
   const lp = document.getElementById("blues-archive-lyrics-panel");
-  const rp = document.getElementById("blues-archive-releases-panel");
   const tp = document.getElementById("blues-archive-tunings-panel");
-  const cp = document.getElementById("blues-archive-connections-panel");
   const ep = document.getElementById("blues-archive-export-panel");
-  if (ap) ap.style.display = _baSubtab === "artists"     ? "" : "none";
-  if (lp) lp.style.display = _baSubtab === "lyrics"      ? "" : "none";
-  if (rp) rp.style.display = _baSubtab === "releases"    ? "" : "none";
-  if (tp) tp.style.display = _baSubtab === "tunings"     ? "" : "none";
-  if (cp) cp.style.display = _baSubtab === "connections" ? "" : "none";
-  if (ep) ep.style.display = _baSubtab === "export"      ? "" : "none";
+  if (lp) lp.style.display = _baSubtab === "lyrics"  ? "" : "none";
+  if (tp) tp.style.display = _baSubtab === "tunings" ? "" : "none";
+  if (ep) ep.style.display = _baSubtab === "export"  ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
@@ -2075,13 +2069,9 @@ function _baSwitchSubtab(tab) {
     if (typeof window.lyricsStartPolling === "function") {
       try { window.lyricsStartPolling(); } catch {}
     }
-  } else if (_baSubtab === "releases") {
-    _baLoadReleases();
   } else if (_baSubtab === "tunings") {
     if (!_baTuningsFacetsLoaded) _baLoadTuningsFacets();
     _baLoadTuningsGrid();
-  } else if (_baSubtab === "connections") {
-    _baLoadConnections();
   } else if (_baSubtab === "export") {
     _baExportInit();
   }
