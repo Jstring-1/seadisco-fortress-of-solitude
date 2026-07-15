@@ -2163,21 +2163,6 @@ function renderSharedFooter(opts) {
         const baA = document.getElementById("footer-blues-archive-link");
         if (baA) baA.style.display = "";
       }
-      if (window._isAdmin) {
-        // Pre-load the discogs_ids AND names already in the
-        // blues_artists table so the admin "+ add to Blues DB" icon
-        // (popup AND card) can hide itself for artists already in.
-        // Cards only know the artist name (parsed from result title),
-        // so we cache names alongside ids for that lookup path.
-        try {
-          const idsRes = await apiFetch("/api/admin/blues/ids");
-          if (idsRes.ok) {
-            const j = await idsRes.json();
-            window._adminBluesIds   = new Set((j.ids   ?? []).map(Number));
-            window._adminBluesNames = new Set((j.names ?? []).map(s => String(s).trim().toLowerCase()));
-          }
-        } catch { /* non-fatal */ }
-      }
     } catch { /* hidden by default — fine */ }
   })();
 }

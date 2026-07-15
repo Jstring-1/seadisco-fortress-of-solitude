@@ -2059,12 +2059,30 @@ let _cacheProjectionStatus = null;
 // Cache write-rate card: release_cache throughput by cached_at over a
 // few rolling windows + a 24h hourly sparkline. Polls every 30s while
 // the Cache panel is open so the numbers move during an active sweep.
-async function loadCacheRate() {
+// Hardened so the card can never sit on a dead "Loading…": the element
+// lookup retries (in case the fragment isn't in the DOM yet), and the
+// fetch has a hard client-side timeout so a slow/hung request surfaces
+// a visible error + retry link instead of an indefinite spinner.
+async function loadCacheRate(_elRetry = 0) {
   const el = document.getElementById("cache-rate-content");
-  if (!el) return;
+  if (!el) {
+    // Fragment may not be injected yet on the very first tab open —
+    // retry a few times before giving up silently.
+    if (_elRetry < 10) { setTimeout(() => loadCacheRate(_elRetry + 1), 300); }
+    return;
+  }
+  const retryLink = `<a href="#" onclick="event.preventDefault();loadCacheRate();return false" style="color:var(--accent);margin-left:0.5rem">↻ retry</a>`;
   try {
-    const r = await apiFetch("/api/admin/cache-rate");
-    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    // Hard 12s timeout so a saturated pool / slow scan can't hang the
+    // card. AbortController aborts the fetch; the catch renders the
+    // error + a retry link.
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 12000);
+    let r;
+    try {
+      r = await apiFetch("/api/admin/cache-rate", { signal: ctrl.signal });
+    } finally { clearTimeout(to); }
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>${retryLink}`; return; }
     const s = await r.json();
     const n = (x) => (Number(x) || 0).toLocaleString();
     const series = Array.isArray(s.hourly) ? s.hourly : [];
@@ -2091,7 +2109,10 @@ async function loadCacheRate() {
       window._cacheRatePollTimer = setTimeout(loadCacheRate, 30000);
     }
   } catch (err) {
-    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+    const msg = err?.name === "AbortError"
+      ? "Timed out (the cache query took over 12s — likely the DB pool is busy warming). "
+      : `${_eHtml(String(err))} `;
+    el.innerHTML = `<span style="color:#e88">${msg}</span>${retryLink}`;
   }
 }
 window.loadCacheRate = loadCacheRate;
