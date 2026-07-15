@@ -311,11 +311,9 @@ function initBluesArchiveView() {
   // after the scrape UI was retired (cancel code referenced the now-
   // deleted #lyrics-scrape-btn, threw on null, the try/catch
   // swallowed it, and the 5s setInterval kept firing forever).
-  if (window._isAdmin && typeof window._sdLoadModule === "function") {
-    window._sdLoadModule("/blues-admin.js").then(() => {
-      try { window._bluesResumeBulkIfRunning?.("blues-enrich-discogs-full-btn", "/api/admin/blues/enrich-discogs-full/status", "Get all info from Discogs"); } catch {}
-    }).catch(() => { /* non-critical */ });
-  }
+  // (The artist-enrichment "resume bulk job" poll that used to run here
+  // was removed with the artist subsystem — its endpoint is gone, so the
+  // poll only 404'd.)
   // Deep-link support: /?v=blues-archive&baArtist=ID opens the given
   // archive artist after the list view paints. Used by the 🎸 badge
   // on album/version modals to jump straight to a matched artist.
