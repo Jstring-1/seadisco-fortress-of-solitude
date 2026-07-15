@@ -612,9 +612,40 @@ app.use(compression());
 // routes near line 666, and as a result HSTS / X-Frame-Options /
 // Permissions-Policy never reached the browser for the root HTML
 // or any static asset — which broke HSTS preload eligibility too.
+// Content-Security-Policy. Moderate policy: keeps 'unsafe-inline' for
+// script/style (the SPA wires everything through inline handlers +
+// inline styles, so removing it would need a site-wide refactor) but
+// locks down every other fetch surface to the specific origins the app
+// actually loads from — Clerk (auth), Google Analytics, YouTube (embeds
+// + IFrame API), and jsdelivr (hls.js / sortablejs). object-src/base-uri
+// /frame-ancestors are hard-locked; images/media allow https broadly
+// since cover art streams from many Discogs/CDN hosts (low XSS risk).
+//
+// Ships as REPORT-ONLY by default so violations only log to the console
+// and nothing breaks; set CSP_ENFORCE=1 on Railway to flip it to the
+// enforcing header once the report-only console is clean.
+const _cspDirectives = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://www.googletagmanager.com https://www.youtube.com https://s.ytimg.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.clerk.accounts.dev https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com",
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.clerk.accounts.dev https://challenges.cloudflare.com",
+  "media-src 'self' https: blob:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self' https://*.clerk.accounts.dev",
+].join("; ");
+const _cspEnforce = process.env.CSP_ENFORCE === "1" || process.env.CSP_ENFORCE === "true";
+const _cspHeaderName = _cspEnforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
+
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader(_cspHeaderName, _cspDirectives);
   // `preload` flag enables submission to the HSTS preload list at
   // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
   // redirect on the FIRST visit too instead of only after they've
