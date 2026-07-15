@@ -298,7 +298,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "labels" || view === "admin") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "admin") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -327,8 +327,6 @@ function switchView(view, skipPushState = false) {
   if (gutenbergView) gutenbergView.style.display = "none";
   if (chronamView) chronamView.style.display = "none";
   if (bluesArchiveView) bluesArchiveView.style.display = "none";
-  const labelsView = document.getElementById("labels-view");
-  if (labelsView) labelsView.style.display = "none";
   const adminView = document.getElementById("admin-view");
   if (adminView) adminView.style.display = "none";
 
@@ -514,24 +512,6 @@ function switchView(view, skipPushState = false) {
     if (typeof initBluesArchiveView === "function") initBluesArchiveView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/blues-archive.js").then(() => window.initBluesArchiveView?.()).catch(() => {});
-    }
-  } else if (view === "labels") {
-    // Admin-only — chronological browse of cached releases grouped
-    // by record label. Server double-gates via requireAdmin on every
-    // /api/admin/labels/* path.
-    if (!_sdGateSignedInView()) return;
-    if (!window._isAdmin) {
-      if (typeof showToast === "function") showToast("Labels page is admin-only.", "info");
-      switchView("search", true);
-      return;
-    }
-    if (labelsView) labelsView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    if (typeof window.initLabelsView === "function") window.initLabelsView();
-    else if (typeof window._sdLoadModule === "function") {
-      window._sdLoadModule("/labels.js").then(() => window.initLabelsView?.()).catch(() => {});
     }
   } else if (view === "admin") {
     // Admin dashboard, inline. Markup comes from the requireAdmin-
@@ -752,7 +732,6 @@ function switchView(view, skipPushState = false) {
         gutenberg: document.getElementById("extras-tab-gutenberg"),
         chronam:   document.getElementById("extras-tab-chronam"),
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
-        labels:         document.getElementById("extras-tab-labels"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -794,24 +773,15 @@ function switchView(view, skipPushState = false) {
         if (baTab) baTab.style.display = baAccess ? "" : "none";
         if (baSep) baSep.style.display = baAccess ? "" : "none";
       };
-      // Labels: admin-only.
-      const _syncLabels = () => {
-        const lbAccess = !!window._isAdmin;
-        const lbSep = document.getElementById("extras-tab-labels-sep");
-        const lbTab = tabs["labels"];
-        if (lbTab) lbTab.style.display = lbAccess ? "" : "none";
-        if (lbSep) lbSep.style.display = lbAccess ? "" : "none";
-      };
       _syncYt();
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
-      _syncLabels();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
         // tabs pop in for admin/demo without requiring a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncLabels(); }).catch(() => {});
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
