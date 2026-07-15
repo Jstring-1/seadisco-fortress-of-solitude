@@ -126,6 +126,11 @@
           <span id="cw-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        <!-- ── Cache write rate (release_cache throughput) ─────────── -->
+        <div id="cache-rate-card" class="admin-card" style="margin-top:0.6rem" title="How fast release_cache is being written (inserts + refreshes) by cached_at. Counts cache-WRITE activity, not strictly first-seen inserts.">
+          <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.4rem">📈 Cache write rate</div>
+          <div id="cache-rate-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </div>
         <!-- ── Cache analytics (faceted drilldown) ─────────────────── -->
         <hr style="margin:1rem 0;border-color:var(--border)">
         <details>

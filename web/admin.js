@@ -116,7 +116,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheAnalytics(); loadCacheProjection(); },
+    load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); loadCacheProjection(); },
   },
   'labels': {
     panels: ['panel-labels'],
@@ -2056,6 +2056,46 @@ async function _labelDirCleanNames() {
 
 // ── Split-cache projection backfill ────────────────────────────
 let _cacheProjectionStatus = null;
+// Cache write-rate card: release_cache throughput by cached_at over a
+// few rolling windows + a 24h hourly sparkline. Polls every 30s while
+// the Cache panel is open so the numbers move during an active sweep.
+async function loadCacheRate() {
+  const el = document.getElementById("cache-rate-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-rate");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const s = await r.json();
+    const n = (x) => (Number(x) || 0).toLocaleString();
+    const series = Array.isArray(s.hourly) ? s.hourly : [];
+    const max = series.reduce((m, h) => Math.max(m, Number(h.n) || 0), 0);
+    const bars = series.map(h => {
+      const v = Number(h.n) || 0;
+      const pct = max > 0 ? Math.round((v / max) * 100) : 0;
+      const hh = String(h.hour).slice(11, 16);
+      return `<span title="${hh}: ${n(v)} writes" style="display:inline-block;width:5px;height:26px;background:var(--surface);border-radius:1px;vertical-align:bottom;position:relative">`
+           + `<span style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;min-height:${v > 0 ? 2 : 0}px;background:var(--accent);border-radius:1px"></span></span>`;
+    }).join("");
+    el.innerHTML = `
+      <div style="display:flex;gap:1.1rem;flex-wrap:wrap;align-items:baseline;margin-bottom:0.5rem">
+        <span title="release_cache writes in the last hour">Last hour: <strong style="color:var(--text)">${n(s.window?.["1h"])}</strong></span>
+        <span title="release_cache writes in the last 24 hours (masters + releases)">Last 24h: <strong style="color:var(--text)">${n(s.window?.["24h"])}</strong> <span style="font-size:0.72rem">(${n(s.window?.master24)} master · ${n(s.window?.release24)} release)</span></span>
+        <span title="Average writes per hour across the last 24h">Rate: <strong style="color:var(--text)">${n(s.ratePerHour24h)}</strong>/hr</span>
+        <span title="release_cache writes in the last 7 days">Last 7d: <strong style="color:var(--text)">${n(s.window?.["7d"])}</strong></span>
+      </div>
+      <div style="display:flex;gap:1px;align-items:flex-end;height:26px" title="Writes per hour, last 24 hours">${bars || '<span style="font-size:0.72rem">no writes in the last 24h</span>'}</div>
+      <div style="font-size:0.72rem;margin-top:0.4rem">Total cached: <strong style="color:var(--text)">${n(s.total?.all)}</strong> (${n(s.total?.master)} masters · ${n(s.total?.release)} releases)</div>
+    `;
+    clearTimeout(window._cacheRatePollTimer);
+    if (_adminPanelVisible() && document.getElementById("panel-cache-warm")?.style.display !== "none") {
+      window._cacheRatePollTimer = setTimeout(loadCacheRate, 30000);
+    }
+  } catch (err) {
+    el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
+  }
+}
+window.loadCacheRate = loadCacheRate;
+
 async function loadCacheProjection() {
   const el = document.getElementById("cache-projection-content");
   if (!el) return;

@@ -801,6 +801,10 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+    // Powers the admin "Cache write rate" card: range counts by cached_at
+    // (last 1h / 24h / 7d) + the hourly GROUP BY use this btree instead of
+    // sequential-scanning the whole table on every 30s poll.
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_cached_at_idx ON release_cache (cached_at)`);
     // GIN indexes for the Constellations artist popup + collect SQL.
     // Without these, looking up every release credited to a given
     // discogs_id was a full table scan that expanded each row's

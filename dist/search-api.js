@@ -8350,6 +8350,67 @@ app.get("/api/admin/cache-fetch-queue/stats", async (req, res) => {
         res.status(500).json({ error: String(e?.message ?? e) });
     }
 });
+// Admin: release_cache write throughput. Counts rows by cached_at
+// (bumped to NOW() on every insert OR refresh), split by type, over a
+// few rolling windows plus a 24-bucket hourly series for a sparkline.
+// This measures cache-WRITE activity — the rate the sweeps/warm jobs
+// are populating the cache — not strictly first-seen inserts, since
+// cached_at moves on refresh. Good enough as a "how fast is the cache
+// growing / churning" gauge.
+app.get("/api/admin/cache-rate", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const [totals, windows, hourly] = await Promise.all([
+            getPool().query(`SELECT type, COUNT(*)::bigint AS n FROM release_cache GROUP BY type`),
+            getPool().query(`SELECT
+           COUNT(*) FILTER (WHERE cached_at >= NOW() - INTERVAL '1 hour')::bigint  AS h1,
+           COUNT(*) FILTER (WHERE cached_at >= NOW() - INTERVAL '24 hours')::bigint AS h24,
+           COUNT(*) FILTER (WHERE cached_at >= NOW() - INTERVAL '7 days')::bigint   AS d7,
+           COUNT(*) FILTER (WHERE type = 'master' AND cached_at >= NOW() - INTERVAL '24 hours')::bigint AS master24,
+           COUNT(*) FILTER (WHERE type = 'release' AND cached_at >= NOW() - INTERVAL '24 hours')::bigint AS release24
+         FROM release_cache`),
+            getPool().query(`SELECT to_char(date_trunc('hour', cached_at), 'YYYY-MM-DD"T"HH24:00') AS hour,
+                COUNT(*)::bigint AS n
+           FROM release_cache
+          WHERE cached_at >= date_trunc('hour', NOW()) - INTERVAL '23 hours'
+          GROUP BY 1
+          ORDER BY 1`),
+        ]);
+        const byType = {};
+        for (const r of totals.rows)
+            byType[r.type] = Number(r.n);
+        const w = windows.rows[0] || {};
+        // Fill the 24 hourly buckets (0 where no writes) so the sparkline
+        // has a stable length regardless of gaps.
+        const counts = new Map();
+        for (const r of hourly.rows)
+            counts.set(r.hour, Number(r.n));
+        const series = [];
+        const base = new Date();
+        base.setMinutes(0, 0, 0);
+        for (let i = 23; i >= 0; i--) {
+            const d = new Date(base.getTime() - i * 3600_000);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:00`;
+            series.push({ hour: key, n: counts.get(key) ?? 0 });
+        }
+        res.json({
+            total: { release: byType.release ?? 0, master: byType.master ?? 0, all: (byType.release ?? 0) + (byType.master ?? 0) },
+            window: {
+                "1h": Number(w.h1 ?? 0),
+                "24h": Number(w.h24 ?? 0),
+                "7d": Number(w.d7 ?? 0),
+                master24: Number(w.master24 ?? 0),
+                release24: Number(w.release24 ?? 0),
+            },
+            ratePerHour24h: Math.round(Number(w.h24 ?? 0) / 24),
+            hourly: series,
+        });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
 // Admin: bootstrap — enqueue every uncached personal suggestion that
 // existed BEFORE the queue was introduced. One-shot operation; after
 // this point the suggestion generator handles enqueueing as it adds
