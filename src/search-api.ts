@@ -1,5 +1,6 @@
 import express from "express";
 import compression from "compression";
+import { rateLimit } from "express-rate-limit";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import fs from "fs";
@@ -791,6 +792,31 @@ app.use((req, res, next) => {
 // handlers (see top of file, just after compression()). Without that
 // move, HSTS / X-Frame-Options / Permissions-Policy never reached
 // the browser for the SPA HTML or any static asset.
+
+// ── Per-IP API rate limiter ──────────────────────────────────────────────
+// Abuse / scraping / runaway-traffic guard on the public API. The ceiling
+// is deliberately generous — normal browsing and Discogs syncing burst well
+// under it, so a human never trips it, but a scraper hammering search /
+// lyrics / blues-archive endpoints does. Keyed on req.ip, which is the real
+// client IP because `trust proxy` is set to 1 (Railway's single hop).
+//
+// Admin routes are exempt: they're already auth-gated by requireAdmin, the
+// admin panel polls several status endpoints on short intervals, and the
+// operator shouldn't be throttled. Mounted before the admin gate so it sees
+// every /api request first. Env-overridable for load spikes / tuning.
+const _apiRateMax    = Number(process.env.API_RATE_LIMIT_MAX ?? 600);   // requests…
+const _apiRateWindow = Number(process.env.API_RATE_LIMIT_WINDOW_MS ?? 60_000); // …per window
+const apiLimiter = rateLimit({
+  windowMs: _apiRateWindow,
+  max: _apiRateMax,
+  standardHeaders: true,   // RateLimit-* headers so clients can back off
+  legacyHeaders: false,
+  // req.path here is mount-relative ("/admin/...") because this is mounted
+  // at "/api". Skip the admin subtree entirely.
+  skip: (req) => req.path === "/admin" || req.path.startsWith("/admin/"),
+  message: { error: "rate_limited", message: "Too many requests — slow down and try again in a minute." },
+});
+app.use("/api", apiLimiter);
 
 // ── Structural admin gate ────────────────────────────────────────────────
 // Every `/api/admin/*` route also calls requireAdmin() in its own body,
