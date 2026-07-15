@@ -1159,7 +1159,6 @@ e.g.  miles davis | coltrane
           No year
         </label>
         <button type="button" id="blues-archive-lyrics-resolve-years-cache-btn" class="archive-btn" onclick="_baResolveYearsCache()" title="Set each year-less lyric's first_release_year by matching its title + artist against the big release_cache (everything the masters+ sweeps have cached). Zero Discogs API calls — one DB pass, seconds. Run this first; it usually resolves the most.">Resolve via cache</button>
-        <button type="button" id="blues-archive-lyrics-resolve-years-btn" class="archive-btn" onclick="_baResolveYearsCheap()" title="Set each lyric's first_release_year by matching its title against the linked artist's discogs_releases. Zero Discogs API calls — runs in seconds. Idempotent.">Resolve years</button>
         <button type="button" id="blues-archive-lyrics-resolve-years-discogs-btn" class="archive-btn" onclick="_baResolveYearsDiscogs()" title="Slow background worker: Discogs-searches each still-missing lyric by artist + title and takes the earliest year. ~1 req/sec → ~1-2 min per 100 lyrics. Resumable.">Resolve via Discogs ↗</button>
         <button type="button" class="archive-btn" onclick="_baLoadLyrics();_baLoadStats();" title="Re-fetch the lyrics list from the server">↻ Refresh</button>
         <button type="button" class="archive-btn" onclick="_baClearVisitedLyrics()" title="Clear the dim 'visited' state from every lyric row so they all read as unread again. Local to this browser.">Reset visited</button>

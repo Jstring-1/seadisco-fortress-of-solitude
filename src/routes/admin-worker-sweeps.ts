@@ -13,12 +13,6 @@
 
 import express, { Express, Request, Response } from "express";
 import {
-  startArtistSweep,
-  requestArtistSweepStop,
-  forceClearArtistSweep,
-  getArtistSweepStatus,
-} from "../artist-sweep-worker.js";
-import {
   startFacetedSweep,
   requestFacetedSweepStop,
   forceClearFacetedSweep,
@@ -40,33 +34,6 @@ import {
 type RequireAdmin = (req: Request, res: Response) => Promise<string | null>;
 
 export function registerAdminWorkerSweepRoutes(app: Express, requireAdmin: RequireAdmin): void {
-  // ── Artist masters+ sweep ────────────────────────────────────────
-  app.post("/api/admin/artist-sweep/start", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    const body = req.body || {};
-    const yearMax = Number.isFinite(Number(body.yearMax)) ? Number(body.yearMax) : undefined;
-    const resetCursor = !!body.resetCursor;
-    try {
-      const r = await startArtistSweep({ yearMax, resetCursor });
-      if (!r.ok) { res.status(409).json(r); return; }
-      res.json(r);
-    } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-  });
-  app.post("/api/admin/artist-sweep/stop", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    try { requestArtistSweepStop(); res.json({ ok: true }); }
-    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-  });
-  app.post("/api/admin/artist-sweep/force-clear", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    try { forceClearArtistSweep(); res.json({ ok: true }); }
-    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-  });
-  app.get("/api/admin/artist-sweep/status", async (req, res) => {
-    if (!await requireAdmin(req, res)) return;
-    try { res.json(getArtistSweepStatus()); }
-    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
-  });
 
   // ── Year × facet (format / country) sweep ────────────────────────
   app.post("/api/admin/faceted-sweep/start", express.json({ limit: "2kb" }), async (req, res) => {

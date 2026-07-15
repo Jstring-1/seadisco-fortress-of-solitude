@@ -1329,10 +1329,7 @@ async function _baOpenLyric(id) {
     const r = await apiFetch(`/api/admin/lyrics/${id}`);
     if (!r.ok) return;
     const row = await r.json();
-    const [tuningOpts, artistOpts] = await Promise.all([
-      _baGetTuningOptionsCached(),
-      _baGetArtistOptionsCached(),
-    ]);
+    const tuningOpts = await _baGetTuningOptionsCached();
     let overlay = document.getElementById("ba-lyric-overlay");
     if (!overlay) {
       overlay = document.createElement("div");
@@ -1349,9 +1346,6 @@ async function _baOpenLyric(id) {
     // disabled until any value differs from what the server returned.
     // The previous read-only viewer + separate editor overlay flow is
     // gone — one popup handles both reading and editing.
-    const artistLink = row.artist_id
-      ? `<a href="#" onclick="event.preventDefault();_baOpenArtistFromBadge(${row.artist_id});return false" style="color:var(--accent);text-decoration:none;font-size:0.74rem;margin-left:0.4rem" title="Open in Blues Archive">↗ open profile</a>`
-      : "";
     const releaseLink = row.discogs_release_id
       ? `<a href="https://www.discogs.com/release/${row.discogs_release_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:0.72rem;margin-left:0.4rem" title="Open release on Discogs">↗</a>`
       : "";
@@ -1373,17 +1367,10 @@ async function _baOpenLyric(id) {
         </div>
         <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.45rem 0.6rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:0.6rem" onfocus="this.style.background='rgba(255,255,255,0.03)'" onblur="this.style.background='transparent'" oninput="_baLyricDirty()">
         <datalist id="ba-tuning-options">${tuningOpts}</datalist>
-        <datalist id="ba-artist-options">${artistOpts}</datalist>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
           <div>
-            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)" title="Type to autocomplete from existing blues_artists rows. On save the server matches your text case-insensitively against blues_artists.name and links the FK. Mismatches save as orphan (no artist_id) until you click '+ Create as new'.">Artist${artistLink}</label>
-            <div style="display:flex;gap:0.3rem;align-items:stretch">
-              <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="Type to search artists…" style="flex:1;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty();_baEditArtistInput()" autocomplete="off">
-              <button type="button" class="archive-btn" onclick="_baEditCreateArtist()" title="Create a new blues_artists row from the typed name and link this lyric to it. Use when no existing artist matches." style="font-size:0.74rem">+ Create as new</button>
-            </div>
-            <div id="ba-edit-artist-status" style="font-size:0.7rem;color:var(--muted);margin-top:0.2rem;min-height:1em">${
-              row.artist_id ? "✓ Linked to existing artist row" : (row.artist ? "Orphan — no FK linked yet. Pick an existing match or click '+ Create as new'." : "")
-            }</div>
+            <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Artist</label>
+            <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()" autocomplete="off">
           </div>
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Tuning</label>
@@ -1507,20 +1494,6 @@ async function _baOpenLyricEditor(id, prefill) {
     .filter(t => t.tuning && t.tuning !== "(unspecified)")
     .map(t => `<option value="${escHtml(t.tuning)}">`)
     .join("");
-  // Pull existing artists for an Artist datalist so the user can pick
-  // an existing row instead of typing a free-text orphan. Capped at
-  // 500 — datalist autocompletes locally so the cap is just a guard
-  // against huge transfers.
-  let artistOpts = "";
-  try {
-    const r = await apiFetch("/api/blues-archive/artists?limit=500");
-    if (r.ok) {
-      const { rows = [] } = await r.json();
-      artistOpts = rows
-        .map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`)
-        .join("");
-    }
-  } catch {}
   let overlay = document.getElementById("ba-lyric-edit-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -1544,17 +1517,10 @@ async function _baOpenLyricEditor(id, prefill) {
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
       <datalist id="ba-tuning-options">${opts}</datalist>
-      <datalist id="ba-artist-options">${artistOpts}</datalist>
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Title</label>
       <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(required)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
-      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="Type to search existing artists (autocomplete from the Blues DB). Pick one to link via artist_id, or type a fresh name and hit '+ Create as new' to mint a row.">Artist</label>
-      <div style="display:flex;gap:0.4rem;align-items:stretch">
-        <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="(leave blank to clear)" style="flex:1;padding:0.45rem 0.7rem;font-size:0.88rem" autocomplete="off" oninput="_baEditArtistInput()">
-        <button type="button" id="ba-edit-create-artist" class="archive-btn" onclick="_baEditCreateArtist()" title="Create a new blues_artists row from the typed name and link this lyric to it. Use when no existing artist matches.">+ Create as new</button>
-      </div>
-      <div id="ba-edit-artist-status" style="font-size:0.74rem;color:var(--muted);margin-top:0.25rem;min-height:1em">${
-        row.artist_id ? "✓ Linked to existing artist row" : (row.artist ? "Orphan — not linked. Pick an existing match or click '+ Create as new'." : "")
-      }</div>
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Artist</label>
+      <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem" autocomplete="off">
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Tuning</label>
       <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
       <!-- Optional Discogs release/master pin. When set, the album-
@@ -1590,110 +1556,6 @@ async function _baOpenLyricEditor(id, prefill) {
   `;
 }
 window._baOpenLyricEditor = _baOpenLyricEditor;
-
-// Live status under the Artist input: tells the user whether the
-// currently-typed name matches an existing blues_artists row (✓), is
-// blank (cleared), or doesn't match (will save as orphan). The static
-// datalist is capped at 500 names, which silently hid existing artists
-// past the cap — instead, debounce-search the server for the typed
-// substring so anyone in blues_artists can be linked.
-let _baEditArtistTimer = null;
-let _baEditArtistReqSeq = 0;
-function _baEditArtistInput() {
-  const input = document.getElementById("ba-edit-artist");
-  const stat  = document.getElementById("ba-edit-artist-status");
-  if (!input || !stat) return;
-  const v = input.value.trim();
-  if (!v) { stat.textContent = "Will clear the artist on save."; stat.style.color = "var(--muted)"; return; }
-  // Provisional status while the server lookup is in flight, so the
-  // user isn't told "No matching artist" before we've actually checked.
-  stat.textContent = "Searching…";
-  stat.style.color = "var(--muted)";
-  if (_baEditArtistTimer) clearTimeout(_baEditArtistTimer);
-  _baEditArtistTimer = setTimeout(() => _baEditArtistLookup(v), 180);
-}
-window._baEditArtistInput = _baEditArtistInput;
-
-async function _baEditArtistLookup(v) {
-  const dl    = document.getElementById("ba-artist-options");
-  const stat  = document.getElementById("ba-edit-artist-status");
-  const input = document.getElementById("ba-edit-artist");
-  if (!input || !stat) return;
-  // Bail if the user kept typing and this lookup is stale.
-  if (input.value.trim() !== v) return;
-  const mySeq = ++_baEditArtistReqSeq;
-  try {
-    const r = await apiFetch(`/api/blues-archive/artists?q=${encodeURIComponent(v)}&limit=50`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const { rows = [] } = await r.json();
-    // Drop late responses if the user has typed more since.
-    if (mySeq !== _baEditArtistReqSeq) return;
-    if (input.value.trim() !== v) return;
-    if (dl) {
-      dl.innerHTML = rows
-        .map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`)
-        .join("");
-    }
-    const lc = v.toLowerCase();
-    const matched = rows.some(a => String(a.name).trim().toLowerCase() === lc);
-    if (matched) {
-      stat.textContent = "✓ Matches an existing artist row — will link on save.";
-      stat.style.color = "#7bc77b";
-    } else {
-      stat.textContent = "No matching artist row — will save as orphan. Click '+ Create as new' to mint one.";
-      stat.style.color = "#e8a85a";
-    }
-  } catch (e) {
-    if (mySeq !== _baEditArtistReqSeq) return;
-    stat.textContent = `Lookup failed: ${e?.message || e}`;
-    stat.style.color = "#e88";
-  }
-}
-window._baEditArtistLookup = _baEditArtistLookup;
-
-// "+ Create as new" — POST a new blues_artists row with the typed
-// name, then save the lyric edit so the FK links immediately. Skips
-// creation when the name already matches an existing row (just saves).
-async function _baEditCreateArtist() {
-  const input = document.getElementById("ba-edit-artist");
-  const stat  = document.getElementById("ba-edit-artist-status");
-  const name  = (input?.value || "").trim();
-  if (!name) {
-    if (stat) { stat.textContent = "Type a name first."; stat.style.color = "#e8a85a"; }
-    return;
-  }
-  if (stat) { stat.textContent = "Creating…"; stat.style.color = "var(--muted)"; }
-  try {
-    const r = await apiFetch("/api/blues-archive/artists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const j = await r.json();
-    if (stat) {
-      stat.textContent = j.created
-        ? `✓ Created new artist row #${j.id}. Click Save to link.`
-        : `✓ Existing artist row #${j.id} matched. Click Save to link.`;
-      stat.style.color = "#7bc77b";
-    }
-    // Drop the new option into the datalist so future renders show it.
-    const dl = document.getElementById("ba-artist-options");
-    if (dl && j.name) {
-      dl.insertAdjacentHTML("beforeend", `<option value="${escHtml(j.name)}" data-id="${j.id}">`);
-    }
-    // Invalidate the session cache of the artist datalist so the next
-    // popup opens with the new row included. Without this, the in-mem
-    // cache would keep serving the pre-creation list until reload.
-    if (typeof _baInvalidateArtistOptionsCache === "function") _baInvalidateArtistOptionsCache();
-  } catch (e) {
-    if (stat) { stat.textContent = `Failed: ${e?.message || e}`; stat.style.color = "#e88"; }
-  }
-}
-window._baEditCreateArtist = _baEditCreateArtist;
 
 // Create a brand-new lyric row from the editor's "new" mode.
 // Source host defaults to "manual" server-side so the new row
@@ -2319,37 +2181,6 @@ function _baLyricsApplyNoYear() {
   _baLoadLyrics();
 }
 window._baLyricsApplyNoYear = _baLyricsApplyNoYear;
-
-// Cheap pass: set every lyric's first_release_year from its linked
-// artist's discogs_releases (title match). Zero Discogs API calls.
-// Reports the rows updated and how many still have no year — the
-// remainder will need either manual entry or a future Discogs-search
-// worker.
-async function _baResolveYearsCheap() {
-  const btn = document.getElementById("blues-archive-lyrics-resolve-years-btn");
-  const orig = btn?.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
-  try {
-    const r = await apiFetch("/api/admin/lyrics/resolve-years-cheap", { method: "POST" });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      alert("Resolve failed: " + (err?.error ?? r.status));
-      return;
-    }
-    const { updated = 0, stillMissing = 0 } = await r.json();
-    const msg = `Resolved ${updated} year${updated === 1 ? "" : "s"} from the linked artist's Discogs releases.\n\n` +
-      (stillMissing
-        ? `${stillMissing.toLocaleString()} lyric${stillMissing === 1 ? "" : "s"} still have no year — they need either a release pin in the editor, or a future Discogs-search worker pass.`
-        : `All lyrics now have a first_release_year.`);
-    alert(msg);
-    _baLoadLyrics();
-  } catch (e) {
-    alert("Resolve failed: " + (e?.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = orig || "Resolve years"; }
-  }
-}
-window._baResolveYearsCheap = _baResolveYearsCheap;
 
 // Cache pass: set each year-less lyric's first_release_year by matching
 // its title + artist against the big release_cache (everything the
@@ -3018,17 +2849,10 @@ function _baLyricRowHtml(l) {
   const artistHtml = l.artist && typeof entityLookupLinkHtml === "function"
     ? entityLookupLinkHtml("artist", l.artist, { title: `Lookup options for "${l.artist}"` })
     : escHtml(l.artist || "");
-  // 🎸 archive-link when the lyric resolves to a blues_artists row
-  // (canonical artist_id), or a "+ promote" button when it's an
-  // orphan with a non-blank artist string. Mutually exclusive.
-  const archiveAffordance = l.artist_id
-    ? `<a href="#" class="ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${l.artist_id})" title="Open in Blues Archive">🎸</a>`
-    : (l.artist && String(l.artist).trim()
-        ? `<a href="#" class="ba-promote-link" onclick="event.preventDefault();event.stopPropagation();_baPromoteOrphan(${l.id})" title="Add as a new blues_artists row and link all orphans with this name" style="color:var(--accent);text-decoration:none;font-size:0.86em;margin-left:0.25rem">+ artist</a>`
-        : "");
-  // Year of first release — resolved by /api/admin/lyrics/resolve-years-cheap
-  // against the linked artist's discogs_releases. NULL until resolved
-  // (rendered as a faint em-dash so the column doesn't visually wobble).
+  const archiveAffordance = "";
+  // Year of first release — resolved from release_cache / Discogs.
+  // NULL until resolved (rendered as a faint em-dash so the column
+  // doesn't visually wobble).
   const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
   const yrHtml = yr
     ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
@@ -4032,34 +3856,9 @@ async function _baLoadStats() {
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
       return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}font-size:0.7rem;padding:0.05rem 0.25rem;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
     };
-    // Artists panel: only the artist-side buckets. Empty is included
-    // when nonzero so the curator can still find dead rows.
-    if (artistsEl) {
-      artistsEl.innerHTML = [
-        chip("Artists", s.artists_total, {
-          alwaysShow: true,
-          onclick: "_baJumpArtists('')",
-          title: "Total rows in the blues_artists table. Click to view all artists (clears any active category filter).",
-        }),
-        chip("With lyrics + releases", s.artists_with_both, {
-          onclick: "_baJumpArtists('with_both')",
-          title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored. Click to filter the Artists tab.",
-        }),
-        chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, {
-          onclick: "_baJumpArtists('with_lyrics_only')",
-          title: "Artists with lyrics but no Discogs releases stored. Click to filter the Artists tab — use 'Get all info from Discogs' on /admin Blues DB to enrich.",
-        }),
-        chip("With releases only", s.artists_with_releases - s.artists_with_both, {
-          onclick: "_baJumpArtists('with_releases_only')",
-          title: "Artists with releases but no matched lyrics yet. Click to filter the Artists tab. Usually a name mismatch with the lyrics table.",
-        }),
-        chip("Empty", s.artists_empty, {
-          tone: "warn",
-          onclick: "_baJumpArtists('empty')",
-          title: "Artists with neither lyrics nor releases — candidates for purge or enrichment. Click to filter the Artists tab.",
-        }),
-      ].join("");
-    }
+    // Artist buckets retired — the Blues Archive is a lyrics + tunings
+    // reference now, so the artist stats strip stays empty.
+    if (artistsEl) artistsEl.innerHTML = "";
     // Lyrics panel: only the lyrics-side buckets.
     if (lyricsEl) {
       lyricsEl.innerHTML = [

@@ -248,11 +248,6 @@ async function loadAdminWorkerStatus() {
       const suffix  = Number.isFinite(pending) ? ` (${pending} pending)` : '';
       badges.push({ label: `YT review${suffix}`, tab: 'yt-review' });
     }
-    if (w.artist?.running) {
-      const j = w.artist;
-      const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
-      badges.push({ label: `Artist sweep${pos}`, tab: 'labels' });
-    }
     if (w.faceted?.running) {
       const j = w.faceted;
       const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
@@ -1725,20 +1720,16 @@ window._labelUpstreamStatsStop = _labelUpstreamStatsStop;
 window._labelUpstreamStatsForceClear = _labelUpstreamStatsForceClear;
 
 // ── Coverage sweeps (artist / faceted)
-let _covArtist = null, _covFaceted = null;
+let _covFaceted = null;
 async function loadCoverageSweeps() {
   const el = document.getElementById("coverage-sweeps-content");
   if (!el) return;
   try {
-    const [aR, fR] = await Promise.all([
-      apiFetch("/api/admin/artist-sweep/status").catch(() => null),
-      apiFetch("/api/admin/faceted-sweep/status").catch(() => null),
-    ]);
-    _covArtist  = aR?.ok ? await aR.json() : null;
+    const fR = await apiFetch("/api/admin/faceted-sweep/status").catch(() => null);
     _covFaceted = fR?.ok ? await fR.json() : null;
     _renderCoverageSweeps();
     clearTimeout(window._covPollTimer);
-    const anyRunning = _covArtist?.running || _covFaceted?.running;
+    const anyRunning = _covFaceted?.running;
     if (anyRunning && _adminPanelVisible() && document.getElementById("panel-labels")?.style.display !== "none") {
       window._covPollTimer = setTimeout(loadCoverageSweeps, 5000);
     }
@@ -1751,36 +1742,10 @@ window.loadCoverageSweeps = loadCoverageSweeps;
 function _renderCoverageSweeps() {
   const el = document.getElementById("coverage-sweeps-content");
   if (!el) return;
-  const a = _covArtist || {}, f = _covFaceted || {};
+  const f = _covFaceted || {};
   const pct = (cur, tot) => tot > 0 ? Math.round((cur / tot) * 100) : 0;
   el.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:0.7rem">
-
-      <!-- Artist sweep -->
-      <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
-        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
-          <strong>🎤 Artist masters+ sweep</strong>
-          <span style="font-size:0.72rem;color:var(--muted)">
-            iterates blues_artists rows with a Discogs ID, caching EVERY release + master credited to each artist (all years, unless you set a yearMax cap)
-          </span>
-        </div>
-        <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.4rem">
-          <label style="font-size:0.78rem;color:var(--muted);white-space:nowrap" title="Cache every release + master regardless of year. Uncheck to cap at a yearMax.">
-            <input id="cov-artist-allyears" type="checkbox" ${(a.yearMax == null || a.yearMax <= 0) ? "checked" : ""} onchange="var y=document.getElementById('cov-artist-yearmax'); if(y) y.disabled=this.checked"> all years
-          </label>
-          <label style="font-size:0.78rem;color:var(--muted)">yearMax
-            <input id="cov-artist-yearmax" type="number" value="${a.yearMax && a.yearMax > 0 ? a.yearMax : 1970}" ${(a.yearMax == null || a.yearMax <= 0) ? "disabled" : ""} style="width:5rem;padding:0.15rem 0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-          </label>
-          ${a.running
-            ? `<span style="font-size:0.78rem;color:var(--muted)">progress: ${a.cursor}/${a.total} (${pct(a.cursor,a.total)}%) · ✓${a.hits} · ⏭${a.skipped} · ⚠${a.errors}</span>
-               <button class="admin-btn" type="button" onclick="_covArtistStop()" style="background:#a33;color:#fff">■ Stop</button>
-               <button class="admin-btn" type="button" onclick="_covArtistForceClear()">⚠ Force clear</button>`
-            : `<button class="admin-btn" type="button" onclick="_covArtistStart(false)">⏵ Start / resume</button>
-               <button class="admin-btn" type="button" onclick="_covArtistStart(true)" title="Rebuild the queue from blues_artists and start from cursor 0.">↻ Restart from top</button>
-               ${a.total ? `<span style="font-size:0.72rem;color:var(--muted)">last: ${a.hits ?? 0} hits · ${a.skipped ?? 0} skipped</span>` : ""}`}
-        </div>
-        ${a.lastError ? `<div style="font-size:0.7rem;color:#e88;margin-top:0.3rem">${_eHtml(a.lastError)}</div>` : ""}
-      </div>
 
       <!-- Faceted (year × format / country) -->
       <div style="border:1px solid var(--border);border-radius:5px;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.02)">
@@ -1825,35 +1790,6 @@ function _renderCoverageSweeps() {
 
     </div>
   `;
-}
-
-async function _covArtistStart(reset) {
-  const allYears = !!document.getElementById("cov-artist-allyears")?.checked;
-  const yearMax = allYears ? 0 : Number(document.getElementById("cov-artist-yearmax")?.value || 1970);
-  const scope = allYears ? "EVERY release + master (all years)" : `masters + releases up to ${yearMax}`;
-  if (!confirm(`Start artist sweep — ${scope}?\n\nIterates every blues_artists row with a Discogs ID, caching ${scope} credited to each artist. Rate-limited to 1 request/sec.`)) return;
-  try {
-    const r = await apiFetch("/api/admin/artist-sweep/start", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ yearMax, resetCursor: !!reset }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Start failed: ${j.error || r.status}`); return; }
-    loadCoverageSweeps();
-    if (typeof loadAdminWorkerStatus === "function") loadAdminWorkerStatus();
-  } catch (err) { alert(String(err)); }
-}
-async function _covArtistStop() {
-  if (!confirm("Stop artist sweep? Cursor is persisted; ⏵ Resume picks up where it stops.")) return;
-  const r = await apiFetch("/api/admin/artist-sweep/stop", { method: "POST" });
-  if (!r.ok) { alert(`Stop failed: ${r.status}`); return; }
-  loadCoverageSweeps();
-}
-async function _covArtistForceClear() {
-  if (!confirm("Force-clear artist sweep state? Only if Stop didn't take.")) return;
-  const r = await apiFetch("/api/admin/artist-sweep/force-clear", { method: "POST" });
-  if (!r.ok) { alert(`Force-clear failed: ${r.status}`); return; }
-  loadCoverageSweeps();
 }
 
 // Discogs-supported facet values. Formats mirror what /database/search

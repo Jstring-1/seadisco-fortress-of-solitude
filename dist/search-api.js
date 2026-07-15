@@ -8,8 +8,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, bulkDeleteBluesArtists, listBluesArtistIdsMatching, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
-import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, insertBluesArtist, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
+import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
 import { initExternalDiscographyWorkerModule, getExternalDiscographyStatus, // used by /api/admin/workers/status aggregate
@@ -26,8 +26,6 @@ import { registerAdminWorkerSweepRoutes } from "./routes/admin-worker-sweeps.js"
 import { registerAdminCacheProjectionRoutes } from "./routes/admin-cache-projection.js";
 import { registerAdminExternalDiscographyRoutes } from "./routes/admin-external-discography.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
-import { initArtistSweepModule, getArtistSweepStatus, // used by /api/admin/workers/status aggregate
- } from "./artist-sweep-worker.js";
 import { initFacetedSweepModule, getFacetedSweepStatus, // used by /api/admin/workers/status aggregate
  } from "./faceted-sweep-worker.js";
 import { isSplitCacheReaderEnabled } from "./db.js";
@@ -8789,183 +8787,20 @@ app.get("/api/admin/user-favorites", async (req, res) => {
 // Curated database of pre-1930 blues artists. Admin-only. Phase 1 seeds
 // from Wikidata; admin can add / edit / delete rows manually for obscure
 // artists not on Wikidata or to correct mistakes.
-app.get("/api/admin/blues/stats", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        res.json(await getBluesStats());
-    }
-    catch (err) {
-        console.error("[blues stats]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // Lightweight: discogs_ids + names of every blues_artists row. Cached
 // client-side so the admin "+ add to Blues DB" icon (popup AND card)
 // can suppress itself for artists already in the DB. Updated locally
 // on each successful add (no need to refetch).
-app.get("/api/admin/blues/ids", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        res.json(await getBluesArtistIdentifiers());
-    }
-    catch (err) {
-        console.error("[blues ids]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // Admin-only "add this artist to the Blues DB" — called from the +
 // icon next to artist names in album/credit popups. Idempotent: keys
 // on discogs_id, merges if already present.
-app.post("/api/admin/blues/add-by-discogs-id", express.json({ limit: "8kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const discogsIdRaw = req.body?.discogs_id;
-    // Length cap (audit #11) — express.json's 8kb limit is the outer
-    // line of defense; this caps the actual stored field at 500 chars.
-    const name = (req.body?.name ?? "").trim().slice(0, 500);
-    const discogsId = parseInt(String(discogsIdRaw), 10);
-    if (!Number.isFinite(discogsId) || discogsId <= 0 || !name) {
-        res.status(400).json({ error: "discogs_id (positive int) and name required" });
-        return;
-    }
-    try {
-        const out = await upsertBluesArtistByDiscogsId({
-            discogs_id: discogsId,
-            name,
-            discogs_releases: [],
-        });
-        res.json({ ok: true, id: out.id, created: out.created });
-    }
-    catch (err) {
-        console.error("[blues add-by-discogs-id]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // Same idea but called from result-card "+" icons where we only have
 // the artist NAME parsed from the card title (no Discogs ID locally).
 // Resolves the name to an ID via /database/search?type=artist and
 // upserts. Returns the resolved id + canonical name so the client can
 // add them to its in-memory cache and suppress the button next time.
-app.post("/api/admin/blues/add-by-name", express.json({ limit: "8kb" }), async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth." });
-        return;
-    }
-    const name = (req.body?.name ?? "").trim().slice(0, 500);
-    if (!name) {
-        res.status(400).json({ error: "name required" });
-        return;
-    }
-    try {
-        const search = await client.get("/database/search", {
-            q: name, type: "artist", per_page: "1",
-        });
-        const top = search?.results?.[0];
-        const artistId = top?.id ?? null;
-        if (!artistId) {
-            res.status(404).json({ error: "No Discogs artist found for that name" });
-            return;
-        }
-        // Use the canonical Discogs name (with disambiguator) when we have
-        // it — keeps the row consistent with the rest of the DB.
-        const canonicalName = (typeof top?.title === "string" && top.title.trim()) ? top.title.trim() : name;
-        const out = await upsertBluesArtistByDiscogsId({
-            discogs_id: artistId,
-            name: canonicalName,
-            discogs_releases: [],
-        });
-        res.json({ ok: true, id: out.id, created: out.created, discogs_id: artistId, name: canonicalName });
-    }
-    catch (err) {
-        console.error("[blues add-by-name]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/blues/list", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const search = (req.query.search ?? "").trim();
-    // Admin tab now defaults to "show everything" (all=1 -> 100,000 cap).
-    // Explicit limit query param still works for callers that want paging.
-    const wantAll = req.query.all === "1" || req.query.all === "true";
-    const limit = wantAll
-        ? 100000
-        : Math.min(2000, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
-    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-    const sort = (req.query.sort ?? "name").trim();
-    const order = (req.query.order ?? "asc").trim();
-    try {
-        const out = await listBluesArtists({ search, limit, offset, sort, order });
-        res.json({ ...out, limit, offset, sort, order });
-    }
-    catch (err) {
-        console.error("[blues list]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // CSV export of every row in blues_artists. Admin-only. Streams a
 // content-type-flagged response so browsers download the file directly.
-app.get("/api/admin/blues/export.csv", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        // Pull everything in one shot. Whitelist-safe sort.
-        const sort = (req.query.sort ?? "name").trim();
-        const order = (req.query.order ?? "asc").trim();
-        const { rows } = await listBluesArtists({ limit: 100000, offset: 0, sort, order });
-        // Columns chosen to be readable in a spreadsheet without losing
-        // the JSON-array structures completely (we serialise arrays as
-        // pipe-separated strings; complex objects get JSON-encoded).
-        const cols = [
-            "id", "name", "aliases",
-            "birth_date", "birth_place", "death_date", "death_place", "death_cause",
-            "hometown_region",
-            "first_recording_year", "first_recording_title",
-            "earliest_release_year",
-            "styles", "instruments", "associated_labels", "songs_authored", "collaborators",
-            "discogs_id", "wikidata_qid", "wikipedia_suffix",
-            "photo_url", "youtube_urls",
-            "discogs_releases",
-            "notes", "enrichment_status",
-            "date_added", "updated_at",
-        ];
-        const csvCell = (v) => {
-            if (v == null)
-                return "";
-            if (Array.isArray(v)) {
-                // Pipe-separated for plain string arrays; JSON for object arrays.
-                const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
-                v = isComplex ? JSON.stringify(v) : v.join(" | ");
-            }
-            else if (typeof v === "object") {
-                v = JSON.stringify(v);
-            }
-            const s = String(v);
-            // Quote if the value contains comma, quote, newline, or starts
-            // with a leading equals/at/plus/minus (Excel formula-injection guard).
-            if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
-                return `"${s.replace(/"/g, '""')}"`;
-            }
-            return s;
-        };
-        const header = cols.join(",");
-        const body = rows.map(r => cols.map(c => csvCell(r[c])).join(",")).join("\n");
-        const csv = "﻿" + header + "\n" + body + "\n"; // BOM for Excel UTF-8
-        res.setHeader("Content-Type", "text/csv; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-${new Date().toISOString().slice(0, 10)}.csv"`);
-        res.send(csv);
-    }
-    catch (err) {
-        console.error("[blues export.csv]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // ── Release cache export (admin) ─────────────────────────────────────
 // Streamed export of release_cache rows. Supports filters across
 // genres/styles/year/country/format/has-youtube and three formats
@@ -9566,7 +9401,6 @@ app.get("/api/admin/workers/status", async (req, res) => {
             yt: { running: _ytReviewRunning, counts: ytCounts },
             bulk: getBulkLabelSweepStatus(),
             projection: getCacheProjectionBackfillStatus(),
-            artist: getArtistSweepStatus(),
             faceted: getFacetedSweepStatus(),
             upstream: getLabelUpstreamStatsStatus(),
         });
@@ -10283,54 +10117,6 @@ function _buildBluesArtistsWhere(q) {
     }
     return { sql: where.length ? `WHERE ${where.join(" AND ")}` : "", args };
 }
-app.get("/api/admin/blues/export.json", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const { sql, args } = _buildBluesArtistsWhere(req.query);
-        const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0, 10)}.json"`);
-        res.send(JSON.stringify(r.rows, null, 2));
-    }
-    catch (err) {
-        console.error("[blues export.json]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/blues/export.ndjson", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const { sql, args } = _buildBluesArtistsWhere(req.query);
-        res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-artists-${new Date().toISOString().slice(0, 10)}.ndjson"`);
-        const r = await getPool().query(`SELECT * FROM blues_artists ${sql} ORDER BY LOWER(name) ASC`, args);
-        for (const row of r.rows)
-            res.write(JSON.stringify(row) + "\n");
-        res.end();
-    }
-    catch (err) {
-        console.error("[blues export.ndjson]", err);
-        if (!res.headersSent)
-            res.status(500).json({ error: err?.message ?? String(err) });
-        else
-            res.end();
-    }
-});
-app.get("/api/admin/blues/preview", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const { sql, args } = _buildBluesArtistsWhere(req.query);
-        const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_artists ${sql}`, args);
-        res.json({ count: r.rows[0]?.n ?? 0 });
-    }
-    catch (err) {
-        console.error("[blues preview]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/admin/lyrics/export.csv — dump every blues_lyrics row.
 // Mirrors the artists CSV: UTF-8 BOM, Excel-friendly quoting, formula-
 // injection guard on cells starting with =/@/+/-. plaintext is the
@@ -10598,215 +10384,9 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
 // meta + pseudonyms + bands + notes (bio) + every Discogs release
 // (sorted oldest→newest). No lyrics here — that's the separate
 // /api/admin/lyrics/export.pdf endpoint.
-app.get("/api/admin/blues/export.pdf", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const r = await getPool().query(`SELECT id, name, aliases, collaborators,
-              birth_date, death_date, birth_place, death_place, hometown_region,
-              first_recording_year, first_recording_title,
-              last_recording_year,  last_recording_title,
-              styles, instruments, associated_labels,
-              notes, discogs_id, wikipedia_suffix,
-              discogs_releases
-         FROM blues_artists
-        ORDER BY jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb)) DESC,
-                 lower(name) ASC, name ASC`);
-        const rows = r.rows;
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="seadisco-artists-${new Date().toISOString().slice(0, 10)}.pdf"`);
-        const doc = new PDFDocument({
-            size: "LETTER",
-            margins: { top: 56, bottom: 56, left: 56, right: 56 },
-            info: {
-                Title: "SeaDisco Blues Archive - Artist Profiles",
-                Author: "SeaDisco",
-                Subject: `${rows.length} artists`,
-            },
-            bufferPages: true,
-        });
-        doc.pipe(res);
-        // ── Cover page ─────────────────────────────────────────────────
-        doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
-        doc.moveDown(0.3);
-        doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted by release count", { align: "center" });
-        doc.moveDown(2);
-        doc.font("Times-Roman").fontSize(11)
-            .text(`${rows.length.toLocaleString()} artists`, { align: "center" })
-            .text(new Date().toISOString().slice(0, 10), { align: "center" });
-        doc.addPage();
-        // Helpers — extract flat string lists out of fields that may be
-        // either string arrays (manual entry) or object arrays (Discogs-
-        // enriched data with {name, discogs_id, kind}).
-        const flatStrings = (v) => {
-            if (!Array.isArray(v))
-                return [];
-            return v.map((x) => typeof x === "string" ? x : (x && typeof x === "object" ? String(x.name ?? "") : "")).filter(Boolean);
-        };
-        const labelLine = (label, items) => {
-            if (!items.length)
-                return;
-            doc.font("Times-Italic").fontSize(9).fillColor("#555")
-                .text(`${_pdfSafe(label)}: `, { continued: true })
-                .font("Times-Roman").fillColor("#222")
-                .text(_pdfSafe(items.join(", ")));
-        };
-        for (const row of rows) {
-            // Orphan-protection: a fresh artist needs at least the name +
-            // meta line + a few release rows to look like a profile.
-            if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
-                doc.addPage();
-            }
-            // ── Name (title) ─────────────────────────────────────────
-            doc.font("Times-Bold").fontSize(18).fillColor("black")
-                .text(_pdfSafe(row.name || "Untitled"));
-            // ── Top meta line: born/died/from + first/last recording ─
-            const metaParts = [];
-            const dates = [row.birth_date, row.death_date].filter(Boolean).join(" - ");
-            if (dates)
-                metaParts.push(dates);
-            if (row.birth_place)
-                metaParts.push(`Born ${row.birth_place}`);
-            if (row.death_place)
-                metaParts.push(`Died ${row.death_place}`);
-            if (row.hometown_region)
-                metaParts.push(`From ${row.hometown_region}`);
-            if (row.first_recording_year) {
-                metaParts.push(row.first_recording_title
-                    ? `First: ${row.first_recording_year} (${row.first_recording_title})`
-                    : `First: ${row.first_recording_year}`);
-            }
-            if (row.last_recording_year) {
-                metaParts.push(row.last_recording_title
-                    ? `Last: ${row.last_recording_year} (${row.last_recording_title})`
-                    : `Last: ${row.last_recording_year}`);
-            }
-            if (metaParts.length) {
-                doc.font("Times-Italic").fontSize(9).fillColor("#555")
-                    .text(_pdfSafe(metaParts.join("  ·  ")));
-            }
-            doc.moveDown(0.4);
-            // ── Labelled lists ─────────────────────────────────────
-            labelLine("Pseudonyms", flatStrings(row.aliases));
-            labelLine("Bands / collaborators", flatStrings(row.collaborators));
-            labelLine("Styles", flatStrings(row.styles));
-            labelLine("Instruments", flatStrings(row.instruments));
-            labelLine("Labels", flatStrings(row.associated_labels));
-            doc.moveDown(0.4);
-            // ── Bio (notes) ────────────────────────────────────────
-            const bio = String(row.notes || "").trim();
-            if (bio) {
-                doc.font("Times-Roman").fontSize(10).fillColor("black")
-                    .text(_pdfSafe(bio), { paragraphGap: 4, lineGap: 1 });
-                doc.moveDown(0.5);
-            }
-            // ── Releases ───────────────────────────────────────────
-            // Sort oldest → newest, NULL years last.
-            const releases = Array.isArray(row.discogs_releases)
-                ? row.discogs_releases.slice()
-                : [];
-            releases.sort((x, y) => {
-                const xy = Number(x?.year) || 9999;
-                const yy = Number(y?.year) || 9999;
-                if (xy !== yy)
-                    return xy - yy;
-                return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
-            });
-            if (releases.length) {
-                doc.font("Times-Bold").fontSize(10).fillColor("#444")
-                    .text(`Releases (${releases.length})`);
-                doc.moveDown(0.15);
-                // Plain text block — year, title, label, type — one row each.
-                // No table grid (would add complexity for marginal benefit).
-                for (const rel of releases) {
-                    if (doc.y > doc.page.height - doc.page.margins.bottom - 30) {
-                        doc.addPage();
-                    }
-                    const year = rel?.year ? String(rel.year) : "-";
-                    const title = rel?.title ? String(rel.title) : "Untitled";
-                    const label = rel?.label ? `  -  ${rel.label}` : "";
-                    const type = rel?.type ? `  -  ${String(rel.type).toUpperCase()}` : "";
-                    doc.font("Times-Roman").fontSize(9).fillColor("#222")
-                        .text(_pdfSafe(`${year}   ${title}${label}${type}`));
-                }
-                doc.moveDown(0.4);
-            }
-            // ── Separator between artists ──────────────────────────
-            doc.moveDown(1.0);
-            const sepY = doc.y;
-            doc.strokeColor("#ddd").lineWidth(0.5)
-                .moveTo(doc.page.margins.left, sepY)
-                .lineTo(doc.page.width - doc.page.margins.right, sepY)
-                .stroke();
-            doc.moveDown(1.0);
-        }
-        // ── Page numbers ───────────────────────────────────────────────
-        const range = doc.bufferedPageRange();
-        for (let i = 0; i < range.count; i++) {
-            doc.switchToPage(range.start + i);
-            if (i === 0)
-                continue;
-            doc.font("Times-Roman").fontSize(9).fillColor("#888");
-            const y = doc.page.height - doc.page.margins.bottom + 20;
-            // lineBreak:false is critical — without it, writing at y below
-            // the content area makes text() think the line overflowed the
-            // page and silently appends a new page. Cost on a 100-page
-            // doc: ~100 spurious blank pages with the footers landing on
-            // the WRONG (new) pages instead of the content pages.
-            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right, lineBreak: false });
-        }
-        doc.end();
-    }
-    catch (err) {
-        console.error("[blues export.pdf]", err);
-        if (!res.headersSent)
-            res.status(500).json({ error: err?.message ?? String(err) });
-        else
-            res.end();
-    }
-});
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
 // seed (e.g. the Wikidata pass that smuggled non-blues artists in via
 // loose genre tags) before re-running.
-app.delete("/api/admin/blues/all", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    // Belt-and-braces: caller must echo a confirm token in the body so
-    // a stray DELETE call can't nuke the table.
-    if ((req.query.confirm ?? req.body?.confirm) !== "DELETE ALL") {
-        res.status(400).json({ error: "missing confirm token (expected: DELETE ALL)" });
-        return;
-    }
-    try {
-        const n = await deleteAllBluesArtists();
-        res.json({ ok: true, deleted: n });
-    }
-    catch (err) {
-        console.error("[blues delete all]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.get("/api/admin/blues/:id(\\d+)", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    try {
-        const row = await getBluesArtist(id);
-        if (!row) {
-            res.status(404).json({ error: "not found" });
-            return;
-        }
-        res.json(row);
-    }
-    catch (err) {
-        console.error("[blues get]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // On unique-violation of discogs_id (PG SQLSTATE 23505), parse the
 // offending id out of the error detail, look up the row that already
 // claims it, and return a structured 409 the editor can render as a
@@ -10861,120 +10441,15 @@ app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) 
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-app.put("/api/admin/blues/:id(\\d+)", express.json({ limit: "200kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    try {
-        await updateBluesArtist(id, req.body ?? {});
-        res.json({ ok: true });
-    }
-    catch (err) {
-        if (await _handleBluesUniqueConflict(err, res))
-            return;
-        console.error("[blues update]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.delete("/api/admin/blues/:id(\\d+)", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    // ?with_lyrics=1 → cascade-delete every lyric tied to this artist
-    // (by FK or by case-insensitive name). Default leaves lyrics alone
-    // (FK nulls out via ON DELETE SET NULL) so existing scripts that
-    // hit this endpoint to drop a stray artist don't suddenly lose
-    // their orphan lyrics. The Discovery profile button passes the
-    // flag explicitly.
-    // ?ban=1 → also add ban rows for the artist name + every deleted
-    // page title so a future rescrape won't re-add any of it. Implies
-    // with_lyrics (banning a name without dropping its lyrics first
-    // would leave orphaned rows the curator just said they don't want).
-    const ban = req.query.ban === "1" || req.query.ban === "true";
-    const cascadeLyrics = ban || req.query.with_lyrics === "1" || req.query.with_lyrics === "true";
-    const banReason = String(req.query.banReason ?? "").trim().slice(0, 400) || null;
-    try {
-        if (cascadeLyrics) {
-            const out = await deleteBluesArtistAndLyrics(id, {
-                ban,
-                banReason,
-                banBy: req.clerkUserId ?? null,
-            });
-            res.json(out);
-        }
-        else {
-            await deleteBluesArtist(id);
-            res.json({ ok: true });
-        }
-    }
-    catch (err) {
-        console.error("[blues delete]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/admin/blues/bulk-delete  body: { ids: number[], withLyrics?: boolean }
 // Hard-delete the named artists in one transaction. withLyrics=true also
 // cascades every lyric tied to them (FK + legacy name-match); default
 // leaves lyrics in place (artist_id nulls out). Confirmation lives on
 // the client; the server only verifies admin + caps the batch. Path is
 // distinct from the digit-constrained /:id(\d+) delete, so no collision.
-app.post("/api/admin/blues/bulk-delete", express.json({ limit: "256kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const body = req.body ?? {};
-        const idsRaw = Array.isArray(body.ids) ? body.ids : [];
-        if (!idsRaw.length) {
-            res.status(400).json({ error: "ids required" });
-            return;
-        }
-        if (idsRaw.length > 10_000) {
-            res.status(400).json({ error: "too many ids (max 10000)" });
-            return;
-        }
-        const ids = idsRaw.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0);
-        const out = await bulkDeleteBluesArtists(ids, { withLyrics: !!body.withLyrics });
-        res.json({ ok: true, ...out });
-    }
-    catch (err) {
-        console.error("[blues bulk-delete]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/admin/blues/matching-ids — every artist id matching the same
 // filters as the Blues Archive list, for "Select all matching" on the
 // bulk-delete bar. Capped at 10k.
-app.get("/api/admin/blues/matching-ids", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const q = String(req.query.q ?? "").trim().slice(0, 200);
-        const rawCat = String(req.query.category ?? "").trim();
-        const category = ["with_both", "with_lyrics_only", "with_releases_only", "empty"]
-            .find(c => c === rawCat) || undefined;
-        const out = await listBluesArtistIdsMatching({
-            search: q || undefined,
-            category,
-            noWiki: req.query.no_wiki === "1" || req.query.no_wiki === "true",
-            noDiscogsId: req.query.no_discogs === "1" || req.query.no_discogs === "true",
-            hasStrict: req.query.has_strict === "1" || req.query.has_strict === "true",
-            noStrict: req.query.no_strict === "1" || req.query.no_strict === "true",
-        });
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues matching-ids]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // ── Blues tunings grid ────────────────────────────────────────────
 // Read-only grid seeded from src/data/tunings.csv at boot. Filters
 // drive a single ILIKE pass; facet endpoint feeds the dropdowns.
@@ -11229,106 +10704,13 @@ app.delete("/api/admin/lyrics/bans/:id(\\d+)", async (req, res) => {
 // can call POST to add or DELETE to remove — the endpoints normalise
 // internally. Used by the editor to mark two rows as the same
 // person (pseudonym) or two artists who played together (band).
-app.get("/api/admin/blues/:id(\\d+)/links", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    try {
-        const rows = await listBluesArtistLinks(id);
-        res.json({ rows });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.post("/api/admin/blues/:id(\\d+)/links", express.json({ limit: "8kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    const other = parseInt(String(req.body?.otherId ?? ""), 10);
-    const kind = String(req.body?.kind ?? "pseudonym");
-    if (!Number.isFinite(other) || other === id) {
-        res.status(400).json({ error: "bad otherId" });
-        return;
-    }
-    if (!BLUES_ARTIST_LINK_KINDS.includes(kind)) {
-        res.status(400).json({ error: "bad kind" });
-        return;
-    }
-    try {
-        await addBluesArtistLink(id, other, kind);
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // References to this artist's name in other rows' freeform fields
 // (aliases / collaborators / notes). Powers the editor's References
 // panel — surfaces unconnected mentions so the curator can promote
 // them into structured links without scanning the whole DB by hand.
-app.get("/api/admin/blues/:id(\\d+)/references", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    try {
-        const rows = await findBluesArtistReferences(id);
-        res.json({ rows });
-    }
-    catch (err) {
-        console.error("[blues references]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // Whole-graph snapshot for the Connections viz. Admin-only — same
 // gate as the rest of /api/blues-archive/*. Cheap because the link
 // table is small; no pagination needed.
-app.get("/api/blues-archive/connections", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const out = await listBluesConnectionsGraph();
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues-archive connections]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
-app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    const other = parseInt(req.params.otherId, 10);
-    if (!Number.isFinite(id) || !Number.isFinite(other)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    // Optional ?kind=X removes just one kind of link between the pair
-    // (the table now allows multiple kinds per pair). Omit kind to wipe
-    // every link between them.
-    const kindParam = String(req.query.kind ?? "").trim();
-    const kind = BLUES_ARTIST_LINK_KINDS.includes(kindParam) ? kindParam : undefined;
-    try {
-        await removeBluesArtistLink(id, other, kind);
-        res.json({ ok: true });
-    }
-    catch (err) {
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // ── Manual cache-warm: single control box, per-(genre, style) runs ─
 // Endpoints power the redesigned Cache admin tab. No cron — runs are
 // kicked manually, one at a time, with the admin picking genre +
@@ -11778,380 +11160,39 @@ app.all(/^\/api\/admin\/genre-cache-warm\/.*/, async (req, res) => {
         return;
     res.status(410).json({ error: "Replaced by /api/admin/cache-warm/* — refresh the admin page" });
 });
-// Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
-// Idempotent — re-running just refreshes the Wikidata-sourced fields and
-// leaves manual edits the admin made elsewhere alone.
-app.post("/api/admin/blues/seed", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const result = await seedBluesArtistsFromWikidata();
-        res.json({ ok: true, ...result });
-    }
-    catch (err) {
-        console.error("[blues seed]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 let _bluesDiscogsJob = {
     status: "idle", startedAt: null, endedAt: null,
     progress: null, result: null, error: null,
 };
-app.post("/api/admin/blues/seed-discogs", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    if (_bluesDiscogsJob.status === "running") {
-        res.status(409).json({
-            error: "Seed already running",
-            startedAt: _bluesDiscogsJob.startedAt,
-            progress: _bluesDiscogsJob.progress,
-        });
-        return;
-    }
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const startYear = parseInt(String(req.query.startYear ?? "1900"), 10);
-    const endYear = parseInt(String(req.query.endYear ?? "1930"), 10);
-    const maxPages = parseInt(String(req.query.maxPages ?? "25"), 10);
-    // Reset job state and kick off — explicitly NOT awaited.
-    _bluesDiscogsJob = {
-        status: "running",
-        startedAt: new Date().toISOString(),
-        endedAt: null,
-        progress: null,
-        result: null,
-        error: null,
-    };
-    seedBluesArtistsFromDiscogs(client, {
-        startYear, endYear, maxPages,
-        onProgress: (p) => { _bluesDiscogsJob.progress = p; },
-    })
-        .then(result => {
-        _bluesDiscogsJob.status = "done";
-        _bluesDiscogsJob.result = result;
-        _bluesDiscogsJob.endedAt = new Date().toISOString();
-    })
-        .catch(err => {
-        _bluesDiscogsJob.status = "error";
-        _bluesDiscogsJob.error = err?.message ?? String(err);
-        _bluesDiscogsJob.endedAt = new Date().toISOString();
-        console.error("[blues seed-discogs]", err);
-    });
-    // 202 Accepted — work is in flight, frontend should poll status.
-    res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsJob.startedAt });
-});
-app.get("/api/admin/blues/seed-discogs/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    res.json(_bluesDiscogsJob);
-});
 const _emptyJob = () => ({
     status: "idle", startedAt: null, endedAt: null,
     progress: null, result: null, error: null,
 });
 let _bluesWikiJob = _emptyJob();
 let _bluesDiscogsIdJob = _emptyJob();
-app.post("/api/admin/blues/enrich-wiki", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const idRaw = req.query.id;
-    const limitRaw = req.query.limit;
-    const force = req.query.force === "1" || req.query.force === "true";
-    const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
-    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    if (Number.isFinite(idFilter)) {
-        try {
-            const result = await enrichBluesFromWikipedia({ idFilter, force });
-            res.json({ ok: true, ...result });
-        }
-        catch (err) {
-            console.error("[blues enrich-wiki single]", err);
-            res.status(500).json({ error: err?.message ?? String(err) });
-        }
-        return;
-    }
-    if (_bluesWikiJob.status === "running") {
-        res.status(409).json({ error: "Wiki enrichment already running", startedAt: _bluesWikiJob.startedAt, progress: _bluesWikiJob.progress });
-        return;
-    }
-    _bluesWikiJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
-    enrichBluesFromWikipedia({
-        limit: Number.isFinite(limit) ? limit : undefined,
-        force,
-        onProgress: (p) => { _bluesWikiJob.progress = p; },
-    })
-        .then(result => {
-        _bluesWikiJob.status = "done";
-        _bluesWikiJob.result = result;
-        _bluesWikiJob.endedAt = new Date().toISOString();
-    })
-        .catch(err => {
-        _bluesWikiJob.status = "error";
-        _bluesWikiJob.error = err?.message ?? String(err);
-        _bluesWikiJob.endedAt = new Date().toISOString();
-        console.error("[blues enrich-wiki bulk]", err);
-    });
-    res.status(202).json({ ok: true, started: true, startedAt: _bluesWikiJob.startedAt });
-});
-app.get("/api/admin/blues/enrich-wiki/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    res.json(_bluesWikiJob);
-});
 // Phase 3b — Discogs ID confirmation. Same single-inline / bulk-job split.
-app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const idRaw = req.query.id;
-    const limitRaw = req.query.limit;
-    const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
-    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    if (Number.isFinite(idFilter)) {
-        try {
-            const result = await enrichBluesFromDiscogs(client, { idFilter });
-            res.json({ ok: true, ...result });
-        }
-        catch (err) {
-            console.error("[blues enrich-discogs single]", err);
-            res.status(500).json({ error: err?.message ?? String(err) });
-        }
-        return;
-    }
-    if (_bluesDiscogsIdJob.status === "running") {
-        res.status(409).json({ error: "Discogs ID enrichment already running", startedAt: _bluesDiscogsIdJob.startedAt, progress: _bluesDiscogsIdJob.progress });
-        return;
-    }
-    _bluesDiscogsIdJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
-    enrichBluesFromDiscogs(client, {
-        limit: Number.isFinite(limit) ? limit : undefined,
-        onProgress: (p) => { _bluesDiscogsIdJob.progress = p; },
-    })
-        .then(result => {
-        _bluesDiscogsIdJob.status = "done";
-        _bluesDiscogsIdJob.result = result;
-        _bluesDiscogsIdJob.endedAt = new Date().toISOString();
-    })
-        .catch(err => {
-        _bluesDiscogsIdJob.status = "error";
-        _bluesDiscogsIdJob.error = err?.message ?? String(err);
-        _bluesDiscogsIdJob.endedAt = new Date().toISOString();
-        console.error("[blues enrich-discogs bulk]", err);
-    });
-    res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsIdJob.startedAt });
-});
-app.get("/api/admin/blues/enrich-discogs/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    res.json(_bluesDiscogsIdJob);
-});
 // Disambiguation: return the top Discogs artist matches for a name so
 // the admin can pick the right one when several artists share a name.
 // Read-only — does NOT touch the row. Caller persists the chosen id
 // via the existing PUT /api/admin/blues/:id { discogs_id }.
 //   GET /api/admin/blues/discogs-candidates?q=<name>[&per_page=10]
-app.get("/api/admin/blues/discogs-candidates", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const q = String(req.query.q ?? "").trim();
-    if (!q) {
-        res.status(400).json({ error: "q required" });
-        return;
-    }
-    const perPageRaw = parseInt(String(req.query.per_page ?? "10"), 10);
-    const perPage = Number.isFinite(perPageRaw) ? Math.max(1, Math.min(25, perPageRaw)) : 10;
-    try {
-        const data = await client.get("/database/search", {
-            q, type: "artist", per_page: String(perPage),
-        });
-        const results = Array.isArray(data?.results) ? data.results : [];
-        // Slim each result down to what the picker needs: id, the
-        // possibly-suffixed display name (Discogs disambiguates dupes
-        // with "(2)" / "(3)" etc.), thumbnail, and the resource URL so
-        // the admin can click through to confirm. We deliberately don't
-        // hit /artists/:id per result — that'd cost N extra requests
-        // for a screen the admin might just glance at.
-        const items = results.map((r) => ({
-            id: r?.id ?? null,
-            title: r?.title ?? "",
-            thumb: r?.thumb ?? r?.cover_image ?? "",
-            uri: r?.uri ?? (r?.id ? `/artist/${r.id}` : ""),
-            resource_url: r?.resource_url ?? "",
-        })).filter((it) => it.id);
-        res.json({ items });
-    }
-    catch (err) {
-        console.error("[blues discogs-candidates]", err);
-        res.status(502).json({ error: err?.message ?? String(err) });
-    }
-});
 // Phase 4 — full Discogs artist record. Walks every row with a
 // discogs_id and pulls /artists/:id, storing bio (profile), aliases,
 // realname, namevariations, members, groups, first image and the
 // urls array. Background job + status polling like the others.
 let _bluesDiscogsFullJob = _emptyJob();
-app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const idRaw = req.query.id;
-    const limitRaw = req.query.limit;
-    const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
-    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    // force=1 → overwrite photo_url / notes and REPLACE discogs_releases
-    // rather than merging. Used by the per-row "Refresh from Discogs"
-    // button after the admin has corrected a stale discogs_id.
-    const force = req.query.force === "1" || req.query.force === "true";
-    if (Number.isFinite(idFilter)) {
-        try {
-            // requireExistingId: per-row admin click should NOT silently
-            // pick the top search result. Admin uses the candidate picker
-            // to confirm an id first, then this just pulls the chosen
-            // artist's full record. Bulk path (no idFilter) keeps the old
-            // auto-resolve behaviour so it can sweep through unidentified
-            // rows.
-            const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true, force });
-            res.json({ ok: true, ...result });
-        }
-        catch (err) {
-            console.error("[blues enrich-discogs-full single]", err);
-            res.status(500).json({ error: err?.message ?? String(err) });
-        }
-        return;
-    }
-    if (_bluesDiscogsFullJob.status === "running") {
-        res.status(409).json({ error: "Discogs full-artist enrichment already running", startedAt: _bluesDiscogsFullJob.startedAt, progress: _bluesDiscogsFullJob.progress });
-        return;
-    }
-    _bluesDiscogsFullJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
-    enrichBluesFromDiscogsArtists(client, {
-        limit: Number.isFinite(limit) ? limit : undefined,
-        onProgress: (p) => { _bluesDiscogsFullJob.progress = p; },
-    })
-        .then(result => {
-        _bluesDiscogsFullJob.status = "done";
-        _bluesDiscogsFullJob.result = result;
-        _bluesDiscogsFullJob.endedAt = new Date().toISOString();
-    })
-        .catch(err => {
-        _bluesDiscogsFullJob.status = "error";
-        _bluesDiscogsFullJob.error = err?.message ?? String(err);
-        _bluesDiscogsFullJob.endedAt = new Date().toISOString();
-        console.error("[blues enrich-discogs-full bulk]", err);
-    });
-    res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsFullJob.startedAt });
-});
-app.get("/api/admin/blues/enrich-discogs-full/status", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    res.json(_bluesDiscogsFullJob);
-});
 // POST /api/admin/blues/discogs-preview-by-id?id=NNN
 // Preview a Discogs artist by id WITHOUT requiring a saved blues_artists
 // row. Used by the "Fetch from Discogs" button in the new-artist editor
 // — the form supplies the id, server returns the patch to populate it.
-app.post("/api/admin/blues/discogs-preview-by-id", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const did = parseInt(String(req.query.id ?? ""), 10);
-    if (!Number.isFinite(did) || did <= 0) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    try {
-        const out = await previewDiscogsArtistById(client, did);
-        res.json({ ok: true, ...out });
-    }
-    catch (err) {
-        console.error("[blues discogs-preview-by-id]", err);
-        res.status(502).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/admin/blues/:id/discogs-preview?force=0|1
 // Compute the patch that Refresh from Discogs WOULD apply, but DON'T
 // write it. The editor uses this to populate its open form so the
 // curator reviews + edits + saves rather than the action committing
 // blind. Returns { patch, row } where patch is the field map.
-app.post("/api/admin/blues/:id(\\d+)/discogs-preview", async (req, res) => {
-    const adminId = await requireAdmin(req, res);
-    if (!adminId)
-        return;
-    const client = await getDiscogsClientForUser(adminId);
-    if (!client) {
-        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
-        return;
-    }
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    const force = req.query.force === "1" || req.query.force === "true";
-    const autoFind = req.query.autoFind === "1" || req.query.autoFind === "true";
-    try {
-        const out = await previewBluesArtistFromDiscogs(client, id, force, { autoFind });
-        res.json({ ok: true, ...out });
-    }
-    catch (err) {
-        console.error("[blues discogs-preview]", err);
-        res.status(502).json({ error: err?.message ?? String(err) });
-    }
-});
 // Phase 3c — YouTube top tracks. Per-row only because each call costs
 // 100 quota units (default daily quota is 10000).
 //   POST /api/admin/blues/enrich-yt/:id
-app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    const id = parseInt(req.params.id, 10);
-    if (!Number.isFinite(id)) {
-        res.status(400).json({ error: "bad id" });
-        return;
-    }
-    const apiKey = process.env.YOUTUBE_API_KEY ?? "";
-    if (!apiKey) {
-        res.status(503).json({ error: "YOUTUBE_API_KEY not configured on the server" });
-        return;
-    }
-    try {
-        const result = await enrichBluesArtistFromYouTube(id, apiKey);
-        if ("error" in result) {
-            res.status(502).json(result);
-            return;
-        }
-        res.json({ ok: true, added: result.added });
-    }
-    catch (err) {
-        console.error("[blues enrich-yt]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
 // Walks the MediaWiki API at weeniecampbell.com/wiki, starting from
 // Category:Lyrics and recursing into every subcategory. For each lyric
@@ -13809,20 +12850,6 @@ app.post("/api/admin/lyrics/resolve-years-discogs/stop", async (req, res) => {
 // the slow (Discogs-search) pass.
 //   ?force=1 → re-resolve rows whose existing year came from this
 //              cheap path (in case the artist's releases changed).
-app.post("/api/admin/lyrics/resolve-years-cheap", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const force = req.query.force === "1" || req.query.force === "true";
-        const out = await resolveLyricFirstReleaseYearsCheap({ force });
-        const missing = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics WHERE first_release_year IS NULL`);
-        res.json({ ok: true, updated: out.updated, stillMissing: missing.rows[0]?.n ?? 0 });
-    }
-    catch (err) {
-        console.error("[lyrics resolve-years-cheap]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/admin/lyrics/resolve-years-cache — fill first_release_year
 // by matching year-less lyrics against the big release_cache (title +
 // artist). Zero Discogs API calls; one scan of release_cache. Runs
@@ -14344,56 +13371,14 @@ app.delete("/api/admin/lyrics/:id", async (req, res) => {
 // POST /api/blues-archive/import-from-lyrics — walks distinct
 // lyrics.artist values and inserts any that aren't already in
 // blues_artists (case-insensitive name match). Idempotent.
-app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        // Pass the same artist-name validator the scrape uses so stale
-        // bad values left in blues_lyrics.artist (from before the
-        // validator was added) don't leak through into blues_artists.
-        const r = await importLyricsArtistsToBluesDb(_lyricsLooksLikeArtist);
-        console.log(`[blues-archive] import: added=${r.added}, existing=${r.existing}, rejected=${r.rejected}, total=${r.total}`);
-        res.json({ ok: true, ...r });
-    }
-    catch (err) {
-        console.error("[blues-archive import]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // POST /api/blues-archive/prune-recent-24h — deletes every blues_artists
 // row added in the last 24 hours. Cleanup for the (removed) no-year pad
 // button; user confirmed they haven't manually added an artist in over
 // a week, so date_added is a precise pad-insert signal.
-app.post("/api/blues-archive/prune-recent-24h", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const r = await pruneBluesArtistsRecent24h();
-        console.log(`[blues-archive] prune-recent-24h: removed=${r.removed}`);
-        res.json({ ok: true, ...r });
-    }
-    catch (err) {
-        console.error("[blues-archive prune-recent-24h]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/blues-archive/pad/strict-pre-1950 — re-pad with strict-Blues
 // artists whose earliest master is in or before 1950. Inserts are tagged
 // enrichment_status.source = "strict_pad_pre1950" so future cleanup
 // can target them precisely.
-app.post("/api/blues-archive/pad/strict-pre-1950", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const r = await padBluesArtistsStrictPre1950();
-        console.log(`[blues-archive] pad/strict-pre-1950: scanned=${r.scanned}, inserted=${r.inserted}, refreshed=${r.refreshed}`);
-        res.json({ ok: true, ...r });
-    }
-    catch (err) {
-        console.error("[blues-archive pad/strict-pre-1950]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/blues-archive/purge-lyric-imports — removes blues_artists
 // rows that were inserted by the lyrics-import job AND have no other
 // data attached (no Discogs / Wikidata IDs, no releases,
@@ -14402,140 +13387,17 @@ app.post("/api/blues-archive/pad/strict-pre-1950", async (req, res) => {
 // before the validator was tightened. Manually-edited rows are
 // preserved — the WHERE clause requires every meaningful field to
 // still be NULL/empty.
-app.post("/api/blues-archive/purge-lyric-imports", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        // Column is `notes` on this schema, not `profile` — earlier query
-        // referenced a non-existent column and 500'd. All other fields
-        // checked here exist on blues_artists.
-        const r = await getPool().query(`
-      DELETE FROM blues_artists
-       WHERE enrichment_status @> '{"source":"lyrics_import"}'::jsonb
-         AND discogs_id        IS NULL
-         AND wikidata_qid      IS NULL
-         AND birth_date        IS NULL
-         AND death_date        IS NULL
-         AND (notes            IS NULL OR notes          = '')
-         AND (birth_place      IS NULL OR birth_place    = '')
-         AND (hometown_region  IS NULL OR hometown_region = '')
-         AND (photo_url        IS NULL OR photo_url      = '')
-         AND (discogs_releases IS NULL OR jsonb_array_length(discogs_releases) = 0)
-      RETURNING id, name
-    `);
-        const removed = r.rowCount ?? 0;
-        console.log(`[blues-archive] purge-lyric-imports: removed=${removed}`);
-        res.json({ ok: true, removed, names: (r.rows ?? []).slice(0, 50).map((row) => row.name) });
-    }
-    catch (err) {
-        console.error("[blues-archive purge]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // GET /api/blues-archive/artists?q=&limit=&offset= — paginated list
 // with releases_count + lyrics_count per artist.
-app.get("/api/blues-archive/artists", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const q = String(req.query.q ?? "").trim().slice(0, 200);
-        const sort = String(req.query.sort ?? "").trim().slice(0, 30);
-        const order = String(req.query.order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
-        // Whitelist the category param — anything else is dropped.
-        const rawCat = String(req.query.category ?? "").trim();
-        const category = ["with_both", "with_lyrics_only", "with_releases_only", "empty"]
-            .find(c => c === rawCat) || undefined;
-        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
-        const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-        const noWiki = req.query.no_wiki === "1" || req.query.no_wiki === "true";
-        const noDiscogsId = req.query.no_discogs === "1" || req.query.no_discogs === "true";
-        const hasStrict = req.query.has_strict === "1" || req.query.has_strict === "true";
-        const noStrict = req.query.no_strict === "1" || req.query.no_strict === "true";
-        res.json(await listBluesArchive({
-            search: q || undefined,
-            sort: sort || undefined,
-            order,
-            category,
-            noWiki,
-            noDiscogsId,
-            hasStrict,
-            noStrict,
-            limit, offset,
-        }));
-    }
-    catch (err) {
-        console.error("[blues-archive list]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // GET /api/blues-archive/releases — flat list of every release
 // stored across all blues_artists.discogs_releases JSONB arrays.
 // Supports search (title or artist name), single-year filter, type
 // (release / master), role (Main / TrackAppearance / …), and
 // sort+pagination. Powers the Releases sub-tab on Blues Archive.
-app.get("/api/blues-archive/releases", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const q = String(req.query.q ?? "").trim().slice(0, 200);
-        const artist = String(req.query.artist ?? "").trim().slice(0, 200);
-        const type = String(req.query.type ?? "").trim().slice(0, 30);
-        const role = String(req.query.role ?? "").trim().slice(0, 30);
-        const yearRaw = String(req.query.year ?? "").trim();
-        const year = yearRaw ? parseInt(yearRaw, 10) : null;
-        const sort = String(req.query.sort ?? "").trim().slice(0, 30);
-        const order = String(req.query.order ?? "").trim().toLowerCase() === "asc" ? "asc" : "desc";
-        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
-        const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-        res.json(await listBluesArchiveReleases({
-            search: q || undefined,
-            artist: artist || undefined,
-            year: (year != null && Number.isFinite(year)) ? year : null,
-            type: type || undefined,
-            role: role || undefined,
-            sort: sort || undefined,
-            order,
-            limit, offset,
-        }));
-    }
-    catch (err) {
-        console.error("[blues-archive releases list]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // GET /api/blues-archive/releases/export.csv — flat CSV dump of every
 // release stored across all blues_artists.discogs_releases JSONB
 // arrays. Mirrors the artists / lyrics CSV style: UTF-8 BOM, Excel-
 // friendly quoting, formula-injection guard.
-app.get("/api/blues-archive/releases/export.csv", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const result = await listBluesArchiveReleases({ limit: 500000, offset: 0 });
-        const cols = ["artist_id", "artist_name", "id", "type", "title", "year", "role", "label", "format"];
-        const csvCell = (v) => {
-            if (v == null)
-                return "";
-            if (Array.isArray(v) || typeof v === "object")
-                v = JSON.stringify(v);
-            const s = String(v);
-            if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
-                return `"${s.replace(/"/g, '""')}"`;
-            }
-            return s;
-        };
-        const header = cols.join(",");
-        const body = (result.rows || []).map((row) => cols.map(c => csvCell(row[c])).join(",")).join("\n");
-        const csv = "﻿" + header + "\n" + body + "\n";
-        res.setHeader("Content-Type", "text/csv; charset=utf-8");
-        res.setHeader("Content-Disposition", `attachment; filename="seadisco-releases-${new Date().toISOString().slice(0, 10)}.csv"`);
-        res.send(csv);
-    }
-    catch (err) {
-        console.error("[blues-archive releases export.csv]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/blues-archive/tunings/export.csv — CSV dump of the static
 // tunings grid (#, artist, title, position, pitch, notes).
 app.get("/api/blues-archive/tunings/export.csv", async (req, res) => {
@@ -14817,25 +13679,6 @@ app.get("/api/blues-archive/setlists/:id(\\d+)/export.:fmt(txt|json|csv)", async
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-app.post("/api/blues-archive/merge", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const fromId = Number(req.body?.fromId);
-        const intoId = Number(req.body?.intoId);
-        if (!Number.isFinite(fromId) || !Number.isFinite(intoId) || fromId === intoId) {
-            res.status(400).json({ error: "bad_ids" });
-            return;
-        }
-        const out = await mergeBluesArtists(fromId, intoId);
-        console.log(`[blues-archive] merge: ${out.fromName} → ${out.intoName} (lyrics=${out.lyricsReassigned}, releases=${out.releasesAdded})`);
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues-archive merge]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/blues-archive/stats — counts powering the list-page stats
 // strip (artists w/ lyrics+releases, orphan lyrics, etc.).
 app.get("/api/blues-archive/stats", async (req, res) => {
@@ -14868,48 +13711,11 @@ app.get("/api/blues-archive/recent", async (req, res) => {
 // Bulk re-key every matching lyric to the target artist. Used by the
 // "fix all of artist X's lyrics → artist Y" curator flow when artists
 // shouldn't be merged but lyrics are mislabeled.
-app.post("/api/blues-archive/lyrics/reassign", express.json({ limit: "1kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const toArtistId = Number(req.body?.toArtistId);
-        const fromArtistId = req.body?.fromArtistId != null ? Number(req.body.fromArtistId) : null;
-        const fromArtistName = typeof req.body?.fromArtistName === "string" ? req.body.fromArtistName.trim().slice(0, 200) : null;
-        if (!Number.isFinite(toArtistId)) {
-            res.status(400).json({ error: "toArtistId required" });
-            return;
-        }
-        if (fromArtistId == null && !fromArtistName) {
-            res.status(400).json({ error: "fromArtistId or fromArtistName required" });
-            return;
-        }
-        const out = await reassignLyrics({ toArtistId, fromArtistId, fromArtistName });
-        console.log(`[blues-archive] reassign: ${out.reassigned} → ${out.toName}`);
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues-archive reassign]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/blues-archive/lyrics/relink-orphans
 // Sweep orphans (artist_id IS NULL) and link any whose artist text
 // matches a blues_artists row — exact case-insensitive trim OR
 // disambiguator-stripped match. Returns the linked count so the UI
 // can tell the user how many rows were rescued.
-app.post("/api/blues-archive/lyrics/relink-orphans", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const linked = await relinkOrphanLyricsToArtists();
-        console.log(`[blues-archive] relink-orphans: linked=${linked}`);
-        res.json({ ok: true, linked });
-    }
-    catch (err) {
-        console.error("[blues-archive relink-orphans]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/blues-archive/lyrics/normalize-empty-tunings
 // Bulk-set every lyric with NULL or empty tuning to 'Standard'. On a
 // blues-lyrics wiki an unmentioned tuning is overwhelmingly standard;
@@ -14931,64 +13737,11 @@ app.post("/api/blues-archive/lyrics/normalize-empty-tunings", async (req, res) =
 // Get-or-create a blues_artists row by case-insensitive name. Used by
 // the lyric editor's "+ Create as new" affordance — clicking it before
 // Save mints a row so the FK can link on the subsequent PATCH.
-app.post("/api/blues-archive/artists", express.json({ limit: "2kb" }), async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const name = typeof req.body?.name === "string" ? req.body.name : "";
-        const out = await getOrCreateBluesArtistByName(name);
-        console.log(`[blues-archive] artists: ${out.created ? "created" : "matched"} ${out.id} (${out.name})`);
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues-archive artists create]", err);
-        res.status(400).json({ error: err?.message ?? String(err) });
-    }
-});
 // POST /api/blues-archive/lyrics/:id/promote-to-artist
 // Promotes an orphan lyric's free-text artist string to a new (or
 // existing) blues_artists row and links every other orphan lyric
 // with the same name in one transaction.
-app.post("/api/blues-archive/lyrics/:id/promote-to-artist", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const id = parseInt(req.params.id, 10);
-        if (!Number.isFinite(id)) {
-            res.status(400).json({ error: "bad_id" });
-            return;
-        }
-        const out = await promoteOrphanLyricToArtist(id);
-        console.log(`[blues-archive] promote: lyric ${id} → artist ${out.artistId} (${out.artistName}); ${out.lyricsLinked} lyrics linked`);
-        res.json(out);
-    }
-    catch (err) {
-        console.error("[blues-archive promote]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
-});
 // GET /api/blues-archive/artists/:id — artist + lyrics + sorted releases
-app.get("/api/blues-archive/artists/:id", async (req, res) => {
-    if (!await requireAdmin(req, res))
-        return;
-    try {
-        const id = parseInt(req.params.id, 10);
-        if (!Number.isFinite(id)) {
-            res.status(400).json({ error: "bad_id" });
-            return;
-        }
-        const row = await getBluesArchiveArtist(id);
-        if (!row) {
-            res.status(404).json({ error: "not_found" });
-            return;
-        }
-        res.json(row);
-    }
-    catch (err) {
-        console.error("[blues-archive artist]", err);
-        res.status(500).json({ error: String(err) });
-    }
-});
 // POST /api/blues-archive/check — admin-only "is this in the archive?"
 // probe used to stamp indicators on album / version modals site-wide.
 // Body: { artistNames?: string[], artistIds?: number[],
@@ -15032,51 +13785,15 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
             release: { inArchive: false },
             tracks: {},
         };
-        // Artists by name (lowercase TRIM match) — covers the common case
-        // where the album popup has a name string but no resolved internal
-        // archive id. Admin-only surface; also feeds the artist_id lyric
-        // path below, so we still populate it for admins.
-        if (isAdmin && artistNames.length) {
-            const r = await getPool().query(`SELECT id, name FROM blues_artists
-          WHERE LOWER(TRIM(name)) = ANY($1::text[])`, [artistNames.map(n => n.trim().toLowerCase())]);
-            for (const row of r.rows) {
-                out.artists[String(row.name).trim().toLowerCase()] = { id: row.id, name: row.name };
-            }
-        }
-        // Artists by Discogs ID — when the modal has a resolved Discogs
-        // artist id, a direct id match is more reliable than name match
-        // (handles "Smith (4)" disambiguation cleanly).
-        if (isAdmin && artistIds.length) {
-            const r = await getPool().query(`SELECT id, name, discogs_id FROM blues_artists
-          WHERE discogs_id = ANY($1::int[])`, [artistIds]);
-            for (const row of r.rows) {
-                out.artistsById[String(row.discogs_id)] = { id: row.id, name: row.name };
-            }
-        }
-        // Release / master match: walk blues_artists.discogs_releases JSONB
-        // and look for any object whose id matches. The JSONB stores both
-        // release and master entries (each row has a type discriminator),
-        // so we'll match either flavor against the corresponding id.
-        if (isAdmin && Number.isFinite(releaseId) && releaseId > 0) {
-            const r = await getPool().query(`SELECT a.id, a.name
-           FROM blues_artists a,
-                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
-          WHERE (rel->>'id')::bigint = $1
-          LIMIT 1`, [releaseId]);
-            if (r.rows.length) {
-                out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name };
-            }
-        }
-        if (isAdmin && !out.release.inArchive && Number.isFinite(masterId) && masterId > 0) {
-            const r = await getPool().query(`SELECT a.id, a.name
-           FROM blues_artists a,
-                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
-          WHERE (rel->>'id')::bigint = $1
-          LIMIT 1`, [masterId]);
-            if (r.rows.length) {
-                out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name, viaMaster: true };
-            }
-        }
+        // Artist / release archive matching has been retired — the Blues
+        // Archive is now a lyrics + tunings reference only. `artists`,
+        // `artistsById`, and `release` stay in the response shape (always
+        // empty) so existing clients don't choke, but nothing stamps the
+        // 🎸 artist / release badge anymore. The 📜 lyric + 🎼 tuning
+        // matching below is unaffected.
+        void artistIds;
+        void releaseId;
+        void masterId;
         // Track-title matches against blues_lyrics.page_title. Match
         // precedence (most precise first):
         //   1. lyric.discogs_release_id == releaseId           — pinned
@@ -17080,12 +15797,6 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         catch (e) {
             console.error("[startup] cache-projection-backfill init failed:", e);
-        }
-        try {
-            initArtistSweepModule(ADMIN_CLERK_ID);
-        }
-        catch (e) {
-            console.error("[startup] artist-sweep init failed:", e);
         }
         try {
             initFacetedSweepModule(ADMIN_CLERK_ID);
