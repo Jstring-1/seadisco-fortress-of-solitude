@@ -2141,8 +2141,28 @@ async function loadCacheProjection() {
     el.innerHTML = `<span style="color:#e88">${_eHtml(String(err))}</span>`;
   }
 }
+// Populate the V1-vs-V2 totals badge next to the Explore cache header
+// from the projection stats already fetched by loadCacheProjection().
+// V1 = projectable release_cache rows (release+master); V2 = the
+// masters_plus + pressings tables — apples-to-apples so a gap means
+// the projection backfill hasn't fully drained.
+function _renderCaTotalsBadge() {
+  const badge = document.getElementById("ca-totals-badge");
+  if (!badge) return;
+  const st = _cacheProjectionStatus && _cacheProjectionStatus.stats;
+  if (!st) { badge.textContent = ""; return; }
+  const v1 = Number(st.releaseCacheProjectable ?? 0);
+  const v2 = Number(st.mastersPlusRows ?? 0) + Number(st.pressingsRows ?? 0);
+  const gap = v1 - v2;
+  const gapTxt = gap === 0 ? "" : ` · Δ${gap > 0 ? "+" : ""}${gap.toLocaleString()}`;
+  badge.innerHTML =
+    `<span title="release_cache rows, release+master only (V1)">V1 ${v1.toLocaleString()}</span>` +
+    ` · <span title="discogs_cache_masters_plus + discogs_cache_pressings (V2)">V2 ${v2.toLocaleString()}</span>` +
+    (gap !== 0 ? `<span title="V1 minus V2 — nonzero means the split projection is behind" style="color:#e8a">${gapTxt}</span>` : "");
+}
 function _renderCacheProjection() {
   const el = document.getElementById("cache-projection-content");
+  _renderCaTotalsBadge();
   if (!el) return;
   const s = _cacheProjectionStatus || {};
   const stats = s.stats || {};
@@ -2257,6 +2277,7 @@ function loadCacheAnalytics() {
 }
 function _renderCacheAnalytics() {
   const el = document.getElementById("cache-analytics-content");
+  _renderCaTotalsBadge();
   if (!el) return;
   const f = _cacheAnalyticsFilters;
   const facetCol = (title, rows, keyName) => {
