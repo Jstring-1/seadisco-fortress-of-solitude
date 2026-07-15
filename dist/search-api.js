@@ -11246,39 +11246,6 @@ app.all(/^\/api\/admin\/genre-cache-warm\/.*/, async (req, res) => {
         return;
     res.status(410).json({ error: "Replaced by /api/admin/cache-warm/* — refresh the admin page" });
 });
-let _bluesDiscogsJob = {
-    status: "idle", startedAt: null, endedAt: null,
-    progress: null, result: null, error: null,
-};
-const _emptyJob = () => ({
-    status: "idle", startedAt: null, endedAt: null,
-    progress: null, result: null, error: null,
-});
-let _bluesWikiJob = _emptyJob();
-let _bluesDiscogsIdJob = _emptyJob();
-// Phase 3b — Discogs ID confirmation. Same single-inline / bulk-job split.
-// Disambiguation: return the top Discogs artist matches for a name so
-// the admin can pick the right one when several artists share a name.
-// Read-only — does NOT touch the row. Caller persists the chosen id
-// via the existing PUT /api/admin/blues/:id { discogs_id }.
-//   GET /api/admin/blues/discogs-candidates?q=<name>[&per_page=10]
-// Phase 4 — full Discogs artist record. Walks every row with a
-// discogs_id and pulls /artists/:id, storing bio (profile), aliases,
-// realname, namevariations, members, groups, first image and the
-// urls array. Background job + status polling like the others.
-let _bluesDiscogsFullJob = _emptyJob();
-// POST /api/admin/blues/discogs-preview-by-id?id=NNN
-// Preview a Discogs artist by id WITHOUT requiring a saved blues_artists
-// row. Used by the "Fetch from Discogs" button in the new-artist editor
-// — the form supplies the id, server returns the patch to populate it.
-// POST /api/admin/blues/:id/discogs-preview?force=0|1
-// Compute the patch that Refresh from Discogs WOULD apply, but DON'T
-// write it. The editor uses this to populate its open form so the
-// curator reviews + edits + saves rather than the action committing
-// blind. Returns { patch, row } where patch is the field map.
-// Phase 3c — YouTube top tracks. Per-row only because each call costs
-// 100 quota units (default daily quota is 10000).
-//   POST /api/admin/blues/enrich-yt/:id
 // ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
 // Walks the MediaWiki API at weeniecampbell.com/wiki, starting from
 // Category:Lyrics and recursing into every subcategory. For each lyric

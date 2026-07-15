@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, pruneBluesArtistsRecent24h, padBluesArtistsStrictPre1950, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, bulkDeleteBluesArtists, listBluesArtistIdsMatching, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listBluesConnectionsGraph, BLUES_ARTIST_LINK_KINDS, findBluesArtistReferences, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
-import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, previewDiscogsArtistById, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
+import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import {
   initCacheWarmCatnoModule,
@@ -10541,89 +10541,6 @@ app.all(/^\/api\/admin\/genre-cache-warm\/.*/, async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.status(410).json({ error: "Replaced by /api/admin/cache-warm/* — refresh the admin page" });
 });
-
-// Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
-// Idempotent — re-running just refreshes the Wikidata-sourced fields and
-// leaves manual edits the admin made elsewhere alone.
-
-// Phase 1.5 — Discogs year-walk seed (background job).
-//
-//   POST /api/admin/blues/seed-discogs[?startYear=1900&endYear=1930&maxPages=25]
-//        → 202 immediately if the job started, 409 if one's already running
-//   GET  /api/admin/blues/seed-discogs/status
-//        → { status: "idle"|"running"|"done"|"error", progress, result, error }
-//
-// The seed walks Discogs paginated search results paced 1.1s/req and runs
-// for ~10 minutes — well past Railway's edge proxy timeout. We run it as
-// a background promise so the HTTP request can return immediately, and
-// the admin UI polls the status endpoint to display progress.
-
-interface BluesSeedJobState {
-  status: "idle" | "running" | "done" | "error";
-  startedAt: string | null;
-  endedAt: string | null;
-  progress: import("./blues-db.js").DiscogsSeedProgress | null;
-  result: import("./blues-db.js").DiscogsSeedResult | null;
-  error: string | null;
-}
-let _bluesDiscogsJob: BluesSeedJobState = {
-  status: "idle", startedAt: null, endedAt: null,
-  progress: null, result: null, error: null,
-};
-
-
-
-// Phase 3a — Wikipedia notes (lead paragraph). Single-row inline,
-// bulk via background job (mirrors the MB/Discogs-seed pattern).
-interface BluesGenericJobState {
-  status: "idle" | "running" | "done" | "error";
-  startedAt: string | null;
-  endedAt: string | null;
-  progress: import("./blues-db.js").GenericEnrichProgress | null;
-  result: import("./blues-db.js").GenericEnrichResult | null;
-  error: string | null;
-}
-const _emptyJob = (): BluesGenericJobState => ({
-  status: "idle", startedAt: null, endedAt: null,
-  progress: null, result: null, error: null,
-});
-let _bluesWikiJob:    BluesGenericJobState = _emptyJob();
-let _bluesDiscogsIdJob: BluesGenericJobState = _emptyJob();
-
-
-
-// Phase 3b — Discogs ID confirmation. Same single-inline / bulk-job split.
-
-
-// Disambiguation: return the top Discogs artist matches for a name so
-// the admin can pick the right one when several artists share a name.
-// Read-only — does NOT touch the row. Caller persists the chosen id
-// via the existing PUT /api/admin/blues/:id { discogs_id }.
-//   GET /api/admin/blues/discogs-candidates?q=<name>[&per_page=10]
-
-// Phase 4 — full Discogs artist record. Walks every row with a
-// discogs_id and pulls /artists/:id, storing bio (profile), aliases,
-// realname, namevariations, members, groups, first image and the
-// urls array. Background job + status polling like the others.
-let _bluesDiscogsFullJob: BluesGenericJobState = _emptyJob();
-
-
-
-// POST /api/admin/blues/discogs-preview-by-id?id=NNN
-// Preview a Discogs artist by id WITHOUT requiring a saved blues_artists
-// row. Used by the "Fetch from Discogs" button in the new-artist editor
-// — the form supplies the id, server returns the patch to populate it.
-
-// POST /api/admin/blues/:id/discogs-preview?force=0|1
-// Compute the patch that Refresh from Discogs WOULD apply, but DON'T
-// write it. The editor uses this to populate its open form so the
-// curator reviews + edits + saves rather than the action committing
-// blind. Returns { patch, row } where patch is the field map.
-
-// Phase 3c — YouTube top tracks. Per-row only because each call costs
-// 100 quota units (default daily quota is 10000).
-//   POST /api/admin/blues/enrich-yt/:id
-
 
 // ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
 // Walks the MediaWiki API at weeniecampbell.com/wiki, starting from
