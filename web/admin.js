@@ -2441,6 +2441,7 @@ async function _caRun() {
 
 // ── Year backfill ───────────────────────────────────────────────
 let _ybfPreview = null;
+let _ybfPreviewLoading = false;
 async function loadYearBackfill() {
   const el = document.getElementById("ybf-content");
   if (!el) return;
@@ -2499,8 +2500,8 @@ async function loadYearBackfill() {
 
     el.innerHTML = `
       <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
-        <button class="admin-btn" type="button" onclick="_ybfPreviewRun()">🔍 Preview</button>
-        <button class="admin-btn" type="button" onclick="_ybfApply()" ${_ybfPreview && (_ybfPreview.phase1Release + _ybfPreview.phase2Master) > 0 ? "" : "disabled"}>✓ Apply</button>
+        <button class="admin-btn" type="button" onclick="_ybfPreviewRun()" ${_ybfPreviewLoading ? "disabled" : ""}>${_ybfPreviewLoading ? "⏳ Running…" : "🔍 Preview"}</button>
+        <button class="admin-btn" type="button" onclick="_ybfApply()" ${_ybfPreview && !_ybfPreviewLoading && (_ybfPreview.phase1Release + _ybfPreview.phase2Master) > 0 ? "" : "disabled"}>✓ Apply</button>
         ${_ybfPreview ? `<button class="admin-btn" type="button" onclick="_ybfClearPreview()">Clear preview</button>` : ""}
       </div>
       ${previewBlock}
@@ -2521,12 +2522,19 @@ async function _errText(r) {
   return `HTTP ${r.status}`;
 }
 async function _ybfPreviewRun() {
+  if (_ybfPreviewLoading) return;
+  _ybfPreviewLoading = true;
+  await loadYearBackfill();   // paint the disabled "⏳ Running…" state
   try {
     const r = await apiFetch("/api/admin/year-backfill/preview", { method: "POST" });
     if (!r.ok) { alert(`Preview failed: ${await _errText(r)}`); return; }
     _ybfPreview = await r.json();
+  } catch (err) {
+    alert(String(err));
+  } finally {
+    _ybfPreviewLoading = false;
     loadYearBackfill();
-  } catch (err) { alert(String(err)); }
+  }
 }
 function _ybfClearPreview() { _ybfPreview = null; loadYearBackfill(); }
 async function _ybfApply() {
