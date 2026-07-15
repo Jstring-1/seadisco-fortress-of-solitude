@@ -2321,7 +2321,13 @@ function _createYTPlayer(id) {
             try {
               const vd = ytPlayer.getVideoData?.();
               if (vd?.title) {
-                const ytAuthorClean = _normalizeYtArtist(vd.author || "");
+                // Only auto-generated "- Topic" channels reliably name the
+                // real artist; any other channel value is just an uploader
+                // handle (e.g. "novonine") we don't want in the bar. Drop
+                // it so the title stands alone rather than showing a username.
+                const rawAuthor = vd.author || "";
+                const isTopicChannel = /\s*[-–—·•]\s*Topic\s*$/i.test(rawAuthor);
+                const ytAuthorClean = isTopicChannel ? _normalizeYtArtist(rawAuthor) : "";
                 const titleEl = document.getElementById("mini-player-title");
                 if (titleEl) titleEl.innerHTML = _renderNowPlayingTitle({
                   track:  vd.title,
