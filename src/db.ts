@@ -12441,9 +12441,8 @@ async function _computeCacheAnalyticsV2(f: CacheAnalyticsFilters): Promise<Cache
 // Donor pool unions:
 //   * external_discography rows (research-grade, preferred)
 //   * release_cache rows that already have a year (Discogs siblings)
-// keyed on (LOWER(label_name), catno_sort) — the leading numeric
-// component of the catalog number, same normalisation external rows
-// already store.
+// keyed on (LOWER(label_name), normalised full catalog number) — see
+// _CATNO_KEY below.
 //
 // Phase 1 (release): for each unknown-year release_cache row, find a
 //   donor and assign earliest year (external beats cache; ties broken
@@ -12456,14 +12455,23 @@ async function _computeCacheAnalyticsV2(f: CacheAnalyticsFilters): Promise<Cache
 // rollbackYearBackfillBatch() can reverse a whole pass.
 
 // donors_raw + donors, without a leading WITH so it can be embedded in
-// either phase's CTE chain. Keyed on (LOWER(label_name), catno_sort);
+// either phase's CTE chain. Keyed on (LOWER(label_name), catno_key);
 // external rows outrank cache siblings, earliest year wins ties.
+// Normalised full catalog-number key: uppercase, strip everything but
+// letters+digits. Matching on this (not just the leading number run)
+// stops bare-number collisions across catalog series — e.g. "CD 32034"
+// (a modern CD) no longer matches a 1903 "32034", and "8041" no longer
+// matches "P-8041A". Formatting-only differences ("45-6217" vs
+// "45 6217") still collapse to the same key, so legit matches survive.
+const _CATNO_KEY = (col: string) =>
+  `NULLIF(UPPER(REGEXP_REPLACE(COALESCE(${col}, ''), '[^A-Za-z0-9]', '', 'g')), '')`;
+
 const _YEAR_BACKFILL_DONORS_BODY = `
   donors_raw AS (
     -- External (research) donors
     SELECT
       LOWER(label_name) AS label_name,
-      catno_sort,
+      ${_CATNO_KEY("catno")} AS catno_key,
       year,
       'external:' || id::text AS donor_ref,
       source AS donor_source,
@@ -12472,7 +12480,7 @@ const _YEAR_BACKFILL_DONORS_BODY = `
       title              AS donor_title,
       0 AS priority
     FROM external_discography
-    WHERE year IS NOT NULL AND catno_sort IS NOT NULL
+    WHERE year IS NOT NULL AND catno IS NOT NULL AND catno <> ''
 
     UNION ALL
 
@@ -12480,7 +12488,7 @@ const _YEAR_BACKFILL_DONORS_BODY = `
     -- by its label+catno entries.
     SELECT
       LOWER(lbl->>'name')                                                 AS label_name,
-      NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort,
+      ${_CATNO_KEY("lbl->>'catno'")}                                      AS catno_key,
       NULLIF(rc.data->>'year','')::int                                   AS year,
       'release_cache:' || rc.discogs_id::text                            AS donor_ref,
       'release_cache'                                                    AS donor_source,
@@ -12495,12 +12503,12 @@ const _YEAR_BACKFILL_DONORS_BODY = `
        AND COALESCE(lbl->>'catno','') <> ''
   ),
   donors AS (
-    SELECT DISTINCT ON (label_name, catno_sort)
-      label_name, catno_sort, year, donor_ref, donor_source,
+    SELECT DISTINCT ON (label_name, catno_key)
+      label_name, catno_key, year, donor_ref, donor_source,
       donor_catno, donor_artist, donor_title
     FROM donors_raw
-    WHERE label_name IS NOT NULL AND catno_sort IS NOT NULL
-    ORDER BY label_name, catno_sort, priority ASC, year ASC
+    WHERE label_name IS NOT NULL AND catno_key IS NOT NULL
+    ORDER BY label_name, catno_key, priority ASC, year ASC
   )`;
 
 const _YEAR_BACKFILL_DONOR_CTE = `
@@ -12510,7 +12518,7 @@ const _YEAR_BACKFILL_DONOR_CTE = `
       rc.discogs_id,
       rc.type,
       LOWER(lbl->>'name')                                                AS label_name,
-      NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort,
+      ${_CATNO_KEY("lbl->>'catno'")}                                     AS catno_key,
       lbl->>'name'  AS label_name_raw,
       lbl->>'catno' AS catno_raw
     FROM release_cache rc,
@@ -12533,7 +12541,7 @@ const _YEAR_BACKFILL_DONOR_CTE = `
     FROM target_label_pairs t
     JOIN donors d
       ON d.label_name = t.label_name
-     AND d.catno_sort = t.catno_sort
+     AND d.catno_key  = t.catno_key
     ORDER BY t.discogs_id, t.type, d.year ASC
   )
 `;
@@ -12552,7 +12560,7 @@ const _YEAR_BACKFILL_PHASE2_CTE = `
     SELECT m.discogs_id                                                  AS master_id,
            NULLIF(v.data->>'year','')::int                              AS version_year,
            LOWER(lbl->>'name')                                          AS label_name,
-           NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort
+           ${_CATNO_KEY("lbl->>'catno'")}                               AS catno_key
       FROM release_cache m
       JOIN release_cache v
         ON v.type = 'release'
@@ -12566,7 +12574,7 @@ const _YEAR_BACKFILL_PHASE2_CTE = `
       FROM version_years vy
       LEFT JOIN donors d
         ON d.label_name = vy.label_name
-       AND d.catno_sort = vy.catno_sort
+       AND d.catno_key  = vy.catno_key
       CROSS JOIN LATERAL (VALUES (NULLIF(vy.version_year, 0)), (d.year)) AS cand(y)
      WHERE cand.y IS NOT NULL AND cand.y > 0
      GROUP BY vy.master_id
