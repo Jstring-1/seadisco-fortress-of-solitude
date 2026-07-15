@@ -3674,21 +3674,6 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   }));
 }
 
-export async function getPriceStats(): Promise<{
-  cacheCount: number;
-  historyRows: number;
-}> {
-  const r = await getPool().query(`
-    SELECT
-      (SELECT COUNT(*) FROM price_cache) AS cache_count,
-      (SELECT COUNT(*) FROM price_history) AS history_rows
-  `);
-  const row = r.rows[0];
-  return {
-    cacheCount:        parseInt(row.cache_count) || 0,
-    historyRows:       parseInt(row.history_rows) || 0,
-  };
-}
 
 export async function getAllUsersForSync(): Promise<Array<{ clerkUserId: string; token: string; username: string; collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null }>> {
   const r = await getPool().query(
@@ -3766,12 +3751,6 @@ export async function setUserToken(clerkUserId: string, token: string): Promise<
   );
 }
 
-export async function deleteUserToken(clerkUserId: string): Promise<void> {
-  await getPool().query(
-    "DELETE FROM user_tokens WHERE clerk_user_id = $1",
-    [clerkUserId]
-  );
-}
 
 
 export async function saveFeedback(clerkUserId: string, userEmail: string, message: string): Promise<void> {
@@ -3899,13 +3878,6 @@ export async function clearOAuthCredentials(clerkUserId: string): Promise<void> 
   );
 }
 
-export async function getAuthMethod(clerkUserId: string): Promise<string> {
-  const r = await getPool().query(
-    `SELECT auth_method FROM user_tokens WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  return r.rows[0]?.auth_method ?? "pat";
-}
 
 // ── Discogs profile cache ────────────────────────────────────────────────
 export async function setDiscogsProfile(
@@ -3984,23 +3956,7 @@ export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSy
   };
 }
 
-// Get the most recent added_at date for a user's collection (for incremental sync)
-export async function getLatestCollectionAddedAt(clerkUserId: string): Promise<Date | null> {
-  const r = await getPool().query(
-    `SELECT MAX(added_at) AS latest FROM user_collection WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  return r.rows[0]?.latest ?? null;
-}
 
-// Get the most recent added_at date for a user's wantlist (for incremental sync)
-export async function getLatestWantlistAddedAt(clerkUserId: string): Promise<Date | null> {
-  const r = await getPool().query(
-    `SELECT MAX(added_at) AS latest FROM user_wantlist WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  return r.rows[0]?.latest ?? null;
-}
 
 export async function upsertCollectionItems(
   clerkUserId: string,
@@ -5237,39 +5193,8 @@ export async function appendPriceHistory(releaseId: number, lowest: number | nul
   );
 }
 
-export async function getPriceCache(releaseId: number, currency: string = "USD"): Promise<{ lowest: number | null; median: number | null; highest: number | null; numForSale: number; fetchedAt: Date | null } | null> {
-  const r = await getPool().query(
-    `SELECT lowest_price, median_price, highest_price, num_for_sale, fetched_at FROM price_cache WHERE discogs_release_id = $1 AND currency = $2`,
-    [releaseId, currency]
-  );
-  if (!r.rows[0]) return null;
-  return { lowest: r.rows[0].lowest_price, median: r.rows[0].median_price, highest: r.rows[0].highest_price, numForSale: r.rows[0].num_for_sale, fetchedAt: r.rows[0].fetched_at };
-}
 
-export async function getPriceHistory(releaseId: number, currency: string = "USD", days: number = 90): Promise<Array<{ median: number; lowest: number; highest: number; recordedAt: Date }>> {
-  const r = await getPool().query(
-    `SELECT median_price, lowest_price, highest_price, recorded_at FROM price_history
-     WHERE discogs_release_id = $1 AND currency = $2 AND recorded_at > NOW() - make_interval(days => $3)
-     ORDER BY recorded_at ASC`,
-    [releaseId, currency, days]
-  );
-  return r.rows.map(row => ({ median: row.median_price, lowest: row.lowest_price, highest: row.highest_price, recordedAt: row.recorded_at }));
-}
 
-export async function getStaleReleaseIds(limit: number = 100): Promise<number[]> {
-  // Get unique release IDs from all collections where price is stale (>24h) or missing
-  const r = await getPool().query(
-    `SELECT uc.discogs_release_id, MIN(pc.fetched_at) AS oldest
-     FROM user_collection uc
-     LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
-     WHERE pc.fetched_at IS NULL OR pc.fetched_at < NOW() - INTERVAL '24 hours'
-     GROUP BY uc.discogs_release_id
-     ORDER BY oldest ASC NULLS FIRST
-     LIMIT $1`,
-    [limit]
-  );
-  return r.rows.map(row => row.discogs_release_id);
-}
 
 
 export async function prunePriceHistory(): Promise<void> {
@@ -5643,31 +5568,6 @@ export async function setDefaultAddFolderId(clerkUserId: string, folderId: numbe
   );
 }
 
-export async function getWantedSample(limit: number = 24, excludeIds: number[] = []): Promise<object[]> {
-  // Distribute evenly across users: each user contributes at most ceil(limit/userCount) items
-  const uc = await getPool().query(`SELECT COUNT(DISTINCT clerk_user_id)::int AS n FROM user_wantlist`);
-  const userCount = Math.max(uc.rows[0]?.n ?? 1, 1);
-  const perUser = Math.ceil(limit / userCount);
-  const excludeClause = excludeIds.length
-    ? `AND discogs_release_id != ALL($3)`
-    : "";
-  const params: any[] = [perUser, limit];
-  if (excludeIds.length) params.push(excludeIds);
-  const r = await getPool().query(
-    `WITH ranked AS (
-       SELECT data, discogs_release_id,
-              ROW_NUMBER() OVER (PARTITION BY clerk_user_id ORDER BY RANDOM()) AS rn
-       FROM user_wantlist
-       WHERE 1=1 ${excludeClause}
-     )
-     SELECT data FROM ranked
-     WHERE rn <= $1
-     ORDER BY RANDOM()
-     LIMIT $2`,
-    params
-  );
-  return r.rows.map(row => row.data);
-}
 
 export async function getWantedItems(): Promise<object[]> {
   const r = await getPool().query(
@@ -5820,13 +5720,6 @@ export async function updateInventorySyncedAt(clerkUserId: string): Promise<void
   );
 }
 
-export async function getInventoryCount(clerkUserId: string): Promise<number> {
-  const r = await getPool().query(
-    "SELECT COUNT(*)::int AS cnt FROM user_inventory WHERE clerk_user_id = $1",
-    [clerkUserId]
-  );
-  return r.rows[0]?.cnt ?? 0;
-}
 
 export async function getInventoryPage(
   clerkUserId: string, page = 1, perPage = 24, filters?: Record<string, any>
@@ -11067,143 +10960,6 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
   return { ...a, lyrics: lr.rows, tunings: tr.rows, gridTunings: gr.rows, releases, links: lk.rows };
 }
 
-// ── Cached blues releases (admin Discovery view) ─────────────────
-// Pulls every release_cache row whose JSONB metadata carries the
-// "Blues" genre, augmented with the per-artist count of cached
-// blues releases (so the UI can sort by "artists with the least
-// releases" for digging up obscure ones). Filters on free-text
-// search, year range, country, format, label. Sort options:
-// year, title, artist, artist_release_count (asc = obscure-first,
-// desc = prolific-first), cached_at, random.
-export interface CachedBluesFilters {
-  q?: string;
-  yearFrom?: number | null;
-  yearTo?: number | null;
-  country?: string;
-  format?: string;
-  label?: string;
-  sort?: string;
-  order?: "asc" | "desc";
-  limit?: number;
-  offset?: number;
-}
-const _CACHED_BLUES_SORT: Record<string, string> = {
-  year:          "bc.release_year",
-  title:         "lower(bc.release_title)",
-  artist:        "lower(bc.artist_name)",
-  artist_count:  "ac.n",                   // user's "least releases" sort
-  cached_at:     "bc.cached_at",
-};
-export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Promise<{ rows: any[]; total: number }> {
-  const params: any[] = [];
-  // The base CTE is shared between count + data. Filters apply to
-  // both. Free-text matches title OR artist via ILIKE.
-  const where: string[] = [];
-  if (opts.q?.trim()) {
-    params.push(`%${opts.q.trim()}%`);
-    where.push(`(bc.release_title ILIKE $${params.length} OR bc.artist_name ILIKE $${params.length})`);
-  }
-  if (opts.yearFrom != null && Number.isFinite(opts.yearFrom)) {
-    params.push(opts.yearFrom);
-    where.push(`bc.release_year >= $${params.length}`);
-  }
-  if (opts.yearTo != null && Number.isFinite(opts.yearTo)) {
-    params.push(opts.yearTo);
-    where.push(`bc.release_year <= $${params.length}`);
-  }
-  if (opts.country?.trim()) {
-    params.push(`%${opts.country.trim()}%`);
-    where.push(`bc.country ILIKE $${params.length}`);
-  }
-  if (opts.format?.trim()) {
-    params.push(`%${opts.format.trim()}%`);
-    where.push(`bc.format_name ILIKE $${params.length}`);
-  }
-  if (opts.label?.trim()) {
-    params.push(`%${opts.label.trim()}%`);
-    where.push(`bc.label_name ILIKE $${params.length}`);
-  }
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const random = opts.sort === "random";
-  const sortCol = _CACHED_BLUES_SORT[String(opts.sort ?? "")] || _CACHED_BLUES_SORT.cached_at;
-  const dir = opts.order === "asc" ? "ASC" : "DESC";
-  // For artist_count asc (least-first), nulls are obvious noise —
-  // push them last so the curator sees real artists first.
-  // bc.discogs_id is the final tiebreaker so LIMIT/OFFSET pagination
-  // is stable: without a unique key in the ORDER BY, ties on the
-  // primary sort + release_year + title would let PostgreSQL shuffle
-  // those rows between page 1 and page 2, causing "Next page doesn't
-  // respect my sort" symptoms.
-  const orderSql = random
-    ? "ORDER BY random()"
-    : `ORDER BY ${sortCol} ${dir} NULLS LAST, bc.release_year ASC NULLS LAST, lower(bc.release_title) ASC, bc.discogs_id ASC`;
-  const limit  = Math.max(1, Math.min(200, opts.limit ?? 60));
-  const offset = Math.max(0, opts.offset ?? 0);
-
-  const cteSql = `
-    WITH blues_cache AS (
-      SELECT
-        discogs_id,
-        type,
-        data,
-        cached_at,
-        COALESCE(NULLIF(data->'artists'->0->>'name', ''), 'Unknown') AS artist_name,
-        data->>'title'                                  AS release_title,
-        NULLIF(data->>'year', '')::int                  AS release_year,
-        data->>'country'                                AS country,
-        COALESCE(
-          data->'images'->0->>'thumb',
-          data->'images'->0->>'uri150',
-          data->'images'->0->>'uri'
-        )                                               AS cover_thumb,
-        data->'formats'->0->>'name'                     AS format_name,
-        data->'labels'->0->>'name'                      AS label_name
-      FROM release_cache
-      WHERE type = 'release'
-        AND data->'genres' ? 'Blues'
-    ),
-    artist_counts AS (
-      SELECT artist_name, COUNT(*)::int AS n
-      FROM blues_cache
-      GROUP BY artist_name
-    )
-  `;
-
-  const totalR = await getPool().query(
-    `${cteSql}
-     SELECT COUNT(*)::int AS n
-       FROM blues_cache bc
-       LEFT JOIN artist_counts ac ON ac.artist_name = bc.artist_name
-     ${whereSql}`,
-    params,
-  );
-  const total = totalR.rows[0]?.n ?? 0;
-
-  params.push(limit, offset);
-  const r = await getPool().query(
-    `${cteSql}
-     SELECT
-       bc.discogs_id           AS release_id,
-       bc.type                 AS release_type,
-       bc.release_title        AS title,
-       bc.release_year         AS year,
-       bc.artist_name          AS artist,
-       bc.country              AS country,
-       bc.format_name          AS format,
-       bc.label_name           AS label,
-       bc.cover_thumb          AS cover_thumb,
-       bc.cached_at            AS cached_at,
-       ac.n                    AS artist_release_count
-     FROM blues_cache bc
-     LEFT JOIN artist_counts ac ON ac.artist_name = bc.artist_name
-     ${whereSql}
-     ${orderSql}
-     LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
-  return { rows: r.rows, total };
-}
-
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
 // the PK enforces single-row-per-pair regardless of click direction.
@@ -11467,149 +11223,15 @@ export async function listAllGenreCacheWarmStates(): Promise<any[]> {
   return r.rows;
 }
 
-export async function getGenreCacheWarmState(genreKey: string): Promise<any> {
-  const r = await getPool().query(
-    `SELECT * FROM genre_cache_warm_state WHERE genre_key = $1`,
-    [genreKey],
-  );
-  return r.rows[0] || null;
-}
 
-export async function updateGenreCacheWarmState(
-  genreKey: string,
-  patch: Record<string, any>,
-): Promise<void> {
-  const allowed = new Set([
-    "rotation_order", "enabled", "manual_override",
-    "start_year", "end_year",
-    "current_year", "current_page",
-    "running", "started_at", "last_tick_at", "last_cached_at",
-    "lifetime_searched", "lifetime_cached", "lifetime_skipped", "lifetime_errors",
-    "cycle_searched", "cycle_cached", "cycle_skipped",
-    "cycle_started_at", "cycle_count",
-    "recent_errors", "recent_cached",
-  ]);
-  const sets: string[] = [];
-  const vals: any[] = [];
-  for (const [k, v] of Object.entries(patch)) {
-    if (!allowed.has(k)) continue;
-    vals.push(
-      (k === "recent_errors" || k === "recent_cached") && v != null
-        ? JSON.stringify(v)
-        : v,
-    );
-    sets.push(`${k} = $${vals.length}`);
-  }
-  if (!sets.length) return;
-  vals.push(genreKey);
-  await getPool().query(
-    `UPDATE genre_cache_warm_state SET ${sets.join(", ")} WHERE genre_key = $${vals.length}`,
-    vals,
-  );
-}
 
-// Atomic "claim a run" for one genre. Flips running false→true so
-// only one worker can be active per genre even if two scheduler
-// ticks race. Returns true if we got the lock.
-export async function tryClaimGenreCacheWarmRun(genreKey: string): Promise<boolean> {
-  const r = await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET running = true,
-            started_at = NOW(),
-            last_tick_at = NOW()
-      WHERE genre_key = $1 AND running = false
-      RETURNING 1`,
-    [genreKey],
-  );
-  return (r.rowCount ?? 0) > 0;
-}
 
-export async function releaseGenreCacheWarmRun(genreKey: string): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state SET running = false, last_tick_at = NOW() WHERE genre_key = $1`,
-    [genreKey],
-  );
-}
 
-// Mass release lock for stale-lock recovery at scheduler boot.
-export async function releaseAllStaleGenreCacheWarmRuns(staleMinutes: number = 10): Promise<number> {
-  const r = await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET running = false
-      WHERE running = true
-        AND (started_at IS NULL OR started_at < NOW() - ($1 || ' minutes')::interval)
-      RETURNING genre_key`,
-    [String(staleMinutes)],
-  );
-  return r.rowCount ?? 0;
-}
 
-export async function recordGenreCacheWarmHit(
-  genreKey: string,
-  title: string,
-  releaseId: number,
-): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET lifetime_cached = lifetime_cached + 1,
-            cycle_cached    = cycle_cached + 1,
-            last_cached_at  = NOW(),
-            recent_cached   = (
-              jsonb_build_array(jsonb_build_object('id', $3::bigint, 'title', $2::text, 'at', NOW()))
-              || (recent_cached - 9)
-            )
-      WHERE genre_key = $1`,
-    [genreKey, title, releaseId],
-  );
-}
 
-export async function recordGenreCacheWarmSkip(genreKey: string): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET lifetime_skipped = lifetime_skipped + 1,
-            cycle_skipped    = cycle_skipped + 1
-      WHERE genre_key = $1`,
-    [genreKey],
-  );
-}
 
-export async function recordGenreCacheWarmSearched(genreKey: string, n: number): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET lifetime_searched = lifetime_searched + $2,
-            cycle_searched    = cycle_searched + $2
-      WHERE genre_key = $1`,
-    [genreKey, n],
-  );
-}
 
-export async function recordGenreCacheWarmError(genreKey: string, msg: string): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET lifetime_errors = lifetime_errors + 1,
-            recent_errors   = (
-              jsonb_build_array(jsonb_build_object('msg', $2::text, 'at', NOW()))
-              || (recent_errors - 9)
-            )
-      WHERE genre_key = $1`,
-    [genreKey, msg.slice(0, 500)],
-  );
-}
 
-export async function resetGenreCacheWarmCycle(genreKey: string): Promise<void> {
-  await getPool().query(
-    `UPDATE genre_cache_warm_state
-        SET current_year     = start_year,
-            current_page     = 1,
-            cycle_searched   = 0,
-            cycle_cached     = 0,
-            cycle_skipped    = 0,
-            cycle_started_at = NOW(),
-            cycle_count      = cycle_count + 1
-      WHERE genre_key = $1`,
-    [genreKey],
-  );
-}
 
 // ── Manual cache-warm run helpers ─────────────────────────────────
 // One row per (genre, style) combo. Helpers below are designed for
@@ -11681,13 +11303,6 @@ export async function recordCacheWarmRunHit(
             )
       WHERE genre_key = $1 AND style_key = $2`,
     [genreKey, styleKey || "", title, releaseId],
-  );
-}
-export async function recordCacheWarmRunSkip(genreKey: string, styleKey: string): Promise<void> {
-  await getPool().query(
-    `UPDATE cache_warm_runs SET total_skipped = total_skipped + 1
-      WHERE genre_key = $1 AND style_key = $2`,
-    [genreKey, styleKey || ""],
   );
 }
 // Bulk variant — one UPDATE for a whole page's worth of cache hits
@@ -13459,40 +13074,6 @@ export async function deleteCacheWarmRun(genreKey: string, styleKey: string): Pr
   );
 }
 
-// Existence check the worker uses before fetching a release. We only
-// pay the Discogs RTT if it's not already cached. (kind defaults to
-// 'release' to match how cacheRelease stores its rows.)
-export async function isReleaseCached(
-  discogsId: number,
-  type: "release" | "master" = "release",
-): Promise<boolean> {
-  if (await isSplitCacheReaderEnabled()) {
-    const pool = getPool();
-    if (type === "master") {
-      const r = await pool.query(
-        `SELECT 1 FROM discogs_cache_masters_plus
-          WHERE discogs_id = $1 AND type = 'master' LIMIT 1`,
-        [discogsId],
-      );
-      return (r.rowCount ?? 0) > 0;
-    }
-    // release — either bucket
-    const r = await pool.query(
-      `SELECT 1 FROM discogs_cache_pressings WHERE discogs_id = $1
-       UNION ALL
-       SELECT 1 FROM discogs_cache_masters_plus
-        WHERE discogs_id = $1 AND type = 'release'
-       LIMIT 1`,
-      [discogsId],
-    );
-    return (r.rowCount ?? 0) > 0;
-  }
-  const r = await getPool().query(
-    `SELECT 1 FROM release_cache WHERE discogs_id = $1 AND type = $2 LIMIT 1`,
-    [discogsId, type],
-  );
-  return (r.rowCount ?? 0) > 0;
-}
 
 // Batch variant — one query for up to several hundred ids. Returns a
 // Set of the ids that are already cached so callers can fast-path

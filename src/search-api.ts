@@ -3574,30 +3574,6 @@ type ArchiveItem = {
   duration: string;    // best-effort, may be empty
 };
 
-async function _fetchArchiveMeta(identifier: string): Promise<{ streamUrl: string; duration: string }> {
-  const metaUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
-  try {
-    const mr = await loggedFetch("archive", metaUrl, {
-      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
-      context: "archive-meta",
-    });
-    if (!mr.ok) return { streamUrl: "", duration: "" };
-    const meta = await mr.json() as any;
-    const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
-    const mp3 = files.find(f =>
-      typeof f?.name === "string" &&
-      /\.mp3$/i.test(f.name) &&
-      (f.format === "VBR MP3" || f.format === "128Kbps MP3" || f.format === "MP3")
-    ) || files.find(f => typeof f?.name === "string" && /\.mp3$/i.test(f.name));
-    if (!mp3) return { streamUrl: "", duration: "" };
-    return {
-      streamUrl: `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(mp3.name)}`,
-      duration: typeof mp3.length === "string" ? mp3.length : "",
-    };
-  } catch {
-    return { streamUrl: "", duration: "" };
-  }
-}
 
 async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
   // Step 1: page through every item belonging to this archive.org user.
@@ -6033,9 +6009,6 @@ app.get("/api/user/sync-status", async (req, res) => {
   });
 });
 
-function stripArtistSuffix(name: string | undefined): string | undefined {
-  return name ? name.replace(/\s*\(\d+\)$/, "").trim() : undefined;
-}
 
 // POST /api/feedback — save feedback from signed-in user
 app.post("/api/feedback", express.json(), async (req, res) => {
