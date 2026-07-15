@@ -2723,54 +2723,6 @@ async function cacheWarmStartNoYearForForm() {
 }
 window.cacheWarmStartNoYearForForm = cacheWarmStartNoYearForForm;
 
-// ── Lexicon (Blues Words) admin ─────────────────────────────────────
-async function lexiconSeedBundled() {
-  const status = document.getElementById("lexicon-status");
-  if (status) status.textContent = "Seeding…";
-  try {
-    const r = await apiFetch("/api/admin/blues-words/seed-bundled", { method: "POST", timeoutMs: 180000 });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
-    const files = j.files || [];
-    const total = files.reduce((acc, f) => acc + (f.upserted || 0), 0);
-    const cits  = files.reduce((acc, f) => acc + (f.citations || 0), 0);
-    if (status) status.textContent = `Seeded ${total} entries (${cits} citations) from ${files.length} file${files.length===1?'':'s'}.`;
-  } catch (e) {
-    if (status) status.textContent = `Seed failed: ${e}`;
-  }
-}
-window.lexiconSeedBundled = lexiconSeedBundled;
-
-async function lexiconUploadJson(event) {
-  const status = document.getElementById("lexicon-status");
-  const file = event.target.files?.[0];
-  if (!file) return;
-  if (status) status.textContent = `Reading ${file.name}…`;
-  try {
-    const text = await file.text();
-    let entries;
-    try { entries = JSON.parse(text); }
-    catch (e) { if (status) status.textContent = `Bad JSON: ${e}`; return; }
-    if (!Array.isArray(entries)) {
-      if (status) status.textContent = `Expected a JSON array of entries; got ${typeof entries}.`;
-      return;
-    }
-    if (status) status.textContent = `Uploading ${entries.length} entries…`;
-    const r = await apiFetch("/api/admin/blues-words/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entries }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { if (status) status.textContent = `Failed: ${j.error || r.status}`; return; }
-    if (status) status.textContent = `Ingested ${j.upserted} entries (${j.citations} citations) from ${file.name}.`;
-  } catch (e) {
-    if (status) status.textContent = `Upload failed: ${e}`;
-  } finally {
-    event.target.value = "";
-  }
-}
-window.lexiconUploadJson = lexiconUploadJson;
 
 // ── Cache exports ────────────────────────────────────────────────────
 // Swap the Style input's datalist to the chosen genre's bucket so
