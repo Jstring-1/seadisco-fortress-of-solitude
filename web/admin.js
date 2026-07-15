@@ -198,6 +198,11 @@ async function loadAdminWorkerStatus() {
   // Inline view hidden (or standalone pre-auth) — skip the fetch; the
   // interval keeps ticking and resumes polling once visible again.
   if (!_adminPanelVisible()) return;
+  // The first tick fires ~500ms after boot, often before Clerk has
+  // handed us a session token. Firing tokenless just logs a 401 in the
+  // console; skip until auth is ready — the 8s interval picks it up on
+  // the next tick.
+  try { if (!(await getSessionToken())) return; } catch { return; }
   try {
     // One aggregate request instead of 10 per poll — see
     // /api/admin/workers/status. Response is keyed by worker.
