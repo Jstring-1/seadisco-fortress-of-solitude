@@ -70,7 +70,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260715.69edcab5" />
+  <link rel="stylesheet" href="/style.css?v=260715.0602531c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -108,7 +108,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260715.69edcab5"></script>
+<script defer src="/shared.js?v=260715.0602531c"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -767,7 +767,7 @@ e.g.  miles davis | coltrane
     <!-- Blues Archive tab — admin-only unified view: blues artists +
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
+    <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only lyrics + tunings reference" style="display:none">Blues Archive</span>
     <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
@@ -1030,12 +1030,9 @@ e.g.  miles davis | coltrane
     <div class="loc-header">
       <h2 class="loc-title">Blues Archive <span id="blues-archive-count" style="font-size:0.72rem;color:var(--muted);font-weight:normal;margin-left:0.5rem"></span></h2>
       <div class="loc-tabs" id="blues-archive-subtabs">
-        <button type="button" class="loc-tab loc-tab-search active ba-subtab" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
-        <button type="button" class="loc-tab ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
-        <button type="button" class="loc-tab ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
+        <button type="button" class="loc-tab loc-tab-search active ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>
-        <button type="button" class="loc-tab ba-subtab" data-ba-tab="connections" onclick="_baSwitchSubtab('connections')">Connections</button>
-        <button type="button" class="loc-tab ba-subtab" data-ba-tab="export" onclick="_baSwitchSubtab('export')" title="Unified export hub: pick a source (artists / lyrics / releases / tunings) + format and download.">Export</button>
+        <button type="button" class="loc-tab ba-subtab" data-ba-tab="export" onclick="_baSwitchSubtab('export')" title="Unified export hub: pick a source (lyrics / tunings) + format and download.">Export</button>
       </div>
     </div>
     <!-- Lexicon panel removed pending better source scans. The
@@ -1058,9 +1055,7 @@ e.g.  miles davis | coltrane
         <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:0.5rem;align-items:end">
           <label style="font-size:0.74rem;color:var(--muted)">Source
             <select id="ba-export-source" onchange="_baExportOnSourceChange()" style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
-              <option value="artists">Artists</option>
               <option value="lyrics" selected>Lyrics</option>
-              <option value="releases">Releases</option>
               <option value="tunings">Tunings</option>
             </select>
           </label>
@@ -1870,13 +1865,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260715.69edcab5"></script>
-<script defer src="/search.js?v=260715.69edcab5"></script>
-<script defer src="/collection.js?v=260715.69edcab5"></script>
+<script defer src="/utils.js?v=260715.0602531c"></script>
+<script defer src="/search.js?v=260715.0602531c"></script>
+<script defer src="/collection.js?v=260715.0602531c"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260715.69edcab5"></script>
-<script defer src="/app.js?v=260715.69edcab5"></script>
+<script defer src="/modal.js?v=260715.0602531c"></script>
+<script defer src="/app.js?v=260715.0602531c"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1887,13 +1882,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260715.69edcab5"></script>
-<script defer src="/queue.js?v=260715.69edcab5"></script>
+<script defer src="/loc.js?v=260715.0602531c"></script>
+<script defer src="/queue.js?v=260715.0602531c"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260715.69edcab5";
+  window._SD_LAZY_VERSION = "260715.0602531c";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1923,8 +1918,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260715.69edcab5"></script>
-<script defer src="/offline.js?v=260715.69edcab5"></script>
+<script defer src="/idb.js?v=260715.0602531c"></script>
+<script defer src="/offline.js?v=260715.0602531c"></script>
 
 </body>
 </html>
