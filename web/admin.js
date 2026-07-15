@@ -116,7 +116,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadYearBackfill(); loadCacheAnalytics(); loadCacheProjection(); },
+    load: () => { loadCacheWarm(); loadYearBackfill(); _ybfResumeApplyIfRunning(); loadCacheAnalytics(); loadCacheProjection(); },
   },
   'labels': {
     panels: ['panel-labels'],
@@ -2509,7 +2509,7 @@ async function loadYearBackfill() {
     el.innerHTML = `
       <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
         <button class="admin-btn" type="button" onclick="_ybfPreviewRun()" ${_ybfPreviewLoading ? "disabled" : ""}>${_ybfPreviewLoading ? "⏳ Running…" : "🔍 Preview"}</button>
-        <button class="admin-btn" type="button" onclick="_ybfApply()" ${_ybfPreview && !_ybfPreviewLoading && (_ybfPreview.phase1Release + _ybfPreview.phase2Master) > 0 ? "" : "disabled"}>✓ Apply</button>
+        <button class="admin-btn" type="button" onclick="_ybfApply()" ${_ybfApplyRunning ? "disabled" : (_ybfPreview && !_ybfPreviewLoading && (_ybfPreview.phase1Release + _ybfPreview.phase2Master) > 0 ? "" : "disabled")}>${_ybfApplyRunning ? "⏳ Applying…" : "✓ Apply"}</button>
         ${_ybfPreview ? `<button class="admin-btn" type="button" onclick="_ybfClearPreview()">Clear preview</button>` : ""}
       </div>
       ${previewBlock}
@@ -2545,18 +2545,48 @@ async function _ybfPreviewRun() {
   }
 }
 function _ybfClearPreview() { _ybfPreview = null; loadYearBackfill(); }
+let _ybfApplyRunning = false;
 async function _ybfApply() {
   const total = (_ybfPreview?.phase1Release || 0) + (_ybfPreview?.phase2Master || 0);
-  if (!confirm(`Apply year backfill — will update ${total} cache rows and log every change. Continue?`)) return;
+  if (!confirm(`Apply year backfill — will update ${total} cache rows and log every change. This runs in the background and can take a few minutes. Continue?`)) return;
   try {
+    // 202 = started, 409 = one already in flight. Either way we start polling.
     const r = await apiFetch("/api/admin/year-backfill/apply", { method: "POST" });
-    if (!r.ok) { alert(`Apply failed: ${await _errText(r)}`); return; }
-    const j = await r.json();
-    alert(`Applied. Phase 1: ${j.phase1Updated}, Phase 2: ${j.phase2Updated}. Batch ${j.batchId.slice(0, 8)}…`);
+    if (r.status === 409) {
+      alert("An apply pass is already running — tracking it.");
+    } else if (!r.ok) {
+      alert(`Apply failed: ${await _errText(r)}`); return;
+    }
+    _ybfApplyRunning = true;
     _ybfPreview = null;
-    loadYearBackfill();
+    loadYearBackfill();          // repaint into the "Applying…" state
+    _ybfPollApplyStatus();
   } catch (err) { alert(String(err)); }
 }
+async function _ybfPollApplyStatus() {
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/apply/status");
+    if (!r.ok) { _ybfApplyRunning = false; loadYearBackfill(); return; }
+    const j = await r.json();
+    if (j.running) { setTimeout(_ybfPollApplyStatus, 2500); return; }
+    _ybfApplyRunning = false;
+    if (j.error) alert(`Apply failed: ${j.error}`);
+    else if (j.result) alert(`Applied. Phase 1: ${j.result.phase1Updated}, Phase 2: ${j.result.phase2Updated}. Batch ${String(j.result.batchId).slice(0, 8)}…`);
+    loadYearBackfill();
+  } catch { _ybfApplyRunning = false; loadYearBackfill(); }
+}
+// Resume polling if an apply pass is still running server-side (e.g.
+// the admin reloaded the page or reopened the Cache tab mid-pass).
+async function _ybfResumeApplyIfRunning() {
+  if (_ybfApplyRunning) return;
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/apply/status");
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.running) { _ybfApplyRunning = true; loadYearBackfill(); _ybfPollApplyStatus(); }
+  } catch {}
+}
+window._ybfResumeApplyIfRunning = _ybfResumeApplyIfRunning;
 async function _ybfRollback(batchId) {
   if (!confirm(`Roll back batch ${batchId.slice(0, 8)}…? Rows whose year has drifted since we wrote them will be left alone.`)) return;
   try {

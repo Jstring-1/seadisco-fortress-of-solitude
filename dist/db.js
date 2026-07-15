@@ -10546,6 +10546,13 @@ export async function applyYearBackfill() {
     const client = await getPool().connect();
     try {
         await client.query("BEGIN");
+        // The donor-pool CTE + phase-2 self-join scan the whole cache, so on
+        // a large release_cache this transaction legitimately runs for
+        // minutes. Lift the per-statement timeout for THIS transaction only
+        // (SET LOCAL reverts on commit/rollback) so Postgres doesn't abort
+        // it mid-pass. 15 min cap so a pathological run can't hold locks
+        // forever.
+        await client.query("SET LOCAL statement_timeout = '900000'");
         // Generate one batch id for this whole apply pass.
         const batchRow = await client.query(`SELECT gen_random_uuid() AS id`);
         const batchId = String(batchRow.rows[0].id);

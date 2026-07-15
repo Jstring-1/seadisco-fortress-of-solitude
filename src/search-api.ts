@@ -9395,16 +9395,41 @@ app.post("/api/admin/year-backfill/preview", async (req, res) => {
   }
 });
 
+// Apply runs a whole-cache scan that can take minutes, so it runs as a
+// background job: POST kicks it off and returns immediately, the UI
+// polls /apply/status. Prevents the HTTP request (and its edge proxy)
+// from timing out mid-pass — the earlier synchronous version returned a
+// timeout to the browser even though the query kept running server-side.
+let _ybfApplyJob: {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: any | null;
+  error: string | null;
+} = { running: false, startedAt: null, finishedAt: null, result: null, error: null };
+
 app.post("/api/admin/year-backfill/apply", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  try {
-    const r = await applyYearBackfill();
-    _invalidateLabelsCarouselCache();    // year changes affect carousel sort
-    res.json(r);
-  } catch (err: any) {
-    console.error("[year-backfill/apply]", err);
-    res.status(500).json({ error: err?.message ?? String(err) });
-  }
+  if (_ybfApplyJob.running) { res.status(409).json({ error: "already_running", job: _ybfApplyJob }); return; }
+  _ybfApplyJob = { running: true, startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null };
+  res.status(202).json({ started: true, startedAt: _ybfApplyJob.startedAt });
+  // Fire-and-forget — the request already returned. Errors land in the
+  // job state for the poller to surface.
+  applyYearBackfill()
+    .then((r) => {
+      _invalidateLabelsCarouselCache();    // year changes affect carousel sort
+      _ybfApplyJob = { running: false, startedAt: _ybfApplyJob.startedAt, finishedAt: new Date().toISOString(), result: r, error: null };
+      console.log(`[year-backfill/apply] done: phase1=${r.phase1Updated} phase2=${r.phase2Updated} batch=${r.batchId}`);
+    })
+    .catch((err: any) => {
+      _ybfApplyJob = { running: false, startedAt: _ybfApplyJob.startedAt, finishedAt: new Date().toISOString(), result: null, error: err?.message ?? String(err) };
+      console.error("[year-backfill/apply]", err);
+    });
+});
+
+app.get("/api/admin/year-backfill/apply/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json(_ybfApplyJob);
 });
 
 app.get("/api/admin/year-backfill/batches", async (req, res) => {
