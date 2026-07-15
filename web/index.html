@@ -70,7 +70,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260715.2ce07e6a" />
+  <link rel="stylesheet" href="/style.css?v=260715.3f825fa6" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -108,7 +108,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260715.2ce07e6a"></script>
+<script defer src="/shared.js?v=260715.3f825fa6"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -768,10 +768,6 @@ e.g.  miles davis | coltrane
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
-    <!-- All Blues tab — admin-only network view of inferred artist
-         relationships from cached Discogs profiles. -->
-    <span id="extras-tab-all-blues-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-all-blues" class="rr-tab rr-tab-restricted" onclick="switchView('all-blues')" title="All Blues — network view of cached artist relationships (admin only)" style="display:none">All Blues</span>
     <!-- Labels tab — admin-only chronological browse of cached
          releases grouped by record label (release_cache only). -->
     <span id="extras-tab-labels-sep" class="rr-tab-sep" style="display:none">/</span>
@@ -1041,66 +1037,6 @@ e.g.  miles davis | coltrane
   <div class="account-box admin-box">
     <div id="admin-inline-status" style="color:var(--muted);font-size:0.9rem"></div>
     <div id="admin-content" style="display:none"></div>
-  </div>
-</div>
-
-<!-- All Blues view: public network of inferred relationships across
-     cached Discogs blues artists. Hybrid layout — title + toolbar
-     sit inside a content-narrow 900px column matching every other
-     discovery page, but the Cytoscape canvas escapes that column
-     and stretches across the full viewport width for exploration.
-     Loaded lazily by switchView('all-blues'). -->
-<div id="all-blues-view" style="display:none">
-  <div class="content-narrow">
-    <div style="margin:0.6rem 0 0.4rem 0">
-      <div style="font-size:1.15rem;font-weight:600">Constellations</div>
-    </div>
-    <!-- Worker controls (Start/Stop/stats) live in the admin dashboard
-         /admin → All Blues tab. The public view is read-only. -->
-    <div id="all-blues-filters" style="display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem">
-      <span style="color:var(--muted)">Show:</span>
-      <span id="all-blues-kind-chips"></span>
-      <!-- Year window inputs are kept as wide-open hidden defaults so
-           _abApplyFilters has something to read; the slider UI was
-           removed because the graph now shows the entire network. -->
-      <input id="ab-from-year-filter" type="hidden" value="1900">
-      <input id="ab-to-year-filter"   type="hidden" value="2100">
-      <label style="display:inline-flex;gap:0.3rem;align-items:center"
-             title="A Played-with connection is a band/sideman credit. These dominate the network; raising this number trims artists with fewer than N Played-with edges.">
-        Min Played-with
-        <input id="ab-min-degree" type="number" value="1" min="1" max="20" style="width:4em" onchange="(window._abApplyFilters && window._abCy) ? window._abApplyFilters() : window.allBluesReload()">
-      </label>
-      <button type="button" class="archive-btn" onclick="allBluesReload()">Reload graph</button>
-      <!-- Admin-only layout cache controls. _abSyncSaveLayoutButton
-           reveals these only when window._isAdmin and the relevant
-           condition applies. -->
-      <button id="ab-save-layout" type="button" class="archive-btn" style="display:none" onclick="_abSaveLayoutClick()" title="Save the current fcose positions so everyone gets an instant preset layout next time">Save layout</button>
-      <button id="ab-recompute-layout" type="button" class="archive-btn" style="display:none" onclick="_abRecomputeLayoutClick()" title="Force a fresh fcose run (slow) — useful after adding new seeds. Then click Save layout to persist.">Recompute layout</button>
-      <span id="ab-graph-counts" style="color:var(--muted)"></span>
-    </div>
-    <div id="all-blues-focus-bar" style="display:flex;flex-wrap:nowrap;gap:0.4rem;align-items:center;margin-bottom:0.5rem;font-size:0.8rem;position:relative">
-      <span style="color:var(--muted);flex-shrink:0">Focus:</span>
-      <!-- type="search" gives Chrome / Edge / Safari a native ⓧ in
-           the input. Our oninput handler treats an empty value as a
-           focus reset, so clicking that ⓧ behaves identically to the
-           dedicated Clear button. onsearch covers Safari's
-           cancellation event. -->
-      <input id="ab-focus-input" type="search" placeholder="Type an artist name…" autocomplete="off"
-        style="padding:0.2rem 0.45rem;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:4px;color:inherit;flex:1;min-width:0"
-        oninput="_abFocusInputChanged()" onsearch="_abFocusInputChanged()"
-        onkeydown="if(event.key==='Enter'){_abFocusSubmit();}else if(event.key==='Escape'){_abFocusClear();}">
-      <button type="button" class="archive-btn" onclick="_abFocusSubmit()" style="flex-shrink:0">Focus</button>
-      <button type="button" class="archive-btn" onclick="_abFocusClear()" style="flex-shrink:0">Clear</button>
-      <span id="ab-focus-active" style="color:var(--muted);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:14em"></span>
-      <!-- Suggestions popover: positioned absolutely beneath the input
-           so it doesn't push the buttons to a new line. -->
-      <div id="ab-focus-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:0.2rem;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:0.2rem 0;background:#0b1220;z-index:10"></div>
-    </div>
-  </div>
-  <!-- Graph escapes the content-narrow column above and stretches
-       across the viewport with just a small horizontal gutter. -->
-  <div style="padding:0 1rem 1rem">
-    <div id="all-blues-graph" style="width:100%;height:calc(100vh - 220px);min-height:560px;border:1px solid var(--border);border-radius:6px;background:rgba(0,0,0,0.15)"></div>
   </div>
 </div>
 
@@ -1954,13 +1890,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260715.2ce07e6a"></script>
-<script defer src="/search.js?v=260715.2ce07e6a"></script>
-<script defer src="/collection.js?v=260715.2ce07e6a"></script>
+<script defer src="/utils.js?v=260715.3f825fa6"></script>
+<script defer src="/search.js?v=260715.3f825fa6"></script>
+<script defer src="/collection.js?v=260715.3f825fa6"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260715.2ce07e6a"></script>
-<script defer src="/app.js?v=260715.2ce07e6a"></script>
+<script defer src="/modal.js?v=260715.3f825fa6"></script>
+<script defer src="/app.js?v=260715.3f825fa6"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1971,13 +1907,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260715.2ce07e6a"></script>
-<script defer src="/queue.js?v=260715.2ce07e6a"></script>
+<script defer src="/loc.js?v=260715.3f825fa6"></script>
+<script defer src="/queue.js?v=260715.3f825fa6"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260715.2ce07e6a";
+  window._SD_LAZY_VERSION = "260715.3f825fa6";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -2007,8 +1943,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260715.2ce07e6a"></script>
-<script defer src="/offline.js?v=260715.2ce07e6a"></script>
+<script defer src="/idb.js?v=260715.3f825fa6"></script>
+<script defer src="/offline.js?v=260715.3f825fa6"></script>
 
 </body>
 </html>

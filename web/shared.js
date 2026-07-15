@@ -1762,7 +1762,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260715.2ce07e6a";
+  const SITE_VERSION = "build 260715.3f825fa6";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1974,7 +1974,6 @@ function renderSharedFooter(opts) {
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
-        <a id="footer-all-blues-link" href="${_seaDiscoBuildViewHref("all-blues")}" data-sd-view="all-blues" title="Constellations — network of inferred relationships across cached Discogs blues artists" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('all-blues');return false"` : ""}>Constellations</a>
         <a id="footer-blues-archive-link" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Blues Archive</a>
         <a id="footer-labels-link" href="${_seaDiscoBuildViewHref("labels")}" data-sd-view="labels" title="${escHtml(HINTS.labels)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('labels');return false"` : ""}>Labels</a>
       </div>
@@ -2160,11 +2159,6 @@ function renderSharedFooter(opts) {
       if (window._isAdmin || window._sdIsDemo) {
         const caA = document.getElementById("footer-chronam-link");
         if (caA) caA.style.display = "";
-      }
-      // All Blues — admin-only network view.
-      if (window._isAdmin) {
-        const abA = document.getElementById("footer-all-blues-link");
-        if (abA) abA.style.display = "";
       }
       // Blues Archive — admin-only artist browser.
       if (window._isAdmin) {
