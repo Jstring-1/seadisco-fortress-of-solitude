@@ -2002,27 +2002,6 @@ export async function initDb() {
 // collapses internal whitespace. Returns the number of rows linked.
 // Idempotent. Triggered by the admin "Re-link orphans" button so the
 // user can sweep up near-misses without restarting the server.
-export async function relinkOrphanLyricsToArtists(): Promise<number> {
-  const r = await getPool().query(`
-    UPDATE blues_lyrics l
-       SET artist_id = a.id
-      FROM blues_artists a
-     WHERE l.artist_id IS NULL
-       AND l.artist IS NOT NULL
-       AND (
-         -- Pass 1: exact lowercase trim match (cheap).
-         LOWER(TRIM(l.artist)) = LOWER(a.name)
-         OR
-         -- Pass 2: drop the " (N)" Discogs disambiguator from EITHER
-         -- side before comparing. Catches "Tommy Tucker" lyric vs
-         -- "Tommy Tucker (3)" artist row and vice versa.
-         REGEXP_REPLACE(LOWER(TRIM(l.artist)), '\\s*\\(\\d+\\)\\s*$', '')
-           =
-         REGEXP_REPLACE(LOWER(a.name),         '\\s*\\(\\d+\\)\\s*$', '')
-       )
-  `);
-  return r.rowCount ?? 0;
-}
 
 // ── Blues lyrics: bulk normalize empty tuning → "Standard" ─────────
 // On a blues-lyrics wiki an unmentioned tuning is overwhelmingly
@@ -2041,29 +2020,6 @@ export async function normalizeEmptyTuningsToStandard(): Promise<number> {
 // input. Looks up by case-insensitive name first to avoid duplicates,
 // otherwise inserts a fresh row with enrichment_status flagged so it
 // can be distinguished from imported/seeded rows.
-export async function getOrCreateBluesArtistByName(rawName: string): Promise<{
-  id: number;
-  name: string;
-  created: boolean;
-}> {
-  const name = String(rawName || "").replace(/\s+/g, " ").trim();
-  if (!name) throw new Error("name required");
-  if (name.length > 200) throw new Error("name too long");
-  const existing = await getPool().query(
-    `SELECT id, name FROM blues_artists WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-    [name],
-  );
-  if (existing.rows.length) {
-    return { id: existing.rows[0].id, name: existing.rows[0].name, created: false };
-  }
-  const inserted = await getPool().query(
-    `INSERT INTO blues_artists (name, enrichment_status)
-     VALUES ($1, '{"source":"manual_editor_create"}'::jsonb)
-     RETURNING id, name`,
-    [name],
-  );
-  return { id: inserted.rows[0].id, name: inserted.rows[0].name, created: true };
-}
 
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
 // Field whitelist used by upsert/update so the admin UI can't smuggle
@@ -2140,72 +2096,20 @@ const _BLUES_SORT_COLUMNS: Record<string, string> = {
   updated_at:     "updated_at",
 };
 
-export async function listBluesArtists(opts: { search?: string; limit?: number; offset?: number; sort?: string; order?: string } = {}): Promise<{ rows: any[]; total: number }> {
-  const { search, limit = 50, offset = 0, sort = "name", order = "asc" } = opts;
-  const args: any[] = [];
-  let where = "";
-  if (search?.trim()) {
-    args.push(`%${search.trim().toLowerCase()}%`);
-    where = `WHERE lower(name) LIKE $1 OR lower(coalesce(birth_place,'')) LIKE $1 OR lower(coalesce(hometown_region,'')) LIKE $1`;
-  }
-  const countSql = `SELECT count(*)::int AS total FROM blues_artists ${where}`;
-  const totalRes = await getPool().query(countSql, args);
-  const total = totalRes.rows[0]?.total ?? 0;
-  // Resolve sort against the whitelist; fall back to name if unknown.
-  const sortFrag = _BLUES_SORT_COLUMNS[sort] ?? _BLUES_SORT_COLUMNS["name"];
-  const dir = String(order).toLowerCase() === "desc" ? "DESC" : "ASC";
-  // NULLS LAST so empty values don't dominate the top of asc sorts.
-  args.push(limit, offset);
-  const sql = `
-    SELECT *,
-           ${_EARLIEST_REL_SQL} AS earliest_release_year
-    FROM blues_artists
-    ${where}
-    ORDER BY ${sortFrag} ${dir} NULLS LAST, lower(name) ASC
-    LIMIT $${args.length - 1} OFFSET $${args.length}
-  `;
-  const r = await getPool().query(sql, args);
-  return { rows: r.rows, total };
-}
 
 /** Return every discogs_id currently in blues_artists. Used by the
  *  admin-only "+" icon next to artist names in album popups so we can
  *  hide the icon for artists already in the DB. */
-export async function getBluesArtistDiscogsIds(): Promise<number[]> {
-  const r = await getPool().query(`SELECT discogs_id FROM blues_artists WHERE discogs_id IS NOT NULL ORDER BY discogs_id`);
-  return r.rows.map(row => row.discogs_id);
-}
 
 /** Return both the discogs_ids and the names of every row in
  *  blues_artists. Cards parse artist NAMES from result titles and
  *  don't have a Discogs ID locally, so we cache names too for the
  *  "already in DB?" check on card-level "+" buttons. */
-export async function getBluesArtistIdentifiers(): Promise<{ ids: number[]; names: string[] }> {
-  const r = await getPool().query(`SELECT discogs_id, name FROM blues_artists`);
-  const ids: number[] = [];
-  const names: string[] = [];
-  for (const row of r.rows) {
-    if (row.discogs_id) ids.push(row.discogs_id);
-    if (row.name) names.push(row.name);
-  }
-  return { ids, names };
-}
 
 /** Wipe the entire blues_artists table. Admin-only — there's no
  *  per-row history so this is irreversible. */
-export async function deleteAllBluesArtists(): Promise<number> {
-  const r = await getPool().query(`DELETE FROM blues_artists`);
-  return r.rowCount ?? 0;
-}
 
-export async function getBluesArtist(id: number): Promise<any | null> {
-  const r = await getPool().query(`SELECT * FROM blues_artists WHERE id = $1`, [id]);
-  return r.rows[0] ?? null;
-}
 
-export async function deleteBluesArtist(id: number): Promise<void> {
-  await getPool().query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
-}
 
 // Cascade-delete the artist AND every lyric tied to them. Matches
 // lyrics by FK (canonical) OR by case-insensitive name (legacy rows
@@ -2523,77 +2427,6 @@ export async function getBannedLyricBodyHashSet(): Promise<Set<string>> {
   return new Set(r.rows.map((row: any) => String(row.value)));
 }
 
-export async function deleteBluesArtistAndLyrics(id: number, opts: {
-  ban?: boolean;            // also add ban rows for the artist + every deleted page_title
-  banReason?: string | null;
-  banBy?: string | null;
-} = {}): Promise<{
-  ok: boolean;
-  artistName: string;
-  lyricsDeleted: number;
-  bansAdded: number;
-}> {
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const ar = await client.query(
-      `SELECT id, name FROM blues_artists WHERE id = $1 FOR UPDATE`,
-      [id],
-    );
-    if (!ar.rows.length) { await client.query("ROLLBACK"); throw new Error("artist not found"); }
-    const name = String(ar.rows[0].name || "");
-    // Capture page titles BEFORE we delete so we can ban them by
-    // exact match later. Union both deletion sets: FK-linked +
-    // legacy name-matched orphans.
-    const titlesR = await client.query(
-      `SELECT page_title FROM blues_lyrics
-        WHERE artist_id = $1
-           OR (artist_id IS NULL
-               AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($2)))`,
-      [id, name],
-    );
-    const titles = titlesR.rows.map((r: any) => String(r.page_title)).filter(Boolean);
-    // 1. Drop lyrics linked by FK.
-    const r1 = await client.query(
-      `DELETE FROM blues_lyrics WHERE artist_id = $1`,
-      [id],
-    );
-    // 2. Drop lyrics that name-match but never got FK-linked (legacy).
-    const r2 = name
-      ? await client.query(
-          `DELETE FROM blues_lyrics
-            WHERE artist_id IS NULL
-              AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($1))`,
-          [name],
-        )
-      : { rowCount: 0 } as any;
-    // 3. Drop the artist.
-    await client.query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
-    await client.query("COMMIT");
-    let bansAdded = 0;
-    if (opts.ban) {
-      // After the transaction so a ban-insert race can't roll back
-      // the deletion. Banning is best-effort — duplicates are fine.
-      const banRows: Array<{ kind: "title" | "artist"; value: string; reason?: string | null; bannedBy?: string | null }> = [];
-      if (name) banRows.push({ kind: "artist", value: name, reason: opts.banReason ?? null, bannedBy: opts.banBy ?? null });
-      for (const t of titles) banRows.push({ kind: "title", value: t, reason: opts.banReason ?? null, bannedBy: opts.banBy ?? null });
-      try { bansAdded = await addBluesLyricsBans(banRows); } catch (e) {
-        console.warn("[deleteBluesArtistAndLyrics] ban insert failed:", e);
-      }
-    }
-    return {
-      ok: true,
-      artistName: name,
-      lyricsDeleted: (r1.rowCount ?? 0) + (r2.rowCount ?? 0),
-      bansAdded,
-    };
-  } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 // ── Lyric first_release_year resolver: cheap path ────────────────────
 // For every lyric whose linked artist has a discogs_releases entry
@@ -2612,49 +2445,6 @@ export async function deleteBluesArtistAndLyrics(id: number, opts: {
 // release year. Idempotent — only touches rows where the value would
 // actually change. force flag re-resolves rows whose year already
 // came from this path (in case the artist's release list shifted).
-export async function resolveLyricFirstReleaseYearsCheap(opts: { force?: boolean } = {}): Promise<{ updated: number }> {
-  const guard = opts.force
-    ? ""
-    : `AND (l.first_release_year IS NULL OR l.first_release_source = 'artist_releases')`;
-  // norm() collapses to [a-z0-9] only so "Don't You Lie to Me" ==
-  // "Dont You Lie To Me" == "don't_you_lie_to_me" — see inline SQL.
-  const r = await getPool().query(`
-    WITH cand AS (
-      SELECT l.id AS lyric_id,
-             MIN((rel->>'year')::int) AS year
-        FROM blues_lyrics l
-        JOIN blues_artists a ON a.id = l.artist_id,
-             jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
-       WHERE (rel->>'year') ~ '^[0-9]+$'
-         AND ((rel->>'role') IS NULL OR (rel->>'role') = '' OR (rel->>'role') = 'Main')
-         AND (
-           -- Full release title matches lyric (normalized: parens
-           -- content stripped, then everything but [a-z0-9])
-           LOWER(regexp_replace(regexp_replace(COALESCE(rel->>'title',''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-           OR
-           -- A-side of "A / B" matches lyric
-           LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rel->>'title','/',1),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-           OR
-           -- B-side of "A / B" matches lyric
-           LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rel->>'title','/',2),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
-         )
-         AND length(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g')) >= 3
-         ${guard}
-       GROUP BY l.id
-    )
-    UPDATE blues_lyrics l
-       SET first_release_year       = c.year,
-           first_release_source     = 'artist_releases',
-           first_release_checked_at = NOW()
-      FROM cand c
-     WHERE c.lyric_id = l.id
-       AND (l.first_release_year IS DISTINCT FROM c.year OR l.first_release_source IS DISTINCT FROM 'artist_releases')
-  `);
-  return { updated: r.rowCount ?? 0 };
-}
 
 // ── Lyric first_release_year resolver: release_cache path ────────────
 // Richer sibling of resolveLyricFirstReleaseYearsCheap. That one only
@@ -2899,184 +2689,14 @@ export async function reorderSetlistItems(userId: string, setlistId: number, ite
  *  When merging into an existing row we use COALESCE semantics: blank
  *  existing fields get filled, non-blank existing fields stay put so
  *  manual edits and earlier richer data aren't trampled. */
-export async function upsertBluesArtistByQid(record: Record<string, any>): Promise<{ id: number; merged: boolean; createdNew: boolean; matchedBy: "qid" | "discogs_id" | null }> {
-  if (!record.wikidata_qid || !record.name) {
-    throw new Error("upsertBluesArtistByQid requires wikidata_qid and name");
-  }
-  // Look up existing row by either key.
-  const existing = await getPool().query(
-    `SELECT id, wikidata_qid, discogs_id FROM blues_artists
-     WHERE wikidata_qid = $1
-        OR ($2::int IS NOT NULL AND discogs_id = $2::int)
-     ORDER BY (wikidata_qid = $1) DESC
-     LIMIT 1`,
-    [record.wikidata_qid, record.discogs_id ?? null],
-  );
-  if (existing.rows.length) {
-    const row = existing.rows[0];
-    const matchedBy: "qid" | "discogs_id" =
-      row.wikidata_qid === record.wikidata_qid ? "qid" : "discogs_id";
-    // Build a COALESCE-style UPDATE so non-null existing values win.
-    // JSONB array fields use a different rule: prefer the existing
-    // array if it has content; otherwise take the new one.
-    const sets: string[] = [];
-    const vals: any[] = [];
-    for (const f of _BLUES_FIELDS) {
-      if (!(f in record)) continue;
-      vals.push(_coerceBluesValue(f, (record as any)[f]));
-      const ph = `$${vals.length}`;
-      if (_BLUES_JSONB_FIELDS.has(f)) {
-        // Keep existing JSONB unless it's NULL / empty array.
-        sets.push(`${f} = CASE
-          WHEN ${f} IS NULL OR jsonb_typeof(${f}) = 'null' OR ${f} = '[]'::jsonb
-            THEN ${ph}::jsonb
-          ELSE ${f}
-        END`);
-      } else {
-        // Keep existing scalar unless it's NULL or empty string.
-        sets.push(`${f} = COALESCE(NULLIF(${f}, ''), ${ph})`);
-      }
-    }
-    vals.push(new Date()); sets.push(`updated_at = $${vals.length}`);
-    vals.push(row.id);
-    await getPool().query(
-      `UPDATE blues_artists SET ${sets.join(", ")} WHERE id = $${vals.length}`,
-      vals,
-    );
-    return { id: row.id, merged: true, createdNew: false, matchedBy };
-  }
-  // No existing row — straight insert.
-  const cols: string[] = [];
-  const vals: any[] = [];
-  const ph: string[] = [];
-  for (const f of _BLUES_FIELDS) {
-    if (!(f in record)) continue;
-    cols.push(f);
-    vals.push(_coerceBluesValue(f, (record as any)[f]));
-    ph.push(`$${vals.length}`);
-  }
-  const ins = await getPool().query(
-    `INSERT INTO blues_artists (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`,
-    vals,
-  );
-  return { id: ins.rows[0].id, merged: false, createdNew: true, matchedBy: null };
-}
 
 /** Upsert from the Discogs seeder. Keys on discogs_id. Merges
  *  discogs_releases by release id (union), and only fills name/labels/
  *  styles when the existing row has them blank — never trampling
  *  manually-edited values or richer Wikidata-sourced data. */
-export async function upsertBluesArtistByDiscogsId(record: {
-  discogs_id: number;
-  name: string;
-  discogs_releases?: Array<{ id: number; type: string; title?: string; year?: number; label?: string }>;
-  associated_labels?: string[];
-  styles?: string[];
-}): Promise<{ id: number; created: boolean; mergedCount: number }> {
-  if (!record.discogs_id || !record.name) {
-    throw new Error("upsertBluesArtistByDiscogsId requires discogs_id and name");
-  }
-  const existing = await getPool().query(
-    `SELECT id, name, discogs_releases, associated_labels, styles, enrichment_status FROM blues_artists WHERE discogs_id = $1`,
-    [record.discogs_id],
-  );
-  const newRels = record.discogs_releases ?? [];
-  if (existing.rows.length) {
-    const row = existing.rows[0];
-    const oldRels = Array.isArray(row.discogs_releases) ? row.discogs_releases : [];
-    const seen = new Set(oldRels.map((r: any) => `${r.type}:${r.id}`));
-    const merged = [...oldRels];
-    let added = 0;
-    for (const r of newRels) {
-      const k = `${r.type}:${r.id}`;
-      if (!seen.has(k)) { merged.push(r); seen.add(k); added++; }
-    }
-    // Fill blank labels/styles, leave populated alone.
-    const oldLabels = Array.isArray(row.associated_labels) ? row.associated_labels : [];
-    const oldStyles = Array.isArray(row.styles) ? row.styles : [];
-    const newLabels = oldLabels.length ? oldLabels : (record.associated_labels ?? []);
-    const newStyles = oldStyles.length ? oldStyles : (record.styles ?? []);
-    const status = (row.enrichment_status && typeof row.enrichment_status === "object")
-      ? row.enrichment_status : {};
-    await getPool().query(
-      `UPDATE blues_artists
-         SET discogs_releases  = $1::jsonb,
-             associated_labels = $2::jsonb,
-             styles            = $3::jsonb,
-             enrichment_status = $4::jsonb,
-             updated_at        = NOW()
-       WHERE id = $5`,
-      [JSON.stringify(merged), JSON.stringify(newLabels), JSON.stringify(newStyles),
-       JSON.stringify({ ...status, discogs_seed: 1 }), row.id],
-    );
-    return { id: row.id, created: false, mergedCount: added };
-  }
-  // No existing row — fresh insert. Other fields default to blank/empty
-  // so a later Wikidata/MB/Wiki enrichment can fill them.
-  const ins = await getPool().query(
-    `INSERT INTO blues_artists
-       (discogs_id, name, discogs_releases, associated_labels, styles, enrichment_status)
-     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb)
-     RETURNING id`,
-    [
-      record.discogs_id,
-      record.name,
-      JSON.stringify(newRels),
-      JSON.stringify(record.associated_labels ?? []),
-      JSON.stringify(record.styles ?? []),
-      JSON.stringify({ discogs_seed: 1 }),
-    ],
-  );
-  return { id: ins.rows[0].id, created: true, mergedCount: newRels.length };
-}
 
-export async function insertBluesArtist(record: Record<string, any>): Promise<number> {
-  if (!record.name) throw new Error("insertBluesArtist requires name");
-  const cols: string[] = [];
-  const vals: any[] = [];
-  const ph: string[] = [];
-  for (const f of _BLUES_FIELDS) {
-    if (!(f in record)) continue;
-    cols.push(f);
-    vals.push(_coerceBluesValue(f, (record as any)[f]));
-    ph.push(`$${vals.length}`);
-  }
-  const sql = `INSERT INTO blues_artists (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`;
-  const r = await getPool().query(sql, vals);
-  return r.rows[0].id;
-}
 
-export async function updateBluesArtist(id: number, record: Record<string, any>): Promise<void> {
-  const sets: string[] = [];
-  const vals: any[] = [];
-  for (const f of _BLUES_FIELDS) {
-    if (!(f in record)) continue;
-    vals.push(_coerceBluesValue(f, (record as any)[f]));
-    sets.push(`${f} = $${vals.length}`);
-  }
-  if (!sets.length) return;
-  vals.push(new Date()); sets.push(`updated_at = $${vals.length}`);
-  vals.push(id);
-  await getPool().query(
-    `UPDATE blues_artists SET ${sets.join(", ")} WHERE id = $${vals.length}`,
-    vals,
-  );
-}
 
-export async function getBluesStats(): Promise<{ total: number; lastSeed: string | null; lastUpdate: string | null }> {
-  const r = await getPool().query(`
-    SELECT
-      count(*)::int AS total,
-      max(date_added)  AS last_seed,
-      max(updated_at)  AS last_update
-    FROM blues_artists
-  `);
-  return {
-    total: r.rows[0]?.total ?? 0,
-    lastSeed: r.rows[0]?.last_seed ?? null,
-    lastUpdate: r.rows[0]?.last_update ?? null,
-  };
-}
 
 // ── Blues Words lexicon ────────────────────────────────────────────────
 
@@ -10283,17 +9903,6 @@ export async function getLyricCount(): Promise<number> {
 // pulled in modern artists. User confirmed they haven't manually
 // added an artist in over a week, so date_added alone is a precise
 // signal for "pad-inserted" rows. Returns { removed, names } for UI.
-export async function pruneBluesArtistsRecent24h(): Promise<{ removed: number; names: string[] }> {
-  const r = await getPool().query(`
-    DELETE FROM blues_artists
-     WHERE date_added >= NOW() - INTERVAL '24 hours'
-    RETURNING name
-  `);
-  return {
-    removed: r.rowCount ?? 0,
-    names: (r.rows ?? []).slice(0, 50).map((row: any) => row.name),
-  };
-}
 
 // Bulk-insert blues_artists for every artist who appears as a primary
 // credit on at least one strictly-Blues master in release_cache whose
@@ -10301,139 +9910,11 @@ export async function pruneBluesArtistsRecent24h(): Promise<{ removed: number; n
 // enrichment_status.source = "strict_pad_pre1950" so future cleanup
 // can target them precisely. Existing rows have their seed_strict_count
 // refreshed but their other fields are untouched.
-export async function padBluesArtistsStrictPre1950(): Promise<{ scanned: number; inserted: number; refreshed: number }> {
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(`
-      CREATE TEMP TABLE _pad_pre1950 ON COMMIT DROP AS
-      SELECT (a->>'id')::int AS aid,
-             MIN(a->>'name') AS name,
-             COUNT(*)::int   AS strict_count,
-             MIN((rc.data->>'year')::int) AS first_year
-        FROM release_cache rc
-        CROSS JOIN LATERAL jsonb_array_elements(
-          COALESCE(rc.data->'artists', '[]'::jsonb)
-        ) AS a
-       WHERE rc.type = 'master'
-         AND jsonb_typeof(rc.data->'genres') = 'array'
-         AND jsonb_array_length(rc.data->'genres') = 1
-         AND rc.data->'genres' ? 'Blues'
-         AND (a->>'id') ~ '^[0-9]+$'
-         AND (a->>'id')::int > 0
-         AND (a->>'id')::int NOT IN (194, 355)
-         AND rc.data->>'year' ~ '^[0-9]+$'
-         AND (rc.data->>'year')::int > 0
-       GROUP BY (a->>'id')::int
-      HAVING MIN((rc.data->>'year')::int) <= 1950
-    `);
-    const scannedR = await client.query(`SELECT COUNT(*)::int AS n FROM _pad_pre1950`);
-    const scanned = scannedR.rows[0]?.n ?? 0;
-    if (!scanned) {
-      await client.query("COMMIT");
-      return { scanned: 0, inserted: 0, refreshed: 0 };
-    }
-    const refreshedR = await client.query(`
-      UPDATE blues_artists ba
-         SET seed_strict_count = c.strict_count,
-             updated_at        = NOW()
-        FROM _pad_pre1950 c
-       WHERE ba.discogs_id = c.aid
-    `);
-    const refreshed = refreshedR.rowCount ?? 0;
-    const insertedR = await client.query(`
-      INSERT INTO blues_artists (discogs_id, name, seed_strict_count, enrichment_status)
-      SELECT c.aid,
-             LEFT(COALESCE(NULLIF(TRIM(c.name), ''), 'Artist ' || c.aid), 200),
-             c.strict_count,
-             '{"source":"strict_pad_pre1950"}'::jsonb
-        FROM _pad_pre1950 c
-       WHERE NOT EXISTS (SELECT 1 FROM blues_artists ba WHERE ba.discogs_id = c.aid)
-      ON CONFLICT (discogs_id) DO UPDATE
-        SET seed_strict_count = EXCLUDED.seed_strict_count,
-            updated_at        = NOW()
-    `);
-    const inserted = insertedR.rowCount ?? 0;
-    await client.query("COMMIT");
-    return { scanned, inserted, refreshed };
-  } catch (err) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw err;
-  } finally {
-    client.release();
-  }
-}
 
 // Walks distinct lyrics.artist values, finds those that don't already
 // exist as a blues_artists.name (case-insensitive), and inserts each
 // as a minimal new row (name only). Returns { added, total, existing }
 // so the UI can report what happened.
-export async function importLyricsArtistsToBluesDb(
-  validate?: (name: string) => boolean,
-): Promise<{ added: number; total: number; existing: number; rejected: number }> {
-  // Distinct non-null lyric-artist names. Trim + dedupe in JS so we
-  // can match against the (lowercased) existing set in one pass.
-  const rawNamesR = await getPool().query(
-    `SELECT DISTINCT TRIM(artist) AS artist
-       FROM blues_lyrics
-      WHERE artist IS NOT NULL AND TRIM(artist) <> ''`,
-  );
-  const rawCandidates = (rawNamesR.rows as Array<{ artist: string }>)
-    .map(r => r.artist.replace(/\s+/g, " ").trim())
-    .filter(s => s.length >= 2 && s.length <= 200);
-  // Validator pass — applied at IMPORT time as well as extraction so
-  // stale bad values left in blues_lyrics.artist (from old scrapes
-  // before the validator was added) don't leak into blues_artists.
-  // Without this, "1934 version" / "alternate take" / catalog
-  // numbers etc. would still get imported as artists.
-  const candidates: string[] = [];
-  let rejected = 0;
-  for (const c of rawCandidates) {
-    if (validate && !validate(c)) { rejected++; continue; }
-    candidates.push(c);
-  }
-  const existingR = await getPool().query(`SELECT LOWER(name) AS lname FROM blues_artists`);
-  const existing = new Set((existingR.rows as Array<{ lname: string }>).map(r => r.lname));
-  // De-dupe locally + filter against the existing set so the bulk
-  // INSERT below only carries names that genuinely need adding.
-  const toAdd: string[] = [];
-  const localSeen = new Set<string>();
-  let already = 0;
-  for (const name of candidates) {
-    const key = name.toLowerCase();
-    if (existing.has(key)) { already++; continue; }
-    if (localSeen.has(key)) continue;
-    localSeen.add(key);
-    toAdd.push(name);
-  }
-  // Bulk INSERT via unnest — one round-trip regardless of size.
-  // Previous version did one INSERT per name which 60s-timed-out
-  // once the candidate set got into the low thousands.
-  let added = 0;
-  if (toAdd.length) {
-    const r = await getPool().query(
-      `INSERT INTO blues_artists (name, enrichment_status)
-       SELECT n, '{"source":"lyrics_import"}'::jsonb FROM unnest($1::text[]) AS n
-       RETURNING id`,
-      [toAdd],
-    );
-    added = r.rowCount ?? 0;
-  }
-  // Wire up the FK on any orphan lyrics whose artist string now
-  // matches a freshly-imported (or previously-existing) artist row.
-  // This is what makes the import the "merge step" — without it, the
-  // new artist rows would exist but their lyrics would still be
-  // joined only by string match.
-  await getPool().query(`
-    UPDATE blues_lyrics l
-       SET artist_id = a.id
-      FROM blues_artists a
-     WHERE l.artist_id IS NULL
-       AND l.artist IS NOT NULL
-       AND LOWER(TRIM(l.artist)) = LOWER(a.name)
-  `);
-  return { added, total: rawCandidates.length, existing: already, rejected };
-}
 
 // Paginated artist list with aggregated counts. Joins lyrics on
 // case-insensitive name match (no alias support yet — keeps the SQL
@@ -10469,127 +9950,6 @@ const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
   has_wiki:  "CASE WHEN COALESCE(a.wikipedia_suffix, '') <> '' THEN 1 ELSE 0 END",
 };
 
-export async function listBluesArchive(opts: {
-  search?: string;
-  sort?: string;
-  order?: "asc" | "desc";
-  // Optional category filter — used by the stats-strip chips.
-  //   "with_both"          → artists with lyrics AND releases
-  //   "with_lyrics_only"   → lyrics but no releases
-  //   "with_releases_only" → releases but no lyrics
-  //   "empty"              → neither
-  category?: "with_both" | "with_lyrics_only" | "with_releases_only" | "empty";
-  // When true, restrict to rows whose wikipedia_suffix is NULL or
-  // empty — surfaces artists that still need a Wikipedia link added.
-  noWiki?: boolean;
-  // When true, restrict to rows whose discogs_id is NULL — surfaces
-  // artists that still need a Discogs profile id pasted in.
-  noDiscogsId?: boolean;
-  // When true, restrict to rows whose seed_strict_count > 0 — i.e. the
-  // artist has at least one cached MASTER in release_cache with
-  // genres = ['Blues'] exactly.
-  hasStrict?: boolean;
-  // When true, restrict to rows whose seed_strict_count = 0 — surfaces
-  // artists with no strict-Blues master in the cache (curation queue
-  // for "this row is missing genre evidence").
-  noStrict?: boolean;
-  limit?: number;
-  offset?: number;
-} = {}): Promise<{ rows: Array<any>; total: number }> {
-  const params: any[] = [];
-  const where: string[] = [];
-  if (opts.search) {
-    // Pure-digit input matches Discogs ID exactly. Free-text matches
-    // BOTH the name (fast index on lower(name)) and the notes column
-    // (linear scan, but ~1k row table — fine). A 4-digit input also
-    // ILIKE's name + notes so a numeric fragment like "1923" finds
-    // "...died 1923..." in a bio.
-    const raw = opts.search.trim();
-    params.push(`%${raw}%`);
-    const likePh = `$${params.length}`;
-    const nameOrNotes = `(a.name ILIKE ${likePh} OR a.notes ILIKE ${likePh})`;
-    if (/^\d+$/.test(raw)) {
-      params.push(parseInt(raw, 10));
-      where.push(`(${nameOrNotes} OR a.discogs_id = $${params.length})`);
-    } else {
-      where.push(nameOrNotes);
-    }
-  }
-  // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
-  // combo. Built as a correlated EXISTS so the index on
-  // blues_lyrics.artist_id stays useful; the lyrics-by-name fallback
-  // covers legacy rows whose artist_id hasn't been backfilled yet.
-  if (opts.category) {
-    const HAS_LYRICS = `EXISTS (
-      SELECT 1 FROM blues_lyrics l
-       WHERE l.artist_id = a.id
-          OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(a.name))
-    )`;
-    const HAS_RELEASES = `COALESCE(jsonb_array_length(a.discogs_releases), 0) > 0`;
-    if      (opts.category === "with_both")          where.push(`${HAS_LYRICS} AND ${HAS_RELEASES}`);
-    else if (opts.category === "with_lyrics_only")   where.push(`${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
-    else if (opts.category === "with_releases_only") where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
-    else if (opts.category === "empty")              where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
-  }
-  if (opts.noWiki) {
-    where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
-  }
-  if (opts.noDiscogsId) {
-    where.push(`a.discogs_id IS NULL`);
-  }
-  if (opts.hasStrict) {
-    where.push(`a.seed_strict_count > 0`);
-  }
-  if (opts.noStrict) {
-    where.push(`COALESCE(a.seed_strict_count, 0) = 0`);
-  }
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
-  const offset = Math.max(0, opts.offset ?? 0);
-  // Whitelist sort column + direction. Secondary sort by name keeps
-  // ordering stable within ties (e.g. two artists with same lyrics
-  // count). NULLS LAST on numeric/id columns so empty discogs_id
-  // rows fall to the bottom instead of crowding the top.
-  const sortCol = _BLUES_ARCHIVE_SORT_COLS[String(opts.sort ?? "")] || "a.name";
-  const order   = opts.order === "desc" ? "DESC" : "ASC";
-  const orderSql = sortCol === "a.name"
-    ? `ORDER BY a.name ${order}`
-    : `ORDER BY ${sortCol} ${order} NULLS LAST, a.name ASC`;
-  const totalR = await getPool().query(
-    `SELECT COUNT(*)::int AS n FROM blues_artists a ${whereSql}`,
-    params,
-  );
-  const total = totalR.rows[0]?.n ?? 0;
-  params.push(limit, offset);
-  const r = await getPool().query(
-    `SELECT a.id,
-            a.name,
-            a.birth_date,
-            a.death_date,
-            a.photo_url,
-            a.discogs_id,
-            a.wikipedia_suffix,
-            COALESCE(a.seed_strict_count, 0) AS seed_strict_count,
-            COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
-            -- lyrics_count: prefer FK count (canonical) but fall back
-            -- to the legacy name-match count for any unmigrated rows
-            -- so the number doesn't read 0 before backfill completes.
-            (SELECT COUNT(*)::int FROM blues_lyrics l
-              WHERE l.artist_id = a.id
-                 OR (l.artist_id IS NULL
-                     AND LOWER(TRIM(l.artist)) = LOWER(a.name))) AS lyrics_count,
-            -- first_release_year: smaller of MB first_recording_year
-            -- and MIN(discogs_releases[*].year). Drives the new "Year"
-            -- column + its sort key.
-            ${_BLUES_ARCHIVE_SORT_COLS.first_release_year} AS first_release_year
-       FROM blues_artists a
-       ${whereSql}
-       ${orderSql}
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
-  return { rows: r.rows, total };
-}
 
 // ── Blues Archive: flat releases list ─────────────────────────────────
 // Unnests every blues_artists.discogs_releases JSONB array into a flat
@@ -10605,176 +9965,11 @@ const _BLUES_REL_SORT_COLS: Record<string, string> = {
   type:         "lower(coalesce(rel->>'type',''))",
   role:         "lower(coalesce(rel->>'role',''))",
 };
-export async function listBluesArchiveReleases(opts: {
-  search?: string;
-  artist?: string;
-  year?: number | null;
-  type?: string;
-  role?: string;
-  sort?: string;
-  order?: "asc" | "desc";
-  limit?: number;
-  offset?: number;
-} = {}): Promise<{ rows: any[]; total: number }> {
-  const params: any[] = [];
-  const where: string[] = [];
-  if (opts.search?.trim()) {
-    const q = opts.search.trim();
-    params.push(`%${q}%`);
-    // Match title, artist name — and if the query is a bare 4-digit
-    // year, also match release year. Keeps the existing dedicated
-    // Year input useful (exact int) while letting the curator type
-    // '1928' into the main search and find what they expect.
-    if (/^\d{4}$/.test(q)) {
-      params.push(parseInt(q, 10));
-      where.push(`(rel->>'title' ILIKE $${params.length - 1} OR a.name ILIKE $${params.length - 1} OR NULLIF(rel->>'year','')::int = $${params.length})`);
-    } else {
-      where.push(`(rel->>'title' ILIKE $${params.length} OR a.name ILIKE $${params.length})`);
-    }
-  }
-  if (opts.artist?.trim()) {
-    params.push(`%${opts.artist.trim()}%`);
-    where.push(`a.name ILIKE $${params.length}`);
-  }
-  if (opts.year != null && Number.isFinite(opts.year)) {
-    params.push(opts.year);
-    where.push(`NULLIF(rel->>'year','')::int = $${params.length}`);
-  }
-  if (opts.type?.trim()) {
-    params.push(opts.type.trim().toLowerCase());
-    where.push(`LOWER(COALESCE(rel->>'type','')) = $${params.length}`);
-  }
-  if (opts.role?.trim()) {
-    params.push(opts.role.trim().toLowerCase());
-    where.push(`LOWER(COALESCE(rel->>'role','')) = $${params.length}`);
-  }
-  // Drop rows whose JSONB entry doesn't have a usable id — they can't
-  // be linked out to discogs.com so they're effectively noise.
-  where.push(`(rel ? 'id') AND (rel->>'id') ~ '^[0-9]+$'`);
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
-  const offset = Math.max(0, opts.offset ?? 0);
-  const sortCol = _BLUES_REL_SORT_COLS[String(opts.sort ?? "")] || _BLUES_REL_SORT_COLS.year;
-  const order   = opts.order === "asc" ? "ASC" : "DESC";
-  // Tie-break by artist then title so identical sort keys stay stable.
-  const orderSql = `ORDER BY ${sortCol} ${order} NULLS LAST, lower(a.name) ASC, lower(coalesce(rel->>'title','')) ASC`;
-  // Count query stays narrow (no release_cache join needed). The
-  // data query LEFT JOINs release_cache so each row can carry a
-  // small cover thumb when one is cached; rows without a cached
-  // release just come back with cover_thumb=null and the UI shows
-  // a placeholder.
-  const fromCountSql = `FROM blues_artists a, jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel`;
-  const fromDataSql  = `
-    FROM blues_artists a
-    CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel
-    LEFT JOIN release_cache rc
-      ON rc.discogs_id = NULLIF(rel->>'id','')::int
-     AND rc.type       = COALESCE(NULLIF(rel->>'type',''), 'release')
-  `;
-  const totalR = await getPool().query(`SELECT COUNT(*)::int AS n ${fromCountSql} ${whereSql}`, params);
-  const total = totalR.rows[0]?.n ?? 0;
-  params.push(limit, offset);
-  const r = await getPool().query(
-    `SELECT a.id   AS artist_id,
-            a.name AS artist_name,
-            a.photo_url,
-            a.discogs_id AS artist_discogs_id,
-            (rel->>'id')::bigint                    AS release_id,
-            COALESCE(rel->>'type', 'release')       AS release_type,
-            COALESCE(rel->>'title','')              AS release_title,
-            NULLIF(rel->>'year','')::int            AS release_year,
-            rel->'label'                            AS release_label,
-            rel->>'role'                            AS role,
-            COALESCE(
-              rc.data->'images'->0->>'thumb',
-              rc.data->'images'->0->>'uri150',
-              rc.data->'images'->0->>'uri'
-            )                                       AS cover_thumb
-       ${fromDataSql}
-       ${whereSql}
-       ${orderSql}
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
-  return { rows: r.rows, total };
-}
 
 // Full artist record + matched lyrics + releases sorted oldest→newest.
 // Lyrics match by artist_id (canonical FK) OR — for legacy rows not
 // yet backfilled — by case-insensitive name. The name fallback keeps
 // the artist popup useful even before the import button has been run.
-export async function getBluesArchiveArtist(id: number): Promise<any | null> {
-  const ar = await getPool().query(`SELECT * FROM blues_artists WHERE id = $1`, [id]);
-  if (!ar.rows.length) return null;
-  const a = ar.rows[0];
-  const lr = await getPool().query(
-    `SELECT id, page_title, page_url, tuning, scraped_at, updated_at,
-            artist_id, discogs_release_id, discogs_master_id,
-            first_release_year, first_release_source,
-            substring(plaintext, 1, 240) AS snippet
-       FROM blues_lyrics
-      WHERE artist_id = $1
-         OR (artist_id IS NULL AND LOWER(TRIM(artist)) = LOWER($2))
-      ORDER BY page_title ASC`,
-    [id, a.name],
-  );
-  // Tuning breakdown — per-artist counts, descending. Powers the
-  // little chip strip above the lyrics table on the artist popup.
-  const tr = await getPool().query(
-    `SELECT COALESCE(NULLIF(tuning, ''), '(unspecified)') AS tuning,
-            COUNT(*)::int AS n
-       FROM blues_lyrics
-      WHERE artist_id = $1
-         OR (artist_id IS NULL AND LOWER(TRIM(artist)) = LOWER($2))
-      GROUP BY 1
-      ORDER BY n DESC, tuning ASC`,
-    [id, a.name],
-  );
-  // Static tunings grid (from src/data/tunings.csv) for this artist.
-  // Match by case-insensitive trimmed name. Annotate each CSV row with
-  // the matching blues_lyrics row id (if any) so the popup can flag
-  // "this CSV title isn't in our lyrics table yet" — useful curation
-  // signal: either the lyric wasn't scraped, or it's filed under a
-  // slightly different page_title that needs reconciling.
-  const gr = await getPool().query(
-    `SELECT g.id, g.title, g.position, g.pitch, g.notes,
-            (SELECT l.id FROM blues_lyrics l
-              WHERE (l.artist_id = $1
-                     OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER($2)))
-                AND LOWER(TRIM(l.page_title)) = LOWER(TRIM(g.title))
-              LIMIT 1) AS lyric_id
-       FROM blues_tunings_grid g
-      WHERE LOWER(TRIM(g.artist)) = LOWER(TRIM($2))
-      ORDER BY g.title ASC, g.id ASC`,
-    [id, a.name],
-  );
-  // Sort the JSONB releases array oldest→newest (NULL years last).
-  const releases = Array.isArray(a.discogs_releases) ? a.discogs_releases.slice() : [];
-  releases.sort((x: any, y: any) => {
-    const xy = Number(x?.year) || 9999;
-    const yy = Number(y?.year) || 9999;
-    if (xy !== yy) return xy - yy;
-    return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
-  });
-  // Linked artists — symmetric junction. Either lo_id or hi_id can
-  // be us; the other side is the linked row. Returns name + photo +
-  // discogs_id so the popup can render a clickable chip with art.
-  const lk = await getPool().query(
-    `SELECT
-        CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END AS id,
-        l.kind,
-        b.name,
-        b.photo_url,
-        b.discogs_id
-       FROM blues_artist_links l
-       JOIN blues_artists b
-         ON b.id = CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END
-      WHERE l.lo_id = $1 OR l.hi_id = $1
-      ORDER BY l.kind ASC, lower(b.name) ASC`,
-    [id],
-  );
-  return { ...a, lyrics: lr.rows, tunings: tr.rows, gridTunings: gr.rows, releases, links: lk.rows };
-}
 
 // ── blues_artist_links helpers ─────────────────────────────────────
 // Symmetric (lo,hi) storage — we normalise the pair before write so
@@ -10795,237 +9990,17 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
 // Excludes the target row itself and any rows already linked to it.
 // `matched` is a string[] of source labels so the panel can show WHY
 // each row surfaced.
-export async function findBluesArtistReferences(
-  id: number,
-): Promise<Array<{ id: number; name: string; matched: string[] }>> {
-  const target = await getPool().query<{ name: string; collaborators: any }>(
-    `SELECT name, collaborators FROM blues_artists WHERE id = $1`,
-    [id],
-  );
-  if (!target.rows.length) return [];
-  const name = (target.rows[0].name || "").trim();
-  if (!name) return [];
-  const n = name.toLowerCase();
-  // Derive the two name-set parameters for sources 4 and 5.
-  //   sharedBandNames: every band/group name this row recorded a
-  //     collaborator entry for. Used to find OTHER rows that share
-  //     one of those band names → likely bandmates.
-  //   memberNames: every person this row's Discogs record listed as a
-  //     member (kind='member'). Used when THIS row is a group: those
-  //     are its line-up, surface any that exist as blues_artists rows.
-  const collabs = Array.isArray(target.rows[0].collaborators) ? target.rows[0].collaborators : [];
-  const sharedBandNames: string[] = [];
-  const memberNames: string[] = [];
-  for (const c of collabs) {
-    if (typeof c === "string") {
-      // Plain-string collaborators are ambiguous (could be a person OR
-      // a band). Treat them as potential bands for source 4 — the
-      // curator can ignore false matches. They don't drive source 5
-      // because there's no member/group distinction.
-      sharedBandNames.push(c);
-    } else if (c && typeof c === "object") {
-      const cn = String(c.name || "").trim();
-      if (!cn) continue;
-      if (c.kind === "group") sharedBandNames.push(cn);
-      else if (c.kind === "member") memberNames.push(cn);
-      else sharedBandNames.push(cn);
-    }
-  }
-  const sharedBandsLc = [...new Set(sharedBandNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
-  const membersLc    = [...new Set(memberNames.map(s => s.trim().toLowerCase()).filter(Boolean))];
-
-  const r = await getPool().query<{
-    id: number; name: string;
-    in_aliases: boolean; in_collabs: boolean; in_notes: boolean;
-    shared_bands: string[] | null;
-    is_band: string | null;
-    via_member: boolean;
-  }>(
-    `WITH t AS (SELECT $2::text AS n),
-          shared_bands AS (SELECT unnest($3::text[]) AS bn),
-          members AS (SELECT unnest($4::text[]) AS mn)
-     SELECT
-       a.id, a.name,
-       EXISTS (
-         SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
-         WHERE lower(trim(v)) = (SELECT n FROM t)
-       ) AS in_aliases,
-       EXISTS (
-         SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
-         WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
-       ) AS in_collabs,
-       (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0) AS in_notes,
-       -- Shared band names this row has in common with the target.
-       -- Aggregated into an array so the UI can show "shared band: X, Y".
-       (
-         SELECT array_agg(DISTINCT sb.bn)
-           FROM shared_bands sb
-          WHERE EXISTS (
-            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
-             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
-          )
-       ) AS shared_bands,
-       -- This row IS one of the bands the target lists in collaborators.
-       -- (Tampa Red has "Hokum Boys" in collaborators; this row's name
-       -- is "Hokum Boys" → surface so user can link as band.)
-       (
-         SELECT sb.bn FROM shared_bands sb
-          WHERE lower(trim(a.name)) = sb.bn
-          LIMIT 1
-       ) AS is_band,
-       -- This row matches a Discogs 'member' name on the target (the
-       -- target is a group; this row is one of its members).
-       EXISTS (
-         SELECT 1 FROM members m
-          WHERE lower(trim(a.name)) = m.mn
-       ) AS via_member
-       FROM blues_artists a
-      WHERE a.id <> $1
-        AND NOT EXISTS (
-          SELECT 1 FROM blues_artist_links l
-           WHERE (l.lo_id = $1 AND l.hi_id = a.id)
-              OR (l.lo_id = a.id AND l.hi_id = $1)
-        )
-        AND (
-          EXISTS (
-            SELECT 1 FROM jsonb_array_elements_text(coalesce(a.aliases, '[]'::jsonb)) v
-            WHERE lower(trim(v)) = (SELECT n FROM t)
-          )
-          OR EXISTS (
-            SELECT 1 FROM jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v
-            WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = (SELECT n FROM t)
-          )
-          OR (a.notes IS NOT NULL AND position(lower($2) in lower(a.notes)) > 0)
-          OR EXISTS (
-            SELECT 1
-              FROM shared_bands sb
-              JOIN jsonb_array_elements(coalesce(a.collaborators, '[]'::jsonb)) v ON true
-             WHERE lower(trim(coalesce(v->>'name', v#>>'{}', ''))) = sb.bn
-          )
-          OR EXISTS (
-            SELECT 1 FROM shared_bands sb WHERE lower(trim(a.name)) = sb.bn
-          )
-          OR EXISTS (
-            SELECT 1 FROM members m WHERE lower(trim(a.name)) = m.mn
-          )
-        )
-      ORDER BY lower(a.name) ASC
-      LIMIT 100`,
-    [id, n, sharedBandsLc, membersLc],
-  );
-  return r.rows.map(row => {
-    const matched: string[] = [];
-    if (row.in_aliases) matched.push("aliases");
-    if (row.in_collabs) matched.push("collaborators");
-    if (row.in_notes)   matched.push("notes");
-    if (row.shared_bands && row.shared_bands.length) {
-      // Keep the band names short — first 2 + ellipsis if more.
-      const list = row.shared_bands.slice(0, 2).join(", ");
-      const more = row.shared_bands.length > 2 ? ` (+${row.shared_bands.length - 2})` : "";
-      matched.push(`shared band: ${list}${more}`);
-    }
-    if (row.is_band) matched.push(`is the band "${row.is_band}"`);
-    if (row.via_member) matched.push("Discogs member");
-    return { id: row.id, name: row.name, matched };
-  });
-}
 
 export type BluesArtistLinkKind =
   | "pseudonym" | "band" | "spouse" | "traveled" | "mentor" | "family";
-export const BLUES_ARTIST_LINK_KINDS: ReadonlyArray<BluesArtistLinkKind> = [
-  "pseudonym", "band", "spouse", "traveled", "mentor", "family",
-];
-export async function addBluesArtistLink(
-  aId: number,
-  bId: number,
-  kind: BluesArtistLinkKind,
-): Promise<void> {
-  if (!Number.isFinite(aId) || !Number.isFinite(bId) || aId === bId) {
-    throw new Error("Invalid artist ids");
-  }
-  if (!BLUES_ARTIST_LINK_KINDS.includes(kind)) {
-    throw new Error("Invalid kind");
-  }
-  const lo = Math.min(aId, bId);
-  const hi = Math.max(aId, bId);
-  // PK is (lo, hi, kind) so multiple kinds per pair coexist (Family +
-  // Band, etc). ON CONFLICT DO NOTHING makes this idempotent — clicking
-  // Band twice on the same pair is a no-op rather than an error.
-  await getPool().query(
-    `INSERT INTO blues_artist_links (lo_id, hi_id, kind)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (lo_id, hi_id, kind) DO NOTHING`,
-    [lo, hi, kind],
-  );
-}
 
 // Snapshot of the entire connection graph for the Connections viz.
 // Nodes carry just the bits the client needs to draw (id, name, photo)
 // and a `degree` field so the viz can size nodes by connectedness.
 // Isolated artists (zero links) are excluded — they'd add noise to the
 // graph without informing any relationship.
-export async function listBluesConnectionsGraph(): Promise<{
-  nodes: Array<{ id: number; name: string; photo_url: string | null; degree: number }>;
-  edges: Array<{ lo_id: number; hi_id: number; kind: BluesArtistLinkKind }>;
-}> {
-  const er = await getPool().query<{ lo_id: number; hi_id: number; kind: BluesArtistLinkKind }>(
-    `SELECT lo_id, hi_id, kind FROM blues_artist_links ORDER BY lo_id, hi_id`,
-  );
-  const edges = er.rows;
-  if (!edges.length) return { nodes: [], edges: [] };
-  const ids = new Set<number>();
-  for (const e of edges) { ids.add(e.lo_id); ids.add(e.hi_id); }
-  const nr = await getPool().query<{ id: number; name: string; photo_url: string | null; degree: number }>(
-    `SELECT a.id, a.name, a.photo_url,
-            (SELECT COUNT(*)::int FROM blues_artist_links l
-              WHERE l.lo_id = a.id OR l.hi_id = a.id) AS degree
-       FROM blues_artists a
-      WHERE a.id = ANY($1::int[])
-      ORDER BY lower(a.name) ASC`,
-    [[...ids]],
-  );
-  return { nodes: nr.rows, edges };
-}
 
-export async function removeBluesArtistLink(
-  aId: number, bId: number, kind?: string,
-): Promise<void> {
-  if (!Number.isFinite(aId) || !Number.isFinite(bId)) return;
-  const lo = Math.min(aId, bId);
-  const hi = Math.max(aId, bId);
-  if (kind) {
-    // Scoped delete — pulls just one of multiple kinds on the same pair.
-    // Caller's responsibility to ensure `kind` is a valid value; the
-    // CHECK constraint on the table catches anything else.
-    await getPool().query(
-      `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2 AND kind = $3`,
-      [lo, hi, kind],
-    );
-  } else {
-    // No kind → wipe every link between the pair.
-    await getPool().query(
-      `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`,
-      [lo, hi],
-    );
-  }
-}
 
-export async function listBluesArtistLinks(aId: number): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT
-        CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END AS id,
-        l.kind,
-        b.name,
-        b.discogs_id
-       FROM blues_artist_links l
-       JOIN blues_artists b
-         ON b.id = CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END
-      WHERE l.lo_id = $1 OR l.hi_id = $1
-      ORDER BY l.kind ASC, lower(b.name) ASC`,
-    [aId],
-  );
-  return r.rows;
-}
 
 // ── Genre cache-warm cron state helpers ──────────────────────────
 // Per-genre rows; every helper takes a genre_key. The scheduler picks
@@ -12627,80 +11602,6 @@ export async function listLyricIdsMatching(opts: {
 //     "Get all info from Discogs" afterward to re-enrich
 // Wrapped in a transaction so a mid-merge crash doesn't leave the
 // DB in a half-merged state.
-export async function mergeBluesArtists(fromId: number, intoId: number): Promise<{
-  ok: boolean;
-  fromName: string;
-  intoName: string;
-  lyricsReassigned: number;
-  releasesAdded: number;
-}> {
-  if (fromId === intoId) throw new Error("source and target are the same row");
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const fr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [fromId]);
-    const tr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [intoId]);
-    if (!fr.rows.length || !tr.rows.length) {
-      await client.query("ROLLBACK");
-      throw new Error("one of the artists doesn't exist");
-    }
-    const from = fr.rows[0];
-    const into = tr.rows[0];
-    // Reassign lyrics. Two-pass: first update by canonical FK (the
-    // common case once backfill has run), then mop up any unmigrated
-    // legacy rows that only join by name. Both passes also update the
-    // display `artist` string so the UI shows the target's name on
-    // every affected row even when a lyric was previously joined only
-    // by string.
-    const lr1 = await client.query(
-      `UPDATE blues_lyrics
-          SET artist_id = $1, artist = $2
-        WHERE artist_id = $3`,
-      [into.id, into.name, from.id],
-    );
-    const lr2 = await client.query(
-      `UPDATE blues_lyrics
-          SET artist_id = $1, artist = $2
-        WHERE artist_id IS NULL
-          AND LOWER(TRIM(artist)) = LOWER($3)`,
-      [into.id, into.name, from.name],
-    );
-    const lyricsReassigned = (lr1.rowCount ?? 0) + (lr2.rowCount ?? 0);
-    // Merge discogs_releases JSONB. Dedupe by id+type.
-    const fromRels = Array.isArray(from.discogs_releases) ? from.discogs_releases : [];
-    const intoRels = Array.isArray(into.discogs_releases) ? into.discogs_releases : [];
-    const seen = new Set(intoRels.map((r: any) => `${r?.type ?? "release"}:${r?.id}`));
-    let releasesAdded = 0;
-    for (const r of fromRels) {
-      const key = `${r?.type ?? "release"}:${r?.id}`;
-      if (seen.has(key)) continue;
-      intoRels.push(r);
-      seen.add(key);
-      releasesAdded++;
-    }
-    if (releasesAdded) {
-      await client.query(
-        `UPDATE blues_artists SET discogs_releases = $1::jsonb WHERE id = $2`,
-        [JSON.stringify(intoRels), intoId],
-      );
-    }
-    // Drop the source row.
-    await client.query(`DELETE FROM blues_artists WHERE id = $1`, [fromId]);
-    await client.query("COMMIT");
-    return {
-      ok: true,
-      fromName: from.name,
-      intoName: into.name,
-      lyricsReassigned,
-      releasesAdded,
-    };
-  } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 // ── Blues Archive aggregate helpers (admin) ──────────────────────────
 
@@ -12764,109 +11665,11 @@ export async function getRecentBluesEdits(limit: number = 20): Promise<Array<any
 // LOWER(TRIM(artist)) for unmigrated rows). Both can be passed
 // together — the union is reassigned. Single transaction so partial
 // failures don't half-rewrite.
-export async function reassignLyrics(opts: {
-  fromArtistId?: number | null;
-  fromArtistName?: string | null;
-  toArtistId: number;
-}): Promise<{ ok: boolean; toName: string; reassigned: number }> {
-  const toId = Number(opts.toArtistId);
-  if (!Number.isFinite(toId)) throw new Error("toArtistId required");
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const tr = await client.query(`SELECT id, name FROM blues_artists WHERE id = $1 FOR UPDATE`, [toId]);
-    if (!tr.rows.length) {
-      await client.query("ROLLBACK");
-      throw new Error("target artist not found");
-    }
-    const to = tr.rows[0];
-    let reassigned = 0;
-    if (opts.fromArtistId != null) {
-      const r = await client.query(
-        `UPDATE blues_lyrics SET artist_id = $1, artist = $2 WHERE artist_id = $3`,
-        [to.id, to.name, Number(opts.fromArtistId)],
-      );
-      reassigned += r.rowCount ?? 0;
-    }
-    if (opts.fromArtistName) {
-      const r = await client.query(
-        `UPDATE blues_lyrics SET artist_id = $1, artist = $2
-          WHERE LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($3))
-            AND (artist_id IS NULL OR artist_id <> $1)`,
-        [to.id, to.name, opts.fromArtistName],
-      );
-      reassigned += r.rowCount ?? 0;
-    }
-    await client.query("COMMIT");
-    return { ok: true, toName: to.name, reassigned };
-  } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 // Promote an orphan lyric (no artist_id) to a brand-new blues_artists
 // row using its current `artist` string as the name. Also retro-links
 // every other orphan lyric with the same name so a single click
 // rescues the whole batch. Transaction.
-export async function promoteOrphanLyricToArtist(lyricId: number): Promise<{
-  ok: boolean;
-  artistId: number;
-  artistName: string;
-  lyricsLinked: number;
-}> {
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const lr = await client.query(
-      `SELECT id, artist FROM blues_lyrics WHERE id = $1 FOR UPDATE`,
-      [lyricId],
-    );
-    if (!lr.rows.length) {
-      await client.query("ROLLBACK");
-      throw new Error("lyric not found");
-    }
-    const name = String(lr.rows[0].artist || "").trim();
-    if (!name) {
-      await client.query("ROLLBACK");
-      throw new Error("lyric has no artist name to promote");
-    }
-    // If a row already exists with this name (case-insensitive), reuse
-    // it instead of creating a duplicate.
-    let artistId: number;
-    const existR = await client.query(
-      `SELECT id FROM blues_artists WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-      [name],
-    );
-    if (existR.rows.length) {
-      artistId = existR.rows[0].id;
-    } else {
-      const insR = await client.query(
-        `INSERT INTO blues_artists (name, enrichment_status)
-         VALUES ($1, '{"source":"promote_from_orphan_lyric"}'::jsonb)
-         RETURNING id`,
-        [name],
-      );
-      artistId = insR.rows[0].id;
-    }
-    const upR = await client.query(
-      `UPDATE blues_lyrics
-          SET artist_id = $1, artist = $2
-        WHERE artist_id IS NULL
-          AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER($3)`,
-      [artistId, name, name],
-    );
-    await client.query("COMMIT");
-    return { ok: true, artistId, artistName: name, lyricsLinked: upR.rowCount ?? 0 };
-  } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 // ── Ad-hoc read-only query runner (admin Query tab) ──────────────────
 // Runs an arbitrary caller-supplied SELECT against the DB with hard
@@ -12956,106 +11759,9 @@ export async function getQueryableSchema(): Promise<Record<string, Array<{ colum
 // orphans), then drop the artist rows. withLyrics=false leaves lyrics
 // in place (their artist_id nulls out via ON DELETE SET NULL) — matches
 // the single-delete endpoint's default.
-export async function bulkDeleteBluesArtists(
-  ids: number[],
-  opts: { withLyrics?: boolean } = {},
-): Promise<{ deleted: number; lyricsDeleted: number }> {
-  const clean = Array.from(new Set(
-    (ids || []).map(n => Number(n)).filter(n => Number.isFinite(n) && n > 0),
-  ));
-  if (!clean.length) return { deleted: 0, lyricsDeleted: 0 };
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    let lyricsDeleted = 0;
-    if (opts.withLyrics) {
-      // Grab the names up front so the legacy name-match orphan sweep
-      // still works after the artist rows are gone.
-      const namesR = await client.query(
-        `SELECT name FROM blues_artists WHERE id = ANY($1::int[])`, [clean],
-      );
-      const names = namesR.rows
-        .map((r: any) => String(r.name || "").trim().toLowerCase())
-        .filter(Boolean);
-      const r1 = await client.query(
-        `DELETE FROM blues_lyrics WHERE artist_id = ANY($1::int[])`, [clean],
-      );
-      lyricsDeleted += r1.rowCount ?? 0;
-      if (names.length) {
-        const r2 = await client.query(
-          `DELETE FROM blues_lyrics
-            WHERE artist_id IS NULL
-              AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($1::text[])`,
-          [names],
-        );
-        lyricsDeleted += r2.rowCount ?? 0;
-      }
-    }
-    const rd = await client.query(
-      `DELETE FROM blues_artists WHERE id = ANY($1::int[])`, [clean],
-    );
-    await client.query("COMMIT");
-    return { deleted: rd.rowCount ?? 0, lyricsDeleted };
-  } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 // Every blues_artists id matching the same filters the Blues Archive
 // list endpoint uses. Powers "Select all matching" on the bulk-delete
 // bar so a filtered set can be actioned beyond the current page. Capped
 // at 10k; `capped` signals the caller that matches beyond the cap exist.
 // WHERE clauses mirror listBluesArchive — keep the two in sync.
-export async function listBluesArtistIdsMatching(opts: {
-  search?: string;
-  category?: "with_both" | "with_lyrics_only" | "with_releases_only" | "empty";
-  noWiki?: boolean;
-  noDiscogsId?: boolean;
-  hasStrict?: boolean;
-  noStrict?: boolean;
-  limit?: number;
-} = {}): Promise<{ ids: number[]; capped: boolean }> {
-  const cap = Math.max(1, Math.min(10_000, Math.trunc(opts.limit ?? 10_000)));
-  const params: any[] = [];
-  const where: string[] = [];
-  if (opts.search) {
-    const raw = opts.search.trim();
-    params.push(`%${raw}%`);
-    const likePh = `$${params.length}`;
-    const nameOrNotes = `(a.name ILIKE ${likePh} OR a.notes ILIKE ${likePh})`;
-    if (/^\d+$/.test(raw)) {
-      params.push(parseInt(raw, 10));
-      where.push(`(${nameOrNotes} OR a.discogs_id = $${params.length})`);
-    } else {
-      where.push(nameOrNotes);
-    }
-  }
-  if (opts.category) {
-    const HAS_LYRICS = `EXISTS (
-      SELECT 1 FROM blues_lyrics l
-       WHERE l.artist_id = a.id
-          OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(a.name))
-    )`;
-    const HAS_RELEASES = `COALESCE(jsonb_array_length(a.discogs_releases), 0) > 0`;
-    if      (opts.category === "with_both")          where.push(`${HAS_LYRICS} AND ${HAS_RELEASES}`);
-    else if (opts.category === "with_lyrics_only")   where.push(`${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
-    else if (opts.category === "with_releases_only") where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
-    else if (opts.category === "empty")              where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
-  }
-  if (opts.noWiki)      where.push(`(a.wikipedia_suffix IS NULL OR a.wikipedia_suffix = '')`);
-  if (opts.noDiscogsId) where.push(`a.discogs_id IS NULL`);
-  if (opts.hasStrict)   where.push(`a.seed_strict_count > 0`);
-  if (opts.noStrict)    where.push(`COALESCE(a.seed_strict_count, 0) = 0`);
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  params.push(cap + 1);
-  const r = await getPool().query(
-    `SELECT a.id FROM blues_artists a ${whereSql} ORDER BY a.id LIMIT $${params.length}`,
-    params,
-  );
-  const all = r.rows.map((x: any) => Number(x.id));
-  const capped = all.length > cap;
-  return { ids: capped ? all.slice(0, cap) : all, capped };
-}
