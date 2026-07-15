@@ -237,6 +237,21 @@ function _ytFormatRelativeTime(iso) {
 }
 window._ytFormatRelativeTime = _ytFormatRelativeTime;
 
+// A year filled by the year-backfill carries a data._year_backfilled_from
+// provenance marker. Turn it into a human-friendly tooltip so estimated
+// years can be flagged on hover without changing the (numeric) value.
+// Returns "" for real Discogs years so callers can add the title only
+// when there's something to say.
+function sdEstYearTitle(from) {
+  if (!from) return "";
+  const s = String(from);
+  if (s.startsWith("external:"))      return "Estimated year — filled by SeaDisco from an external discography by catalog number";
+  if (s.startsWith("release_cache:")) return "Estimated year — inferred from another Discogs pressing with the same catalog number";
+  if (s.startsWith("aggregate"))      return "Estimated year — earliest known year across this master's versions";
+  return "Estimated year — filled by SeaDisco";
+}
+window.sdEstYearTitle = sdEstYearTitle;
+
 // Hover enrichment for any YT-submission affordance carrying
 // data-yt-q="<query>". On first hover, fire one /api/youtube/search-meta
 // lookup (no quota cost \u2014 pure cache read) and update the title

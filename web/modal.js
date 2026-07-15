@@ -4810,7 +4810,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
-    year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
+    year    ? (() => {
+      const estTitle = (typeof sdEstYearTitle === "function") ? sdEstYearTitle(d && d._year_backfilled_from) : "";
+      const est = estTitle ? ` title="${escHtml(estTitle)}" style="cursor:help"` : "";
+      return `<span class="detail-label">Year</span><span${est}>${escHtml(String(year))}</span>`;
+    })() : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
     seriesLinks ? `<span class="detail-label">Series</span><span>${seriesLinks}</span>` : "",
     companyRows,
