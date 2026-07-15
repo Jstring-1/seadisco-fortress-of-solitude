@@ -70,7 +70,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=260715.3f825fa6" />
+  <link rel="stylesheet" href="/style.css?v=260715.69edcab5" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -108,7 +108,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=260715.3f825fa6"></script>
+<script defer src="/shared.js?v=260715.69edcab5"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -768,10 +768,6 @@ e.g.  miles davis | coltrane
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only artist browser (lyrics + releases)" style="display:none">Blues Archive</span>
-    <!-- Labels tab — admin-only chronological browse of cached
-         releases grouped by record label (release_cache only). -->
-    <span id="extras-tab-labels-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-labels" class="rr-tab rr-tab-restricted" onclick="switchView('labels')" title="Labels — chronological browse of cached label catalogs (admin only)" style="display:none">Labels</span>
     <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
@@ -1011,22 +1007,6 @@ e.g.  miles davis | coltrane
      containers (loc-view, gutenberg-view, chronam-view) before the
      footer — when it was below the footer the footer rendered above
      the archive content. -->
-<!-- Labels view: admin-only chronological browse of the release
-     cache, grouped by record label. Loaded lazily by
-     switchView('labels'). Source is release_cache only. -->
-<div id="labels-view" class="content-narrow" style="display:none">
-  <div style="margin:0.6rem 0 0.5rem">
-    <div style="font-size:1.15rem;font-weight:600">Labels</div>
-    <div style="color:var(--muted);font-size:0.82rem;margin-top:0.15rem">Browse cached releases grouped by record label, sorted chronologically by year then catalog number.</div>
-  </div>
-  <!-- Sticky controls bar — label picker + year range + type +
-       in-range pagination. Renders the year-jump strip below. -->
-  <div id="labels-controls" style="position:sticky;top:0;background:var(--bg);z-index:5;padding:0.4rem 0;border-bottom:1px solid var(--border);margin-bottom:0.6rem"></div>
-  <div id="labels-year-anchors" style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-bottom:0.6rem;font-size:0.78rem"></div>
-  <div id="labels-results"><div class="loc-empty">Pick a label to start.</div></div>
-  <div id="labels-pagination" style="display:flex;gap:0.5rem;justify-content:center;margin:1rem 0 2rem"></div>
-</div>
-
 <!-- Admin view (admin-only). Empty shell — the dashboard markup is
      fetched on demand from the requireAdmin-gated /admin-panel.html
      fragment and admin.js is lazy-loaded the first time the view
@@ -1890,13 +1870,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=260715.3f825fa6"></script>
-<script defer src="/search.js?v=260715.3f825fa6"></script>
-<script defer src="/collection.js?v=260715.3f825fa6"></script>
+<script defer src="/utils.js?v=260715.69edcab5"></script>
+<script defer src="/search.js?v=260715.69edcab5"></script>
+<script defer src="/collection.js?v=260715.69edcab5"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=260715.3f825fa6"></script>
-<script defer src="/app.js?v=260715.3f825fa6"></script>
+<script defer src="/modal.js?v=260715.69edcab5"></script>
+<script defer src="/app.js?v=260715.69edcab5"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1907,13 +1887,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=260715.3f825fa6"></script>
-<script defer src="/queue.js?v=260715.3f825fa6"></script>
+<script defer src="/loc.js?v=260715.69edcab5"></script>
+<script defer src="/queue.js?v=260715.69edcab5"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "260715.3f825fa6";
+  window._SD_LAZY_VERSION = "260715.69edcab5";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1943,8 +1923,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=260715.3f825fa6"></script>
-<script defer src="/offline.js?v=260715.3f825fa6"></script>
+<script defer src="/idb.js?v=260715.69edcab5"></script>
+<script defer src="/offline.js?v=260715.69edcab5"></script>
 
 </body>
 </html>

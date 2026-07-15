@@ -1762,7 +1762,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260715.3f825fa6";
+  const SITE_VERSION = "build 260715.69edcab5";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1900,7 +1900,6 @@ function renderSharedFooter(opts) {
     dig:         "Long-tail vinyl that nobody on SeaDisco has opened yet",
     // Extras tabs (admin / demo)
     "blues-archive": "Blues Archive — admin-only artist browser (lyrics + releases)",
-    labels:        "Labels — chronological browse of cached label catalogs",
   };
   // data-sd-view marks the link for the live href-sync system below.
   // `idAttr` is used for admin-only gated links so the post-/api/me
@@ -1975,7 +1974,6 @@ function renderSharedFooter(opts) {
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
         <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
         <a id="footer-blues-archive-link" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Blues Archive</a>
-        <a id="footer-labels-link" href="${_seaDiscoBuildViewHref("labels")}" data-sd-view="labels" title="${escHtml(HINTS.labels)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('labels');return false"` : ""}>Labels</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -2164,11 +2162,6 @@ function renderSharedFooter(opts) {
       if (window._isAdmin) {
         const baA = document.getElementById("footer-blues-archive-link");
         if (baA) baA.style.display = "";
-      }
-      // Labels — admin-only carousel of cached label catalogs.
-      if (window._isAdmin) {
-        const lbA = document.getElementById("footer-labels-link");
-        if (lbA) lbA.style.display = "";
       }
       if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the
