@@ -237,21 +237,6 @@ function _ytFormatRelativeTime(iso) {
 }
 window._ytFormatRelativeTime = _ytFormatRelativeTime;
 
-// A year filled by the year-backfill carries a data._year_backfilled_from
-// provenance marker. Turn it into a human-friendly tooltip so estimated
-// years can be flagged on hover without changing the (numeric) value.
-// Returns "" for real Discogs years so callers can add the title only
-// when there's something to say.
-function sdEstYearTitle(from) {
-  if (!from) return "";
-  const s = String(from);
-  if (s.startsWith("external:"))      return "Estimated year — filled by SeaDisco from an external discography by catalog number";
-  if (s.startsWith("release_cache:")) return "Estimated year — inferred from another Discogs pressing with the same catalog number";
-  if (s.startsWith("aggregate"))      return "Estimated year — earliest known year across this master's versions";
-  return "Estimated year — filled by SeaDisco";
-}
-window.sdEstYearTitle = sdEstYearTitle;
-
 // Hover enrichment for any YT-submission affordance carrying
 // data-yt-q="<query>". On first hover, fire one /api/youtube/search-meta
 // lookup (no quota cost \u2014 pure cache read) and update the title
@@ -981,17 +966,6 @@ function _sdInjectEnrichmentIntoCards(row) {
           line.classList.toggle("is-expanded");
         });
         meta.insertAdjacentElement("afterend", line);
-      }
-    }
-    // Estimated-year tooltip: wrap the leading year in the meta line
-    // when this row was year-backfilled. Numeric text is preserved so
-    // list-mode's year scraper still reads it.
-    if (row.year_estimated_from) {
-      const meta = card.querySelector(".card-meta");
-      const estT = (typeof sdEstYearTitle === "function") ? sdEstYearTitle(row.year_estimated_from) : "";
-      if (meta && estT && !meta.querySelector("[data-est-year]")) {
-        meta.innerHTML = meta.innerHTML.replace(/^(\s*)((?:18|19|20)\d{2})\b/,
-          (m, sp, yr) => `${sp}<span data-est-year title="${escAttr(estT)}" style="cursor:help">${yr}</span>`);
       }
     }
     if (images.length > 1) {
@@ -1788,7 +1762,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260715.e5a0c735";
+  const SITE_VERSION = "build 260715.2ce07e6a";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
