@@ -284,9 +284,11 @@ function initBluesArchiveView() {
   if (detail) detail.style.display = "none";
   const list = document.querySelector("#blues-archive-view .blues-archive-list");
   if (list) list.style.display = "";
-  _baLoadList();
-  // Stats strip — fire non-blocking. Recent-edits feed removed from
-  // the UI (the BE endpoint stays for future re-enablement).
+  // Artists / Releases / Connections were removed — Lyrics is the
+  // default landing tab now.
+  if (typeof _baSwitchSubtab === "function") _baSwitchSubtab("lyrics");
+  else if (typeof _baLoadLyrics === "function") _baLoadLyrics();
+  // Stats strip — fire non-blocking.
   _baLoadStats().catch(() => {});
   // Warm the favorites cache so the star renders correct on the first
   // lyric viewer open. Non-blocking; default empty Set if it fails.
@@ -4330,9 +4332,7 @@ window._baExportTuningsCsv = _baExportTuningsCsv;
 // keys present in `filters` get appended as query params, so endpoints
 // that don't yet recognise a key just ignore it.
 const _BA_EXPORT_FORMATS = {
-  artists:  ["csv", "pdf"],
   lyrics:   ["csv", "pdf", "doc"],
-  releases: ["csv"],
   tunings:  ["csv"],
 };
 function _baExportInit() {
@@ -4353,7 +4353,6 @@ function _baExportOnSourceChange() {
   // the others. Containers that don't exist (e.g. releases / tunings)
   // simply have no filter UI.
   document.getElementById("ba-export-filters-lyrics").style.display  = src === "lyrics"  ? "flex" : "none";
-  document.getElementById("ba-export-filters-artists").style.display = src === "artists" ? "flex" : "none";
 }
 window._baExportOnSourceChange = _baExportOnSourceChange;
 
