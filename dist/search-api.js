@@ -10018,7 +10018,7 @@ app.post("/api/admin/cache-analytics", express.json({ limit: "8kb" }), async (re
         country: trim(b.country),
         yearFrom: num(b.yearFrom),
         yearTo: num(b.yearTo),
-        type: b.type === "release" || b.type === "master" ? b.type : undefined,
+        type: b.type === "release" || b.type === "master" || b.type === "masters_plus" ? b.type : undefined,
     };
     // ?reader=v1|v2 override for side-by-side compare during Phase 2.
     const rawReader = String(req.query.reader ?? "").toLowerCase();

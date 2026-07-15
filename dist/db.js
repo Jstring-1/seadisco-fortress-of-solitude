@@ -10405,7 +10405,11 @@ async function _computeCacheAnalyticsV1(f) {
     if (Number.isFinite(f.yearTo)) {
         where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 9999) <= ${push(f.yearTo)}`);
     }
-    if (f.type === "release" || f.type === "master") {
+    if (f.type === "masters_plus") {
+        // masters + orphan releases (release rows that have no master_id)
+        where.push(`(rc.type = 'master' OR (rc.type = 'release' AND NULLIF(rc.data->>'master_id','') IS NULL))`);
+    }
+    else if (f.type === "release" || f.type === "master") {
         where.push(`rc.type = ${push(f.type)}`);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -10541,7 +10545,11 @@ async function _computeCacheAnalyticsV2(f) {
     if (Number.isFinite(f.yearTo)) {
         where.push(`COALESCE(ca.year, 9999)::int <= ${push(f.yearTo)}`);
     }
-    if (f.type === "release" || f.type === "master") {
+    if (f.type === "masters_plus") {
+        // buckets 0 (master) + 1 (orphan release) = the masters_plus table
+        where.push(`ca.bucket IN (0, 1)`);
+    }
+    else if (f.type === "release" || f.type === "master") {
         where.push(`ca.type = ${push(f.type)}`);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";

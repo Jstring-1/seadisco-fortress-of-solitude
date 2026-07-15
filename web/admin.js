@@ -2342,6 +2342,7 @@ function _renderCacheAnalytics() {
           <option value=""${f.type === "" ? " selected" : ""}>Both</option>
           <option value="release"${f.type === "release" ? " selected" : ""}>Release</option>
           <option value="master"${f.type === "master" ? " selected" : ""}>Master</option>
+          <option value="masters_plus"${f.type === "masters_plus" ? " selected" : ""}>Masters+ (masters + orphans)</option>
         </select>
       </label>
     </div>
