@@ -237,7 +237,11 @@
                 </select>
                 <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
                 <button class="admin-btn" type="button" onclick="rcxDumpSplit()"
-                        title="Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file, one row per line, with a __table field. Ignores the filters — this is a full DB dump.">📦 Dump whole split cache</button>
+                        title="Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file, one row per line, with a __table field. Ignores the filters — this is a full split-cache dump.">📦 Dump split cache (V2)</button>
+                <button class="admin-btn" type="button" onclick="rcxDumpV1()"
+                        title="Stream every row of the old single-table release_cache (V1) as NDJSON — straight SELECT *, all columns. Ignores the filters.">📦 Dump release_cache (V1)</button>
+                <button class="admin-btn" type="button" onclick="rcxDumpAll()"
+                        title="Stream EVERY base table in the database as one NDJSON file, each row tagged with __table. The true whole-DB export. Large — this is everything.">🗄 Dump whole DB</button>
                 <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every row matching these filters — from release_cache AND the split schema tables when Source=V2. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
                 <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>

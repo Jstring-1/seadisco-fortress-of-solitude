@@ -2247,6 +2247,7 @@ async function _cacheProjectionForceClear() {
 let _cacheAnalyticsFilters = { label:"", artist:"", genre:"", style:"", country:"", yearFrom:"", yearTo:"", type:"" };
 let _cacheAnalyticsResult = null;
 let _cacheAnalyticsLoading = false;
+let _cacheAnalyticsReader = "";  // "" = auto (follows split-cache flag), "v1", "v2"
 
 function loadCacheAnalytics() {
   // Just render the form on first tab open — running the query is
@@ -2344,9 +2345,18 @@ function _renderCacheAnalytics() {
         </select>
       </label>
     </div>
-    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem">
+    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center;flex-wrap:wrap">
       <button class="admin-btn" type="button" onclick="_caRun()" ${_cacheAnalyticsLoading ? "disabled" : ""}>▶ Analyze</button>
       <button class="admin-btn" type="button" onclick="_caReset()">Reset</button>
+      <label style="font-size:0.75rem;color:var(--muted);display:inline-flex;gap:0.3rem;align-items:center"
+             title="Which cache to read. Auto follows the split-cache readers flag. If Auto returns nothing, try V1 (release_cache) — empty V2 results mean the split projection hasn't populated those tables.">Source
+        <select id="ca-reader" onchange="_caReaderChange(event)"
+                style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+          <option value=""${_cacheAnalyticsReader === "" ? " selected" : ""}>Auto</option>
+          <option value="v1"${_cacheAnalyticsReader === "v1" ? " selected" : ""}>release_cache (V1)</option>
+          <option value="v2"${_cacheAnalyticsReader === "v2" ? " selected" : ""}>Split cache (V2)</option>
+        </select>
+      </label>
     </div>
     ${resultsHtml}
   `;
@@ -2372,6 +2382,11 @@ function _caReset() {
   _cacheAnalyticsResult = null;
   _renderCacheAnalytics();
 }
+function _caReaderChange(ev) {
+  const v = ev.target.value;
+  _cacheAnalyticsReader = (v === "v1" || v === "v2") ? v : "";
+}
+window._caReaderChange = _caReaderChange;
 async function _caRun() {
   _cacheAnalyticsLoading = true;
   _renderCacheAnalytics();
@@ -2379,11 +2394,15 @@ async function _caRun() {
     const body = { ...(_cacheAnalyticsFilters) };
     // Blank strings should not be sent as filter values.
     for (const k of Object.keys(body)) if (body[k] === "") delete body[k];
-    const r = await apiFetch("/api/admin/cache-analytics", {
+    const qs = _cacheAnalyticsReader ? `?reader=${_cacheAnalyticsReader}` : "";
+    const r = await apiFetch(`/api/admin/cache-analytics${qs}`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error ? `HTTP ${r.status}: ${j.error}` : `HTTP ${r.status}`);
+    }
     _cacheAnalyticsResult = await r.json();
   } catch (err) {
     alert(`Analyze failed: ${err}`);
@@ -2893,6 +2912,28 @@ async function rcxDumpSplit() {
   setTimeout(() => link.remove(), 0);
 }
 window.rcxDumpSplit = rcxDumpSplit;
+
+async function rcxDumpV1() {
+  if (!confirm("Stream every row of the old single-table release_cache (V1) as NDJSON — straight SELECT *, all columns?\n\nFilters are ignored. Uncompressed — expect gigabytes at millions of rows.")) return;
+  const link = document.createElement("a");
+  link.href = "/api/admin/release-cache/dump-v1";
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
+}
+window.rcxDumpV1 = rcxDumpV1;
+
+async function rcxDumpAll() {
+  if (!confirm("Dump the ENTIRE database — every base table, all columns — as one NDJSON file (each row tagged __table)?\n\nThis is everything, including lyrics, words, artists, logs. Uncompressed and potentially very large.")) return;
+  const link = document.createElement("a");
+  link.href = "/api/admin/db/dump-all";
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
+}
+window.rcxDumpAll = rcxDumpAll;
 
 // ── Labels multi-select picker ────────────────────────────────────
 window._rcxSelectedLabels = window._rcxSelectedLabels || new Set();

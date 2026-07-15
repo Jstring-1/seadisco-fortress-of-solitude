@@ -9843,6 +9843,114 @@ app.get("/api/admin/release-cache/dump-split", async (req, res) => {
   }
 });
 
+// ── Whole release_cache (V1) dump ──────────────────────────────────
+// Streams every row of the old single-table cache as NDJSON. Unlike
+// the filtered ?out=ndjson export (which only emits discogs_id/type/
+// cached_at/data), this is a straight SELECT * so any future columns
+// on release_cache come along too. Keyset-paged on (discogs_id, type)
+// so memory stays flat regardless of table size.
+app.get("/api/admin/release-cache/dump-v1", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const CHUNK = 5000;
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="seadisco-release-cache-full-${date}.ndjson"`);
+  let written = 0;
+  try {
+    let lastId: number | null = null;
+    let lastType: string | null = null;
+    while (true) {
+      const args: any[] = [CHUNK];
+      let where = "";
+      if (lastId != null) {
+        args.push(lastId, lastType);
+        where = `WHERE (discogs_id, type) > ($2, $3)`;
+      }
+      const q = `SELECT * FROM release_cache ${where}
+                 ORDER BY discogs_id ASC, type ASC LIMIT $1`;
+      const r = await getPool().query(q, args);
+      if (!r.rows.length) break;
+      for (const row of r.rows) {
+        const clean: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          clean[k] = v instanceof Date ? v.toISOString() : v;
+        }
+        res.write(JSON.stringify(clean) + "\n");
+        written++;
+      }
+      const last = r.rows[r.rows.length - 1] as any;
+      lastId = last.discogs_id;
+      lastType = last.type;
+      if (r.rows.length < CHUNK) break;
+    }
+    res.end();
+    console.log(`[release-cache dump-v1] streamed ${written} rows`);
+  } catch (err: any) {
+    console.error("[release-cache dump-v1]", err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
+    else res.end();
+  }
+});
+
+// ── Whole-DB dump ──────────────────────────────────────────────────
+// Streams EVERY base table in the public schema as NDJSON, one row
+// per line, each tagged with __table. Table list is discovered at
+// request time from information_schema, so new tables are covered
+// automatically. Each table is keyset-paged on ctid (cheap, needs no
+// known primary key) so server memory stays flat even on the biggest
+// tables. This is the true "entire database" export.
+app.get("/api/admin/db/dump-all", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const CHUNK = 5000;
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="seadisco-db-full-${date}.ndjson"`);
+  let written = 0;
+  const dumpTable = async (table: string): Promise<void> => {
+    let lastCtid: string | null = null;
+    while (true) {
+      const args: any[] = [CHUNK];
+      let where = "";
+      if (lastCtid != null) {
+        args.push(lastCtid);
+        where = `WHERE ctid > $2::tid`;
+      }
+      // Identifier is from information_schema (our own catalog), not
+      // user input — safe to interpolate. Quote it defensively.
+      const q = `SELECT ctid, * FROM "${table}" ${where} ORDER BY ctid ASC LIMIT $1`;
+      const r = await getPool().query(q, args);
+      if (!r.rows.length) return;
+      for (const row of r.rows) {
+        const clean: any = { __table: table };
+        for (const [k, v] of Object.entries(row)) {
+          if (k === "ctid") continue;
+          clean[k] = v instanceof Date ? v.toISOString() : v;
+        }
+        res.write(JSON.stringify(clean) + "\n");
+        written++;
+      }
+      lastCtid = (r.rows[r.rows.length - 1] as any).ctid;
+      if (r.rows.length < CHUNK) return;
+    }
+  };
+  try {
+    const tablesQ = await getPool().query(
+      `SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name`,
+    );
+    for (const t of tablesQ.rows) {
+      await dumpTable(String(t.table_name));
+    }
+    res.end();
+    console.log(`[db dump-all] streamed ${written} rows across ${tablesQ.rows.length} tables`);
+  } catch (err: any) {
+    console.error("[db dump-all]", err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
+    else res.end();
+  }
+});
+
 // ── Artist cache JSON / NDJSON exports (CSV + PDF already exist) ─────
 function _buildBluesArtistsWhere(q: any): { sql: string; args: any[] } {
   const where: string[] = [];

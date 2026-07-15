@@ -12917,8 +12917,11 @@ async function _computeCacheAnalyticsV2(f: CacheAnalyticsFilters): Promise<Cache
 // Every change is logged to year_backfill_log keyed by batch_id so
 // rollbackYearBackfillBatch() can reverse a whole pass.
 
-const _YEAR_BACKFILL_DONOR_CTE = `
-  WITH donors_raw AS (
+// donors_raw + donors, without a leading WITH so it can be embedded in
+// either phase's CTE chain. Keyed on (LOWER(label_name), catno_sort);
+// external rows outrank cache siblings, earliest year wins ties.
+const _YEAR_BACKFILL_DONORS_BODY = `
+  donors_raw AS (
     -- External (research) donors
     SELECT
       LOWER(label_name) AS label_name,
@@ -12953,7 +12956,10 @@ const _YEAR_BACKFILL_DONOR_CTE = `
     FROM donors_raw
     WHERE label_name IS NOT NULL AND catno_sort IS NOT NULL
     ORDER BY label_name, catno_sort, priority ASC, year ASC
-  ),
+  )`;
+
+const _YEAR_BACKFILL_DONOR_CTE = `
+  WITH ${_YEAR_BACKFILL_DONORS_BODY},
   target_label_pairs AS (
     SELECT
       rc.discogs_id,
@@ -12984,6 +12990,41 @@ const _YEAR_BACKFILL_DONOR_CTE = `
   )
 `;
 
+// Phase 2 donor pool for masters. For every year-less master, gather
+// candidate years from BOTH its cached versions' own years AND the
+// external-inclusive donor pool matched by each version's (label,
+// catno). Taking MIN over the union means a master gets a year even
+// when its cached versions are themselves year-less, as long as an
+// external_discography row covers one of their pressings — the gap
+// the old versions-only aggregate missed. Exposes master_years
+// (master_id, new_year) for both preview and apply.
+const _YEAR_BACKFILL_PHASE2_CTE = `
+  WITH ${_YEAR_BACKFILL_DONORS_BODY},
+  version_years AS (
+    SELECT m.discogs_id                                                  AS master_id,
+           NULLIF(v.data->>'year','')::int                              AS version_year,
+           LOWER(lbl->>'name')                                          AS label_name,
+           NULLIF((REGEXP_MATCH(COALESCE(lbl->>'catno',''), '(\\d+)'))[1],'')::numeric AS catno_sort
+      FROM release_cache m
+      JOIN release_cache v
+        ON v.type = 'release'
+       AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) = m.discogs_id
+      LEFT JOIN LATERAL jsonb_array_elements(COALESCE(v.data->'labels','[]'::jsonb)) lbl ON TRUE
+     WHERE m.type = 'master'
+       AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
+  ),
+  master_years AS (
+    SELECT vy.master_id, MIN(cand.y)::int AS new_year
+      FROM version_years vy
+      LEFT JOIN donors d
+        ON d.label_name = vy.label_name
+       AND d.catno_sort = vy.catno_sort
+      CROSS JOIN LATERAL (VALUES (NULLIF(vy.version_year, 0)), (d.year)) AS cand(y)
+     WHERE cand.y IS NOT NULL AND cand.y > 0
+     GROUP BY vy.master_id
+  )
+`;
+
 export interface YearBackfillPreview {
   phase1Release: number;
   phase2Master:  number;
@@ -13008,18 +13049,12 @@ export async function previewYearBackfill(): Promise<YearBackfillPreview> {
      SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref
        FROM matches ORDER BY new_year ASC, discogs_id ASC LIMIT 20`,
   );
-  // Phase 2 estimate: masters with no year whose versions DO have years.
+  // Phase 2 estimate: year-less masters that gain a year from either a
+  // cached version's year OR an external donor matched via a version's
+  // (label, catno).
   const phase2Q = await getPool().query(
-    `SELECT COUNT(*)::int AS n
-       FROM release_cache m
-      WHERE m.type = 'master'
-        AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
-        AND EXISTS (
-          SELECT 1 FROM release_cache v
-           WHERE v.type = 'release'
-             AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) = m.discogs_id
-             AND NULLIF(v.data->>'year','')::int > 0
-        )`,
+    `${_YEAR_BACKFILL_PHASE2_CTE}
+     SELECT COUNT(*)::int AS n FROM master_years WHERE new_year IS NOT NULL`,
   );
   return {
     phase1Release: Number(totalQ.rows[0]?.n ?? 0),
@@ -13123,25 +13158,16 @@ export async function applyYearBackfill(): Promise<YearBackfillApplyResult> {
     }
 
     // Phase 2 — bulk. Same shape: log + UPDATE against the log.
-    // Master row's year = MIN of its known-year versions in cache.
+    // Master year = MIN over its cached versions' years AND external
+    // donors matched by those versions' (label, catno).
     const phase2LogQ = await client.query(
-      `INSERT INTO year_backfill_log
+      `${_YEAR_BACKFILL_PHASE2_CTE}
+       INSERT INTO year_backfill_log
          (batch_id, discogs_id, type, old_year, new_year, donor_ref, donor_source)
-       SELECT $1::uuid, m.discogs_id, 'master', NULL, agg.new_year,
-              'aggregate:versions', 'aggregate:versions'
-         FROM release_cache m
-         JOIN (
-           SELECT COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) AS master_id,
-                  MIN(NULLIF(v.data->>'year','')::int) AS new_year
-             FROM release_cache v
-            WHERE v.type = 'release'
-              AND NULLIF(v.data->>'year','')::int > 0
-              AND COALESCE(NULLIF(v.data->>'master_id','')::bigint, 0) > 0
-            GROUP BY 1
-         ) agg ON agg.master_id = m.discogs_id
-        WHERE m.type = 'master'
-          AND COALESCE(NULLIF(m.data->>'year','')::int, 0) = 0
-          AND agg.new_year IS NOT NULL
+       SELECT $1::uuid, my.master_id, 'master', NULL, my.new_year,
+              'aggregate:versions+external', 'aggregate:versions+external'
+         FROM master_years my
+        WHERE my.new_year IS NOT NULL
        ON CONFLICT (batch_id, discogs_id, type) DO NOTHING`,
       [batchId],
     );
@@ -13152,7 +13178,7 @@ export async function applyYearBackfill(): Promise<YearBackfillApplyResult> {
         `UPDATE release_cache rc
             SET data = jsonb_set(
                          jsonb_set(rc.data, '{year}', to_jsonb(l.new_year::int)),
-                         '{_year_backfilled_from}', to_jsonb('aggregate:versions'::text)
+                         '{_year_backfilled_from}', to_jsonb(l.donor_ref::text)
                        )
            FROM year_backfill_log l
           WHERE l.batch_id = $1::uuid
@@ -13170,7 +13196,7 @@ export async function applyYearBackfill(): Promise<YearBackfillApplyResult> {
             SET year = l.new_year::smallint,
                 data = jsonb_set(
                          jsonb_set(mp.data, '{year}', to_jsonb(l.new_year::int)),
-                         '{_year_backfilled_from}', to_jsonb('aggregate:versions'::text)
+                         '{_year_backfilled_from}', to_jsonb(l.donor_ref::text)
                        )
            FROM year_backfill_log l
           WHERE l.batch_id = $1::uuid
