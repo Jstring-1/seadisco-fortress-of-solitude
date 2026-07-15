@@ -116,7 +116,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadYearBackfill(); _ybfResumeApplyIfRunning(); loadCacheAnalytics(); loadCacheProjection(); },
+    load: () => { loadCacheWarm(); loadYearBackfill(); _ybfResumePreviewIfRunning(); _ybfResumeApplyIfRunning(); loadCacheAnalytics(); loadCacheProjection(); },
   },
   'labels': {
     panels: ['panel-labels'],
@@ -2531,19 +2531,43 @@ async function _errText(r) {
 }
 async function _ybfPreviewRun() {
   if (_ybfPreviewLoading) return;
-  _ybfPreviewLoading = true;
-  await loadYearBackfill();   // paint the disabled "⏳ Running…" state
   try {
+    // 202 = started, 409 = one already in flight. Then poll for the result.
     const r = await apiFetch("/api/admin/year-backfill/preview", { method: "POST" });
-    if (!r.ok) { alert(`Preview failed: ${await _errText(r)}`); return; }
-    _ybfPreview = await r.json();
-  } catch (err) {
-    alert(String(err));
-  } finally {
-    _ybfPreviewLoading = false;
-    loadYearBackfill();
-  }
+    if (r.status === 409) {
+      // fall through to polling the in-flight job
+    } else if (!r.ok) {
+      alert(`Preview failed: ${await _errText(r)}`); return;
+    }
+    _ybfPreviewLoading = true;
+    await loadYearBackfill();   // paint the disabled "⏳ Running…" state
+    _ybfPollPreviewStatus();
+  } catch (err) { alert(String(err)); }
 }
+async function _ybfPollPreviewStatus() {
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/preview/status");
+    if (!r.ok) { _ybfPreviewLoading = false; loadYearBackfill(); return; }
+    const j = await r.json();
+    if (j.running) { setTimeout(_ybfPollPreviewStatus, 2500); return; }
+    _ybfPreviewLoading = false;
+    if (j.error) alert(`Preview failed: ${j.error}`);
+    else if (j.result) _ybfPreview = j.result;
+    loadYearBackfill();
+  } catch { _ybfPreviewLoading = false; loadYearBackfill(); }
+}
+// Resume polling if a preview is still running server-side (page reload
+// or tab reopen mid-scan).
+async function _ybfResumePreviewIfRunning() {
+  if (_ybfPreviewLoading) return;
+  try {
+    const r = await apiFetch("/api/admin/year-backfill/preview/status");
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.running) { _ybfPreviewLoading = true; loadYearBackfill(); _ybfPollPreviewStatus(); }
+  } catch {}
+}
+window._ybfResumePreviewIfRunning = _ybfResumePreviewIfRunning;
 function _ybfClearPreview() { _ybfPreview = null; loadYearBackfill(); }
 let _ybfApplyRunning = false;
 async function _ybfApply() {

@@ -10030,17 +10030,32 @@ app.post("/api/admin/cache-analytics", express.json({ limit: "8kb" }), async (re
 // and Discogs cache siblings donate years to release_cache rows that
 // have none. Every change is logged in year_backfill_log keyed by
 // batch_id so a whole pass can be rolled back if a source is wrong.
+// Preview scans the whole cache (same as apply) so it also runs as a
+// background job: POST kicks it off + returns immediately, the UI polls
+// /preview/status. Prevents the edge proxy from 502-ing on a long scan.
+let _ybfPreviewJob = { running: false, startedAt: null, finishedAt: null, result: null, error: null };
 app.post("/api/admin/year-backfill/preview", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
-    try {
-        const r = await previewYearBackfill();
-        res.json(r);
+    if (_ybfPreviewJob.running) {
+        res.status(409).json({ error: "already_running", job: _ybfPreviewJob });
+        return;
     }
-    catch (err) {
+    _ybfPreviewJob = { running: true, startedAt: new Date().toISOString(), finishedAt: null, result: null, error: null };
+    res.status(202).json({ started: true, startedAt: _ybfPreviewJob.startedAt });
+    previewYearBackfill()
+        .then((r) => {
+        _ybfPreviewJob = { running: false, startedAt: _ybfPreviewJob.startedAt, finishedAt: new Date().toISOString(), result: r, error: null };
+    })
+        .catch((err) => {
+        _ybfPreviewJob = { running: false, startedAt: _ybfPreviewJob.startedAt, finishedAt: new Date().toISOString(), result: null, error: err?.message ?? String(err) };
         console.error("[year-backfill/preview]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
+    });
+});
+app.get("/api/admin/year-backfill/preview/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(_ybfPreviewJob);
 });
 // Apply runs a whole-cache scan that can take minutes, so it runs as a
 // background job: POST kicks it off and returns immediately, the UI

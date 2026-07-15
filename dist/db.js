@@ -10428,36 +10428,68 @@ const _YEAR_BACKFILL_PHASE2_CTE = `
   )
 `;
 export async function previewYearBackfill() {
-    const phase1Q = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
-     SELECT donor_source, COUNT(*)::int AS n FROM matches GROUP BY donor_source ORDER BY n DESC`);
-    const totalQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
-     SELECT COUNT(*)::int AS n FROM matches`);
-    const sampleQ = await getPool().query(`${_YEAR_BACKFILL_DONOR_CTE}
-     SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref,
-            donor_catno, donor_artist, donor_title
-       FROM matches ORDER BY new_year ASC, discogs_id ASC LIMIT 20`);
-    // Phase 2 estimate: year-less masters that gain a year from either a
-    // cached version's year OR an external donor matched via a version's
-    // (label, catno).
-    const phase2Q = await getPool().query(`${_YEAR_BACKFILL_PHASE2_CTE}
-     SELECT COUNT(*)::int AS n FROM master_years WHERE new_year IS NOT NULL`);
-    return {
-        phase1Release: Number(totalQ.rows[0]?.n ?? 0),
-        phase2Master: Number(phase2Q.rows[0]?.n ?? 0),
-        bySource: phase1Q.rows.map(r => ({ donor_source: String(r.donor_source), n: Number(r.n) })),
-        sample: sampleQ.rows.map(r => ({
-            discogs_id: Number(r.discogs_id),
-            type: String(r.type),
-            new_year: Number(r.new_year),
-            label_name: String(r.label_name ?? ""),
-            catno: String(r.catno ?? ""),
-            donor_source: String(r.donor_source),
-            donor_ref: String(r.donor_ref),
-            donor_catno: String(r.donor_catno ?? ""),
-            donor_artist: String(r.donor_artist ?? ""),
-            donor_title: String(r.donor_title ?? ""),
-        })),
-    };
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN READ ONLY");
+        // Same whole-cache scan as apply; lift the per-statement timeout so
+        // Postgres doesn't abort it. SET LOCAL reverts on commit.
+        await client.query("SET LOCAL statement_timeout = '900000'");
+        // Phase 1 in ONE scan. matches is materialised once (m); count /
+        // bySource / sample all read the materialised result instead of
+        // re-running the donor CTE three times (the old shape that timed
+        // out the HTTP request on a large cache).
+        const phase1Q = await client.query(`${_YEAR_BACKFILL_DONOR_CTE},
+       m AS MATERIALIZED (SELECT * FROM matches),
+       by_src AS (SELECT donor_source, COUNT(*)::int AS n FROM m GROUP BY donor_source),
+       samp AS (
+         SELECT discogs_id, type, new_year, label_name, catno, donor_source, donor_ref,
+                donor_catno, donor_artist, donor_title
+           FROM m ORDER BY new_year ASC, discogs_id ASC LIMIT 20
+       )
+       SELECT jsonb_build_object(
+         'total',    (SELECT COUNT(*)::int FROM m),
+         'bySource', COALESCE((SELECT jsonb_agg(jsonb_build_object('donor_source', donor_source, 'n', n) ORDER BY n DESC) FROM by_src), '[]'::jsonb),
+         'sample',   COALESCE((SELECT jsonb_agg(jsonb_build_object(
+             'discogs_id', discogs_id, 'type', type, 'new_year', new_year,
+             'label_name', label_name, 'catno', catno, 'donor_source', donor_source,
+             'donor_ref', donor_ref, 'donor_catno', donor_catno,
+             'donor_artist', donor_artist, 'donor_title', donor_title)) FROM samp), '[]'::jsonb)
+       ) AS payload`);
+        // Phase 2 estimate: year-less masters that gain a year from either a
+        // cached version's year OR an external donor matched via a version's
+        // (label, catno).
+        const phase2Q = await client.query(`${_YEAR_BACKFILL_PHASE2_CTE}
+       SELECT COUNT(*)::int AS n FROM master_years WHERE new_year IS NOT NULL`);
+        await client.query("COMMIT");
+        const payload = phase1Q.rows[0]?.payload ?? {};
+        return {
+            phase1Release: Number(payload.total ?? 0),
+            phase2Master: Number(phase2Q.rows[0]?.n ?? 0),
+            bySource: (payload.bySource ?? []).map((r) => ({ donor_source: String(r.donor_source), n: Number(r.n) })),
+            sample: (payload.sample ?? []).map((r) => ({
+                discogs_id: Number(r.discogs_id),
+                type: String(r.type),
+                new_year: Number(r.new_year),
+                label_name: String(r.label_name ?? ""),
+                catno: String(r.catno ?? ""),
+                donor_source: String(r.donor_source),
+                donor_ref: String(r.donor_ref),
+                donor_catno: String(r.donor_catno ?? ""),
+                donor_artist: String(r.donor_artist ?? ""),
+                donor_title: String(r.donor_title ?? ""),
+            })),
+        };
+    }
+    catch (err) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw err;
+    }
+    finally {
+        client.release();
+    }
 }
 export async function applyYearBackfill() {
     const client = await getPool().connect();
