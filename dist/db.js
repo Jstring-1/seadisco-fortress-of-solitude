@@ -1576,99 +1576,10 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS discogs_artist_cache_cached_at_idx ON discogs_artist_cache (cached_at DESC)`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS all_blues_links (
-      src_id     INTEGER NOT NULL,
-      dst_id     INTEGER NOT NULL,
-      kind       TEXT    NOT NULL DEFAULT 'mention',
-      excerpt    TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (src_id, dst_id, kind),
-      CHECK (src_id <> dst_id),
-      CHECK (kind IN ('family', 'spouse', 'mentor', 'band', 'alias', 'mention'))
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_links_dst_idx ON all_blues_links (dst_id)`);
-    // release_ids: which release/master IDs surfaced this edge (release-
-    // notes phase only — profile-prose mentions have no associated release
-    // and stay as empty arrays). Each insert appends + dedupes so an edge
-    // accumulates every blues release where the pair was credited together.
-    await getPool().query(`ALTER TABLE all_blues_links ADD COLUMN IF NOT EXISTS release_ids INT[] NOT NULL DEFAULT '{}'`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS all_blues_artist_queue (
-      discogs_id INTEGER PRIMARY KEY,
-      status     TEXT NOT NULL DEFAULT 'pending',
-      added_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      fetched_at TIMESTAMPTZ,
-      error      TEXT
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_status_idx ON all_blues_artist_queue (status)`);
-    // seed_year: earliest year of a Blues-genre release in release_cache
-    // that referenced this artist as a primary. Drives the worker's
-    // oldest-first ordering and acts as a "this is a real blues seed"
-    // flag — mention-follow targets without a seed_year are excluded
-    // from the graph so the network stays inside the blues universe.
-    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS seed_year INT`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS all_blues_artist_queue_seed_year_idx ON all_blues_artist_queue (seed_year)`);
-    // name: harvested at collect time from release_cache.data.artists[]
-    // so the graph has labels the moment the worker finishes collect,
-    // without waiting for the rate-limited Discogs profile fetch phase.
-    // Overwritten by the actual fetched profile name on conflict — until
-    // then this is what the public network view shows.
-    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS name TEXT`);
-    // Cached graph positions: admin runs fcose once in the browser,
-    // posts the resulting x/y per node back, and everyone gets a
-    // "preset" layout next load = instant. New seeds added by later
-    // worker runs get NULL positions and trigger an fcose re-fit only
-    // on demand (admin button); public viewers always use whatever's
-    // cached, falling back to (0,0) for unpositioned nodes.
-    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_x DOUBLE PRECISION`);
-    await getPool().query(`ALTER TABLE all_blues_artist_queue ADD COLUMN IF NOT EXISTS pos_y DOUBLE PRECISION`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS all_blues_warm_state (
-      id              INT PRIMARY KEY DEFAULT 1,
-      running         BOOLEAN NOT NULL DEFAULT false,
-      phase           TEXT NOT NULL DEFAULT 'idle',
-      from_year       INT NOT NULL DEFAULT 1900,
-      to_year         INT NOT NULL DEFAULT 1970,
-      started_at      TIMESTAMPTZ,
-      last_tick_at    TIMESTAMPTZ,
-      artists_queued  INT NOT NULL DEFAULT 0,
-      artists_fetched INT NOT NULL DEFAULT 0,
-      artists_errored INT NOT NULL DEFAULT 0,
-      links_inserted  INT NOT NULL DEFAULT 0,
-      last_error      TEXT,
-      CHECK (id = 1)
-    )
-  `);
-    await getPool().query(`INSERT INTO all_blues_warm_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
-    // Migration: extend the all_blues_links kind CHECK to include
-    // 'traveled' so we can import the matching kind from the manually
-    // curated blues_artist_links table. Same idempotent pattern as the
-    // blues_artist_links CHECK widening above — find every CHECK on
-    // all_blues_links that references "kind", drop it, then re-add the
-    // permissive one. Safe to re-run on every boot.
-    await getPool().query(`
-    DO $$
-    DECLARE r record;
-    BEGIN
-      FOR r IN
-        SELECT con.conname
-          FROM pg_constraint con
-          JOIN pg_class    cls ON cls.oid = con.conrelid
-         WHERE cls.relname = 'all_blues_links'
-           AND con.contype = 'c'
-           AND pg_get_constraintdef(con.oid) ILIKE '%kind%'
-      LOOP
-        EXECUTE format('ALTER TABLE all_blues_links DROP CONSTRAINT %I', r.conname);
-      END LOOP;
-      ALTER TABLE all_blues_links ADD CONSTRAINT all_blues_links_kind_check
-        CHECK (kind IN ('family','spouse','mentor','band','alias','mention','traveled'));
-    EXCEPTION WHEN OTHERS THEN
-      RAISE NOTICE 'all_blues_links kind CHECK migration skipped: %', SQLERRM;
-    END $$;
-  `);
+    // All Blues / Constellations feature removed — drop its tables (idempotent).
+    await getPool().query(`DROP TABLE IF EXISTS all_blues_links`);
+    await getPool().query(`DROP TABLE IF EXISTS all_blues_artist_queue`);
+    await getPool().query(`DROP TABLE IF EXISTS all_blues_warm_state`);
     // ── Scrape ban list ──────────────────────────────────────────────
     // When the curator deletes an artist (or a single lyric) they can
     // mark it BANNED so the wiki rescrape doesn't immediately put it
@@ -10766,7 +10677,7 @@ const _QUERYABLE_TABLES = [
     "release_labels", "release_artists", "release_tags",
     "blues_artists", "blues_lyrics", "blues_tunings_grid",
     "blues_words", "blues_word_citations",
-    "external_discography", "all_blues_links",
+    "external_discography",
 ];
 export async function getQueryableSchema() {
     const r = await getPool().query(`SELECT table_name, column_name, data_type

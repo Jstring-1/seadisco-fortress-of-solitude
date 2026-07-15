@@ -122,10 +122,6 @@ const _adminGroups = {
     panels: ['panel-labels'],
     load: () => { loadLabelDirectory(); loadCoverageSweeps(); },
   },
-  'all-blues': {
-    panels: ['panel-all-blues'],
-    load: () => { loadAllBluesAdmin(); },
-  },
   'yt-review': {
     panels: ['panel-yt-review'],
     load: () => { loadYtReview(); },
@@ -242,7 +238,6 @@ async function loadAdminWorkerStatus() {
       const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
       badges.push({ label: `Ext scrape · ${j.source || 'unknown'}${pos}`, tab: 'labels' });
     }
-    if (w.allBlues?.running) badges.push({ label: 'All Blues worker', tab: 'all-blues' });
     if (w.warm?.running) {
       const p = w.warm.active || {};
       const label = p.genreKey ? `Cache-warm · ${p.genreKey}${p.styleKey ? '/' + p.styleKey : ''}` : 'Cache-warm run';
@@ -3412,109 +3407,6 @@ async function ytrShowErrors() {
 window.ytrShowErrors = ytrShowErrors;
 window.loadYtReview = loadYtReview;
 
-// Stats panel shows queue (pending/done/error), cached artist count,
-// and links-by-kind so the admin can watch progress.
-async function loadAllBluesAdmin() {
-  const el = document.getElementById("ab-status");
-  if (!el) return;
-  try {
-    const r = await apiFetch("/api/admin/all-blues/status");
-    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
-    const s = await r.json();
-    const startBtn = document.getElementById("ab-start");
-    const stopBtn  = document.getElementById("ab-stop");
-    if (startBtn) startBtn.style.display = s.running ? "none" : "";
-    if (stopBtn)  stopBtn.style.display  = s.running ? "" : "none";
-    const fmt = n => Number(n || 0).toLocaleString();
-    const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
-    const queue = s.queue || {};
-    const kinds = s.links_by_kind || {};
-    const totalLinks = Object.values(kinds).reduce((a, b) => a + b, 0);
-    const phase = esc(s.state?.phase || "idle");
-    const fromY = s.state?.from_year || s.active?.fromYear || 1900;
-    const toY   = s.state?.to_year   || s.active?.toYear   || 1970;
-    const started = s.state?.started_at ? new Date(s.state.started_at).toLocaleString() : "—";
-    const tick    = s.state?.last_tick_at ? new Date(s.state.last_tick_at).toLocaleString() : "—";
-    const kindRows = Object.entries(kinds).sort((a, b) => b[1] - a[1])
-      .map(([k, n]) => `<tr><td style="padding:0.15rem 0.6rem">${esc(k)}</td><td style="padding:0.15rem 0.6rem;text-align:right">${fmt(n)}</td></tr>`).join("");
-    el.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.7rem;margin-bottom:0.7rem">
-        <div><div style="font-size:1.1rem;font-weight:600">${s.running ? "Running" : "Idle"}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Worker</div></div>
-        <div><div style="font-size:1.1rem;font-weight:600">${phase}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Phase</div></div>
-        <div><div style="font-size:1.1rem;font-weight:600">${fromY}–${toY}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Year window</div></div>
-        <div><div style="font-size:1.1rem;font-weight:600">${fmt(s.cached_artists)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Cached artists</div></div>
-        <div><div style="font-size:1.1rem;font-weight:600">${fmt(totalLinks)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Total links</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.7rem;margin-bottom:0.7rem">
-        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.pending)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue pending</div></div>
-        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.done)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue done</div></div>
-        <div><div style="font-size:1rem;font-weight:600">${fmt(queue.error)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Queue errors</div></div>
-        <div><div style="font-size:1rem;font-weight:600">${fmt(s.state?.artists_fetched)}</div><div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase">Lifetime fetched</div></div>
-      </div>
-      ${kindRows ? `<div style="margin-bottom:0.6rem"><div style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;margin-bottom:0.2rem">Links by kind</div><table style="font-size:0.8rem;border-collapse:collapse"><tbody>${kindRows}</tbody></table></div>` : ""}
-      ${Number.isFinite(s.isolated_seeds) ? (() => {
-        const iso = s.isolated_seeds, tot = s.total_seeds || 0;
-        const pct = tot ? Math.round((iso / tot) * 100) : 0;
-        return `<div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.4rem">Isolated seeds: <strong style="color:${iso > 0 ? "#e8a55a" : "var(--muted)"}">${fmt(iso)}</strong> of ${fmt(tot)} (${pct}%) — blues seeds with no edges either direction.</div>`;
-      })() : ""}
-      <div style="font-size:0.74rem;color:var(--muted)">Started: ${esc(started)} · Last tick: ${esc(tick)}</div>
-      ${s.state?.last_error ? `<div style="font-size:0.74rem;color:#e88;margin-top:0.3rem">Last error: ${esc(s.state.last_error)}</div>` : ""}`;
-  } catch (e) {
-    el.innerHTML = `<span style="color:#e88">Failed: ${(e && e.message) || e}</span>`;
-  }
-}
-window.loadAllBluesAdmin = loadAllBluesAdmin;
-
-async function adminAllBluesStart() {
-  const from = Number(document.getElementById("ab-from-year")?.value || 1900);
-  const to   = Number(document.getElementById("ab-to-year")?.value   || 1970);
-  const reset = !!document.getElementById("ab-reset-queue")?.checked;
-  try {
-    const r = await apiFetch("/api/admin/all-blues/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromYear: from, toYear: to, resetQueue: reset }),
-    });
-    if (r.status === 409) { alert((await r.json().catch(() => ({}))).error || "Another run is in progress."); return; }
-    if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
-    loadAllBluesAdmin();
-  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
-}
-window.adminAllBluesStart = adminAllBluesStart;
-
-async function adminAllBluesStop() {
-  try {
-    const r = await apiFetch("/api/admin/all-blues/stop", { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadAllBluesAdmin();
-  } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
-}
-window.adminAllBluesStop = adminAllBluesStop;
-
-async function adminAllBluesForceClear() {
-  if (!confirm("Force-clear the in-memory 'running' lock for All Blues? Use only when a worker crashed silently and Start refuses to fire.")) return;
-  try {
-    const r = await apiFetch("/api/admin/all-blues/force-clear", { method: "POST" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    loadAllBluesAdmin();
-  } catch (e) { alert("Force-clear failed: " + ((e && e.message) || e)); }
-}
-window.adminAllBluesForceClear = adminAllBluesForceClear;
-
-async function adminAllBluesWipe(alsoCache) {
-  const msg = alsoCache
-    ? "Delete auto-scraped Constellations data INCLUDING the Discogs artist-profile cache?\n\nBlues Archive (manually curated) connections will be preserved. The next run will re-fetch every artist from Discogs (slow, hits the API rate limit)."
-    : "Delete auto-scraped Constellations queue + edges?\n\nBlues Archive (manually curated) connections will be preserved. The Discogs artist-profile cache stays so the next run skips API calls.";
-  if (!confirm(msg)) return;
-  try {
-    const url = "/api/admin/all-blues/wipe" + (alsoCache ? "?cache=1" : "");
-    const r = await apiFetch(url, { method: "POST" });
-    if (r.status === 409) { alert((await r.json().catch(() => ({}))).error || "Worker is running — Stop first."); return; }
-    if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.error || `HTTP ${r.status}`); }
-    loadAllBluesAdmin();
-  } catch (e) { alert("Delete failed: " + ((e && e.message) || e)); }
-}
-window.adminAllBluesWipe = adminAllBluesWipe;
 
 // ── API Request Log ───────────────────────────────────────────────────
 let _apiLogSeq = 0;

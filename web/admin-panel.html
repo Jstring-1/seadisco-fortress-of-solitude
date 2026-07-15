@@ -34,7 +34,6 @@
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
         <button class="admin-tab" onclick="switchAdminTab('labels')">Labels</button>
-        <button class="admin-tab" onclick="switchAdminTab('all-blues')">All Blues</button>
         <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
         <button class="admin-tab" onclick="switchAdminTab('query')">Query</button>
       </div>
@@ -298,45 +297,6 @@
         </details>
       </div>
 
-      <!-- All Blues background worker: walks release_cache for the
-           configured year window, collects every Discogs artist ID,
-           fetches each artist's profile, and parses [aNNNNN] mentions
-           into all_blues_links with a kind inferred from surrounding
-           prose. The public network view (/?v=all-blues) renders the
-           result; this panel is where the worker actually runs. -->
-      <div class="admin-tab-panel admin-grp-all-blues" id="panel-all-blues" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">All Blues worker</h2>
-          <button class="admin-refresh-btn" id="ab-refresh-btn" onclick="_adminClickRefresh(this, loadAllBluesAdmin)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="ab-refresh-status" class="admin-refresh-status"></span>
-          <a href="/?v=all-blues" style="font-size:0.74rem;color:var(--muted);margin-left:auto">Open public network view ↗</a>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center;font-size:0.82rem;margin-bottom:0.5rem">
-          <label style="display:inline-flex;gap:0.3rem;align-items:center">From <input id="ab-from-year" type="number" value="1900" min="1900" max="2100" style="width:6em"></label>
-          <label style="display:inline-flex;gap:0.3rem;align-items:center">To <input id="ab-to-year" type="number" value="1970" min="1900" max="2100" style="width:6em"></label>
-          <label style="display:inline-flex;gap:0.3rem;align-items:center" title="Marks every queued seed back to 'pending' so the worker re-walks everything from the start. Existing connections stay — new ones are added on top. Use the Delete buttons below for a real wipe.">
-            <input id="ab-reset-queue" type="checkbox"> restart from beginning
-          </label>
-          <button id="ab-start" type="button" class="admin-btn" onclick="adminAllBluesStart()">Start</button>
-          <button id="ab-stop" type="button" class="admin-btn" onclick="adminAllBluesStop()" style="display:none">Stop</button>
-          <button type="button" class="admin-btn" onclick="adminAllBluesForceClear()" title="Clear stuck in-memory running flag">Force-clear</button>
-          <button type="button" class="admin-btn" onclick="adminAllBluesWipe(false)" title="Delete the auto-scraped queue + edges. Preserves edges that came from the Blues Archive (manually curated). Keeps the cached Discogs artist profiles so the next run skips API calls.">Delete scraped data</button>
-          <button type="button" class="admin-btn" onclick="adminAllBluesWipe(true)" title="Same as Delete scraped data, but also clears cached Discogs artist profiles — every artist will be re-fetched on the next run. Blues Archive edges still preserved.">Delete scraped + cache</button>
-        </div>
-        <div id="ab-status" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
-        <hr style="margin:0.9rem 0;border-color:var(--border)">
-        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-          <h3 style="margin:0;font-size:1rem">Blues Words lexicon</h3>
-          <button class="admin-btn" type="button" onclick="lexiconSeedBundled()" title="Seed/refresh from the parsed JSON files committed under src/data/blueswords-*.json (idempotent — re-running upserts existing headwords).">Seed from bundled JSON</button>
-          <label class="admin-btn" style="cursor:pointer" title="Upload a parsed JSON file (output of scripts/parse-blueswords.py) to add a new volume.">
-            Upload JSON…
-            <input id="lexicon-upload-input" type="file" accept=".json,application/json" style="display:none" onchange="lexiconUploadJson(event)">
-          </label>
-          <span id="lexicon-status" style="font-size:0.78rem;color:var(--muted)"></span>
-        </div>
-      </div>
-
-      <!-- ── YT Review tab (v1) ──────────────────────────────────────
            Background worker walks earliest-year Blues masters and
            proposes YouTube videos for tracks with no override yet.
            v1 = everything goes here for human review; no auto-accept. -->

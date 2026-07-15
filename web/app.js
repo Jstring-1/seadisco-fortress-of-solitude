@@ -83,7 +83,7 @@ window._ensureAdminFlag = _ensureAdminFlag;
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "all-blues" || rawView === "labels" || rawView === "admin") {
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "labels" || rawView === "admin") {
     // LOC / Wikipedia / Archive / All Blues: anon-accessible (read +
     // search, no save). YouTube + Gutenberg + Chronam + Blues Archive
     // + Admin: admin/demo gated. Wait for auth so the
@@ -227,7 +227,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "all-blues" || rawView === "labels" || rawView === "admin") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "labels" || rawView === "admin") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");
