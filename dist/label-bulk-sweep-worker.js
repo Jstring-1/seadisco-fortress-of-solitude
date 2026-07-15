@@ -17,7 +17,7 @@
 //   4. advance cursor, persist
 //   5. repeat until queue exhausted or stop requested
 import { isCacheWarmCatnoRunning, startAdHocLabelSweep, requestCacheWarmCatnoStop, buildLabelSweptMap, } from "./cache-warm-catno.js";
-import { listLabelDirectory, getAppSetting, setAppSetting, getLabelUpstreamStatsMap, applyYearBackfill } from "./db.js";
+import { listLabelDirectory, getAppSetting, setAppSetting, getLabelUpstreamStatsMap } from "./db.js";
 const STATE_KEY = "bulk_label_sweep_state";
 let _state = null;
 let _running = false;
@@ -249,17 +249,6 @@ async function _run() {
             console.log(`[bulk-label-sweep] queue drained; clearing state`);
             _state = null;
             await _persist();
-            // Auto-fill years for the freshly-swept rows. One bulk pass over
-            // the donor pool (external + cache siblings); wrapped so a
-            // backfill failure never masks a successful sweep. Logged as its
-            // own batch so it stays rollback-able from the admin panel.
-            try {
-                const r = await applyYearBackfill();
-                console.log(`[bulk-label-sweep] post-sweep year backfill: phase1=${r.phase1Updated} phase2=${r.phase2Updated} batch=${r.batchId}`);
-            }
-            catch (err) {
-                console.error(`[bulk-label-sweep] post-sweep year backfill failed:`, err?.message ?? err);
-            }
         }
         else {
             // Stopped mid-queue: keep state so the operator can inspect.
