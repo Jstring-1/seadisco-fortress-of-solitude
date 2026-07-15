@@ -818,7 +818,7 @@ async function loadLocStats() {
 
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.8rem;margin-bottom:1rem">
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
+        <div class="admin-card">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Cache</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hit rate</span><strong style="color:var(--fg)">${s.hitRatePct}%</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hits</span><strong style="color:#6b8f71">${s.cacheHits.toLocaleString()}</strong></div>
@@ -826,21 +826,21 @@ async function loadLocStats() {
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Entries</span><strong style="color:var(--fg)">${s.cacheEntries} / ${s.cacheMax}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">TTL</span><strong style="color:var(--fg)">${fmtDur(s.cacheTtlMs)}</strong></div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
+        <div class="admin-card">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Rate Limiter</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">In window</span><strong style="color:${windowColor}">${rl.inWindow ?? 0} / ${rl.max ?? 0}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Queue depth</span><strong style="color:${queueColor}">${queueDepth} / ${rl.maxQueueDepth ?? 0}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Window</span><strong style="color:var(--fg)">${fmtDur(rl.windowMs)}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">503s fired</span><strong style="color:${rlColor}">${s.rateLimitHits.toLocaleString()}</strong></div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
+        <div class="admin-card">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Traffic</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 10 min</span><strong style="color:var(--fg)">${s.requestsLast10m.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last hour</span><strong style="color:var(--fg)">${s.requestsLastHour.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 24h</span><strong style="color:var(--fg)">${s.requestsLastDay.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last request</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastRequestAt)}</strong></div>
         </div>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
+        <div class="admin-card">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Failures</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Total</span><strong style="color:${failureColor}">${s.failures.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last failure</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastFailureAt)}</strong></div>

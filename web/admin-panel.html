@@ -148,15 +148,15 @@
               <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Release cache</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem">
                 <label>Type
-                  <select id="rcx-type" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <select id="rcx-type" class="admin-input">
                     <option value="">Both</option><option value="release">release</option><option value="master">master</option>
                   </select>
                 </label>
                 <label>Format contains
-                  <input id="rcx-format" type="text" placeholder="Vinyl, CD…" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-format" type="text" placeholder="Vinyl, CD…" class="admin-input">
                 </label>
                 <label>Genre
-                  <select id="rcx-genre" onchange="_rcxSyncStyleList()" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <select id="rcx-genre" onchange="_rcxSyncStyleList()" class="admin-input">
                     <option value="">(any)</option>
                     <option value="Blues">Blues</option>
                     <option value="Folk, World, &amp; Country">Folk, World, &amp; Country</option>
@@ -176,16 +176,16 @@
                   </select>
                 </label>
                 <label>Style
-                  <input id="rcx-style" type="text" list="cw-styles-Blues" placeholder="(any of genre)" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-style" type="text" list="cw-styles-Blues" placeholder="(any of genre)" class="admin-input">
                 </label>
                 <label>Year from
-                  <input id="rcx-year-from" type="number" placeholder="1900" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-year-from" type="number" placeholder="1900" class="admin-input">
                 </label>
                 <label>Year to
-                  <input id="rcx-year-to" type="number" placeholder="1970" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-year-to" type="number" placeholder="1970" class="admin-input">
                 </label>
                 <label>Country contains
-                  <input id="rcx-country" type="text" placeholder="US" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-country" type="text" placeholder="US" class="admin-input">
                 </label>
                 <label style="grid-column:span 2;position:relative">Labels (any of)
                   <button type="button" id="rcx-labels-btn" onclick="_rcxToggleLabelsPanel(event)" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;text-align:left;cursor:pointer">(any)</button>
@@ -199,15 +199,15 @@
                   </div>
                 </label>
                 <label>Limit (max 1M)
-                  <input id="rcx-limit" type="number" value="1000000" min="1" max="1000000" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="rcx-limit" type="number" value="1000000" min="1" max="1000000" class="admin-input">
                 </label>
                 <label>Sort
-                  <select id="rcx-sort" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <select id="rcx-sort" class="admin-input">
                     <option value="year" selected>Year</option><option value="artist">Artist</option><option value="cached_at">Cached at</option><option value="title">Title</option><option value="discogs_id">Discogs ID</option>
                   </select>
                 </label>
                 <label>Order
-                  <select id="rcx-order" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <select id="rcx-order" class="admin-input">
                     <option value="asc" selected>Asc</option><option value="desc">Desc</option>
                   </select>
                 </label>
@@ -244,13 +244,13 @@
               <h3 style="margin:0 0 0.5rem;font-size:0.95rem">Artist cache (blues_artists)</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;font-size:0.78rem">
                 <label>Name contains
-                  <input id="bax-name" type="text" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="bax-name" type="text" class="admin-input">
                 </label>
                 <label>Hometown contains
-                  <input id="bax-hometown" type="text" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="bax-hometown" type="text" class="admin-input">
                 </label>
                 <label>Born decade
-                  <input id="bax-decade" type="number" step="10" placeholder="1900" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                  <input id="bax-decade" type="number" step="10" placeholder="1900" class="admin-input">
                 </label>
                 <div></div>
               </div>
