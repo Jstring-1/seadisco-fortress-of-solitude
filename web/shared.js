@@ -983,6 +983,17 @@ function _sdInjectEnrichmentIntoCards(row) {
         meta.insertAdjacentElement("afterend", line);
       }
     }
+    // Estimated-year tooltip: wrap the leading year in the meta line
+    // when this row was year-backfilled. Numeric text is preserved so
+    // list-mode's year scraper still reads it.
+    if (row.year_estimated_from) {
+      const meta = card.querySelector(".card-meta");
+      const estT = (typeof sdEstYearTitle === "function") ? sdEstYearTitle(row.year_estimated_from) : "";
+      if (meta && estT && !meta.querySelector("[data-est-year]")) {
+        meta.innerHTML = meta.innerHTML.replace(/^(\s*)((?:18|19|20)\d{2})\b/,
+          (m, sp, yr) => `${sp}<span data-est-year title="${escAttr(estT)}" style="cursor:help">${yr}</span>`);
+      }
+    }
     if (images.length > 1) {
       const wrap = card.querySelector(".card-thumb-wrap");
       if (wrap && !wrap.querySelector(".card-images-strip")) {

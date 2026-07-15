@@ -1339,7 +1339,13 @@ function renderCard(item, index, opts) {
   const country = item.country ?? "";
   const year    = item.year    ?? "";
 
-  const metaParts = [year, type, country].filter(Boolean);
+  // Estimated (year-backfilled) years get a hover tooltip; the numeric
+  // value is unchanged so list-mode's year scraper still reads it.
+  const _yEstTitle = (typeof sdEstYearTitle === "function") ? sdEstYearTitle(item.year_estimated_from) : "";
+  const yearHtml = year
+    ? (_yEstTitle ? `<span title="${escHtml(_yEstTitle)}" style="cursor:help">${escHtml(String(year))}</span>` : escHtml(String(year)))
+    : "";
+  const metaHtml = [yearHtml, ...[type, country].filter(Boolean).map(escHtml)].filter(Boolean).join(" · ");
 
   // width/height attrs let the browser reserve layout space before
   // the image arrives, eliminating the cumulative-layout-shift jolt
@@ -1527,7 +1533,7 @@ function renderCard(item, index, opts) {
           ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
           ${ratingHtml}
           ${priceHtml}
-          <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
+          <div class="card-meta">${metaHtml}</div>
           ${notesHtml}
         </div>
         ${tracklistHtml}

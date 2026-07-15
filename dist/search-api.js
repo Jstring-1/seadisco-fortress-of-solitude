@@ -7316,6 +7316,7 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
                     type: row.type,
                     title: composed,
                     year: d.year ?? "",
+                    year_estimated_from: d._year_backfilled_from ? String(d._year_backfilled_from) : null,
                     country: d.country ?? "",
                     cover_image: cover,
                     thumb: cover,
@@ -7424,7 +7425,10 @@ app.post("/api/cards/enrich", express.json({ limit: "32kb" }), async (req, res) 
             }))
                 .filter((it) => it.value)
                 .slice(0, 8);
-            return { id: row.id, type: row.type, images, tracklist, videos, overrides, matrix };
+            // Provenance marker for a year filled by the year-backfill — lets
+            // the client flag estimated years with a hover tooltip.
+            const year_estimated_from = d._year_backfilled_from ? String(d._year_backfilled_from) : null;
+            return { id: row.id, type: row.type, images, tracklist, videos, overrides, matrix, year_estimated_from };
         });
         res.json({ items });
     }
@@ -7555,6 +7559,7 @@ app.get("/api/feed/random", async (req, res) => {
                 type: row.type,
                 title: composed,
                 year: d.year ?? "",
+                year_estimated_from: d._year_backfilled_from ? String(d._year_backfilled_from) : null,
                 country: d.country ?? "",
                 cover_image: cover,
                 thumb: cover,
@@ -7617,6 +7622,7 @@ app.get("/api/user/my-submitted-albums", async (req, res) => {
                 type: row.type,
                 title: composed,
                 year: d.year ?? "",
+                year_estimated_from: d._year_backfilled_from ? String(d._year_backfilled_from) : null,
                 country: d.country ?? "",
                 cover_image: cover,
                 thumb: cover,
