@@ -2353,15 +2353,6 @@ function openLookupPopup(ev, scope, label, ctx) {
     const openLabel = openType === "lyric" ? "Open lyric" : (openType === "master" ? "Open master" : "Open release");
     internal.push({ key: "open", icon: "↗", text: openLabel });
   }
-  // Admin-only EDIT — only relevant for artist scope. Opens the Blues
-  // Archive artist detail popup if the artist is in the archive; if
-  // it isn't, offers to add them. Sits at the top of the popup since
-  // curators reach for it more than the search buttons when they're
-  // actively cleaning up data.
-  if (window._isAdmin && scope === "artist") {
-    internal.push({ key: "edit",    icon: "✎", text: "Edit in Blues Archive" });
-    internal.push({ key: "profile", icon: "🎸", text: "Open archive profile" });
-  }
   // Admin-only "Add to lyrics" — track scope only. Opens the new-lyric
   // editor pre-populated with this track's title (and artist when the
   // popup knows it via ctx.trackArtist). Curator pastes the body and
@@ -2513,100 +2504,6 @@ function openLookupPopup(ev, scope, label, ctx) {
             } catch {
               tryToast("Could not copy", "error");
             }
-          })();
-        }
-        else if (b.key === "edit") {
-          // Resolve to archive row → open popup. If not in archive,
-          // offer to add via the existing +blues add-by-id endpoint
-          // (when we have a Discogs id) or just tell the user.
-          (async () => {
-            try {
-              const r = await apiFetch("/api/blues-archive/check", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  artistNames: [label, label.replace(/\s*\(\d+\)\s*$/, "").trim()].filter(Boolean),
-                  artistIds:   entityId ? [Number(entityId)] : [],
-                }),
-              });
-              if (!r.ok) { showToast?.("Couldn't check archive", "error"); return; }
-              const result = await r.json();
-              const hit = (entityId && result.artistsById?.[String(entityId)])
-                       || result.artists?.[String(label).trim().toLowerCase()]
-                       || result.artists?.[String(label).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()];
-              if (hit) {
-                // Hit → lazy-load /blues-admin.js (where the full
-                // editor lives), then open the editor on this row.
-                // No view switch, no nav — the editor overlay layers
-                // on top of whatever the user was doing.
-                const openIt = () => {
-                  if (typeof window.bluesDbOpenEditor === "function") {
-                    window.bluesDbOpenEditor(hit.id);
-                    return true;
-                  }
-                  return false;
-                };
-                if (openIt()) return;
-                if (typeof window._sdLoadModule === "function") {
-                  window._sdLoadModule("/blues-admin.js")
-                    .then(() => { if (!openIt()) showToast?.("Editor not available", "error"); })
-                    .catch(() => showToast?.("Couldn't load editor", "error"));
-                } else {
-                  // Last-resort fallback: open the archive artist popup
-                  // (merge / reassign / lyric edits) instead of the
-                  // full form editor.
-                  if (typeof window._baOpenArtistFromBadge === "function") {
-                    window._baOpenArtistFromBadge(hit.id);
-                  } else {
-                    window.location.href = `/?v=blues-archive&baArtist=${hit.id}`;
-                  }
-                }
-              } else if (entityId && typeof window._bluesAddArtist === "function") {
-                if (confirm(`"${label}" isn't in the Blues Archive yet. Add now?`)) {
-                  window._bluesAddArtist(Number(entityId), label, null);
-                }
-              } else {
-                showToast?.(`"${label}" isn't in the Blues Archive`, "info");
-              }
-            } catch (err) {
-              showToast?.("Couldn't open editor", "error");
-              console.warn("[edit lookup popup]", err);
-            }
-          })();
-        }
-        else if (b.key === "profile") {
-          // Resolve the archive row by name (or Discogs id when known)
-          // and open the artist profile popup. Lazy-loads
-          // blues-archive.js when triggered from a non-archive view.
-          (async () => {
-            try {
-              const r = await apiFetch("/api/blues-archive/check", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  artistNames: [label, label.replace(/\s*\(\d+\)\s*$/, "").trim()].filter(Boolean),
-                  artistIds:   entityId ? [Number(entityId)] : [],
-                }),
-              });
-              if (!r.ok) { showToast?.("Couldn't check archive", "error"); return; }
-              const result = await r.json();
-              const hit = (entityId && result.artistsById?.[String(entityId)])
-                       || result.artists?.[String(label).trim().toLowerCase()]
-                       || result.artists?.[String(label).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()];
-              if (!hit) { showToast?.(`"${label}" isn't in the Blues Archive`, "info"); return; }
-              const open = () => {
-                if (typeof window._baOpenArtistFromBadge === "function") {
-                  window._baOpenArtistFromBadge(hit.id); return true;
-                }
-                return false;
-              };
-              if (open()) return;
-              if (typeof window._sdLoadModule === "function") {
-                window._sdLoadModule("/blues-archive.js")
-                  .then(() => { if (!open()) showToast?.("Profile viewer unavailable", "error"); })
-                  .catch(() => showToast?.("Couldn't load profile viewer", "error"));
-              }
-            } catch { showToast?.("Couldn't open profile", "error"); }
           })();
         }
         else if (b.key === "addLyric") {
