@@ -118,36 +118,44 @@
         <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
       </div>
 
-      <!-- Manual cache-warm: single control box + stats grid -->
-      <div class="admin-tab-panel admin-grp-cache" id="panel-cache-warm" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Cache-warm runs</h2>
-          <button class="admin-refresh-btn" id="cw-refresh-btn" onclick="_adminClickRefresh(this, loadCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="cw-refresh-status" class="admin-refresh-status"></span>
+      <!-- Cache tab — each section is its own collapsed disclosure so
+           the tab reads as a list of headings you open on demand. -->
+      <div class="admin-tab-panel admin-grp-cache admin-sections-inside" id="panel-cache-warm" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap">
+          <h2 style="margin:0">Cache</h2>
         </div>
-        <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-        <!-- ── Cache write rate (release_cache throughput) ─────────── -->
-        <div id="cache-rate-card" class="admin-card" style="margin-top:0.6rem" title="How fast release_cache is being written (inserts + refreshes) by cached_at. Counts cache-WRITE activity, not strictly first-seen inserts.">
-          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
-            <span style="font-weight:600;font-size:0.9rem">📈 Cache write rate</span>
-            <button class="admin-refresh-btn" onclick="loadCacheRate()" title="Refresh cache rate"><span class="admin-refresh-icon">&#8635;</span></button>
+        <!-- ── Cache-warm runs ─────────────────────────────────────── -->
+        <details>
+          <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🔥 Cache-warm runs</summary>
+          <div style="margin-top:0.6rem">
+            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+              <button class="admin-refresh-btn" id="cw-refresh-btn" onclick="_adminClickRefresh(this, loadCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+              <span id="cw-refresh-status" class="admin-refresh-status"></span>
+            </div>
+            <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
           </div>
-          <div id="cache-rate-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </div>
+        </details>
+        <!-- ── Cache write rate (release_cache throughput) ─────────── -->
+        <details>
+          <summary title="How fast release_cache is being written (inserts + refreshes) by cached_at. Counts cache-WRITE activity, not strictly first-seen inserts." style="cursor:pointer;font-weight:600;font-size:0.95rem">📈 Cache write rate</summary>
+          <div id="cache-rate-card" class="admin-card" style="margin-top:0.6rem">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+              <button class="admin-refresh-btn" onclick="loadCacheRate()" title="Refresh cache rate"><span class="admin-refresh-icon">&#8635;</span></button>
+            </div>
+            <div id="cache-rate-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+          </div>
+        </details>
         <!-- ── Cache analytics (faceted drilldown) ─────────────────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
           <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache<span id="ca-totals-badge" style="font-weight:400;font-size:0.72rem;color:var(--muted);margin-left:0.6rem"></span></summary>
           <div id="cache-analytics-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)"></div>
         </details>
         <!-- ── Split-cache projection backfill ─────────────────────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
           <summary title="Migrates release_cache into the new split schema: discogs_cache_masters_plus (masters + orphan releases — the hot browse table) and discogs_cache_pressings (specific-pressing releases), plus normalized release_labels / release_artists / release_tags side tables. Idempotent — safe to stop / resume. Runs in the background; nothing in the UI changes until readers are flipped over in a later phase." style="cursor:pointer;font-weight:600;font-size:0.95rem">🧬 Project into split cache</summary>
           <div id="cache-projection-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
           <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📦 Exports — release_cache &amp; artist cache</summary>
           <div style="margin-top:0.6rem;display:grid;grid-template-columns:1fr 1fr;gap:0.8rem">
@@ -285,20 +293,19 @@
            crawler, the external-discography scraper (wirz.de +
            78discography.com), and the unified label directory grid
            with Discogs ID lookup. -->
-      <div class="admin-tab-panel admin-grp-labels" id="panel-labels" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+      <div class="admin-tab-panel admin-grp-labels admin-sections-inside" id="panel-labels" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap">
           <h2 style="margin:0">Labels</h2>
           <button class="admin-refresh-btn" id="lbl-refresh-btn" onclick="_adminClickRefresh(this, loadLabelDirectory)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
         </div>
 
         <!-- ── Label directory grid ─────────────────────────────── -->
-        <details open>
+        <details>
           <summary title="Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later." style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
           <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
 
         <!-- ── Coverage-boosting sweeps beyond label + genre ───────── -->
-        <hr style="margin:1rem 0;border-color:var(--border)">
         <details>
           <summary title="Angles beyond year × genre and per-label sweeps for pushing pre-1970 coverage closer to comprehensive. Each of these is a singleflight worker with a persisted cursor — safe to stop / resume / redeploy through." style="cursor:pointer;font-weight:600;font-size:0.95rem">🕸 Coverage sweeps</summary>
           <div id="coverage-sweeps-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>

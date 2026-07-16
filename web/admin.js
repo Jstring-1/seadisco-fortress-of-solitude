@@ -199,6 +199,10 @@ window.addEventListener('hashchange', _adminBootTabFromHash);
 function _adminMakeSectionsCollapsible() {
   document.querySelectorAll('.admin-tab-panel').forEach(panel => {
     if (panel._collapseWired) return;
+    // Panels that host several sections internally (each its own
+    // <details>) manage their own collapsing — don't wrap the whole
+    // panel, or the entire tab would hide behind one caret.
+    if (panel.classList.contains('admin-sections-inside')) return;
     const header = panel.firstElementChild;
     if (!header) return;
     // Everything after the header row folds into a body wrapper.
