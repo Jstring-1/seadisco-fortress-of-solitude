@@ -42,7 +42,9 @@ async function _load() {
     }
 }
 async function _adminClient() {
-    return getAdminDiscogsClient(_adminClerkId);
+    const c = await getAdminDiscogsClient(_adminClerkId);
+    // Scheduled background job: above the cache sweeps, below realtime.
+    return c ? c.withPriority("scheduled") : null;
 }
 export function isLabelUpstreamStatsRunning() { return _running; }
 export function getLabelUpstreamStatsStatus() {

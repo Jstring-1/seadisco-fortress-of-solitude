@@ -58,7 +58,9 @@ async function _load(): Promise<State | null> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  return getAdminDiscogsClient(_adminClerkId);
+  const c = await getAdminDiscogsClient(_adminClerkId);
+  // Lowest rate-lane priority: yield to user-facing + scheduled traffic.
+  return c ? c.withPriority("sweep") : null;
 }
 
 export function isFacetedSweepRunning(): boolean { return _running; }

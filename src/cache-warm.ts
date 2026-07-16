@@ -147,7 +147,9 @@ async function _withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  return getAdminDiscogsClient(_adminClerkIdForWorker);
+  const c = await getAdminDiscogsClient(_adminClerkIdForWorker);
+  // Lowest rate-lane priority: yield to user-facing + scheduled traffic.
+  return c ? c.withPriority("sweep") : null;
 }
 
 // Public: kick off a manual run. Rejects if another run is in

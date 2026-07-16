@@ -173,7 +173,9 @@ async function _withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  return getAdminDiscogsClient(_adminClerkIdForWorker);
+  const c = await getAdminDiscogsClient(_adminClerkIdForWorker);
+  // Lowest rate-lane priority: yield to user-facing + scheduled traffic.
+  return c ? c.withPriority("sweep") : null;
 }
 
 function _findSeries(key: string): CatnoSeries | null {

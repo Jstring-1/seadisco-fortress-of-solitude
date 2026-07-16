@@ -1,47 +1,108 @@
 import crypto from "crypto";
 import { logApiRequest, getOAuthCredentials } from "./db.js";
 const BASE_URL = "https://api.discogs.com";
-// ── Process-wide Discogs request scheduler ────────────────────────
-// Every DiscogsClient.get() passes through this gate before firing, so
-// the WHOLE process shares one authed 60/min budget — the background
-// sweeps (cache-warm, label-bulk, faceted, catno), the collection sync,
-// and live user searches all draw from the same pace instead of each
-// sleeping independently and collectively blowing past the limit into
-// 429 backoff.
+// ── Per-key, priority Discogs request scheduler ───────────────────
+// Discogs enforces its ~60/min authed limit PER CREDENTIAL, so we keep
+// one independent rate lane per api key (PAT token / OAuth access
+// token). A user's sync + marketplace traffic on their own token never
+// competes with the admin sweeps on the admin token — each lane paces
+// itself at ~1/sec against its own budget.
 //
-// It also fixes the "sleep-then-fetch" spacing bug: pacing is measured
-// from the previous DISPATCH, not "gap after the last fetch finished",
-// so a request's own network latency is absorbed into the interval
-// rather than added on top. A lone sweep therefore lands close to the
-// true 1/sec ceiling instead of ~1 per 1.5s.
+// Within a lane, three priority tiers decide who gets the next slot:
+//   realtime  — user-facing: live search, album-modal fetches, a user
+//               triggering a sync or a marketplace action. Highest.
+//   scheduled — background-but-timely jobs: scheduled sync/refresh,
+//               suggestions, upstream-stats. Yields to realtime.
+//   sweep     — the bulk cache crawlers (cache-warm, faceted, catno).
+//               Lowest: yields to everything, resumes when the lane is
+//               otherwise idle.
+// A higher tier that arrives mid-wait is dispatched before any waiting
+// lower-tier caller, so sweeps never make a user wait behind the crawl.
 //
-// Implemented as a serial promise chain: each acquirer awaits the prior
-// dispatch, then waits out any remaining interval. Depth ≈ number of
-// concurrently-active callers (each awaits its slot AND its fetch before
-// looping), so no single caller floods the queue — an interactive call
-// waits behind at most a handful of in-flight sweep slots (~1-2s), not
-// the crawler's entire backlog. Tunable via DISCOGS_MIN_INTERVAL_MS.
+// Pacing is measured from the previous DISPATCH (not gap-after-fetch),
+// so a request's own latency is absorbed into the interval and a lone
+// caller lands near the true 1/sec ceiling. Tunable via
+// DISCOGS_MIN_INTERVAL_MS.
 const DISCOGS_MIN_INTERVAL_MS = Math.max(0, Number(process.env.DISCOGS_MIN_INTERVAL_MS) || 1050);
-let _discogsGateChain = Promise.resolve();
-let _discogsLastDispatch = 0;
-export function discogsGate() {
-    const prev = _discogsGateChain;
-    _discogsGateChain = (async () => {
-        try {
-            await prev;
+const _PRIORITY_ORDER = ["realtime", "scheduled", "sweep"];
+const _gateLanes = new Map();
+function _laneFor(keyId) {
+    let lane = _gateLanes.get(keyId);
+    if (!lane) {
+        lane = { lastDispatch: 0, queues: { realtime: [], scheduled: [], sweep: [] }, pumping: false };
+        _gateLanes.set(keyId, lane);
+    }
+    return lane;
+}
+function _nextWaiter(lane) {
+    for (const p of _PRIORITY_ORDER) {
+        const q = lane.queues[p];
+        if (q.length)
+            return q.shift();
+    }
+    return undefined;
+}
+function _hasWaiter(lane) {
+    return _PRIORITY_ORDER.some(p => lane.queues[p].length > 0);
+}
+function _pump(lane) {
+    if (lane.pumping)
+        return;
+    lane.pumping = true;
+    const tick = () => {
+        if (!_hasWaiter(lane)) {
+            lane.pumping = false;
+            return;
         }
-        catch { /* never let one waiter's rejection wedge the chain */ }
-        const wait = _discogsLastDispatch + DISCOGS_MIN_INTERVAL_MS - Date.now();
-        if (wait > 0)
-            await new Promise(r => setTimeout(r, wait));
-        _discogsLastDispatch = Date.now();
-    })();
-    return _discogsGateChain;
+        const wait = Math.max(0, lane.lastDispatch + DISCOGS_MIN_INTERVAL_MS - Date.now());
+        setTimeout(() => {
+            // Re-pick the highest-priority waiter AT dispatch time — a realtime
+            // call that arrived during the wait jumps ahead of a queued sweep.
+            const resolve = _nextWaiter(lane);
+            lane.lastDispatch = Date.now();
+            if (resolve)
+                resolve();
+            tick();
+        }, wait);
+    };
+    tick();
+}
+// Acquire a rate slot on `keyId`'s lane at the given priority. Resolves
+// when the caller may dispatch its Discogs request.
+export function discogsGate(keyId, priority = "realtime") {
+    const lane = _laneFor(keyId || "anon");
+    return new Promise(resolve => {
+        lane.queues[priority].push(resolve);
+        _pump(lane);
+    });
+}
+// Derive a stable per-credential lane key from an Authorization header
+// (so raw fetch() callers that build their own headers land on the same
+// lane as this.get()). PAT: "Discogs token=XXX"; OAuth 1.0a:
+// "OAuth …,oauth_token=\"YYY\",…". Falls back to a hash of the whole
+// header, then "anon". Never returns the raw secret.
+export function discogsKeyFromAuthHeader(auth) {
+    if (!auth)
+        return "anon";
+    const pat = auth.match(/Discogs\s+token=([^,\s]+)/i);
+    if (pat)
+        return "pat:" + _shortHash(pat[1]);
+    const oauth = auth.match(/oauth_token="?([^",\s]+)"?/i);
+    if (oauth)
+        return "oauth:" + _shortHash(oauth[1]);
+    return "hdr:" + _shortHash(auth);
+}
+function _shortHash(s) {
+    return crypto.createHash("sha1").update(s).digest("hex").slice(0, 12);
 }
 export class DiscogsClient {
     token;
     oauth;
     appName;
+    // Rate-lane priority for every request this client makes. Default
+    // realtime (interactive); background workers downgrade to "sweep" or
+    // "scheduled" so they yield to user-facing traffic on the same lane.
+    priority = "realtime";
     constructor(tokenOrOAuth, appName = "SeaDisco/1.0 (+https://seadisco.com)") {
         this.appName = appName;
         if (typeof tokenOrOAuth === "string") {
@@ -52,6 +113,22 @@ export class DiscogsClient {
             this.token = null;
             this.oauth = tokenOrOAuth;
         }
+    }
+    /** Fluent priority setter — `client.withPriority("sweep")`. */
+    withPriority(p) { this.priority = p; return this; }
+    /** Stable per-credential lane key (never the raw secret). MUST match
+     *  discogsKeyFromAuthHeader so get() and raw fetch() land on one lane. */
+    _gateKey() {
+        if (this.token)
+            return "pat:" + _shortHash(this.token);
+        if (this.oauth?.accessToken)
+            return "oauth:" + _shortHash(this.oauth.accessToken);
+        return "anon";
+    }
+    /** Acquire a rate slot on this client's lane — for raw fetch() callers
+     *  (sync, marketplace) that build their own headers and bypass get(). */
+    async gate(priority = this.priority) {
+        await discogsGate(this._gateKey(), priority);
     }
     /** Build authorization headers for an external URL — either PAT or OAuth 1.0a signed.
      *  Use this when you need to make raw fetch() calls with proper auth (e.g. sync). */
@@ -83,9 +160,9 @@ export class DiscogsClient {
         }
         const fullUrl = url.toString();
         const headers = this.getAuthHeaders("GET", fullUrl);
-        // Wait for a process-wide rate-limit slot before dispatching, so
-        // all Discogs traffic shares one 60/min budget (see discogsGate).
-        await discogsGate();
+        // Wait for a rate slot on this credential's lane at this client's
+        // priority before dispatching (see discogsGate).
+        await discogsGate(this._gateKey(), this.priority);
         // 30 second hard timeout. Prevents a stalled Discogs socket from
         // locking any caller (sync, background cache-warm worker, search
         // endpoints) indefinitely. AbortController fires the abort signal

@@ -39,7 +39,9 @@ async function _load() {
     }
 }
 async function _adminClient() {
-    return getAdminDiscogsClient(_adminClerkId);
+    const c = await getAdminDiscogsClient(_adminClerkId);
+    // Lowest rate-lane priority: yield to user-facing + scheduled traffic.
+    return c ? c.withPriority("sweep") : null;
 }
 export function isFacetedSweepRunning() { return _running; }
 export function getFacetedSweepStatus() {

@@ -58,7 +58,9 @@ async function _load(): Promise<State | null> {
 }
 
 async function _adminClient(): Promise<DiscogsClient | null> {
-  return getAdminDiscogsClient(_adminClerkId);
+  const c = await getAdminDiscogsClient(_adminClerkId);
+  // Scheduled background job: above the cache sweeps, below realtime.
+  return c ? c.withPriority("scheduled") : null;
 }
 
 export function isLabelUpstreamStatsRunning(): boolean { return _running; }

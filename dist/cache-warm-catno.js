@@ -144,7 +144,9 @@ async function _withRetry(label, fn) {
     throw lastErr;
 }
 async function _adminClient() {
-    return getAdminDiscogsClient(_adminClerkIdForWorker);
+    const c = await getAdminDiscogsClient(_adminClerkIdForWorker);
+    // Lowest rate-lane priority: yield to user-facing + scheduled traffic.
+    return c ? c.withPriority("sweep") : null;
 }
 function _findSeries(key) {
     return CATNO_SERIES.find(s => s.key === key) ?? null;
