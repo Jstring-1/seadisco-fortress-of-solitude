@@ -3,6 +3,41 @@ import { logApiRequest, getOAuthCredentials } from "./db.js";
 
 const BASE_URL = "https://api.discogs.com";
 
+// ── Process-wide Discogs request scheduler ────────────────────────
+// Every DiscogsClient.get() passes through this gate before firing, so
+// the WHOLE process shares one authed 60/min budget — the background
+// sweeps (cache-warm, label-bulk, faceted, catno), the collection sync,
+// and live user searches all draw from the same pace instead of each
+// sleeping independently and collectively blowing past the limit into
+// 429 backoff.
+//
+// It also fixes the "sleep-then-fetch" spacing bug: pacing is measured
+// from the previous DISPATCH, not "gap after the last fetch finished",
+// so a request's own network latency is absorbed into the interval
+// rather than added on top. A lone sweep therefore lands close to the
+// true 1/sec ceiling instead of ~1 per 1.5s.
+//
+// Implemented as a serial promise chain: each acquirer awaits the prior
+// dispatch, then waits out any remaining interval. Depth ≈ number of
+// concurrently-active callers (each awaits its slot AND its fetch before
+// looping), so no single caller floods the queue — an interactive call
+// waits behind at most a handful of in-flight sweep slots (~1-2s), not
+// the crawler's entire backlog. Tunable via DISCOGS_MIN_INTERVAL_MS.
+const DISCOGS_MIN_INTERVAL_MS = Math.max(0, Number(process.env.DISCOGS_MIN_INTERVAL_MS) || 1050);
+let _discogsGateChain: Promise<void> = Promise.resolve();
+let _discogsLastDispatch = 0;
+
+export function discogsGate(): Promise<void> {
+  const prev = _discogsGateChain;
+  _discogsGateChain = (async () => {
+    try { await prev; } catch { /* never let one waiter's rejection wedge the chain */ }
+    const wait = _discogsLastDispatch + DISCOGS_MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    _discogsLastDispatch = Date.now();
+  })();
+  return _discogsGateChain;
+}
+
 export interface OAuthCredentials {
   consumerKey: string;
   consumerSecret: string;
@@ -59,6 +94,10 @@ export class DiscogsClient {
 
     const fullUrl = url.toString();
     const headers = this.getAuthHeaders("GET", fullUrl);
+
+    // Wait for a process-wide rate-limit slot before dispatching, so
+    // all Discogs traffic shares one 60/min budget (see discogsGate).
+    await discogsGate();
 
     // 30 second hard timeout. Prevents a stalled Discogs socket from
     // locking any caller (sync, background cache-warm worker, search

@@ -39,6 +39,7 @@ async function _adminEnsureDom() {
     if (!r.ok) return r.status;
     host.innerHTML = await r.text();
     _adminDomReady = true;
+    try { _adminMakeSectionsCollapsible(); } catch (e) { console.warn('[admin] collapse wiring failed', e); }
     return 200;
   } catch { return 0; }
 }
@@ -187,6 +188,52 @@ function _adminBootTabFromHash() {
   if (h && _adminGroups[h]) switchAdminTab(h);
 }
 window.addEventListener('hashchange', _adminBootTabFromHash);
+
+// ── Collapsible sections ──────────────────────────────────────────
+// Every admin tab-panel becomes a disclosure: its header row gets a
+// caret and clicking the header collapses/expands the body. Collapsed
+// by default; the open/closed choice is remembered per panel in
+// localStorage. Done generically here (not in markup) so it covers
+// every current + future panel. Clicks on controls inside the header
+// (refresh, filters, action buttons) never toggle the collapse.
+function _adminMakeSectionsCollapsible() {
+  document.querySelectorAll('.admin-tab-panel').forEach(panel => {
+    if (panel._collapseWired) return;
+    const header = panel.firstElementChild;
+    if (!header) return;
+    // Everything after the header row folds into a body wrapper.
+    const body = document.createElement('div');
+    body.className = 'admin-collapse-body';
+    let n = header.nextSibling;
+    while (n) { const next = n.nextSibling; body.appendChild(n); n = next; }
+    // Header-only panel (e.g. the System bar) — nothing to collapse.
+    if (!body.querySelector('*') && !body.textContent.trim()) {
+      while (body.firstChild) panel.appendChild(body.firstChild);
+      return;
+    }
+    panel.appendChild(body);
+    panel._collapseWired = true;
+    const caret = document.createElement('span');
+    caret.className = 'admin-collapse-caret';
+    caret.textContent = '▸'; // ▸
+    header.insertBefore(caret, header.firstChild);
+    header.classList.add('admin-collapse-header');
+    const key = 'sd-admin-collapse:' + (panel.id || '');
+    let open = false;
+    try { open = localStorage.getItem(key) === '1'; } catch {}
+    const apply = () => {
+      body.style.display = open ? '' : 'none';
+      caret.textContent = open ? '▾' : '▸'; // ▾ / ▸
+    };
+    apply();
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('button, input, select, textarea, a, label')) return;
+      open = !open;
+      try { localStorage.setItem(key, open ? '1' : '0'); } catch {}
+      apply();
+    });
+  });
+}
 
 // ── Persistent worker-status bar ──────────────────────────────────
 // Polls every worker's status endpoint in parallel every 8s and

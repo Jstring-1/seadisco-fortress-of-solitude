@@ -305,6 +305,7 @@
         </details>
       </div>
 
+      <!-- ── YT Review tab ──────────────────────────────────────────
            Background worker walks earliest-year Blues masters and
            proposes YouTube videos for tracks with no override yet.
            v1 = everything goes here for human review; no auto-accept. -->
@@ -518,6 +519,17 @@
 }
 .admin-btn:hover { background: #3a3a3a; }
 .admin-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Collapsible tab-panel sections (wired in admin.js). */
+.admin-collapse-header { cursor: pointer; }
+.admin-collapse-caret {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  user-select: none;
+  flex-shrink: 0;
+}
 .admin-btn-danger {
   background: #6b1a1a;
   color: #fff;

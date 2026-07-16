@@ -320,7 +320,9 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
             if (cachedIds.has(id))
                 continue;
             try {
-                await _sleep(REQ_INTERVAL_MS);
+                // Pacing is now enforced process-wide by discogsGate() inside
+                // DiscogsClient — no local sleep, so a solo run rides the gate
+                // at ~1/sec instead of gate + local sleep ≈ 2s/item.
                 const full = await _withRetry(`master ${id}`, () => client.getMasterRelease(id));
                 await cacheRelease(id, "master", full);
                 const title = String(full?.title ?? r?.title ?? "(untitled)");
