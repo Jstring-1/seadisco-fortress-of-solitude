@@ -7894,10 +7894,13 @@ app.get("/api/admin/cache-rate", async (req, res) => {
          FROM release_cache`,
       ),
       getPool().query(
-        `SELECT to_char(date_trunc('hour', cached_at), 'YYYY-MM-DD"T"HH24:00') AS hour,
+        // Bucket by absolute UTC-hour epoch (ms) so the count grid is
+        // timezone-independent and matches the Node fill below exactly.
+        // The client formats these instants in Pacific for display.
+        `SELECT (floor(extract(epoch from cached_at) / 3600) * 3600000)::bigint AS t,
                 COUNT(*)::bigint AS n
            FROM release_cache
-          WHERE cached_at >= date_trunc('hour', NOW()) - INTERVAL '23 hours'
+          WHERE cached_at >= NOW() - INTERVAL '24 hours'
           GROUP BY 1
           ORDER BY 1`,
       ),
@@ -7907,15 +7910,16 @@ app.get("/api/admin/cache-rate", async (req, res) => {
     const w = windows.rows[0] || {};
     // Fill the 24 hourly buckets (0 where no writes) so the sparkline
     // has a stable length regardless of gaps.
-    const counts = new Map<string, number>();
-    for (const r of hourly.rows) counts.set(r.hour, Number(r.n));
-    const series: Array<{ hour: string; n: number }> = [];
-    const base = new Date();
-    base.setMinutes(0, 0, 0);
+    const HOUR_MS = 3600_000;
+    const counts = new Map<number, number>();
+    for (const r of hourly.rows) counts.set(Number(r.t), Number(r.n));
+    // Current UTC-hour start (ms) → 24 buckets back. Each `t` is an
+    // absolute instant the client renders in Pacific time.
+    const baseHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    const series: Array<{ t: number; n: number }> = [];
     for (let i = 23; i >= 0; i--) {
-      const d = new Date(base.getTime() - i * 3600_000);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:00`;
-      series.push({ hour: key, n: counts.get(key) ?? 0 });
+      const t = baseHour - i * HOUR_MS;
+      series.push({ t, n: counts.get(t) ?? 0 });
     }
     res.json({
       total:    { release: byType.release ?? 0, master: byType.master ?? 0, all: (byType.release ?? 0) + (byType.master ?? 0) },

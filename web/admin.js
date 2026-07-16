@@ -2092,13 +2092,34 @@ async function loadCacheRate(_elRetry = 0) {
     const n = (x) => (Number(x) || 0).toLocaleString();
     const series = Array.isArray(s.hourly) ? s.hourly : [];
     const max = series.reduce((m, h) => Math.max(m, Number(h.n) || 0), 0);
-    const bars = series.map(h => {
+    const HOUR_MS = 3600000;
+    // Each bucket carries an absolute instant `t` (ms). Format in Pacific.
+    // Fallback parses the legacy UTC "hour" string if an old payload lands.
+    const tOf = (h) => Number.isFinite(Number(h.t)) ? Number(h.t)
+                     : (h.hour ? Date.parse(String(h.hour) + ":00Z") : NaN);
+    const ptFull = (ms) => Number.isFinite(ms)
+      ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+      : "";
+    const ptHour = (ms) => Number.isFinite(ms)
+      ? new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric" })
+      : "";
+    const bars = series.map((h, i) => {
       const v = Number(h.n) || 0;
+      const ms = tOf(h);
       const pct = max > 0 ? Math.round((v / max) * 100) : 0;
-      const hh = String(h.hour).slice(11, 16);
-      return `<span title="${hh}: ${n(v)} writes" style="display:inline-block;width:5px;height:26px;background:var(--surface);border-radius:1px;vertical-align:bottom;position:relative">`
-           + `<span style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;min-height:${v > 0 ? 2 : 0}px;background:var(--accent);border-radius:1px"></span></span>`;
+      const last = i === series.length - 1;
+      return `<span title="${ptFull(ms)} PT · ${n(v)} writes" style="display:inline-block;width:6px;height:34px;background:rgba(255,255,255,0.045);vertical-align:bottom;position:relative">`
+           + `<span style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;min-height:${v > 0 ? 2 : 0}px;background:var(--accent)${last ? ";opacity:0.55" : ""}"></span></span>`;
     }).join("");
+    const firstT = series.length ? tOf(series[0]) : NaN;
+    const lastT  = series.length ? tOf(series[series.length - 1]) : NaN;
+    const chart = `
+      <div style="display:inline-block;max-width:100%;overflow-x:auto">
+        <div style="display:flex;gap:1px;align-items:flex-end;height:34px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 1px" title="Writes per hour, last 24 h (Pacific time)">${bars || '<span style="font-size:0.72rem">no writes in the last 24h</span>'}</div>
+        <div style="display:flex;justify-content:space-between;font-size:0.64rem;color:var(--muted);margin-top:3px">
+          <span>${ptHour(firstT)}</span><span>now · ${ptHour(lastT)} PT</span>
+        </div>
+      </div>`;
     el.innerHTML = `
       <div style="display:flex;gap:1.1rem;flex-wrap:wrap;align-items:baseline;margin-bottom:0.5rem">
         <span title="release_cache writes in the last hour">Last hour: <strong style="color:var(--text)">${n(s.window?.["1h"])}</strong></span>
@@ -2106,7 +2127,7 @@ async function loadCacheRate(_elRetry = 0) {
         <span title="Average writes per hour across the last 24h">Rate: <strong style="color:var(--text)">${n(s.ratePerHour24h)}</strong>/hr</span>
         <span title="release_cache writes in the last 7 days">Last 7d: <strong style="color:var(--text)">${n(s.window?.["7d"])}</strong></span>
       </div>
-      <div style="display:flex;gap:1px;align-items:flex-end;height:26px" title="Writes per hour, last 24 hours">${bars || '<span style="font-size:0.72rem">no writes in the last 24h</span>'}</div>
+      ${chart}
       <div style="font-size:0.72rem;margin-top:0.4rem">Total cached: <strong style="color:var(--text)">${n(s.total?.all)}</strong> (${n(s.total?.master)} masters · ${n(s.total?.release)} releases)</div>
     `;
     clearTimeout(window._cacheRatePollTimer);
