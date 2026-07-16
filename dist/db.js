@@ -8958,16 +8958,19 @@ async function _computeCacheAnalyticsV1(f) {
                         WHERE LOWER(art->>'name') LIKE LOWER(${push('%' + f.artist + '%')}))`);
     }
     if (f.genre) {
-        // jsonb_exists = the ? key-exists operator, function form. Explicit
-        // so there's no operator-resolution ambiguity with the bound param
-        // (the old @> to_jsonb(ARRAY[…]) form matched nothing here).
-        where.push(`jsonb_exists(rc.data->'genres', ${push(f.genre)})`);
+        // Case-insensitive exact match on any genre tag. jsonb_exists (the ?
+        // operator) is case-SENSITIVE, so "blues" silently missed rows tagged
+        // "Blues" — matching the label/artist convention avoids those silent
+        // zero-result surprises.
+        where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(rc.data->'genres','[]'::jsonb)) g
+                        WHERE LOWER(g) = LOWER(${push(f.genre)}))`);
     }
     if (f.style) {
-        where.push(`jsonb_exists(rc.data->'styles', ${push(f.style)})`);
+        where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(rc.data->'styles','[]'::jsonb)) st
+                        WHERE LOWER(st) = LOWER(${push(f.style)}))`);
     }
     if (f.country) {
-        where.push(`rc.data->>'country' = ${push(f.country)}`);
+        where.push(`LOWER(rc.data->>'country') = LOWER(${push(f.country)})`);
     }
     if (Number.isFinite(f.yearFrom)) {
         where.push(`COALESCE(NULLIF(rc.data->>'year','')::int, 0) >= ${push(f.yearFrom)}`);
@@ -9097,17 +9100,19 @@ async function _computeCacheAnalyticsV2(f) {
                           AND LOWER(ra.name) LIKE LOWER(${push('%' + f.artist + '%')}))`);
     }
     if (f.genre) {
+        // Case-insensitive to match the V1 reader + the label/artist filters;
+        // exact `=` silently missed casing variants ("blues" vs "Blues").
         where.push(`EXISTS (SELECT 1 FROM release_tags rt
                         WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
-                          AND rt.kind = 'genre' AND rt.value = ${push(f.genre)})`);
+                          AND rt.kind = 'genre' AND LOWER(rt.value) = LOWER(${push(f.genre)}))`);
     }
     if (f.style) {
         where.push(`EXISTS (SELECT 1 FROM release_tags rt
                         WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
-                          AND rt.kind = 'style' AND rt.value = ${push(f.style)})`);
+                          AND rt.kind = 'style' AND LOWER(rt.value) = LOWER(${push(f.style)}))`);
     }
     if (f.country) {
-        where.push(`ca.country = ${push(f.country)}`);
+        where.push(`LOWER(ca.country) = LOWER(${push(f.country)})`);
     }
     if (Number.isFinite(f.yearFrom)) {
         where.push(`COALESCE(ca.year, 0)::int >= ${push(f.yearFrom)}`);
