@@ -314,20 +314,10 @@ function initBluesArchiveView() {
   // (The artist-enrichment "resume bulk job" poll that used to run here
   // was removed with the artist subsystem — its endpoint is gone, so the
   // poll only 404'd.)
-  // Deep-link support: /?v=blues-archive&baArtist=ID opens the given
-  // archive artist after the list view paints. Used by the 🎸 badge
-  // on album/version modals to jump straight to a matched artist.
-  // A URL deep-link wins over any persisted view-state so the badge
-  // jump never lands you on the Lyrics tab from a stale session.
-  let hasUrlDeepLink = false;
-  try {
-    const p = new URLSearchParams(window.location.search);
-    const aid = parseInt(p.get("baArtist") || "", 10);
-    if (Number.isFinite(aid) && aid > 0) {
-      hasUrlDeepLink = true;
-      setTimeout(() => _baOpenArtist(aid), 40);
-    }
-  } catch { /* non-fatal */ }
+  // The ?baArtist=ID deep-link was removed with the artist subsystem;
+  // nothing deep-links now, so the persisted view-state restore below
+  // always runs.
+  const hasUrlDeepLink = false;
   // Restore the previously-active subtab + filters if the user just
   // bounced over to Search (or any other view) and came back. Only
   // honoured when no URL deep-link is active.
@@ -392,361 +382,26 @@ function initBluesArchiveView() {
 }
 window.initBluesArchiveView = initBluesArchiveView;
 
-function _bluesArchiveDebouncedSearch() {
-  if (_baSearchTimer) clearTimeout(_baSearchTimer);
-  _baSearchTimer = setTimeout(() => { _baPage = 0; _baLoadList(); }, 280);
-}
-window._bluesArchiveDebouncedSearch = _bluesArchiveDebouncedSearch;
 
-async function _baLoadList() {
-  const rowsEl = document.getElementById("blues-archive-rows");
-  const countEl = document.getElementById("blues-archive-count");
-  if (!rowsEl) return;
-  const q = (document.getElementById("blues-archive-search")?.value || "").trim();
-  const params = new URLSearchParams();
-  if (q) params.set("q", q);
-  if (_baListCategory) params.set("category", _baListCategory);
-  // "No Wikipedia" checkbox — surfaces artists whose wikipedia_suffix
-  // is still NULL / empty so the curator can knock them out quickly.
-  if (document.getElementById("blues-archive-no-wiki")?.checked) {
-    params.set("no_wiki", "1");
-  }
-  // "No Discogs ID" — same idea, for rows still missing the canonical
-  // Discogs profile id. Pairs with the per-row 🔎 (search Discogs by
-  // name) and the click-to-edit Discogs ID cell.
-  if (document.getElementById("blues-archive-no-discogs")?.checked) {
-    params.set("no_discogs", "1");
-  }
-  // Strict-Blues filter — tri-state select. "has" = seed_strict_count > 0
-  // (at least one cached MASTER whose genres = ['Blues'] exactly).
-  // "no" = seed_strict_count = 0 (missing genre evidence). Empty = any.
-  const strictMode = document.getElementById("blues-archive-strict-filter")?.value || "";
-  if (strictMode === "has") params.set("has_strict", "1");
-  else if (strictMode === "no") params.set("no_strict", "1");
-  // Server-side sort — same fix as lyrics. Client-side sort over only
-  // the visible 100 rows used to mislead users into thinking the
-  // entire DB had been sorted.
-  if (_baListSort?.key) {
-    params.set("sort",  _baListSort.key);
-    params.set("order", _baListSort.dir);
-  }
-  params.set("limit", String(_BA_LIMIT));
-  params.set("offset", String(_baPage * _BA_LIMIT));
-  // Render the active-filter indicator (or hide it) regardless of fetch
-  // result so the affordance updates even when the network is slow.
-  _baRenderArtistsFilterIndicator();
-  // Dim instead of wipe — keeps the existing rows visible (and the
-  // user's scroll position) until the new data arrives.
-  const scrollY = window.scrollY;
-  rowsEl.classList.add("ba-loading");
-  const _listPagEl = document.getElementById("blues-archive-pager");
-  if (_listPagEl && _baPage === 0) _listPagEl.innerHTML = "";
-  try {
-    const r = await apiFetch(`/api/blues-archive/artists?${params}`);
-    if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
-    const { rows = [], total = 0 } = await r.json();
-    _baTotal = total;
-    if (countEl) countEl.textContent = total ? `${total.toLocaleString()} artist${total === 1 ? "" : "s"}` : "No artists yet.";
-    _baListRowsCache = rows;
-    _baRenderListTable();
-    _baRenderPager();
-    requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
-  } catch (e) {
-    rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
-  } finally {
-    rowsEl.classList.remove("ba-loading");
-  }
-}
 
-function _baSortList(key) {
-  _baToggleSort(_baListSort, key);
-  _baPage = 0;           // back to page 1 when the order changes
-  _baLoadList();
-}
-window._baSortList = _baSortList;
 // Expose so blues-admin.js's bluesDbRenderList() can refresh this
 // grid after inline editor mutations (Refresh from Discogs, Pick
 // Discogs match, per-row enrich, etc.) without admin.html present.
-window._baLoadList = _baLoadList;
 
-function _baRenderListTable() {
-  const rowsEl = document.getElementById("blues-archive-rows");
-  if (!rowsEl) return;
-  // Server-side sort — render as-is.
-  const rows = _baListRowsCache;
-  if (!rows.length) {
-    rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
-    return;
-  }
-  const S = _baListSort;
-  rowsEl.innerHTML = `
-    <table class="api-log-table" style="font-size:0.86rem;width:100%;table-layout:fixed">
-      <colgroup>
-        <col style="width:32px">
-        <col style="width:52px">
-        <col>
-        <col style="width:110px">
-        <col style="width:60px">
-        <col style="width:70px">
-        <col style="width:70px">
-        <col style="width:80px">
-        <col style="width:60px">
-      </colgroup>
-      <thead><tr>
-        <th style="width:32px;text-align:center"><input type="checkbox" id="ba-artists-cb-all" onclick="_baArtistsToggleAllOnPage(this.checked)" title="Select every artist on this page"></th>
-        ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
-        ${_baSortTh("Name",       "name",               S, "_baSortList")}
-        ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
-        ${_baSortTh("Wiki",       "has_wiki",           S, "_baSortList", "text-align:center")}
-        ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
-        ${_baSortTh("Lyrics",     "lyrics_count",       S, "_baSortList", "text-align:right")}
-        ${_baSortTh("Releases",   "releases_count",     S, "_baSortList", "text-align:right")}
-        ${_baSortTh("🩸",         "strict_count",       S, "_baSortList", "text-align:right", "Cached masters whose genres = ['Blues'] exactly with this artist as a primary credit")}
-      </tr></thead>
-      <tbody>${rows.map(row => {
-        // Name cell uses entityLookupLinkHtml so clicking the text
-        // opens the unified search-options popup (Wikipedia / YouTube
-        // / LOC / Archive.org / Search SeaDisco / Copy). Clicking
-        // anywhere else on the row opens the Blues Archive artist
-        // detail page (existing behavior).
-        const nameHtml = (typeof entityLookupLinkHtml === "function" && row.name)
-          ? entityLookupLinkHtml("artist", row.name, { entityId: row.discogs_id, title: `Lookup options for "${row.name}"` })
-          : escHtml(row.name || "");
-        // Strict-Blues badge — lit when the artist has at least one
-        // cached MASTER whose genres = ['Blues'] exactly. Populated by
-        // the strict-pad button. Tooltip shows the actual count.
-        const strictCount = Number(row.seed_strict_count) || 0;
-        const strictBadge = strictCount > 0
-          ? `<span title="${strictCount} cached master${strictCount === 1 ? "" : "s"} with genres = ['Blues'] exactly" style="margin-left:0.3rem;font-size:0.74rem;color:#c5687a;border:1px solid rgba(197,104,122,0.4);border-radius:4px;padding:0.05rem 0.32rem;vertical-align:middle">🩸 ${strictCount}</span>`
-          : "";
-        // Per-row "Search Discogs as artist" affordance — fastest way
-        // to track down the canonical id when curating. Opens
-        // discogs.com's artist-scoped site search in a new tab; the
-        // admin then pastes the right id into the editor + hits
-        // Refresh from Discogs.
-        const discogsSearchHref = row.name
-          ? "https://www.discogs.com/search/?type=artist&q=" + encodeURIComponent(row.name)
-          : "";
-        const discogsSearchHtml = discogsSearchHref
-          ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎</a>`
-          : "";
-        // Per-row quick actions: Wikipedia search and full artist
-        // editor. Both stopPropagation so the row-level click that
-        // opens the artist profile doesn't also fire.
-        const wikiSearchHref = row.name
-          ? "https://en.wikipedia.org/wiki/Special:Search?search=" + encodeURIComponent(row.name)
-          : "";
-        const wikiSearchHtml = wikiSearchHref
-          ? `<a href="${escHtml(wikiSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Wikipedia for &quot;${escHtml(row.name || "")}&quot; — opens en.wikipedia.org in a new tab so you can find the canonical article and paste its suffix into wikipedia_suffix." style="margin-left:0.3rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem">📖</a>`
-          : "";
-        const editorHtml = `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="Open the full artist editor (name, dates, hometown, bio, IDs, photo, discogs_releases, etc.)" style="margin-left:0.3rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem">✎</a>`;
-        // Discogs ID — click opens the full Edit Artist form so the
-        // curator can fix / add the id (or any other field) without
-        // an extra trip into the artist profile. stopPropagation so
-        // the row's profile-open click doesn't also fire. Blank-id
-        // rows still click-to-edit (rendered as an em-dash). The
-        // 'Open on Discogs.com' link lives inside the editor's
-        // external-links bar, so it's not lost.
-        const didHtml = row.discogs_id
-          ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" style="color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums" title="Click to edit this artist">${row.discogs_id}</a>`
-          : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" style="color:var(--muted);text-decoration:none" title="Click to edit this artist and add a Discogs ID">—</a>`;
-        // first_release_year: server computes LEAST(MB first_recording_year,
-        // MIN(discogs_releases.year)). Renders as a plain year cell;
-        // dash when neither MB nor Discogs has supplied one yet.
-        const yr = Number.isFinite(Number(row.first_release_year)) ? Number(row.first_release_year) : null;
-        const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
-        // Photo thumb — blues_artists.photo_url is populated by the
-        // Wikidata / Wikipedia / Discogs seeds. Lazy-load + decode async
-        // so a row of 100 thumbs doesn't block the table render; broken
-        // URLs collapse to a faint placeholder so the column width
-        // stays consistent across rows that have / don't have a photo.
-        const photo = (typeof row.photo_url === "string" && row.photo_url) ? row.photo_url : "";
-        const photoHtml = photo
-          ? `<img src="${escHtml(photo)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;object-fit:cover;border-radius:4px;background:var(--border);display:block" onerror="this.style.visibility='hidden'">`
-          : `<span style="width:40px;height:40px;border-radius:4px;background:rgba(255,255,255,0.04);display:inline-block" aria-hidden="true"></span>`;
-        const fullName = String(row.name || "");
-        // Wiki indicator: ✓ link if wikipedia_suffix is set, dim dash if
-        // not. Clicking ✓ opens the article in a new tab; clicking the
-        // dash opens the editor on this row so the curator can add a
-        // suffix in one step. stopPropagation so the row-click (which
-        // opens the artist popup) doesn't also fire.
-        const wikiSuffix = (typeof row.wikipedia_suffix === "string") ? row.wikipedia_suffix.trim() : "";
-        const wikiHtml = wikiSuffix
-          ? `<a href="https://en.wikipedia.org/wiki/${encodeURIComponent(wikiSuffix)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Wikipedia: ${escHtml(wikiSuffix)}" style="color:#7bc77b;text-decoration:none">✓</a>`
-          : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" title="No Wikipedia link — click to edit this artist and add one" style="color:#666;text-decoration:none">—</a>`;
-        const cbChecked = _baArtistsSelectedIds.has(Number(row.id)) ? " checked" : "";
-        return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
-          <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="ba-artist-cb" data-artist-cb="${row.id}" onclick="event.stopPropagation();_baArtistsToggleRow(${row.id}, this.checked)"${cbChecked}></td>
-          <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
-          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${strictBadge}${discogsSearchHtml}${wikiSearchHtml}${editorHtml}</td>
-          <td style="font-size:0.78rem">${didHtml}</td>
-          <td style="text-align:center;font-size:0.9rem">${wikiHtml}</td>
-          <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
-          <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
-          <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
-          <td style="text-align:right;color:${strictCount ? "#c5687a" : "var(--muted)"}" title="Cached masters whose genres = ['Blues'] exactly with ${escHtml(fullName)} as primary credit">${strictCount || ""}</td>
-        </tr>`;
-      }).join("")}</tbody>
-    </table>`;
-  // Re-sync the header checkbox + bulk bar against the persistent
-  // selection Set (which survives pagination). Per-row boxes were
-  // already stamped inline via cbChecked above.
-  _baArtistsSyncSelectionUI();
-}
 
-function _baRenderPager() {
-  const el = document.getElementById("blues-archive-pager");
-  if (!el) return;
-  const pageCount = Math.max(1, Math.ceil(_baTotal / _BA_LIMIT));
-  const cur = _baPage + 1;
-  if (pageCount <= 1) { el.innerHTML = ""; return; }
-  el.innerHTML = `
-    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baGoToPage(${_baPage - 1})">‹ Prev</button>
-    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
-    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baGoToPage(${_baPage + 1})">Next ›</button>
-  `;
-}
 
-function _baGoToPage(p) {
-  _baPage = Math.max(0, p);
-  _baLoadList();
-}
-window._baGoToPage = _baGoToPage;
 
 // ── Bulk artist select + delete ──────────────────────────────────────
 // Mirrors the lyrics bulk editor: per-row checkboxes bind to a Set that
 // persists across pagination; a bulk bar appears once anything's picked.
-function _baArtistsToggleRow(id, checked) {
-  const n = Number(id);
-  if (!Number.isFinite(n)) return;
-  if (checked) _baArtistsSelectedIds.add(n);
-  else         _baArtistsSelectedIds.delete(n);
-  _baArtistsSelectedCapped = false; // any manual edit invalidates the cap flag
-  _baArtistsSyncSelectionUI();
-}
-window._baArtistsToggleRow = _baArtistsToggleRow;
 
-function _baArtistsToggleAllOnPage(checked) {
-  for (const r of (_baListRowsCache || [])) {
-    const n = Number(r.id);
-    if (!Number.isFinite(n)) continue;
-    if (checked) _baArtistsSelectedIds.add(n);
-    else         _baArtistsSelectedIds.delete(n);
-  }
-  _baArtistsSelectedCapped = false;
-  document.querySelectorAll(".ba-artist-cb").forEach(cb => {
-    cb.checked = _baArtistsSelectedIds.has(Number(cb.getAttribute("data-artist-cb")));
-  });
-  _baArtistsSyncSelectionUI();
-}
-window._baArtistsToggleAllOnPage = _baArtistsToggleAllOnPage;
 
 // Refresh the header tri-state checkbox + bulk bar from the Set. Called
 // after each table render and every selection change.
-function _baArtistsSyncSelectionUI() {
-  const hdr = document.getElementById("ba-artists-cb-all");
-  if (hdr) {
-    const pageIds = (_baListRowsCache || []).map(r => Number(r.id));
-    const sel = pageIds.filter(id => _baArtistsSelectedIds.has(id)).length;
-    const allOnPage = pageIds.length > 0 && sel === pageIds.length;
-    hdr.checked = allOnPage;
-    hdr.indeterminate = sel > 0 && !allOnPage;
-  }
-  _baArtistsRenderBulkBar();
-}
 
-async function _baArtistsSelectAllMatching() {
-  const params = new URLSearchParams();
-  const q = (document.getElementById("blues-archive-search")?.value || "").trim();
-  if (q) params.set("q", q);
-  if (_baListCategory) params.set("category", _baListCategory);
-  if (document.getElementById("blues-archive-no-wiki")?.checked)    params.set("no_wiki", "1");
-  if (document.getElementById("blues-archive-no-discogs")?.checked) params.set("no_discogs", "1");
-  const strictMode = document.getElementById("blues-archive-strict-filter")?.value || "";
-  if (strictMode === "has") params.set("has_strict", "1");
-  else if (strictMode === "no") params.set("no_strict", "1");
-  try {
-    const r = await apiFetch(`/api/admin/blues/matching-ids?${params}`);
-    if (!r.ok) { alert(`Select-all failed: HTTP ${r.status}`); return; }
-    const { ids = [], capped = false } = await r.json();
-    for (const id of ids) { const n = Number(id); if (Number.isFinite(n)) _baArtistsSelectedIds.add(n); }
-    _baArtistsSelectedCapped = !!capped;
-    document.querySelectorAll(".ba-artist-cb").forEach(cb => {
-      cb.checked = _baArtistsSelectedIds.has(Number(cb.getAttribute("data-artist-cb")));
-    });
-    _baArtistsSyncSelectionUI();
-  } catch (e) {
-    alert(`Select-all failed: ${String(e?.message || e)}`);
-  }
-}
-window._baArtistsSelectAllMatching = _baArtistsSelectAllMatching;
 
-function _baArtistsClearSelection() {
-  _baArtistsSelectedIds.clear();
-  _baArtistsSelectedCapped = false;
-  document.querySelectorAll(".ba-artist-cb").forEach(cb => { cb.checked = false; });
-  _baArtistsSyncSelectionUI();
-}
-window._baArtistsClearSelection = _baArtistsClearSelection;
 
-function _baArtistsRenderBulkBar() {
-  const el = document.getElementById("blues-archive-artists-bulkbar");
-  if (!el) return;
-  const n = _baArtistsSelectedIds.size;
-  if (!n) { el.style.display = "none"; el.innerHTML = ""; return; }
-  el.style.display = "";
-  const capNote = _baArtistsSelectedCapped
-    ? ` <span style="color:#e88" title="Server capped the matching-ids response at 10k; matches beyond that aren't selected.">(capped at 10k)</span>`
-    : "";
-  el.innerHTML = `
-    <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-      <strong>${n.toLocaleString()} artist${n === 1 ? "" : "s"} selected</strong>${capNote}
-      <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baArtistsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching filter</a>
-      <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baArtistsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
-      <span style="margin-left:auto;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-        <label style="display:inline-flex;align-items:center;gap:0.3rem;color:var(--muted)" title="Also hard-delete every lyric tied to these artists (FK-linked + legacy name-matched). Off = lyrics are kept but their artist link is cleared.">
-          <input type="checkbox" id="ba-artists-bulk-lyrics"> delete their lyrics too
-        </label>
-        <button type="button" class="archive-btn" onclick="_baArtistsBulkDelete()" title="Permanently delete every selected artist. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
-      </span>
-    </div>`;
-}
-window._baArtistsRenderBulkBar = _baArtistsRenderBulkBar;
 
-async function _baArtistsBulkDelete() {
-  const ids = Array.from(_baArtistsSelectedIds);
-  if (!ids.length) return;
-  const n = ids.length;
-  const withLyrics = !!document.getElementById("ba-artists-bulk-lyrics")?.checked;
-  const lyricsNote = withLyrics ? " AND every lyric tied to them" : " (their lyrics are kept, just unlinked)";
-  if (!confirm(`Permanently delete ${n.toLocaleString()} artist${n === 1 ? "" : "s"}${lyricsNote}?\n\nThis cannot be undone.`)) return;
-  // Big-batch second confirm — same guard as the lyrics bulk delete.
-  if (n > 25) {
-    const typed = prompt(`Type "delete ${n}" to confirm:`);
-    if (typed !== `delete ${n}`) { alert("Confirmation didn't match — cancelled."); return; }
-  }
-  try {
-    const r = await apiFetch("/api/admin/blues/bulk-delete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ids, withLyrics }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Bulk delete failed: ${j?.error || r.status}`); return; }
-    if (typeof showToast === "function") {
-      const ly = withLyrics ? ` · ${(j.lyricsDeleted ?? 0).toLocaleString()} lyric${j.lyricsDeleted === 1 ? "" : "s"}` : "";
-      showToast(`Deleted ${(j.deleted ?? 0).toLocaleString()} artist${j.deleted === 1 ? "" : "s"}${ly}`, "info");
-    }
-    _baArtistsClearSelection();
-    if (typeof _baLoadStats === "function") _baLoadStats();
-    _baLoadList();
-  } catch (e) {
-    alert(`Bulk delete failed: ${String(e?.message || e)}`);
-  }
-}
-window._baArtistsBulkDelete = _baArtistsBulkDelete;
 
 // Open an artist as an overlay popup. Was previously a page swap that
 // hid .blues-archive-list and rendered into #blues-archive-detail; the
@@ -759,59 +414,7 @@ window._baArtistsBulkDelete = _baArtistsBulkDelete;
 // background after the current artist renders.
 const _baArtistCache = new Map();
 const _BA_CACHE_LIMIT = 50;
-function _baCacheGet(id) {
-  if (!_baArtistCache.has(id)) return null;
-  const v = _baArtistCache.get(id);
-  _baArtistCache.delete(id);
-  _baArtistCache.set(id, v); // bump LRU position
-  return v;
-}
-function _baCachePut(id, data) {
-  _baArtistCache.set(id, data);
-  while (_baArtistCache.size > _BA_CACHE_LIMIT) {
-    const oldest = _baArtistCache.keys().next().value;
-    _baArtistCache.delete(oldest);
-  }
-}
 
-async function _baOpenArtist(id) {
-  _baCurrentArtistId = id;
-  _baPopupReleasesFilter = ""; // fresh artist — clear any prior filter
-  // Reuse overlay if already there (e.g. opened twice in a row).
-  let overlay = document.getElementById("ba-artist-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "ba-artist-overlay";
-    Object.assign(overlay.style, {
-      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
-      zIndex: "300", display: "flex", alignItems: "flex-start",
-      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
-    });
-    overlay.onclick = (e) => { if (e.target === overlay) _baBackToList(); };
-    document.body.appendChild(overlay);
-  }
-  // Cache hit: render instantly, no spinner. Cache miss: spinner +
-  // fetch. Either way, kick off background preloads for linked
-  // artists so the next click is instant too.
-  const cached = _baCacheGet(id);
-  if (cached) {
-    _baRenderArtistDetail(cached);
-    _baPreloadLinkedArtists(cached);
-    return;
-  }
-  overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%);color:var(--muted)">Loading…</div>`;
-  try {
-    const r = await apiFetch(`/api/blues-archive/artists/${id}`);
-    if (!r.ok) { overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: HTTP ${r.status}</p></div>`; return; }
-    const a = await r.json();
-    _baCachePut(id, a);
-    _baRenderArtistDetail(a);
-    _baPreloadLinkedArtists(a);
-  } catch (e) {
-    overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: ${escHtml(String(e?.message || e))}</p></div>`;
-  }
-}
-window._baOpenArtist = _baOpenArtist;
 
 // Background fetch of every linked artist (pseudonyms / bands /
 // spouse / mentor / family / traveled-with) so clicking a pill
@@ -819,373 +422,14 @@ window._baOpenArtist = _baOpenArtist;
 // the API on artists with long link lists. Silent on errors —
 // a miss just means the cache won't hit for that one and we fall
 // back to the spinner-fetch path.
-async function _baPreloadLinkedArtists(a) {
-  const links = Array.isArray(a?.links) ? a.links : [];
-  const ids = links
-    .map(l => Number(l?.id))
-    .filter(id => Number.isFinite(id) && id > 0 && !_baArtistCache.has(id));
-  const CHUNK = 5;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const chunk = ids.slice(i, i + CHUNK);
-    await Promise.allSettled(chunk.map(async (lid) => {
-      try {
-        const r = await apiFetch(`/api/blues-archive/artists/${lid}`);
-        if (r.ok) {
-          const data = await r.json();
-          _baCachePut(lid, data);
-        }
-      } catch { /* network errors silenced — cache miss fallback */ }
-    }));
-  }
-}
 
-function _baSortLyrics(key) {
-  _baToggleSort(_baLyricsSort, key);
-  if (_baDetailArtist) _baRenderArtistDetail(_baDetailArtist);
-}
-window._baSortLyrics = _baSortLyrics;
 
-function _baSortReleases(key) {
-  _baToggleSort(_baReleasesSort, key);
-  if (_baDetailArtist) _baRenderArtistDetail(_baDetailArtist);
-}
-window._baSortReleases = _baSortReleases;
 
-function _baRenderArtistDetail(a) {
-  _baDetailArtist = a;
-  // Render into the overlay's inner box. Falls back to the legacy
-  // #blues-archive-detail panel only if the overlay isn't around (e.g.
-  // someone called _baRenderArtistDetail directly outside the popup
-  // flow). New callers should go through _baOpenArtist.
-  const overlay = document.getElementById("ba-artist-overlay");
-  const detail = overlay
-    ? (overlay.firstElementChild || (() => {
-        const inner = document.createElement("div");
-        Object.assign(inner.style, {
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "8px", padding: "1.2rem 1.4rem", width: "min(980px,100%)",
-        });
-        overlay.appendChild(inner);
-        return inner;
-      })())
-    : document.getElementById("blues-archive-detail");
-  if (!detail) return;
-  // Ensure the overlay's container has the popup chrome styles
-  // (re-rendering swaps innerHTML on the loading shell that already
-  // has them, but a defensive re-apply guarantees it).
-  if (overlay && detail === overlay.firstElementChild) {
-    Object.assign(detail.style, {
-      background: "var(--surface)", border: "1px solid var(--border)",
-      borderRadius: "8px", padding: "1.2rem 1.4rem", width: "min(980px,100%)",
-    });
-  }
-  const dates = [a.birth_date, a.death_date].filter(Boolean).join(" – ");
-  // Schema field is `notes` (no `profile` column on blues_artists). No
-  // length cap — the column is plain TEXT and full Wikipedia bios run
-  // 8–20k chars. The popup section is collapsible (Bio/Notes details
-  // element) so a long bio doesn't shove the rest of the popup down.
-  const bio = a.notes ? `<p style="font-size:0.86rem;line-height:1.5;color:var(--text);white-space:pre-wrap;margin:0.6rem 0">${escHtml(a.notes)}</p>` : "";
-  const photo = a.photo_url
-    ? `<img src="${escHtml(a.photo_url)}" alt="" style="width:140px;height:140px;object-fit:cover;border-radius:4px;flex:0 0 auto" loading="lazy" />`
-    : "";
-  // Combine DOB/DOD with the place strings so each life-event line
-  // carries both pieces of context: "Born: 1903-03-22, Memphis, TN".
-  // Falls back gracefully when either part is missing.
-  const bornLine = (a.birth_date || a.birth_place)
-    ? `Born: ${[escHtml(a.birth_date || ""), escHtml(a.birth_place || "")].filter(Boolean).join(", ")}`
-    : "";
-  const diedLine = (a.death_date || a.death_place)
-    ? `Died: ${[escHtml(a.death_date || ""), escHtml(a.death_place || "")].filter(Boolean).join(", ")}`
-    : "";
-  const meta = [
-    bornLine,
-    diedLine,
-    a.hometown_region ? `From: ${escHtml(a.hometown_region)}` : "",
-    a.first_recording_year ? `First recording: ${a.first_recording_year}` : "",
-  ].filter(Boolean).join(" · ");
-  // Pseudonyms / bands strip — aliases (alternate names the artist
-  // recorded under) and collaborators (bands or sidemen they played
-  // with). Both are plain string arrays on the row; clicking a chip
-  // opens its lookup popup so the curator can jump to a search /
-  // Wikipedia / Discogs for that name. Hidden when both are empty.
-  const aliasArr = Array.isArray(a.aliases) ? a.aliases.filter(Boolean) : [];
-  const bandsArr = Array.isArray(a.collaborators)
-    ? a.collaborators
-        .map(c => (typeof c === "string" ? c : (c && typeof c === "object" ? (c.name || "") : "")))
-        .filter(Boolean)
-    : [];
-  const chipHtml = (label, items) => items.length
-    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;margin-top:0.4rem">
-         <span style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
-         ${items.map(n => {
-           const safe = escHtml(n);
-           // Custom chip — entityLookupLinkHtml doesn't accept inline
-           // style, so wire openLookupPopup directly via onclick. Same
-           // lookup popup the artist names use, in artist scope.
-           return `<span role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'artist',${JSON.stringify(n).replace(/"/g, '&quot;')},{})" title="Lookup options for &quot;${safe}&quot;" style="padding:0.18rem 0.5rem;border:1px solid var(--border);border-radius:999px;font-size:0.76rem;color:var(--text);background:rgba(255,255,255,0.03);cursor:pointer">${safe}</span>`;
-         }).join("")}
-       </div>`
-    : "";
-  const aliasBandsHtml = chipHtml("Pseudonyms", aliasArr) + chipHtml("Bands / played with", bandsArr);
-  // Structured artist↔artist links — separate from the freeform
-  // aliases/collaborators above. These point at OTHER blues_artists
-  // rows by id so the chip can open that artist's profile directly.
-  const linksAll = Array.isArray(a.links) ? a.links : [];
-  // All six relation kinds, grouped. Pseudonym + band are the legacy
-  // pair; spouse / traveled / mentor / family were added with the
-  // Connections tab. Each group renders only if non-empty.
-  const _baLinkKindLabels = {
-    pseudonym: "Pseudonym",
-    band:      "Band / played with",
-    spouse:    "Spouse / partner",
-    traveled:  "Traveled with",
-    mentor:    "Mentor / taught",
-    family:    "Family",
-  };
-  const linkChipHtml = (label, items) => items.length
-    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;margin-top:0.4rem">
-         <span style="font-size:0.74rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
-         ${items.map(l => {
-           const safe = escHtml(l.name || "");
-           return `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${l.id})" title="Open ${safe} in Blues Archive" style="padding:0.18rem 0.5rem;border:1px solid var(--accent);border-radius:999px;font-size:0.76rem;color:var(--accent);background:rgba(255,255,255,0.03);text-decoration:none;cursor:pointer">🔗 ${safe}</a>`;
-         }).join("")}
-       </div>`
-    : "";
-  const linksHtml = Object.keys(_baLinkKindLabels).map(k => {
-    const rows = linksAll.filter(l => l.kind === k);
-    return linkChipHtml(`Linked: ${_baLinkKindLabels[k].toLowerCase()}`, rows);
-  }).join("");
-  const lyricsRaw = Array.isArray(a.lyrics) ? a.lyrics : [];
-  const releasesRaw = Array.isArray(a.releases) ? a.releases : [];
-  const lyrics   = _baSortApply(lyricsRaw,   _baLyricsSort,   _BA_LYRICS_TYPES);
-  const releases = _baSortApply(releasesRaw, _baReleasesSort, _BA_RELEASES_TYPES);
-  const LS = _baLyricsSort, RS = _baReleasesSort;
-  // Title cells use entityLookupLinkHtml so the title text fires the
-  // unified search-options popup (Wikipedia / YouTube / LOC / Archive
-  // / Search SeaDisco / Copy). The rest of each row still opens the
-  // detail/viewer (existing behavior preserved).
-  const lyricsHtml = lyricsRaw.length
-    ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr>
-          ${_baSortTh("Title",   "page_title",         LS, "_baSortLyrics")}
-          ${_baSortTh("Year",    "first_release_year", LS, "_baSortLyrics", "text-align:right;padding-right:0.6rem")}
-          ${_baSortTh("Tuning",  "tuning",             LS, "_baSortLyrics")}
-          ${_baSortTh("Snippet", "snippet",            LS, "_baSortLyrics")}
-          <th style="width:1%"></th>
-        </tr></thead>
-        <tbody>${lyrics.map(l => {
-          const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
-            ? entityLookupLinkHtml("track", l.page_title, { trackArtist: a.name || "", openId: l.id, openType: "lyric", title: `Lookup options for "${l.page_title}"` })
-            : escHtml(l.page_title || "");
-          const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
-          const yrHtml = yr
-            ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
-            : `<span style="color:#555">—</span>`;
-          // Search-this-track shortcut: jumps to the main SeaDisco
-          // search with title in `q`, artist name in `a`, restricted
-          // to master+ results, sorted by year ascending. Params here
-          // mirror restoreFromParams() in search.js (1-letter keys).
-          const searchQs = `?q=${encodeURIComponent(l.page_title || "")}` +
-                           `&a=${encodeURIComponent(a.name || "")}` +
-                           `&r=${encodeURIComponent("master+")}` +
-                           `&s=${encodeURIComponent("year:asc")}`;
-          const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
-          const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? " ba-lyric-visited" : "";
-          return `<tr data-lyric-row="${l.id}" class="${visitedCls.trim()}">
-            <td style="font-weight:600;color:var(--text);white-space:nowrap">${searchLink} ${titleHtml}</td>
-            <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
-            <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
-            <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
-            <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
-          </tr>`;
-        }).join("")}</tbody>
-      </table>`
-    : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No lyrics matched this artist's name. (Try Import from lyrics on the list page if you've just scraped.)</p>`;
-  const releasesHtml = releasesRaw.length
-    ? `<table id="ba-popup-releases-table" class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr>
-          ${_baSortTh("Year",  "year",  RS, "_baSortReleases")}
-          ${_baSortTh("Title", "title", RS, "_baSortReleases")}
-          ${_baSortTh("Label", "label", RS, "_baSortReleases")}
-          ${_baSortTh("Type",  "type",  RS, "_baSortReleases")}
-        </tr></thead>
-        <tbody>${releases.map(rel => {
-          const type = String(rel.type || "release");
-          // Lowercased haystack for the in-place popup filter — matches
-          // across year, title, label, and type in one substring test.
-          const relFilter = escHtml([rel.year, rel.title, rel.label, type].filter(Boolean).join(" ").toLowerCase());
-          const url  = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${rel.id}`;
-          const safeUrl = url.replace(/'/g, "\\'");
-          const titleHtml = (typeof entityLookupLinkHtml === "function" && rel.title)
-            ? entityLookupLinkHtml("release", rel.title, { entityId: rel.id, openId: rel.id, openType: type === "master" ? "master" : "release", title: `Lookup options for "${rel.title}"` })
-            : escHtml(rel.title || "");
-          // Type cell is an explicit anchor that opens the in-app
-          // release/master popup. Title still routes through
-          // entityLookupLinkHtml (search-options popup), so the curator
-          // can pick: title → lookup options, type → straight to the
-          // release/album popup.
-          const typeSafe = escHtml(type).replace(/'/g, "\\'");
-          const typeLinkHtml = `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')" style="color:var(--accent);text-decoration:none;text-transform:uppercase" title="Open ${type} popup">${escHtml(type)} ↗</a>`;
-          return `<tr data-relfilter="${relFilter}" style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')">
-            <td style="white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums">${rel.year || "—"}</td>
-            <td style="font-weight:600;color:var(--text)">${titleHtml}</td>
-            <td style="color:#888;font-size:0.78rem">${escHtml(rel.label || "")}</td>
-            <td style="font-size:0.74rem">${typeLinkHtml}</td>
-          </tr>`;
-        }).join("")}</tbody>
-      </table>`
-    : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No releases stored. Use the existing "Get all info from Discogs" button on the Blues DB tab to populate them.</p>`;
-  // Free-text filter for the releases table. Only worth showing once the
-  // list is long enough to scroll; short lists are faster to eyeball.
-  // stopPropagation on click so focusing the field doesn't toggle the
-  // parent <details>. Filtering is in-place (_baApplyPopupReleasesFilter)
-  // so typing keeps focus and doesn't re-render the popup.
-  const releasesFilterBar = releasesRaw.length > 5
-    ? `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
-         <input id="ba-popup-releases-filter" type="search" placeholder="Filter releases: title, label, year, type…"
-                value="${escHtml(_baPopupReleasesFilter)}" oninput="_baApplyPopupReleasesFilter()"
-                onclick="event.stopPropagation()"
-                style="flex:1;min-width:180px;padding:0.35rem 0.55rem;font-size:0.82rem">
-         <span id="ba-popup-releases-count" style="font-size:0.76rem;color:var(--muted);white-space:nowrap"></span>
-       </div>`
-    : "";
-  // Collapsible-section state. Each <details> reads its `open` from the
-  // persisted map (default = open) and writes back on toggle. The state
-  // is keyed by section name so all artist popups share the user's
-  // last choice for that section.
-  const collapsed = _baGetCollapsedState();
-  const isOpen = (k) => !collapsed[k]; // default = expanded
-  const sectionStyle = "margin:1rem 0;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.8rem;background:rgba(255,255,255,0.015)";
-  const summaryStyle = "cursor:pointer;font-size:0.92rem;color:var(--accent);font-weight:600;padding:0.2rem 0;list-style:none;user-select:none";
-  const onToggle = (k) => `onclick="event.stopPropagation()" ontoggle="window._baSetSectionCollapsed && window._baSetSectionCollapsed('${k}', !this.open)"`;
-  // Permanent header strip — photo + dates/place meta + the
-  // pseudonyms / bands / linked-artist pill clusters. Pulled OUT of
-  // the collapsible Bio/Notes section so the pills stay visible
-  // regardless of whether the bio text is expanded. Now the
-  // collapsible Notes panel below matches every other section: just
-  // its own data (the bio prose).
-  const profileHeader = `
-    <div style="display:flex;gap:1rem;margin:0.6rem 0 1rem;align-items:flex-start;flex-wrap:wrap">
-      ${photo}
-      <div style="flex:1;min-width:240px">
-        ${meta ? `<div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem">${meta}</div>` : ""}
-        ${linksHtml}
-        ${aliasBandsHtml}
-      </div>
-    </div>`;
-  // Notes collapsible body — just the prose (or a "none recorded"
-  // placeholder so the panel still looks consistent when empty).
-  const notesBody = bio || `<p style="color:var(--muted);font-style:italic;margin:0.4rem 0">No notes recorded.</p>`;
-  // Tunings — combines (a) per-lyric tuning chip strip and (b) the
-  // static tunings grid from src/data/tunings.csv. The grid rows
-  // include a flag for "no matching lyric in our table" so the curator
-  // can spot CSV titles that haven't been scraped yet or are filed
-  // under a slightly different page_title.
-  const tuningsArr = Array.isArray(a.tunings) ? a.tunings : [];
-  const gridTunings = Array.isArray(a.gridTunings) ? a.gridTunings : [];
-  const gridUnmatchedCount = gridTunings.filter(g => !g.lyric_id).length;
-  const chipStripHtml = tuningsArr.length
-    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin:0.4rem 0 0.6rem">${
-        tuningsArr.map(t => `<a href="#" onclick="event.preventDefault();_baJumpTuningForArtist('${escHtml((t.tuning || "").replace(/'/g, "\\'"))}', '${escHtml((a.name || "").replace(/'/g, "\\'"))}')" style="padding:0.2rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.74rem;color:var(--accent);text-decoration:none">${escHtml(t.tuning)} <span style="color:var(--muted)">· ${t.n}</span></a>`).join("")
-      }</div>`
-    : "";
-  const gridTableHtml = gridTunings.length
-    ? `<table class="api-log-table" style="font-size:0.82rem;width:100%;margin-top:0.3rem">
-        <thead><tr>
-          <th>Title</th>
-          <th>Position</th>
-          <th>Pitch</th>
-          <th>Notes</th>
-          <th style="text-align:right">Lyric</th>
-        </tr></thead>
-        <tbody>${gridTunings.map(g => {
-          const unmatched = !g.lyric_id;
-          const titleCell = unmatched
-            ? `<span title="No matching lyric in blues_lyrics yet" style="color:#e8a">${escHtml(g.title || "")}</span>`
-            : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyric(${g.lyric_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(g.title || "")}</a>`;
-          const flag = unmatched
-            ? `<span title="No matching lyric" style="color:#e8a">unmatched</span>`
-            : `<span style="color:var(--muted)">✓</span>`;
-          return `<tr>
-            <td style="white-space:nowrap">${titleCell}</td>
-            <td style="white-space:nowrap;color:var(--accent)">${escHtml(g.position || "")}</td>
-            <td style="white-space:nowrap;color:var(--muted)">${escHtml(g.pitch || "")}</td>
-            <td style="font-size:0.78rem;color:#888">${escHtml(g.notes || "")}</td>
-            <td style="text-align:right;font-size:0.78rem">${flag}</td>
-          </tr>`;
-        }).join("")}</tbody>
-      </table>`
-    : "";
-  const tuningsBody = (chipStripHtml || gridTableHtml)
-    ? `${chipStripHtml}${gridTableHtml}${gridUnmatchedCount ? `<p style="font-size:0.78rem;color:#e8a;margin:0.5rem 0 0">${gridUnmatchedCount} CSV tuning${gridUnmatchedCount === 1 ? "" : "s"} not matched to a lyric in blues_lyrics.</p>` : ""}`
-    : `<p style="color:var(--muted);font-style:italic;margin:0.4rem 0">No tunings recorded for this artist.</p>`;
-  const tuningsCount = tuningsArr.length;
-  const tuningsLabel = `Tunings${tuningsCount ? ` (${tuningsCount})` : ""}${gridTunings.length ? ` · grid: ${gridTunings.length}${gridUnmatchedCount ? `, ${gridUnmatchedCount} unmatched` : ""}` : ""}`;
-  // Header style — match the album/release modal pattern: a sticky
-  // top close strip (popup-close-zone) instead of an inline × button,
-  // and the action buttons render smaller so the title + dates strip
-  // doesn't overflow with five fat curator buttons.
-  const smallBtn = "font-size:0.72rem;padding:0.2rem 0.5rem;line-height:1.1";
-  const smallBtnDanger = `${smallBtn};color:#e88;border-color:rgba(232,136,136,0.4)`;
-  detail.innerHTML = `
-    <div class="popup-close-zone" onclick="_baBackToList()" title="Click to close" style="margin:-1.2rem -1.4rem 0.4rem"></div>
-    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
-      <h2 style="margin:0;font-size:1.1rem">${(typeof entityLookupLinkHtml === "function" && a.name)
-        ? entityLookupLinkHtml("artist", a.name, { entityId: a.discogs_id, title: `Lookup options for "${a.name}"` })
-        : escHtml(a.name || "")}</h2>
-      <span style="margin-left:auto;display:inline-flex;gap:0.3rem;flex-wrap:wrap">
-        <button class="archive-btn archive-btn-suggest" style="${smallBtn}" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: name / dates / identifiers / pseudonyms / bands / notes / photo + enrichment buttons for Wiki, Discogs, YouTube).">✎ Edit</button>
-        <button class="archive-btn" style="${smallBtn}" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics…</button>
-        <button class="archive-btn" style="${smallBtn}" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge…</button>
-        <button class="archive-btn" style="${smallBtnDanger}" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate.">Delete</button>
-        <button class="archive-btn" style="${smallBtnDanger}" onclick="_baDeleteArtistWithLyrics(${a.id}, { ban: true })" title="Same as Delete, but also records the artist name + every deleted page title in the ban list so a future rescrape won't re-add them. Reversible — open the Bans panel to unban later.">Delete + ban</button>
-      </span>
-    </div>
-    ${profileHeader}
-    <details ${isOpen("bio") ? "open" : ""} ${onToggle("bio")} style="${sectionStyle}">
-      <summary style="${summaryStyle}">Notes</summary>
-      <div style="margin-top:0.5rem">${notesBody}</div>
-    </details>
-    <details ${isOpen("tunings") ? "open" : ""} ${onToggle("tunings")} style="${sectionStyle}">
-      <summary style="${summaryStyle}">${tuningsLabel}</summary>
-      ${tuningsBody}
-    </details>
-    <details ${isOpen("lyrics") ? "open" : ""} ${onToggle("lyrics")} style="${sectionStyle}">
-      <summary style="${summaryStyle}">Lyrics (${lyrics.length})</summary>
-      <div style="margin-top:0.5rem">${lyricsHtml}</div>
-    </details>
-    <details ${isOpen("releases") ? "open" : ""} ${onToggle("releases")} style="${sectionStyle}">
-      <summary style="${summaryStyle}">Releases — oldest to newest (${releases.length})</summary>
-      <div style="margin-top:0.5rem">${releasesFilterBar}${releasesHtml}</div>
-    </details>
-  `;
-  // Re-apply the persisted release filter after the innerHTML swap so it
-  // survives sort re-renders (which rebuild the whole popup). No-op when
-  // the filter bar isn't present or the filter string is empty.
-  try { _baApplyPopupReleasesFilter(); } catch {}
-}
 
 // In-place filter for the artist-popup releases table. Reads the field,
 // stashes the value in the module var (so a sort re-render can restore
 // it), and shows/hides rows by substring match against each row's
 // data-relfilter haystack. Updates the "N of M" count beside the input.
-function _baApplyPopupReleasesFilter() {
-  const input = document.getElementById("ba-popup-releases-filter");
-  const table = document.getElementById("ba-popup-releases-table");
-  if (input) _baPopupReleasesFilter = input.value;
-  if (!table) return;
-  const q = (_baPopupReleasesFilter || "").trim().toLowerCase();
-  const rows = table.querySelectorAll("tbody tr[data-relfilter]");
-  let shown = 0;
-  rows.forEach(tr => {
-    const match = !q || (tr.getAttribute("data-relfilter") || "").includes(q);
-    tr.style.display = match ? "" : "none";
-    if (match) shown++;
-  });
-  const countEl = document.getElementById("ba-popup-releases-count");
-  if (countEl) countEl.textContent = q ? `${shown} of ${rows.length}` : `${rows.length}`;
-}
-window._baApplyPopupReleasesFilter = _baApplyPopupReleasesFilter;
 
 // Cascade-delete an artist AND every lyric tied to them. Two-step
 // confirm (the count of affected lyrics is shown after we look it
@@ -1197,64 +441,10 @@ window._baApplyPopupReleasesFilter = _baApplyPopupReleasesFilter;
 // title to blues_lyrics_bans so a future rescrape doesn't re-add
 // them. Pass true from the "Delete + don't re-add" button; the
 // plain delete button calls without ban.
-async function _baDeleteArtistWithLyrics(id, opts = {}) {
-  const ban = !!opts.ban;
-  const artistName = _baDetailArtist?.name || `#${id}`;
-  const lyricsN = Array.isArray(_baDetailArtist?.lyrics) ? _baDetailArtist.lyrics.length : 0;
-  const releasesN = Array.isArray(_baDetailArtist?.releases) ? _baDetailArtist.releases.length : 0;
-  const msg = ban
-    ? `Permanently delete ${artistName} AND ban from rescrape?\n\n` +
-      `This removes:\n` +
-      `· the artist row\n` +
-      `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
-      `\nAnd adds ban rows so the wiki rescrape will SKIP every page from this artist (by title + by name). Reversible — bans can be removed individually later.` +
-      (releasesN ? `\n\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "")
-    : `Permanently delete ${artistName}?\n\n` +
-      `This removes:\n` +
-      `· the artist row\n` +
-      `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
-      (releasesN ? `\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "") +
-      `\nThis cannot be undone. Use 'Merge into…' instead if you want to consolidate without losing lyrics. If a rescrape would just re-add this artist, use 'Delete + don't re-add' instead.`;
-  if (!confirm(msg)) return;
-  try {
-    const qs = ban ? "?with_lyrics=1&ban=1" : "?with_lyrics=1";
-    const r = await apiFetch(`/api/admin/blues/${id}${qs}`, { method: "DELETE" });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      alert("Delete failed: " + (err?.error ?? r.status));
-      return;
-    }
-    const out = await r.json().catch(() => ({}));
-    // Close the popup, refresh the underlying list + stats so the
-    // row vanishes and the chip counts update.
-    document.getElementById("ba-artist-overlay")?.remove();
-    _baCurrentArtistId = null;
-    if (typeof _baLoadList === "function")  { try { _baLoadList();  } catch {} }
-    if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
-    if (typeof showToast === "function") {
-      const banSuffix = (ban && out.bansAdded) ? ` · ${out.bansAdded} ban${out.bansAdded === 1 ? "" : "s"} added` : "";
-      showToast(`Deleted ${out.artistName || artistName} + ${out.lyricsDeleted ?? 0} lyric${out.lyricsDeleted === 1 ? "" : "s"}${banSuffix}`, "ok");
-    }
-  } catch (e) {
-    alert("Delete failed: " + (e?.message || e));
-  }
-}
-window._baDeleteArtistWithLyrics = _baDeleteArtistWithLyrics;
 
 // Dismiss the artist popup. The function name predates the popup
 // rewrite (it used to swap back to the list page); kept so existing
 // onclick attributes don't need rewriting.
-function _baBackToList() {
-  document.getElementById("ba-artist-overlay")?.remove();
-  // Legacy: if anything still uses the inline panel, hide it too so
-  // we don't end up with both visible after a hot reload.
-  const detail = document.getElementById("blues-archive-detail");
-  const list = document.querySelector("#blues-archive-view .blues-archive-list");
-  if (detail) detail.style.display = "none";
-  if (list) list.style.display = "";
-  _baCurrentArtistId = null;
-}
-window._baBackToList = _baBackToList;
 
 // Session caches for the merged lyric popup's datalists. Both
 // endpoints used to fire on every popup open (the artist list pulls
@@ -1287,28 +477,6 @@ async function _baGetTuningOptionsCached() {
   }
   return _baTuningOptionsPromise;
 }
-async function _baGetArtistOptionsCached() {
-  if (_baArtistOptionsCache != null) return _baArtistOptionsCache;
-  if (!_baArtistOptionsPromise) {
-    _baArtistOptionsPromise = (async () => {
-      try {
-        const ar = await apiFetch("/api/blues-archive/artists?limit=500");
-        if (!ar.ok) { _baArtistOptionsCache = ""; return ""; }
-        const { rows = [] } = await ar.json();
-        const html = rows.map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`).join("");
-        _baArtistOptionsCache = html;
-        return html;
-      } catch { _baArtistOptionsCache = ""; return ""; }
-      finally { _baArtistOptionsPromise = null; }
-    })();
-  }
-  return _baArtistOptionsPromise;
-}
-function _baInvalidateArtistOptionsCache() {
-  _baArtistOptionsCache = null;
-  _baArtistOptionsPromise = null;
-}
-window._baInvalidateArtistOptionsCache = _baInvalidateArtistOptionsCache;
 
 // Reuse the same lyric viewer the admin Lyrics tab uses. The admin
 // view is on a different page (/admin), so we render a simple inline
@@ -1439,14 +607,6 @@ window._baLyricDirty = _baLyricDirty;
 // Open a release in the same modal the main site uses (modal.js's
 // openModal). Falls back to opening the Discogs page if the function
 // isn't around.
-function _baOpenRelease(id, type, discogsUrl) {
-  if (typeof openModal === "function") {
-    openModal(null, id, type, discogsUrl);
-  } else {
-    window.open(discogsUrl, "_blank", "noopener");
-  }
-}
-window._baOpenRelease = _baOpenRelease;
 
 // ── Lyric editor (per-row pencil) ────────────────────────────────────
 // Small overlay form for fixing tuning / artist on a single lyric.
@@ -1823,193 +983,29 @@ window._baDeleteAndBanLyric = _baDeleteAndBanLyric;
 // Two-step flow: type to filter the artist list, click the target,
 // then confirm. Server transaction reassigns lyrics + appends releases
 // + deletes the source row.
-async function _baOpenMergePicker(fromId, fromName) {
-  let overlay = document.getElementById("ba-merge-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "ba-merge-overlay";
-    Object.assign(overlay.style, {
-      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
-      zIndex: "310", display: "flex", alignItems: "flex-start",
-      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
-    });
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-    document.body.appendChild(overlay);
-  }
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(600px,100%)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-        <h3 style="margin:0">Merge <em>${escHtml(fromName)}</em> into…</h3>
-        <button class="archive-btn" onclick="document.getElementById('ba-merge-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-      </div>
-      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
-        Lyrics keyed to <em>${escHtml(fromName)}</em> will be reassigned to the target.
-        Release JSONB arrays will be concatenated (deduped by id+type).
-        The source row will be deleted. This action runs as a single transaction.
-      </p>
-      <input id="ba-merge-search" type="search" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="_baMergePickerSearch(${fromId})">
-      <div id="ba-merge-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
-      <div id="ba-merge-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
-    </div>
-  `;
-  // Auto-focus the filter input
-  setTimeout(() => document.getElementById("ba-merge-search")?.focus(), 50);
-  _baMergePickerSearch(fromId);
-}
-window._baOpenMergePicker = _baOpenMergePicker;
 
 let _baMergePickerTimer = null;
-function _baMergePickerSearch(fromId) {
-  if (_baMergePickerTimer) clearTimeout(_baMergePickerTimer);
-  _baMergePickerTimer = setTimeout(() => _baMergePickerLoad(fromId), 240);
-}
-window._baMergePickerSearch = _baMergePickerSearch;
 
-async function _baMergePickerLoad(fromId) {
-  const q = (document.getElementById("ba-merge-search")?.value || "").trim();
-  const resultsEl = document.getElementById("ba-merge-results");
-  if (!resultsEl) return;
-  const params = new URLSearchParams();
-  if (q) params.set("q", q);
-  params.set("limit", "40");
-  resultsEl.textContent = "Loading…";
-  try {
-    const r = await apiFetch(`/api/blues-archive/artists?${params}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const { rows = [] } = await r.json();
-    const choices = rows.filter(row => row.id !== fromId);
-    if (!choices.length) {
-      resultsEl.innerHTML = `<p style="color:var(--muted);padding:0.4rem 0">No matches.</p>`;
-      return;
-    }
-    resultsEl.innerHTML = choices.map(row => `
-      <div onclick="_baConfirmMerge(${fromId}, ${row.id}, ${JSON.stringify(row.name || "").replace(/"/g, "&quot;")})" style="cursor:pointer;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
-        <span style="font-weight:600;color:var(--text)">${escHtml(row.name || "")}</span>
-        <span style="color:var(--muted);font-size:0.76rem">${row.lyrics_count || 0}L · ${row.releases_count || 0}R</span>
-      </div>`).join("");
-  } catch (e) {
-    resultsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
-  }
-}
 
-async function _baConfirmMerge(fromId, intoId, intoName) {
-  if (!confirm(`Merge into "${intoName}"? Lyrics get reassigned; releases get concatenated; the source row is then deleted. This cannot be undone from the UI.`)) return;
-  const statusEl = document.getElementById("ba-merge-status");
-  if (statusEl) statusEl.textContent = "Merging…";
-  try {
-    const r = await apiFetch("/api/blues-archive/merge", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromId, intoId }),
-    });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const j = await r.json();
-    document.getElementById("ba-merge-overlay")?.remove();
-    // Navigate to the target so the user sees the merged result.
-    _baOpenArtist(intoId);
-    setTimeout(() => alert(`Merged. ${j.lyricsReassigned} lyrics reassigned, ${j.releasesAdded} releases added.`), 100);
-  } catch (e) {
-    if (statusEl) statusEl.textContent = `Merge failed: ${e?.message || e}`;
-  }
-}
-window._baConfirmMerge = _baConfirmMerge;
 
 // Admin button — import distinct lyrics-artist names that aren't yet
 // in blues_artists. Idempotent (server checks LOWER(name) uniqueness).
-async function bluesArchiveImport() {
-  const btn = document.getElementById("blues-archive-import-btn");
-  const statusEl = document.getElementById("blues-archive-import-status");
-  if (!confirm("Walk the scraped lyrics and insert any artist names not already in the Blues DB?")) return;
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = "Importing…";
-  try {
-    const r = await apiFetch("/api/blues-archive/import-from-lyrics", { method: "POST", timeoutMs: 60000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50">Imported</span> ${j.added} new of ${j.total} distinct · ${j.existing} already in DB · ${j.rejected || 0} rejected by validator`;
-    _baLoadList();
-  } catch (e) {
-    if (statusEl) statusEl.textContent = `Import failed: ${e?.message || e}`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-window.bluesArchiveImport = bluesArchiveImport;
 
 // Admin button — remove blues_artists rows that were created by the
 // lyric-import job AND have no other data (no Discogs ID, no Wikidata
 // QID, no bio, etc.). Safety net for when the artist extractor pulled
 // trash before the validator was tightened. Manually-edited rows are
 // preserved server-side.
-async function bluesArchivePurgeImports() {
-  const btn = document.getElementById("blues-archive-purge-btn");
-  const statusEl = document.getElementById("blues-archive-import-status");
-  if (!confirm("Remove all unenriched lyric-import rows from the Blues DB? Rows with any manually-added data (Discogs ID, bio, dates, etc.) are kept.")) return;
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = "Purging…";
-  try {
-    const r = await apiFetch("/api/blues-archive/purge-lyric-imports", { method: "POST", timeoutMs: 60000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50">Purged</span> ${j.removed.toLocaleString()} row${j.removed === 1 ? "" : "s"}`;
-    _baLoadList();
-  } catch (e) {
-    if (statusEl) statusEl.textContent = `Purge failed: ${e?.message || e}`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-window.bluesArchivePurgeImports = bluesArchivePurgeImports;
 
 // Admin button — cleanup for the (removed) no-year pad button.
 // Deletes every blues_artists row added in the last 24 hours.
 // User confirmed they haven't manually added anyone in over a week,
 // so this is a precise pad-insert signal.
-async function bluesArchivePruneRecent24h() {
-  const btn = document.getElementById("blues-prune-recent-btn");
-  if (!confirm("Delete every blues_artists row added in the last 24 hours?\n\nThis assumes you haven't manually added anyone recently.")) return;
-  if (btn) { btn.disabled = true; btn.textContent = "Pruning…"; }
-  try {
-    const r = await apiFetch("/api/blues-archive/prune-recent-24h", { method: "POST", timeoutMs: 60000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    const sample = (j.names && j.names.length) ? `\n\nSample: ${j.names.slice(0, 10).join(", ")}` : "";
-    alert(`Removed ${j.removed.toLocaleString()} artist${j.removed === 1 ? "" : "s"}.${sample}`);
-    _baLoadList();
-    if (typeof _baLoadStats === "function") _baLoadStats();
-  } catch (e) {
-    alert(`Prune failed: ${e?.message || e}`);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Prune last-24h adds"; }
-  }
-}
-window.bluesArchivePruneRecent24h = bluesArchivePruneRecent24h;
 
 // Admin button — re-pad with strict-Blues artists whose earliest
 // master is in or before 1950. Inserts are tagged
 // enrichment_status.source = "strict_pad_pre1950" for precise future
 // cleanup. Existing rows are untouched beyond seed_strict_count.
-async function bluesArchivePadStrictPre1950() {
-  const btn = document.getElementById("blues-pad-pre1950-btn");
-  if (!confirm("Pad the Blues Archive with every artist whose EARLIEST strict-Blues master in release_cache is in or before 1950?\n\nExisting artists are untouched; only their seed_strict_count is refreshed.")) return;
-  if (btn) { btn.disabled = true; btn.textContent = "Padding…"; }
-  try {
-    const r = await apiFetch("/api/blues-archive/pad/strict-pre-1950", { method: "POST", timeoutMs: 120000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-    alert(`Pre-1950 strict pad: scanned ${j.scanned.toLocaleString()} artists · inserted ${j.inserted.toLocaleString()} new · refreshed ${j.refreshed.toLocaleString()} existing.`);
-    _baLoadList();
-    if (typeof _baLoadStats === "function") _baLoadStats();
-  } catch (e) {
-    alert(`Strict pad failed: ${e?.message || e}`);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "+ Pad strict-Blues (pre-1950)"; }
-  }
-}
-window.bluesArchivePadStrictPre1950 = bluesArchivePadStrictPre1950;
 
 // ── Lyrics sub-tab ───────────────────────────────────────────────────
 // Master searchable list of every scraped lyric, independent of any
@@ -3197,172 +2193,19 @@ let _baReleasesRowsCache = [];
 const _baReleasesListSort = { key: "year", dir: "desc" };
 const _BA_RELEASES_LIST_TYPES = { artist: "str", title: "str", year: "num", type: "str", role: "str" };
 
-async function _baLoadReleases() {
-  const rowsEl  = document.getElementById("blues-archive-releases-rows");
-  const countEl = document.getElementById("blues-archive-releases-count");
-  if (!rowsEl) return;
-  const q     = (document.getElementById("blues-archive-releases-search")?.value || "").trim();
-  const year  = (document.getElementById("blues-archive-releases-year")?.value || "").trim();
-  const type  = document.getElementById("blues-archive-releases-type")?.value || "";
-  const role  = document.getElementById("blues-archive-releases-role")?.value || "";
-  const params = new URLSearchParams();
-  if (q)    params.set("q",    q);
-  if (year) params.set("year", year);
-  if (type) params.set("type", type);
-  if (role) params.set("role", role);
-  if (_baReleasesListSort?.key) {
-    params.set("sort",  _baReleasesListSort.key);
-    params.set("order", _baReleasesListSort.dir);
-  }
-  params.set("limit",  String(_BA_RELEASES_LIMIT));
-  params.set("offset", String(_baReleasesPage * _BA_RELEASES_LIMIT));
-  // Show the "Clear filters" button when any filter is active.
-  const clearBtn = document.getElementById("blues-archive-releases-clear");
-  if (clearBtn) clearBtn.style.display = (q || year || type || role) ? "" : "none";
-  const scrollY = window.scrollY;
-  rowsEl.classList.add("ba-loading");
-  const _relPagEl = document.getElementById("blues-archive-releases-pager");
-  if (_relPagEl && _baReleasesPage === 0) _relPagEl.innerHTML = "";
-  try {
-    const r = await apiFetch(`/api/blues-archive/releases?${params}`);
-    if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
-    const { rows = [], total = 0 } = await r.json();
-    _baReleasesTotal = total;
-    if (countEl) countEl.textContent = total
-      ? `${total.toLocaleString()} release${total === 1 ? "" : "s"}`
-      : "No matches.";
-    _baReleasesRowsCache = rows;
-    _baRenderReleasesTable();
-    _baRenderReleasesPager();
-    requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
-  } catch (e) {
-    rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(e?.message || String(e))}</p>`;
-  } finally {
-    rowsEl.classList.remove("ba-loading");
-  }
-}
 
-function _baRenderReleasesTable() {
-  const rowsEl = document.getElementById("blues-archive-releases-rows");
-  if (!rowsEl) return;
-  const rows = _baReleasesRowsCache;
-  if (!rows.length) {
-    rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
-    return;
-  }
-  const S = _baReleasesListSort;
-  rowsEl.innerHTML = `
-    <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
-      <colgroup>
-        <col style="width:44px">
-        <col style="width:60px">
-        <col>
-        <col style="width:24%">
-        <col style="width:80px">
-        <col style="width:100px">
-        <col style="width:1%">
-      </colgroup>
-      <thead><tr>
-        <th style="width:44px"></th>
-        ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right;padding-right:0.9rem")}
-        ${_baSortTh("Title",  "title",  S, "_baSortReleasesList")}
-        ${_baSortTh("Artist", "artist", S, "_baSortReleasesList")}
-        ${_baSortTh("Type",   "type",   S, "_baSortReleasesList", "width:70px")}
-        ${_baSortTh("Role",   "role",   S, "_baSortReleasesList", "width:100px")}
-        <th style="width:1%"></th>
-      </tr></thead>
-      <tbody>${rows.map(_baReleaseRowHtml).join("")}</tbody>
-    </table>`;
-}
 
 // Per-row HTML. Title links to discogs.com/release|/master/<id> in a
 // new tab. Artist links to the in-app artist popup (so the curator
 // can pivot to the artist's full record). Type+role rendered as
 // muted text. Cells are click-through-friendly: stopPropagation on
 // the action links so any future row-click handler doesn't pre-empt.
-function _baReleaseRowHtml(row) {
-  const id   = row.release_id;
-  const type = (row.release_type || "release").toLowerCase();
-  const url  = id ? `https://www.discogs.com/${type}/${id}` : "";
-  // Title click opens the SeaDisco album/release modal (same modal
-  // the search-results cards use) so the curator can see tracklist,
-  // credits, marketplace, etc. without leaving the page.
-  const titleText = escHtml(row.release_title || "(untitled)");
-  const titleHtml = id
-    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${id}, '${type}', '${escHtml(url)}')" style="color:var(--accent);text-decoration:none" title="Open ${type} popup">${titleText}</a>`
-    : titleText;
-  const artistHtml = row.artist_id
-    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${row.artist_id})" style="color:var(--text);text-decoration:none" title="Open in Blues Archive">${escHtml(row.artist_name || "")}</a>`
-    : escHtml(row.artist_name || "");
-  const yr = Number.isFinite(Number(row.release_year)) ? Number(row.release_year) : null;
-  const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
-  const fullTitle  = String(row.release_title || "(untitled)");
-  const fullArtist = String(row.artist_name || "");
-  // Cover thumb when release_cache has the release; placeholder
-  // otherwise. Click opens the release modal (same as Title).
-  const thumb = row.cover_thumb || "";
-  const thumbInner = thumb
-    ? `<img src="${escHtml(thumb)}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:cover;border-radius:3px;display:block;background:var(--surface-raised)" />`
-    : `<div style="width:36px;height:36px;border-radius:3px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.9rem">♪</div>`;
-  const thumbHtml = id
-    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${id}, '${type}', '${escHtml(url)}')" title="Open ${type} popup">${thumbInner}</a>`
-    : thumbInner;
-  return `<tr data-release-id="${id || ""}">
-    <td style="padding:0.2rem 0.3rem">${thumbHtml}</td>
-    <td style="text-align:right;font-size:0.82rem;padding-right:0.9rem;white-space:nowrap">${yrHtml}</td>
-    <td style="padding-left:0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${titleHtml}</td>
-    <td style="color:var(--text);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}</td>
-    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(row.release_type || "")}">${escHtml(row.release_type || "")}</td>
-    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(row.role || "")}">${escHtml(row.role || "")}</td>
-    <td></td>
-  </tr>`;
-}
 
-function _baRenderReleasesPager() {
-  const el = document.getElementById("blues-archive-releases-pager");
-  if (!el) return;
-  const pageCount = Math.max(1, Math.ceil(_baReleasesTotal / _BA_RELEASES_LIMIT));
-  const cur = _baReleasesPage + 1;
-  if (pageCount <= 1) { el.innerHTML = ""; return; }
-  el.innerHTML = `
-    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baReleasesGoToPage(${_baReleasesPage - 1})">‹ Prev</button>
-    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
-    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baReleasesGoToPage(${_baReleasesPage + 1})">Next ›</button>
-  `;
-}
 
-function _baReleasesGoToPage(p) { _baReleasesPage = Math.max(0, p); _baLoadReleases(); }
-window._baReleasesGoToPage = _baReleasesGoToPage;
 
-function _baSortReleasesList(key) {
-  _baToggleSort(_baReleasesListSort, key);
-  _baReleasesPage = 0;
-  _baLoadReleases();
-}
-window._baSortReleasesList = _baSortReleasesList;
 
-function _baReleasesDebouncedSearch() {
-  if (_baReleasesSearchTimer) clearTimeout(_baReleasesSearchTimer);
-  _baReleasesSearchTimer = setTimeout(() => { _baReleasesPage = 0; _baLoadReleases(); }, 280);
-}
-window._baReleasesDebouncedSearch = _baReleasesDebouncedSearch;
 
-function _baReleasesApplyFilters() { _baReleasesPage = 0; _baLoadReleases(); }
-window._baReleasesApplyFilters = _baReleasesApplyFilters;
 
-function _baReleasesClearFilters() {
-  const s = document.getElementById("blues-archive-releases-search");
-  const y = document.getElementById("blues-archive-releases-year");
-  const t = document.getElementById("blues-archive-releases-type");
-  const r = document.getElementById("blues-archive-releases-role");
-  if (s) s.value = "";
-  if (y) y.value = "";
-  if (t) t.value = "";
-  if (r) r.value = "";
-  _baReleasesPage = 0;
-  _baLoadReleases();
-}
-window._baReleasesClearFilters = _baReleasesClearFilters;
 
 // ── Tunings grid ─────────────────────────────────────────────────────
 // Read-only view over blues_tunings_grid, seeded server-side from
@@ -3879,13 +2722,6 @@ window._baLoadStats = _baLoadStats;
 
 // Jump handlers used by the stats-strip chips on the Artists side.
 // Set the category filter + switch to the Artists tab.
-function _baJumpArtists(category) {
-  _baListCategory = category || "";
-  _baPage = 0;
-  _baSwitchSubtab("artists");
-  _baLoadList();
-}
-window._baJumpArtists = _baJumpArtists;
 
 function _baJumpAllLyrics() {
   // Clear every lyrics-side filter and switch to the Lyrics tab.
@@ -3903,20 +2739,7 @@ const _BA_CATEGORY_LABEL = {
   "with_releases_only": "With releases only",
   "empty":              "Empty (no lyrics or releases)",
 };
-function _baRenderArtistsFilterIndicator() {
-  const el = document.getElementById("blues-archive-artists-filter");
-  if (!el) return;
-  if (!_baListCategory) { el.innerHTML = ""; return; }
-  const label = _BA_CATEGORY_LABEL[_baListCategory] || _baListCategory;
-  el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.25rem 0.6rem;border:1px solid var(--accent);border-radius:999px;font-size:0.78rem;color:var(--accent)">Filter: ${escHtml(label)} <a href="#" onclick="event.preventDefault();_baClearArtistsCategory()" title="Clear filter — show all artists" style="color:var(--accent);text-decoration:none">×</a></span>`;
-}
 
-function _baClearArtistsCategory() {
-  _baListCategory = "";
-  _baPage = 0;
-  _baLoadList();
-}
-window._baClearArtistsCategory = _baClearArtistsCategory;
 
 // Lyrics CSV export — backed by a dedicated server endpoint that dumps
 // the entire blues_lyrics table. Same blob-download pattern as the
@@ -3928,23 +2751,6 @@ window._baClearArtistsCategory = _baClearArtistsCategory;
 //   2. " (N)" Discogs disambiguator stripped from EITHER side
 // Reports the count + refreshes the list and stats so the user sees
 // the orphan count drop immediately.
-async function _baRelinkOrphans() {
-  if (!confirm("Sweep orphan lyrics and link them to existing artists when names match (with or without ' (N)' disambiguators)?")) return;
-  try {
-    const r = await apiFetch("/api/blues-archive/lyrics/relink-orphans", { method: "POST", timeoutMs: 60000 });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const j = await r.json();
-    alert(`Linked ${j.linked.toLocaleString()} orphan${j.linked === 1 ? "" : "s"}.`);
-    _baLoadStats().catch(() => {});
-    if (_baSubtab === "lyrics") _baLoadLyrics();
-  } catch (e) {
-    alert("Re-link failed: " + (e?.message || e));
-  }
-}
-window._baRelinkOrphans = _baRelinkOrphans;
 
 async function _baExportLyricsCsv() {
   const btn = document.getElementById("blues-export-lyrics-btn");
@@ -4030,58 +2836,10 @@ window._baExportLyricsDoc = _baExportLyricsDoc;
 // Artist-profile PDF — same flow as the lyrics one. Big bib of every
 // artist alphabetised: name + dates / hometown / first-last recording
 // + pseudonyms + bands + bio + every Discogs release oldest→newest.
-async function _baExportArtistsPdf() {
-  const btn = document.getElementById("blues-export-artists-pdf-btn");
-  const orig = btn ? btn.textContent : "";
-  if (btn) { btn.disabled = true; btn.textContent = "Building PDF…"; }
-  try {
-    const r = await apiFetch("/api/admin/blues/export.pdf");
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const blob = await r.blob();
-    const fname = `seadisco-artists-${new Date().toISOString().slice(0, 10)}.pdf`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch (e) {
-    alert("Export failed: " + (e?.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = orig; }
-  }
-}
-window._baExportArtistsPdf = _baExportArtistsPdf;
 
 // Releases + Tunings CSV exports — mirror the lyrics CSV flow.
 // Endpoints stream the full table; the download trigger is the same
 // blob → object URL → anchor.click pattern used elsewhere.
-async function _baExportReleasesCsv() {
-  const btn = document.getElementById("blues-export-releases-btn");
-  const orig = btn ? btn.textContent : "";
-  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
-  try {
-    const r = await apiFetch("/api/blues-archive/releases/export.csv");
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const blob = await r.blob();
-    const fname = `seadisco-releases-${new Date().toISOString().slice(0, 10)}.csv`;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = fname;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch (e) {
-    alert("Export failed: " + (e?.message || e));
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = orig; }
-  }
-}
-window._baExportReleasesCsv = _baExportReleasesCsv;
 
 async function _baExportTuningsCsv() {
   const btn = document.getElementById("blues-export-tunings-btn");
@@ -4202,42 +2960,6 @@ window._baExportRun = _baExportRun;
 // /blues-admin.js. Each kind maps to a function name; we lazy-load
 // the module on first call, then invoke. Keeps the inline onclick
 // attributes short and centralizes the lazy-load plumbing.
-function _baAdminAction(kind, ev) {
-  const map = {
-    addArtist:        () => window.bluesDbOpenEditor?.(null),
-    enrichDiscogsFull:() => window.bluesDbEnrichDiscogsFull?.(null),
-    // Two exports now: artists (with the discogs_releases JSONB
-    // column embedded as JSON) and lyrics (separate dump of the
-    // blues_lyrics table). Old `exportCsv` kept as an alias so any
-    // stale callers don't 404.
-    exportArtistsCsv: () => window.bluesDbExportCsv?.(),
-    exportCsv:        () => window.bluesDbExportCsv?.(),
-    exportLyricsCsv:  () => _baExportLyricsCsv(),
-    exportLyricsPdf:  () => _baExportLyricsPdf(),
-    exportLyricsDoc:  () => _baExportLyricsDoc(),
-    exportArtistsPdf: () => _baExportArtistsPdf(),
-    deleteAll:        () => window.bluesDbDeleteAll?.(),
-    lyricsScrape:     () => window.lyricsStartScrape?.(),
-    lyricsStop:       () => window.lyricsStopScrape?.(),
-    lyricsReextract:  () => window.lyricsReextract?.(),
-    lyricsSyncArtists:() => window.lyricsSyncArtists?.(ev),
-  };
-  const fn = map[kind];
-  if (!fn) return;
-  const tryOnce = () => {
-    try { fn(); } catch (e) { console.warn("[_baAdminAction]", kind, e); }
-  };
-  // Already loaded? Just run.
-  if (typeof window.bluesDbOpenEditor === "function") return tryOnce();
-  if (typeof window._sdLoadModule === "function") {
-    window._sdLoadModule("/blues-admin.js")
-      .then(tryOnce)
-      .catch(err => alert("Couldn't load admin module: " + (err?.message || err)));
-  } else {
-    alert("Admin module not available.");
-  }
-}
-window._baAdminAction = _baAdminAction;
 
 // Open the full /admin-style editor (25 fields + enrichment buttons)
 // in place. The editor JS lives in /blues-admin.js — lazy-loaded so
@@ -4245,42 +2967,6 @@ window._baAdminAction = _baAdminAction;
 // embedded in index.html as #blues-editor-overlay and friends.
 // On save, the editor fires window._bluesDbAfterSaveOnce so we can
 // refresh the artist popup that was open behind it.
-function _baOpenFullEditor(id) {
-  // Set the one-shot post-save callback BEFORE opening. The Discovery
-  // artist popup is what's open behind the editor overlay; refreshing
-  // it re-renders the bio / dates / photo / lyrics with any edits.
-  // Also reload the underlying artist list so the row reflects the
-  // save (cleared photo → empty placeholder, updated name → new
-  // entry text, etc.) without needing a manual refresh.
-  window._bluesDbAfterSaveOnce = (savedId) => {
-    const targetId = Number(savedId || id);
-    if (Number.isFinite(targetId)) {
-      // Invalidate the LRU cache so the re-open fetches the freshly-
-      // saved row instead of the pre-edit copy. Without this, the bio
-      // and any other field that just changed would render stale.
-      _baArtistCache.delete(targetId);
-      _baOpenArtist(targetId);
-    }
-    if (typeof _baLoadList === "function") { try { _baLoadList(); } catch {} }
-    if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
-  };
-  const openIt = () => {
-    if (typeof window.bluesDbOpenEditor === "function") {
-      window.bluesDbOpenEditor(id);
-      return true;
-    }
-    return false;
-  };
-  if (openIt()) return;
-  if (typeof window._sdLoadModule === "function") {
-    window._sdLoadModule("/blues-admin.js")
-      .then(() => { if (!openIt()) alert("Editor not available."); })
-      .catch(err => alert("Couldn't load editor: " + (err?.message || err)));
-  } else {
-    alert("Editor not available.");
-  }
-}
-window._baOpenFullEditor = _baOpenFullEditor;
 
 function _baJumpOrphans() {
   // Set the filter state + checkbox BEFORE switching the subtab so
@@ -4316,344 +3002,34 @@ function _baJumpMissingTuning() {
 window._baJumpMissingTuning = _baJumpMissingTuning;
 
 // ── Recent edits feed ────────────────────────────────────────────────
-async function _baLoadRecent() {
-  const el = document.getElementById("blues-archive-recent");
-  if (!el) return;
-  try {
-    const r = await apiFetch("/api/blues-archive/recent?limit=20");
-    if (!r.ok) { el.innerHTML = ""; return; }
-    const { rows = [] } = await r.json();
-    if (!rows.length) { el.innerHTML = `<span style="color:var(--muted);font-style:italic">No edits yet.</span>`; return; }
-    el.innerHTML = rows.map(row => {
-      const when = row.updated_at ? new Date(row.updated_at).toLocaleString() : "";
-      if (row.kind === "artist") {
-        return `<div style="padding:0.2rem 0;display:flex;gap:0.5rem;align-items:center"><span style="color:var(--accent);font-size:0.76rem">ARTIST</span><a href="#" onclick="event.preventDefault();_baOpenArtist(${row.id})" style="color:var(--text);text-decoration:none">${escHtml(row.title)}</a><span style="color:#666;font-size:0.74rem;margin-left:auto">${escHtml(when)}</span></div>`;
-      }
-      return `<div style="padding:0.2rem 0;display:flex;gap:0.5rem;align-items:center"><span style="color:#7eb8da;font-size:0.76rem">LYRIC</span><a href="#" onclick="event.preventDefault();_baOpenLyric(${row.id})" style="color:var(--text);text-decoration:none">${escHtml(row.title)}</a>${row.artist_name ? `<span style="color:var(--muted);font-size:0.76rem">· ${escHtml(row.artist_name)}</span>` : ""}<span style="color:#666;font-size:0.74rem;margin-left:auto">${escHtml(when)}</span></div>`;
-    }).join("");
-  } catch { el.innerHTML = ""; }
-}
 
 // ── Promote orphan lyric to a new artist ─────────────────────────────
 // Tuning-chip click on the artist popup: switch to the Lyrics tab and
 // pre-filter to (artist, tuning).
-function _baJumpTuningForArtist(tuning, artistName) {
-  // Close the artist overlay so the lyrics list is visible.
-  _baBackToList();
-  _baSwitchSubtab("lyrics");
-  setTimeout(() => {
-    const searchEl = document.getElementById("blues-archive-lyrics-search");
-    const tuningEl = document.getElementById("blues-archive-lyrics-tuning");
-    if (searchEl) searchEl.value = artistName || "";
-    const applyTuning = () => {
-      if (tuningEl) {
-        if (![...tuningEl.options].some(o => o.value === tuning)) {
-          // Tuning may not yet be in the dropdown (lazy load). Fall back
-          // to just setting the underlying state and reloading.
-          _baLyricsTuning = tuning || "";
-        } else {
-          tuningEl.value = tuning || "";
-          _baLyricsTuning = tuningEl.value;
-        }
-      }
-      _baLyricsPage = 0;
-      _baLoadLyrics();
-    };
-    if (!_baLyricsTuningsLoaded) _baLoadTunings().then(applyTuning); else applyTuning();
-  }, 50);
-}
-window._baJumpTuningForArtist = _baJumpTuningForArtist;
 
 // ── Bulk reassign picker ─────────────────────────────────────────────
 // Two ways to specify the source: either pick an existing artist
 // (lyrics with that artist_id) or type a free-text name (matches
 // LOWER(TRIM(artist)) for unmigrated rows). Server endpoint runs the
 // reassignment in a single transaction.
-async function _baOpenReassignPicker(toId, toName) {
-  let overlay = document.getElementById("ba-reassign-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "ba-reassign-overlay";
-    Object.assign(overlay.style, {
-      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
-      zIndex: "310", display: "flex", alignItems: "flex-start",
-      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
-    });
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-    document.body.appendChild(overlay);
-  }
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(600px,100%)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-        <h3 style="margin:0">Reassign lyrics → <em>${escHtml(toName)}</em></h3>
-        <button class="archive-btn" onclick="document.getElementById('ba-reassign-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-      </div>
-      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
-        Source artist's lyrics get re-keyed to <em>${escHtml(toName)}</em>.
-        The source row is <strong>not</strong> deleted (use Merge for that).
-      </p>
-      <label style="display:block;margin:0.4rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">By artist name (matches lyrics whose artist string matches, even when not yet linked)</label>
-      <input id="ba-reassign-from-name" type="text" placeholder="e.g. Robert Jonson" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
-      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">OR by existing artist row (matches lyrics whose artist_id = this row's id)</label>
-      <input id="ba-reassign-from-search" type="search" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="_baReassignPickerSearch(${toId})">
-      <div id="ba-reassign-results" style="max-height:30vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem;margin-top:0.3rem"></div>
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
-        <button class="archive-btn" onclick="document.getElementById('ba-reassign-overlay')?.remove()">Cancel</button>
-        <button class="archive-btn archive-btn-suggest" onclick="_baConfirmReassign(${toId}, ${JSON.stringify(toName || '').replace(/"/g, '&quot;')})">Reassign</button>
-      </div>
-      <div id="ba-reassign-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
-    </div>
-  `;
-  setTimeout(() => document.getElementById("ba-reassign-from-name")?.focus(), 50);
-}
-window._baOpenReassignPicker = _baOpenReassignPicker;
 
 let _baReassignPickerTimer = null;
 let _baReassignFromId = null;
-function _baReassignPickerSearch(toId) {
-  if (_baReassignPickerTimer) clearTimeout(_baReassignPickerTimer);
-  _baReassignPickerTimer = setTimeout(() => _baReassignPickerLoad(toId), 240);
-}
-window._baReassignPickerSearch = _baReassignPickerSearch;
 
-async function _baReassignPickerLoad(toId) {
-  const q = (document.getElementById("ba-reassign-from-search")?.value || "").trim();
-  const el = document.getElementById("ba-reassign-results");
-  if (!el) return;
-  if (!q) { el.innerHTML = `<span style="color:var(--muted)">Type to filter…</span>`; _baReassignFromId = null; return; }
-  el.textContent = "Loading…";
-  try {
-    const p = new URLSearchParams(); p.set("q", q); p.set("limit", "30");
-    const r = await apiFetch(`/api/blues-archive/artists?${p}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const { rows = [] } = await r.json();
-    const choices = rows.filter(row => row.id !== toId);
-    if (!choices.length) { el.innerHTML = `<span style="color:var(--muted)">No matches.</span>`; return; }
-    el.innerHTML = choices.map(row => `
-      <div onclick="_baReassignFromId=${row.id};document.querySelectorAll('#ba-reassign-results > div').forEach(d=>d.style.background='');this.style.background='rgba(255,255,255,0.07)'" style="cursor:pointer;padding:0.3rem 0.4rem;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
-        <span>${escHtml(row.name || "")}</span>
-        <span style="color:var(--muted);font-size:0.76rem">${row.lyrics_count || 0}L</span>
-      </div>`).join("");
-  } catch (e) {
-    el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</span>`;
-  }
-}
 
-async function _baConfirmReassign(toId, toName) {
-  const fromArtistName = (document.getElementById("ba-reassign-from-name")?.value || "").trim();
-  const fromArtistId = _baReassignFromId;
-  if (!fromArtistName && !fromArtistId) {
-    const s = document.getElementById("ba-reassign-status");
-    if (s) s.textContent = "Pick a source artist or type a name.";
-    return;
-  }
-  const desc = [];
-  if (fromArtistId) desc.push(`artist row #${fromArtistId}`);
-  if (fromArtistName) desc.push(`name "${fromArtistName}"`);
-  if (!confirm(`Reassign all lyrics matching ${desc.join(" and ")} to "${toName}"?`)) return;
-  const s = document.getElementById("ba-reassign-status");
-  if (s) s.textContent = "Reassigning…";
-  try {
-    const r = await apiFetch("/api/blues-archive/lyrics/reassign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toArtistId: toId, fromArtistId, fromArtistName: fromArtistName || null }),
-    });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const j = await r.json();
-    document.getElementById("ba-reassign-overlay")?.remove();
-    _baReassignFromId = null;
-    // Refresh the artist popup so the new lyric rows show up.
-    if (_baCurrentArtistId != null) _baOpenArtist(_baCurrentArtistId);
-    _baLoadStats().catch(() => {});
-    alert(`Reassigned ${j.reassigned} lyric${j.reassigned === 1 ? "" : "s"} to "${j.toName}".`);
-  } catch (e) {
-    if (s) s.textContent = `Reassign failed: ${e?.message || e}`;
-  }
-}
-window._baConfirmReassign = _baConfirmReassign;
 
 // Click handler for the "+ artist" link on orphan lyric rows. Opens a
 // picker so the user can EITHER link the orphan to an existing artist
 // (the common case: "John Lee" → John Lee Hooker) OR fall back to
 // creating a new artist row from the orphan string. Pre-fills the
 // search with the orphan name so existing matches show up immediately.
-async function _baPromoteOrphan(lyricId) {
-  // Pull the lyric to get its current artist string. Without this,
-  // we'd have no name to pre-fill or to use as the bulk-reassign key.
-  let row;
-  try {
-    const r = await apiFetch(`/api/admin/lyrics/${lyricId}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    row = await r.json();
-  } catch (e) {
-    alert(`Couldn't load lyric: ${e?.message || e}`);
-    return;
-  }
-  const orphanName = String(row.artist || "").trim();
-  if (!orphanName) {
-    alert("This lyric has no artist string to link.");
-    return;
-  }
-  let overlay = document.getElementById("ba-orphan-picker-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "ba-orphan-picker-overlay";
-    Object.assign(overlay.style, {
-      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
-      zIndex: "320", display: "flex", alignItems: "flex-start",
-      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
-    });
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-    document.body.appendChild(overlay);
-  }
-  const safeName = orphanName.replace(/"/g, "&quot;").replace(/'/g, "\\'");
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(620px,100%)">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-        <h3 style="margin:0">Link <em>${escHtml(orphanName)}</em> to an artist</h3>
-        <button class="archive-btn" onclick="document.getElementById('ba-orphan-picker-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-      </div>
-      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
-        Pick an existing artist row to take this orphan (and, when the checkbox is on, every other orphan with the same name).
-        If no existing artist fits, use the "Create new" button at the bottom.
-      </p>
-      <input id="ba-orphan-picker-search" type="search" value="${escHtml(orphanName)}" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="_baOrphanPickerSearch(${lyricId})">
-      <div id="ba-orphan-picker-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
-      <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.6rem;font-size:0.82rem;color:var(--muted)" title="When on, every orphan lyric whose artist string matches the orphan name (case-insensitive) gets reassigned in the same transaction. Off = only this lyric.">
-        <input id="ba-orphan-picker-bulk" type="checkbox" checked>
-        Also link all other orphans named "${escHtml(orphanName)}"
-      </label>
-      <div style="display:flex;gap:0.5rem;justify-content:space-between;margin-top:1rem;align-items:center;flex-wrap:wrap">
-        <button class="archive-btn" onclick="_baOrphanCreateAsNew(${lyricId})" title="Fallback: create a brand-new blues_artists row using the orphan name as-is and link this lyric (plus siblings) to it.">+ Create "${escHtml(orphanName)}" as new artist</button>
-        <button class="archive-btn" onclick="document.getElementById('ba-orphan-picker-overlay')?.remove()">Cancel</button>
-      </div>
-      <div id="ba-orphan-picker-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
-    </div>
-  `;
-  // Auto-run the initial search using the pre-filled name so matches
-  // show up without the user having to type anything.
-  setTimeout(() => {
-    document.getElementById("ba-orphan-picker-search")?.focus();
-    _baOrphanPickerSearch(lyricId);
-  }, 30);
-}
-window._baPromoteOrphan = _baPromoteOrphan;
 
 let _baOrphanPickerTimer = null;
-function _baOrphanPickerSearch(lyricId) {
-  if (_baOrphanPickerTimer) clearTimeout(_baOrphanPickerTimer);
-  _baOrphanPickerTimer = setTimeout(() => _baOrphanPickerLoad(lyricId), 220);
-}
-window._baOrphanPickerSearch = _baOrphanPickerSearch;
 
-async function _baOrphanPickerLoad(lyricId) {
-  const q = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
-  const el = document.getElementById("ba-orphan-picker-results");
-  if (!el) return;
-  if (!q) { el.innerHTML = `<span style="color:var(--muted)">Type to filter…</span>`; return; }
-  el.textContent = "Loading…";
-  try {
-    const p = new URLSearchParams(); p.set("q", q); p.set("limit", "40");
-    const r = await apiFetch(`/api/blues-archive/artists?${p}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const { rows = [] } = await r.json();
-    if (!rows.length) {
-      el.innerHTML = `<span style="color:var(--muted)">No matches. Use "+ Create" below to mint a new artist instead.</span>`;
-      return;
-    }
-    el.innerHTML = rows.map(row => `
-      <div onclick="_baOrphanPickerConfirm(${lyricId}, ${row.id}, ${JSON.stringify(row.name || "").replace(/"/g, "&quot;")})" style="cursor:pointer;padding:0.35rem 0.4rem;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
-        <span style="color:var(--text);font-weight:600">${escHtml(row.name || "")}</span>
-        <span style="color:var(--muted);font-size:0.76rem;white-space:nowrap">${row.lyrics_count || 0}L · ${row.releases_count || 0}R${row.discogs_id ? ` · #${row.discogs_id}` : ""}</span>
-      </div>`).join("");
-  } catch (e) {
-    el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</span>`;
-  }
-}
 
-async function _baOrphanPickerConfirm(lyricId, toId, toName) {
-  const bulk = !!document.getElementById("ba-orphan-picker-bulk")?.checked;
-  const status = document.getElementById("ba-orphan-picker-status");
-  // We need the orphan name even after the overlay closes, so capture
-  // it before the request. It's the value of the search input — same
-  // as what we pre-filled with.
-  const orphanName = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
-  if (!confirm(`Link "${orphanName}" to "${toName}"?\n\n${bulk ? `Every orphan lyric with artist = "${orphanName}" will be reassigned.` : "Only this one lyric will be reassigned."}`)) return;
-  if (status) status.textContent = "Linking…";
-  try {
-    let summary;
-    if (bulk) {
-      // Bulk path — use the existing reassign endpoint keyed by name.
-      const r = await apiFetch("/api/blues-archive/lyrics/reassign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toArtistId: toId, fromArtistName: orphanName }),
-      });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-      }
-      const j = await r.json();
-      summary = `Reassigned ${j.reassigned} lyric${j.reassigned === 1 ? "" : "s"} → ${j.toName}`;
-    } else {
-      // Single-lyric path — PATCH this row's artist_id directly. Also
-      // overwrite the artist string with the target name so the
-      // display matches the canonical artist row.
-      const r = await apiFetch(`/api/admin/lyrics/${lyricId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artist: toName, artist_id: toId }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const updated = await r.json().catch(() => null);
-      if (updated) {
-        const i = _baLyricsRowsCache.findIndex(x => Number(x.id) === Number(updated.id));
-        if (i >= 0) _baLyricsRowsCache[i] = { ..._baLyricsRowsCache[i], ...updated };
-        _baPatchLyricRowEverywhere(updated);
-      }
-      summary = `Linked this lyric to ${toName}.`;
-    }
-    document.getElementById("ba-orphan-picker-overlay")?.remove();
-    _baLoadStats().catch(() => {});
-    // Bulk mode changed many rows the local cache doesn't know about
-    // — just reload the lyrics list. Scroll position is restored
-    // automatically by _baLoadLyrics.
-    if (bulk && _baSubtab === "lyrics") _baLoadLyrics();
-    alert(summary);
-  } catch (e) {
-    if (status) status.textContent = `Failed: ${e?.message || e}`;
-  }
-}
-window._baOrphanPickerConfirm = _baOrphanPickerConfirm;
 
 // "+ Create as new artist" fallback inside the orphan picker — calls
 // the existing promote endpoint that creates the row + links siblings.
-async function _baOrphanCreateAsNew(lyricId) {
-  const orphanName = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
-  if (!orphanName) return;
-  if (!confirm(`Create a new blues_artists row named "${orphanName}" and link all orphan lyrics with that name?`)) return;
-  const status = document.getElementById("ba-orphan-picker-status");
-  if (status) status.textContent = "Creating…";
-  try {
-    const r = await apiFetch(`/api/blues-archive/lyrics/${lyricId}/promote-to-artist`, { method: "POST" });
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "");
-      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
-    }
-    const j = await r.json();
-    document.getElementById("ba-orphan-picker-overlay")?.remove();
-    if (_baSubtab === "lyrics") _baLoadLyrics();
-    _baLoadStats().catch(() => {});
-    alert(`Created "${j.artistName}". ${j.lyricsLinked} lyric${j.lyricsLinked === 1 ? "" : "s"} linked.`);
-  } catch (e) {
-    if (status) status.textContent = `Failed: ${e?.message || e}`;
-  }
-}
-window._baOrphanCreateAsNew = _baOrphanCreateAsNew;
 
 // ─── Connections subtab ──────────────────────────────────────────────
 // Visualisation of blues_artist_links. Three view modes — network
@@ -4707,367 +3083,21 @@ let _baConnFocusId = (() => {
   } catch { return null; }
 })();
 
-function _baLoadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`CDN load failed: ${src}`));
-    document.head.appendChild(s);
-  });
-}
-function _baEnsureCytoscape() {
-  if (window.cytoscape && window._baFcoseLoaded) return Promise.resolve(window.cytoscape);
-  if (_baCytoscapeLoading) return _baCytoscapeLoading;
-  // Cytoscape core, then layout-base + cose-base + fcose extension.
-  // fcose gives much better spread than the built-in cose for sparse
-  // graphs (Leadbelly chain, Hokum Boys chain etc. were piling up).
-  // If the fcose chain fails to load we silently fall back to cose
-  // by setting _baFcoseLoaded=false; the graph still renders.
-  _baCytoscapeLoading = _baLoadScript("https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js")
-    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"))
-    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"))
-    .then(() => _baLoadScript("https://cdn.jsdelivr.net/npm/cytoscape-fcose@2.2.0/cytoscape-fcose.js"))
-    .then(() => {
-      if (window.cytoscape && window.cytoscapeFcose) {
-        try { window.cytoscape.use(window.cytoscapeFcose); window._baFcoseLoaded = true; }
-        catch { window._baFcoseLoaded = false; }
-      }
-      return window.cytoscape;
-    })
-    .catch(err => {
-      // If the fcose pieces fail but cytoscape itself loaded, keep
-      // going with the built-in cose layout.
-      if (window.cytoscape) { window._baFcoseLoaded = false; return window.cytoscape; }
-      throw err;
-    });
-  return _baCytoscapeLoading;
-}
 
-async function _baLoadConnections(opts = {}) {
-  const empty = document.getElementById("ba-conn-empty");
-  if (empty) empty.textContent = "Loading connections…";
-  if (!_baConnGraph || opts.force) {
-    try {
-      const r = await apiFetch("/api/blues-archive/connections");
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      _baConnGraph = await r.json();
-    } catch (e) {
-      if (empty) empty.textContent = `Load failed: ${e?.message || e}`;
-      return;
-    }
-  }
-  _baRenderConnToolbar();
-  _baConnRender();
-}
-window._baLoadConnections = _baLoadConnections;
 
-function _baRenderConnToolbar() {
-  // View-mode button highlight
-  document.querySelectorAll("#ba-conn-view-tabs .ba-conn-view-btn").forEach(b => {
-    const on = b.dataset.view === _baConnView;
-    b.style.background = on ? "var(--accent)" : "";
-    b.style.color = on ? "#111" : "";
-    b.style.borderColor = on ? "var(--accent)" : "";
-  });
-  // Kind toggle chips
-  const togWrap = document.getElementById("ba-conn-kind-toggles");
-  if (togWrap) {
-    const counts = {};
-    for (const e of (_baConnGraph?.edges || [])) counts[e.kind] = (counts[e.kind] || 0) + 1;
-    togWrap.innerHTML = _BA_CONN_KINDS.map(k => {
-      const on = _baConnKindsOn.has(k.id);
-      const n = counts[k.id] || 0;
-      return `<button type="button" onclick="_baConnToggleKind('${k.id}')" title="${k.label}" style="padding:0.2rem 0.55rem;border:1px solid ${on ? k.color : "#333"};border-radius:999px;background:${on ? "rgba(255,255,255,0.04)" : "transparent"};color:${on ? k.color : "#555"};cursor:pointer;font-size:0.74rem">${k.label}<span style="opacity:0.6;margin-left:0.4em">${n}</span></button>`;
-    }).join("");
-  }
-  // Hub picker visibility
-  const pickWrap = document.getElementById("ba-conn-hub-picker");
-  if (pickWrap) pickWrap.style.display = _baConnView === "hub" ? "inline-flex" : "none";
-  if (_baConnView === "hub") _baRenderHubPicker();
-  // Network-mode focus picker visibility + population
-  const focusWrap = document.getElementById("ba-conn-focus-picker");
-  if (focusWrap) focusWrap.style.display = _baConnView === "network" ? "inline-flex" : "none";
-  if (_baConnView === "network") _baRenderFocusPicker();
-  // Stats line — single span on the top toolbar.
-  const n = _baConnGraph?.nodes?.length || 0;
-  const e = _baConnGraph?.edges?.length || 0;
-  const statsEl = document.getElementById("ba-conn-stats");
-  if (statsEl) statsEl.textContent = `${n} artist${n === 1 ? "" : "s"} · ${e} link${e === 1 ? "" : "s"}`;
-}
 
-function _baRenderFocusPicker() {
-  const sel = document.getElementById("ba-conn-focus-select");
-  if (!sel) return;
-  const nodes = (_baConnGraph?.nodes || []).slice()
-    .sort((a, b) => (b.degree || 0) - (a.degree || 0) || a.name.localeCompare(b.name));
-  const cur = _baConnFocusId;
-  sel.innerHTML = `<option value="">— show everyone —</option>` +
-    nodes.map(n => `<option value="${n.id}" ${n.id === cur ? "selected" : ""}>${escHtml(n.name)} (${n.degree})</option>`).join("");
-  // Stats: how many artists are reachable from the focus
-  const statsEl = document.getElementById("ba-conn-focus-stats");
-  if (statsEl) {
-    if (!cur) { statsEl.textContent = ""; }
-    else {
-      const reachable = _baBfsReachable(cur, _baConnKindsOn);
-      statsEl.textContent = `${reachable.size} reachable artist${reachable.size === 1 ? "" : "s"}`;
-    }
-  }
-}
 
-function _baConnSetFocus(idStr) {
-  const n = Number(idStr);
-  _baConnFocusId = Number.isFinite(n) && n > 0 ? n : null;
-  try {
-    if (_baConnFocusId) localStorage.setItem(_BA_CONN_FOCUS_KEY, String(_baConnFocusId));
-    else localStorage.removeItem(_BA_CONN_FOCUS_KEY);
-  } catch {}
-  _baRenderConnToolbar();
-  _baConnRender();
-}
-window._baConnSetFocus = _baConnSetFocus;
 
 // BFS from `startId` through the supplied set of enabled kinds. Returns
 // a Set of every node id reachable (inclusive of start). Adjacency is
 // built on the fly from _baConnGraph.edges to keep things simple — the
 // link table is small.
-function _baBfsReachable(startId, kindsOn) {
-  if (!_baConnGraph || !Number.isFinite(startId)) return new Set();
-  const adj = new Map();
-  for (const e of _baConnGraph.edges || []) {
-    if (!kindsOn.has(e.kind)) continue;
-    if (!adj.has(e.lo_id)) adj.set(e.lo_id, []);
-    if (!adj.has(e.hi_id)) adj.set(e.hi_id, []);
-    adj.get(e.lo_id).push(e.hi_id);
-    adj.get(e.hi_id).push(e.lo_id);
-  }
-  const seen = new Set([startId]);
-  const queue = [startId];
-  while (queue.length) {
-    const u = queue.shift();
-    for (const v of (adj.get(u) || [])) {
-      if (!seen.has(v)) { seen.add(v); queue.push(v); }
-    }
-  }
-  return seen;
-}
 
-function _baRenderHubPicker() {
-  const sel = document.getElementById("ba-conn-hub-select");
-  if (!sel) return;
-  const nodes = (_baConnGraph?.nodes || []).slice().sort((a, b) => (b.degree || 0) - (a.degree || 0) || a.name.localeCompare(b.name));
-  if (!_baConnHubId && nodes.length) _baConnHubId = nodes[0].id;
-  sel.innerHTML = nodes.map(n => `<option value="${n.id}" ${n.id === _baConnHubId ? "selected" : ""}>${escHtml(n.name)} (${n.degree})</option>`).join("");
-  sel.onchange = () => { _baConnHubId = Number(sel.value); _baConnRender(); };
-}
 
-function _baConnToggleKind(k) {
-  if (_baConnKindsOn.has(k)) _baConnKindsOn.delete(k);
-  else _baConnKindsOn.add(k);
-  try { localStorage.setItem(_BA_CONN_KINDS_KEY, JSON.stringify([..._baConnKindsOn])); } catch {}
-  _baRenderConnToolbar();
-  _baConnRender();
-}
-window._baConnToggleKind = _baConnToggleKind;
 
-function _baConnSwitchView(v) {
-  if (v !== "network" && v !== "hub" && v !== "matrix") return;
-  _baConnView = v;
-  try { localStorage.setItem(_BA_CONN_VIEW_KEY, v); } catch {}
-  _baRenderConnToolbar();
-  _baConnRender();
-}
-window._baConnSwitchView = _baConnSwitchView;
 
-function _baConnRender() {
-  const canvas = document.getElementById("ba-conn-canvas");
-  if (!canvas || !_baConnGraph) return;
-  const empty = document.getElementById("ba-conn-empty");
-  if (empty) empty.remove();
-  // Tear down any prior Cytoscape — matrix view replaces the canvas
-  // entirely, network/hub reuse but need a fresh container.
-  if (_baConnCy) { try { _baConnCy.destroy(); } catch {} _baConnCy = null; }
-  const filteredEdges = (_baConnGraph.edges || []).filter(e => _baConnKindsOn.has(e.kind));
-  if (_baConnView === "matrix") {
-    _baConnRenderMatrix(canvas, filteredEdges);
-  } else {
-    _baConnRenderGraph(canvas, filteredEdges, _baConnView);
-  }
-}
-window._baConnRender = _baConnRender;
 
-function _baConnRenderGraph(canvas, edges, mode) {
-  // Reset canvas to a fresh mount node for Cytoscape.
-  canvas.innerHTML = `<div id="ba-conn-cy" style="position:absolute;inset:0"></div>`;
-  const mount = canvas.querySelector("#ba-conn-cy");
-  _baEnsureCytoscape().then(cy => {
-    const nodesById = new Map((_baConnGraph.nodes || []).map(n => [n.id, n]));
-    let edgesToDraw = edges;
-    let nodesToDraw;
-    if (mode === "hub") {
-      // Hub mode: centre artist + their direct neighbours. Edges
-      // limited to those touching the centre.
-      const center = _baConnHubId;
-      if (!center) { mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">No artist selected.</div>`; return; }
-      edgesToDraw = edges.filter(e => e.lo_id === center || e.hi_id === center);
-      const keep = new Set([center]);
-      for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
-      nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
-    } else {
-      // Network mode. If a focus artist is selected, BFS through the
-      // currently-enabled kinds to find every reachable node and limit
-      // the draw to that connected component. Empty focus = whole graph.
-      if (_baConnFocusId) {
-        const reachable = _baBfsReachable(_baConnFocusId, _baConnKindsOn);
-        edgesToDraw = edges.filter(e => reachable.has(e.lo_id) && reachable.has(e.hi_id));
-        nodesToDraw = [...reachable].map(id => nodesById.get(id)).filter(Boolean);
-      } else {
-        const keep = new Set();
-        for (const e of edgesToDraw) { keep.add(e.lo_id); keep.add(e.hi_id); }
-        nodesToDraw = [...keep].map(id => nodesById.get(id)).filter(Boolean);
-      }
-    }
-    if (!nodesToDraw.length) {
-      mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">No links match the current filter.</div>`;
-      return;
-    }
-    const colorByKind = Object.fromEntries(_BA_CONN_KINDS.map(k => [k.id, k.color]));
-    const cyEls = [
-      ...nodesToDraw.map(n => ({
-        data: { id: String(n.id), label: n.name, degree: n.degree || 1 },
-      })),
-      ...edgesToDraw.map(e => ({
-        data: {
-          id: `e${e.lo_id}-${e.hi_id}-${e.kind}`,
-          source: String(e.lo_id),
-          target: String(e.hi_id),
-          kind: e.kind,
-          color: colorByKind[e.kind] || "#888",
-        },
-      })),
-    ];
-    _baConnCy = cy({
-      container: mount,
-      elements: cyEls,
-      style: [
-        { selector: "node", style: {
-          "background-color": "#1a3a4a",
-          "border-color": "var(--accent)",
-          "border-width": 1,
-          "label": "data(label)",
-          "color": "#ddd",
-          "font-size": 11,
-          "text-valign": "bottom",
-          "text-halign": "center",
-          "text-margin-y": 6,
-          "text-outline-color": "#000",
-          "text-outline-width": 3,
-          // Long names get truncated rather than overflowing across
-          // neighbour labels. ~14 chars at 11px ≈ 100px wide which is
-          // roughly the layout's min spacing target.
-          "text-max-width": 110,
-          "text-wrap": "ellipsis",
-          "text-events": "yes",
-          "width":  "mapData(degree, 1, 20, 16, 50)",
-          "height": "mapData(degree, 1, 20, 16, 50)",
-        }},
-        // Highlight the focused/centred node — hub mode uses _baConnHubId,
-        // network mode uses _baConnFocusId when set.
-        { selector: `node[id = '${mode === "hub" ? _baConnHubId : (_baConnFocusId || "")}']`, style: {
-          "background-color": "var(--accent)",
-          "border-color": "#fff",
-          "border-width": 2,
-        }},
-        { selector: "edge", style: {
-          "line-color":  "data(color)",
-          "target-arrow-shape": "none",
-          // Thicker + higher opacity so the relation hue actually reads
-          // — at 1.5/0.7 the new vivid palette still washed out.
-          "width": 2.5,
-          "opacity": 0.95,
-          "curve-style": "bezier",
-        }},
-      ],
-      // Layout tuned for legibility: fcose if available (better
-      // quality on sparse graphs), built-in cose as fallback. Both
-      // use long ideal edges + high repulsion so chain members
-      // (Leadbelly → Blind Lemon → King Solomon …) fan out instead
-      // of stacking on top of each other.
-      layout: mode === "hub"
-        ? { name: "concentric", concentric: n => n.data("id") === String(_baConnHubId) ? 100 : 1, levelWidth: () => 1, minNodeSpacing: 80, padding: 40 }
-        : (window._baFcoseLoaded
-            ? { name: "fcose", quality: "proof", animate: false, randomize: true,
-                nodeRepulsion: 12000, idealEdgeLength: 220, edgeElasticity: 0.25,
-                nodeSeparation: 120, gravity: 0.15, gravityRange: 4.0,
-                gravityCompound: 1.5, gravityRangeCompound: 2.0,
-                packComponents: true, componentSpacing: 80, padding: 40,
-                numIter: 4000, tile: false }
-            : { name: "cose", animate: false, randomize: true,
-                idealEdgeLength: 220, nodeRepulsion: 60000, nodeOverlap: 80,
-                edgeElasticity: 80, gravity: 0.15, componentSpacing: 200,
-                padding: 40, numIter: 2500, initialTemp: 200,
-                coolingFactor: 0.95, minTemp: 1.0 }),
-      wheelSensitivity: 0.2,
-    });
-    _baConnCy.on("tap", "node", evt => {
-      const id = Number(evt.target.data("id"));
-      if (!Number.isFinite(id)) return;
-      if (mode === "hub") {
-        _baConnHubId = id;
-        _baRenderHubPicker();
-        _baConnRender();
-      } else {
-        _baOpenArtist(id);
-      }
-    });
-  }).catch(err => {
-    mount.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#e88">Graph library load failed: ${escHtml(String(err?.message || err))}</div>`;
-  });
-}
 
 let _baConnMatrixSort = { key: "lo_name", dir: "asc" };
-function _baConnRenderMatrix(canvas, edges) {
-  const nodesById = new Map((_baConnGraph.nodes || []).map(n => [n.id, n]));
-  const labelByKind = Object.fromEntries(_BA_CONN_KINDS.map(k => [k.id, k]));
-  const rows = edges.map(e => ({
-    lo_id: e.lo_id, hi_id: e.hi_id, kind: e.kind,
-    lo_name: nodesById.get(e.lo_id)?.name || `#${e.lo_id}`,
-    hi_name: nodesById.get(e.hi_id)?.name || `#${e.hi_id}`,
-  }));
-  const dir = _baConnMatrixSort.dir === "desc" ? -1 : 1;
-  rows.sort((a, b) => {
-    const k = _baConnMatrixSort.key;
-    return String(a[k] || "").localeCompare(String(b[k] || "")) * dir;
-  });
-  const arrow = (k) => _baConnMatrixSort.key === k ? (_baConnMatrixSort.dir === "asc" ? " ▲" : " ▼") : "";
-  canvas.innerHTML = `
-    <div style="padding:0.6rem 0.8rem;max-height:560px;overflow:auto">
-      <table class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr>
-          <th style="cursor:pointer" onclick="_baConnSortMatrix('lo_name')">Artist A${arrow("lo_name")}</th>
-          <th style="cursor:pointer" onclick="_baConnSortMatrix('kind')">Relation${arrow("kind")}</th>
-          <th style="cursor:pointer" onclick="_baConnSortMatrix('hi_name')">Artist B${arrow("hi_name")}</th>
-        </tr></thead>
-        <tbody>${rows.map(r => {
-          const k = labelByKind[r.kind] || { label: r.kind, color: "#888" };
-          return `<tr>
-            <td><a href="#" onclick="event.preventDefault();_baOpenArtist(${r.lo_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(r.lo_name)}</a></td>
-            <td><span style="padding:0.12rem 0.5rem;border:1px solid ${k.color};border-radius:999px;font-size:0.74rem;color:${k.color}">${escHtml(k.label)}</span></td>
-            <td><a href="#" onclick="event.preventDefault();_baOpenArtist(${r.hi_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(r.hi_name)}</a></td>
-          </tr>`;
-        }).join("") || `<tr><td colspan="3" style="color:var(--muted);font-style:italic;padding:0.6rem 0">No links match the current filter.</td></tr>`}</tbody>
-      </table>
-    </div>`;
-}
 
-function _baConnSortMatrix(key) {
-  if (_baConnMatrixSort.key === key) {
-    _baConnMatrixSort.dir = _baConnMatrixSort.dir === "asc" ? "desc" : "asc";
-  } else {
-    _baConnMatrixSort = { key, dir: "asc" };
-  }
-  _baConnRender();
-}
-window._baConnSortMatrix = _baConnSortMatrix;
 
