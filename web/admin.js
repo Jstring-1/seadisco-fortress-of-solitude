@@ -2093,33 +2093,35 @@ async function loadCacheRate(_elRetry = 0) {
     const series = Array.isArray(s.hourly) ? s.hourly : [];
     const max = series.reduce((m, h) => Math.max(m, Number(h.n) || 0), 0);
     const HOUR_MS = 3600000;
-    // Each bucket carries an absolute instant `t` (ms). Format in Pacific.
-    // Fallback parses the legacy UTC "hour" string if an old payload lands.
-    const tOf = (h) => Number.isFinite(Number(h.t)) ? Number(h.t)
-                     : (h.hour ? Date.parse(String(h.hour) + ":00Z") : NaN);
-    const ptFull = (ms) => Number.isFinite(ms)
-      ? new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-      : "";
-    const ptHour = (ms) => Number.isFinite(ms)
-      ? new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric" })
-      : "";
+    const len = series.length;
+    // The series is always N consecutive hourly buckets ending at the
+    // current hour, so derive each bucket's instant from its POSITION.
+    // This makes the hover time bulletproof — no dependence on whatever
+    // the payload happens to carry (t / hour / nothing).
+    const nowHour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    const msAt = (i) => Number.isFinite(Number(series[i]?.t)) ? Number(series[i].t) : (nowHour - (len - 1 - i) * HOUR_MS);
+    const ptFull = (ms) => new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const ptHour = (ms) => new Date(ms).toLocaleTimeString("en-US", { timeZone: "America/Los_Angeles", hour: "numeric" });
     const bars = series.map((h, i) => {
       const v = Number(h.n) || 0;
-      const ms = tOf(h);
+      const ms = msAt(i);
       const pct = max > 0 ? Math.round((v / max) * 100) : 0;
-      const last = i === series.length - 1;
-      return `<span title="${ptFull(ms)} PT · ${n(v)} writes" style="display:inline-block;width:6px;height:34px;background:rgba(255,255,255,0.045);vertical-align:bottom;position:relative">`
-           + `<span style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;min-height:${v > 0 ? 2 : 0}px;background:var(--accent)${last ? ";opacity:0.55" : ""}"></span></span>`;
+      const last = i === len - 1;
+      // Data hours → accent bar (min 4% so tiny counts stay visible).
+      // Empty hours → a 2px muted floor tick so "0 writes" reads clearly
+      // distinct from a bar. Current hour → accent outline marks "now".
+      const inner = v > 0
+        ? `<span style="position:absolute;bottom:0;left:0;right:0;height:${Math.max(pct, 4)}%;background:var(--accent)"></span>`
+        : `<span style="position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--border)"></span>`;
+      return `<span title="${ptFull(ms)} PT · ${n(v)} write${v === 1 ? "" : "s"}" style="display:inline-block;width:7px;height:36px;background:rgba(255,255,255,0.05);vertical-align:bottom;position:relative${last ? ";outline:1px solid var(--accent);outline-offset:-1px" : ""}">${inner}</span>`;
     }).join("");
-    const firstT = series.length ? tOf(series[0]) : NaN;
-    const lastT  = series.length ? tOf(series[series.length - 1]) : NaN;
-    const chart = `
+    const chart = len ? `
       <div style="display:inline-block;max-width:100%;overflow-x:auto">
-        <div style="display:flex;gap:1px;align-items:flex-end;height:34px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 1px" title="Writes per hour, last 24 h (Pacific time)">${bars || '<span style="font-size:0.72rem">no writes in the last 24h</span>'}</div>
+        <div style="display:flex;gap:1px;align-items:flex-end;height:36px;border-left:1px solid var(--border);border-bottom:1px solid var(--border);padding:0 1px" title="Writes per hour, last ${len} h (Pacific time). Each slot is one hour; the outlined slot on the right is the current hour.">${bars}</div>
         <div style="display:flex;justify-content:space-between;font-size:0.64rem;color:var(--muted);margin-top:3px">
-          <span>${ptHour(firstT)}</span><span>now · ${ptHour(lastT)} PT</span>
+          <span>${ptHour(msAt(0))} PT</span><span>now · ${ptHour(msAt(len - 1))} PT ▸</span>
         </div>
-      </div>`;
+      </div>` : `<div style="font-size:0.72rem;color:var(--muted)">no hourly data</div>`;
     el.innerHTML = `
       <div style="display:flex;gap:1.1rem;flex-wrap:wrap;align-items:baseline;margin-bottom:0.5rem">
         <span title="release_cache writes in the last hour">Last hour: <strong style="color:var(--text)">${n(s.window?.["1h"])}</strong></span>
