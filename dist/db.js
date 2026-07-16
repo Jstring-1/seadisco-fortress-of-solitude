@@ -8958,16 +8958,17 @@ async function _computeCacheAnalyticsV1(f) {
                         WHERE LOWER(art->>'name') LIKE LOWER(${push('%' + f.artist + '%')}))`);
     }
     if (f.genre) {
-        // Case-insensitive exact match on any genre tag. jsonb_exists (the ?
-        // operator) is case-SENSITIVE, so "blues" silently missed rows tagged
-        // "Blues" — matching the label/artist convention avoids those silent
-        // zero-result surprises.
-        where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(rc.data->'genres','[]'::jsonb)) g
-                        WHERE LOWER(g) = LOWER(${push(f.genre)}))`);
+        // Genres are stored as Discogs sends them (Title-Case, e.g. "Blues"),
+        // so an exact-lowercase match silently missed everything. Match both
+        // the lowercase and Title-Case forms via the ?| operator, which still
+        // uses the release_cache_data_genres_gin index (unlike lowering the
+        // column, which would force a full scan).
+        const g = push(f.genre);
+        where.push(`rc.data->'genres' ?| ARRAY[lower(${g}), initcap(${g})]`);
     }
     if (f.style) {
-        where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(rc.data->'styles','[]'::jsonb)) st
-                        WHERE LOWER(st) = LOWER(${push(f.style)}))`);
+        const st = push(f.style);
+        where.push(`rc.data->'styles' ?| ARRAY[lower(${st}), initcap(${st})]`);
     }
     if (f.country) {
         where.push(`LOWER(rc.data->>'country') = LOWER(${push(f.country)})`);
@@ -9100,16 +9101,18 @@ async function _computeCacheAnalyticsV2(f) {
                           AND LOWER(ra.name) LIKE LOWER(${push('%' + f.artist + '%')}))`);
     }
     if (f.genre) {
-        // Case-insensitive to match the V1 reader + the label/artist filters;
-        // exact `=` silently missed casing variants ("blues" vs "Blues").
+        // Match both casings (lower + Title-Case) so the value= comparison
+        // still uses the release_tags index, mirroring the V1 reader.
+        const g = push(f.genre);
         where.push(`EXISTS (SELECT 1 FROM release_tags rt
                         WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
-                          AND rt.kind = 'genre' AND LOWER(rt.value) = LOWER(${push(f.genre)}))`);
+                          AND rt.kind = 'genre' AND rt.value IN (lower(${g}), initcap(${g})))`);
     }
     if (f.style) {
+        const st = push(f.style);
         where.push(`EXISTS (SELECT 1 FROM release_tags rt
                         WHERE rt.discogs_id = ca.discogs_id AND rt.bucket = ca.bucket
-                          AND rt.kind = 'style' AND LOWER(rt.value) = LOWER(${push(f.style)}))`);
+                          AND rt.kind = 'style' AND rt.value IN (lower(${st}), initcap(${st})))`);
     }
     if (f.country) {
         where.push(`LOWER(ca.country) = LOWER(${push(f.country)})`);
