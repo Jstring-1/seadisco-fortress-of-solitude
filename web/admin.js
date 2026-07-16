@@ -3169,6 +3169,8 @@ let _ytrPage = 0;
 let _ytrStatus = "pending";
 const _YTR_LIMIT = 50;
 let _ytrPollTimer = null;
+let _ytrQuery = "";
+let _ytrFilterTimer = null;
 async function loadYtReview() {
   const stEl = document.getElementById("ytr-status");
   if (!stEl) return;
@@ -3210,6 +3212,15 @@ async function loadYtReview() {
         </div>
       </div>
     `;
+    // Reflect the once-a-day auto-run state (static markup, survives polls).
+    const dailyToggle = document.getElementById("ytr-daily-toggle");
+    if (dailyToggle) dailyToggle.checked = !!s.dailyEnabled;
+    const dailyNext = document.getElementById("ytr-daily-next");
+    if (dailyNext) {
+      dailyNext.textContent = s.dailyEnabled && s.nextDailyRun
+        ? `next auto-run ${new Date(s.nextDailyRun).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+        : (s.dailyEnabled ? "" : "auto-run off");
+    }
     // Poll while running so the cursor + counters stay live.
     if (_ytrPollTimer) { clearTimeout(_ytrPollTimer); _ytrPollTimer = null; }
     if (running && _adminPanelVisible() && document.getElementById("panel-yt-review")?.style.display !== "none") {
@@ -3227,6 +3238,27 @@ function ytrTile(label, n, color, status) {
 }
 function ytrSetStatus(s) { _ytrStatus = s; _ytrPage = 0; loadYtReviewQueue(); }
 window.ytrSetStatus = ytrSetStatus;
+// Debounced free-text filter over the queue (track artist or title).
+function ytrFilterInput(v) {
+  const q = String(v || "").trim();
+  if (_ytrFilterTimer) clearTimeout(_ytrFilterTimer);
+  _ytrFilterTimer = setTimeout(() => {
+    _ytrQuery = q; _ytrPage = 0; loadYtReviewQueue();
+  }, 300);
+}
+window.ytrFilterInput = ytrFilterInput;
+// Toggle the once-a-day auto-run.
+async function ytrToggleDaily(enabled) {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/daily", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: !!enabled }),
+    });
+    if (!r.ok) { alert(`Failed to update schedule: HTTP ${r.status}`); }
+  } catch (e) { alert(`Failed to update schedule: ${e?.message || e}`); }
+  loadYtReview();
+}
+window.ytrToggleDaily = ytrToggleDaily;
 async function ytrStart() {
   try {
     const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
@@ -3275,6 +3307,7 @@ async function loadYtReviewQueue() {
   const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   try {
     const params = new URLSearchParams({ status: _ytrStatus, limit: String(_YTR_LIMIT), offset: String(_ytrPage * _YTR_LIMIT) });
+    if (_ytrQuery) params.set("q", _ytrQuery);
     const r = await apiFetch(`/api/admin/yt-review/queue?${params}`);
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Queue load failed: HTTP ${r.status}</span>`; return; }
     const { rows = [], total = 0 } = await r.json();

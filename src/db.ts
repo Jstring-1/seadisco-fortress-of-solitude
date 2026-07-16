@@ -7008,21 +7008,35 @@ export async function listReviewQueue(opts: {
   status?: string;
   limit?: number;
   offset?: number;
+  q?: string;
 } = {}): Promise<{ rows: any[]; total: number }> {
   const status = opts.status || "pending";
   const limit = Math.max(1, Math.min(200, opts.limit ?? 50));
   const offset = Math.max(0, opts.offset ?? 0);
+  const q = (opts.q ?? "").trim();
+  // Free-text filter: matches the track's artist OR title so the admin
+  // can find "is this specific missing track already suggested?".
+  const where = ["status = $1"];
+  const params: any[] = [status];
+  if (q) {
+    params.push(`%${q}%`);
+    where.push(`(track_artist ILIKE $${params.length} OR track_title ILIKE $${params.length})`);
+  }
+  const whereSql = where.join(" AND ");
   const totalR = await getPool().query(
-    `SELECT COUNT(*)::int AS n FROM track_yt_review_queue WHERE status = $1`,
-    [status],
+    `SELECT COUNT(*)::int AS n FROM track_yt_review_queue WHERE ${whereSql}`,
+    params,
   );
+  const rowParams = params.slice();
+  rowParams.push(limit); const limIdx = rowParams.length;
+  rowParams.push(offset); const offIdx = rowParams.length;
   const r = await getPool().query(
     `SELECT * FROM track_yt_review_queue
-      WHERE status = $1
+      WHERE ${whereSql}
       ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC,
                title_score DESC NULLS LAST, id ASC
-      LIMIT $2 OFFSET $3`,
-    [status, limit, offset],
+      LIMIT $${limIdx} OFFSET $${offIdx}`,
+    rowParams,
   );
   return { rows: r.rows, total: totalR.rows[0]?.n ?? 0 };
 }

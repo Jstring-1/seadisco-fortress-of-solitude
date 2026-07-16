@@ -317,6 +317,13 @@
           <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">v1 — every candidate is human-reviewed; nothing auto-pinned.</span>
         </div>
         <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.6rem">
+          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);cursor:pointer" title="Run the worker automatically once a day (just after midnight UTC) so candidates accumulate for review on your own schedule. Manual Start/Stop still work.">
+            <input type="checkbox" id="ytr-daily-toggle" onchange="ytrToggleDaily(this.checked)"> Run automatically once a day
+          </label>
+          <span id="ytr-daily-next" style="font-size:0.72rem;color:var(--muted)"></span>
+          <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" oninput="ytrFilterInput(this.value)" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
+        </div>
         <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>
         <div id="ytr-pager" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.6rem;font-size:0.8rem"></div>
       </div>

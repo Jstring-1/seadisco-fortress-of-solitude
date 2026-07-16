@@ -11697,6 +11697,51 @@ async function _runYtReviewWorker(): Promise<void> {
   }
 }
 
+// ── Once-a-day auto-run ───────────────────────────────────────────
+// Kicks the worker once per day, just after the UTC-midnight budget
+// reset, so candidates accumulate for review on the admin's own
+// schedule — no need to remember to hit Start. Toggle via the
+// yt_review_daily_enabled app setting (default on). Manual Start/Stop
+// still work; a run already in progress is left alone.
+const _YT_REVIEW_DAILY_RUN_HOUR_UTC = 1; // 01:00 UTC, just after the reset
+async function _ytReviewDailyEnabled(): Promise<boolean> {
+  try { return (await getAppSetting("yt_review_daily_enabled")) !== "0"; }
+  catch { return true; }
+}
+function _ytReviewMsUntilDailyRun(): number {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(_YT_REVIEW_DAILY_RUN_HOUR_UTC, 0, 0, 0);
+  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now.getTime();
+}
+function _ytReviewDailyTick(): void {
+  (async () => {
+    if (!(await _ytReviewDailyEnabled())) { console.log("[yt-review] daily auto-run disabled — skipping"); return; }
+    if (_ytReviewRunning) { console.log("[yt-review] daily auto-run: already running — skipping"); return; }
+    console.log("[yt-review] daily auto-run kicking worker");
+    _runYtReviewWorker().catch((e) => console.error("[yt-review] daily run threw:", e));
+  })().catch((e) => console.error("[yt-review] daily tick failed:", e));
+}
+function initYtReviewDailySchedule(): void {
+  const wait = _ytReviewMsUntilDailyRun();
+  setTimeout(() => {
+    _ytReviewDailyTick();
+    setInterval(_ytReviewDailyTick, 24 * 60 * 60 * 1000);
+  }, wait);
+  console.log(`[yt-review] daily auto-run scheduled in ~${Math.round(wait / 60000)}min, then every 24h (${_YT_REVIEW_DAILY_RUN_HOUR_UTC}:00 UTC)`);
+}
+
+// Enable/disable the once-a-day auto-run.
+app.post("/api/admin/yt-review/daily", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const enabled = !!(req.body && req.body.enabled);
+  try {
+    await setAppSetting("yt_review_daily_enabled", enabled ? "1" : "0");
+    res.json({ ok: true, dailyEnabled: enabled, nextDailyRun: enabled ? Date.now() + _ytReviewMsUntilDailyRun() : null });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 app.post("/api/admin/yt-review/start", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   if (_ytReviewRunning) { res.status(409).json({ error: "already_running" }); return; }
@@ -11751,6 +11796,7 @@ app.get("/api/admin/yt-review/status", async (req, res) => {
   ]);
   _ytReviewMaybeReset();
   _ytQuotaMaybeReset();
+  const dailyEnabled = await _ytReviewDailyEnabled();
   res.json({
     state,
     counts,
@@ -11760,6 +11806,8 @@ app.get("/api/admin/yt-review/status", async (req, res) => {
     projectUnitsToday: _ytQuotaUnitsToday,
     projectUnitsCap: _YT_DAILY_SOFT_CAP_UNITS,
     throttleMs: _YT_REVIEW_THROTTLE_MS,
+    dailyEnabled,
+    nextDailyRun: dailyEnabled ? Date.now() + _ytReviewMsUntilDailyRun() : null,
   });
 });
 
@@ -11768,7 +11816,8 @@ app.get("/api/admin/yt-review/queue", async (req, res) => {
   const status = String(req.query.status ?? "pending").trim() || "pending";
   const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "50"), 10) || 50));
   const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-  const out = await listReviewQueue({ status, limit, offset });
+  const q = String(req.query.q ?? "").trim();
+  const out = await listReviewQueue({ status, limit, offset, q });
   res.json(out);
 });
 
@@ -14798,6 +14847,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initLabelUpstreamStatsModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] label-upstream-stats init failed:", e);
+    }
+    try { initYtReviewDailySchedule(); } catch (e) {
+      console.error("[startup] yt-review daily schedule init failed:", e);
     }
     // Warm the cache-warm-runs stats cache out of band so the first
     // admin who opens the panel after deploy doesn't pay for the
