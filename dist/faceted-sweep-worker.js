@@ -11,15 +11,13 @@
 // (year, value) queue on start, walk it with a persisted cursor,
 // resume on boot.
 import { getAdminDiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, } from "./db.js";
+import { cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "faceted_sweep_state";
-const REQ_INTERVAL_MS = 1000;
 let _state = null;
 let _running = false;
 let _stopRequested = false;
 let _adminClerkId = null;
-const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function _persist() {
     try {
         await setAppSetting(STATE_KEY, _state ? JSON.stringify(_state) : null);
@@ -182,16 +180,26 @@ async function _sweepSlot(client, mode, slot) {
         const results = Array.isArray(payload?.results) ? payload.results : [];
         if (results.length === 0)
             return;
-        // Batch cache check across the whole page (all master ids).
+        // Build the master-id worklist. A type=master search combined with
+        // a pressing-level facet (format/country) makes Discogs hand back
+        // PRESSING rows still tagged type:"master" but carrying the release
+        // id — fetching that as a master 404s. So we trust r.master_id (the
+        // real master) over r.id, falling back to r.id only for genuine
+        // master rows that carry no master_id. Dedup because many pressings
+        // collapse onto one master.
+        const seen = new Set();
         const inScope = [];
         for (const r of results) {
-            const id = Number(r?.id);
             const kind = String(r?.type ?? "").toLowerCase();
-            if (!Number.isFinite(id) || id <= 0)
+            const mid = Number(r?.master_id);
+            const rid = Number(r?.id);
+            const masterId = Number.isFinite(mid) && mid > 0
+                ? mid
+                : (kind === "master" && Number.isFinite(rid) && rid > 0 ? rid : 0);
+            if (masterId <= 0 || seen.has(masterId))
                 continue;
-            if (kind !== "master")
-                continue;
-            inScope.push(id);
+            seen.add(masterId);
+            inScope.push(masterId);
         }
         if (inScope.length === 0) {
             if (results.length < perPage)
@@ -199,11 +207,16 @@ async function _sweepSlot(client, mode, slot) {
             page++;
             continue;
         }
-        const cachedSet = await getCachedReleaseIds(inScope, "master");
+        // Skip both already-cached and known-dead ids so a mature sweep
+        // doesn't re-spend its budget re-fetching either.
+        const [cachedSet, deadSet] = await Promise.all([
+            getCachedReleaseIds(inScope, "master"),
+            getDeadDiscogsIds(inScope, "master"),
+        ]);
         for (const id of inScope) {
             if (_stopRequested)
                 return;
-            if (cachedSet.has(id)) {
+            if (cachedSet.has(id) || deadSet.has(id)) {
                 _state.skipped++;
                 continue;
             }
@@ -217,8 +230,13 @@ async function _sweepSlot(client, mode, slot) {
                 _state.errors++;
                 _state.lastError = `master=${id}: ${err?.message ?? String(err)}`;
                 console.warn(`[faceted-sweep] ${_state.lastError}`);
+                // Tombstone genuine 404s so we never re-fetch this id again.
+                if (/Discogs API error 404/.test(String(err?.message ?? err))) {
+                    await recordDeadDiscogsId(id, "master").catch(() => { });
+                }
             }
-            await _sleep(REQ_INTERVAL_MS);
+            // Pacing is enforced process-wide by discogsGate() in DiscogsClient;
+            // no local sleep so the gate is the single, uniform pacer.
         }
         if (results.length < perPage)
             return;

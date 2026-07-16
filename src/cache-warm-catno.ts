@@ -29,6 +29,8 @@ import {
   getAppSetting,
   setAppSetting,
   getCachedReleaseIds,
+  getDeadDiscogsIds,
+  recordDeadDiscogsId,
   backfillCachedMasterLabel,
 } from "./db.js";
 
@@ -461,9 +463,15 @@ async function _processSearchResults(
     if (Number.isFinite(id) && id > 0) ids.push(id);
   }
   let cachedIds: Set<number>;
-  try { cachedIds = await getCachedReleaseIds(ids, type); }
-  catch { cachedIds = new Set(); }
-  const skippedIds = ids.filter(id => cachedIds.has(id));
+  let deadIds: Set<number>;
+  try {
+    [cachedIds, deadIds] = await Promise.all([
+      getCachedReleaseIds(ids, type),
+      getDeadDiscogsIds(ids, type),
+    ]);
+  } catch { cachedIds = new Set(); deadIds = new Set(); }
+  // Count both already-cached and known-dead ids as skips.
+  const skippedIds = ids.filter(id => cachedIds.has(id) || deadIds.has(id));
   if (skippedIds.length > 0) await bumpCacheWarmCatnoRunSkip(series.key, skippedIds.length);
   // GET /masters/{id} carries no `labels` field, so a master cached
   // by an earlier run (before this backfill existed, or via the
@@ -483,7 +491,7 @@ async function _processSearchResults(
     if (_stopRequested) break;
     const id = Number(r?.id);
     if (!Number.isFinite(id) || id <= 0) continue;
-    if (cachedIds.has(id)) continue;
+    if (cachedIds.has(id) || deadIds.has(id)) continue;
     try {
       await _sleep(REQ_INTERVAL_MS);
       const full = type === "master"
@@ -498,6 +506,10 @@ async function _processSearchResults(
       fresh++;
     } catch (err: any) {
       await recordCacheWarmCatnoRunError(series.key, `${type} ${id}: ${err?.message ?? String(err)}`);
+      // Tombstone genuine 404s so future sweeps stop re-fetching them.
+      if (/Discogs API error 404/.test(String(err?.message ?? err))) {
+        await recordDeadDiscogsId(id, type).catch(() => {});
+      }
       await _sleep(REQ_INTERVAL_MS);
     }
   }

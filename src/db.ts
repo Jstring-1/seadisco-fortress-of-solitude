@@ -847,6 +847,20 @@ export async function initDb() {
   // (last 1h / 24h / 7d) + the hourly GROUP BY use this btree instead of
   // sequential-scanning the whole table on every 30s poll.
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_cached_at_idx ON release_cache (cached_at)`);
+  // Negative cache — Discogs ids that returned 404 (deleted / merged,
+  // or mis-typed by the search index: a type=master search combined
+  // with a pressing-level facet like format/country/label hands back
+  // PRESSING ids still tagged "master", which then 404 on /masters/{id}).
+  // Recorded here so a mature sweep stops re-spending its ~1/sec Discogs
+  // budget re-fetching the same known-dead ids on every pass.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_dead_ids (
+      discogs_id  BIGINT      NOT NULL,
+      type        TEXT        NOT NULL,
+      first_seen  TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (discogs_id, type)
+    )
+  `);
   // GIN indexes for the Constellations artist popup + collect SQL.
   // Without these, looking up every release credited to a given
   // discogs_id was a full table scan that expanded each row's
@@ -11377,6 +11391,36 @@ export async function getCachedReleaseIds(
     [type, ids],
   );
   return new Set((r.rows ?? []).map((row: any) => Number(row.discogs_id)));
+}
+
+// Negative-cache lookup — which of these ids are known-dead (previously
+// 404'd) for this type. Sweeps union this with getCachedReleaseIds so a
+// dead id is skipped exactly like an already-cached one, instead of
+// being re-fetched (and re-404'd) on every pass. Batched, PK-indexed.
+export async function getDeadDiscogsIds(
+  ids: number[],
+  type: "release" | "master" = "master",
+): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const r = await getPool().query(
+    `SELECT discogs_id FROM discogs_dead_ids WHERE type = $1 AND discogs_id = ANY($2::bigint[])`,
+    [type, ids],
+  );
+  return new Set((r.rows ?? []).map((row: any) => Number(row.discogs_id)));
+}
+
+// Tombstone an id that returned 404 from Discogs so future sweeps skip
+// it. Idempotent; keeps the earliest first_seen on conflict.
+export async function recordDeadDiscogsId(
+  id: number,
+  type: "release" | "master" = "master",
+): Promise<void> {
+  if (!Number.isFinite(id) || id <= 0) return;
+  await getPool().query(
+    `INSERT INTO discogs_dead_ids (discogs_id, type) VALUES ($1, $2)
+       ON CONFLICT (discogs_id, type) DO NOTHING`,
+    [id, type],
+  );
 }
 
 // GET /masters/{id} carries no `labels` field (labels are a

@@ -10,7 +10,7 @@
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 import { getAdminDiscogsClient } from "./discogs-client.js";
-import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, bumpCacheWarmRunSkip, cacheRelease, getAppSetting, setAppSetting, } from "./db.js";
+import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, bumpCacheWarmRunSkip, cacheRelease, getAppSetting, setAppSetting, } from "./db.js";
 // Persisted intent so a Railway restart can auto-resume the run.
 // Set when startCacheWarmRun fires, cleared by Stop or natural
 // completion. Crashes do NOT clear it — boot-resume picks up where
@@ -295,20 +295,30 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
         // instead of N round-trips. Re-runs over already-cached genres
         // used to spend ~2 DB calls per result (SELECT + UPDATE) on every
         // hit; this collapses each page's 100 hits to 2 queries total.
+        // Genre/style master searches carry no pressing-level facet, so
+        // Discogs returns genuine master rows (id === master_id) — but guard
+        // by type anyway, and skip any row that isn't actually a master.
         const pageIds = [];
         for (const r of results) {
             const id = Number(r?.id);
+            if (String(r?.type ?? "").toLowerCase() !== "master")
+                continue;
             if (Number.isFinite(id) && id > 0)
                 pageIds.push(id);
         }
         let cachedIds;
+        let deadIds;
         try {
-            cachedIds = await getCachedReleaseIds(pageIds, "master");
+            [cachedIds, deadIds] = await Promise.all([
+                getCachedReleaseIds(pageIds, "master"),
+                getDeadDiscogsIds(pageIds, "master"),
+            ]);
         }
         catch {
             cachedIds = new Set();
+            deadIds = new Set();
         }
-        const skipsThisPage = pageIds.filter(id => cachedIds.has(id)).length;
+        const skipsThisPage = pageIds.filter(id => cachedIds.has(id) || deadIds.has(id)).length;
         if (skipsThisPage > 0)
             await bumpCacheWarmRunSkip(genreKey, styleKey, skipsThisPage);
         for (const r of results) {
@@ -317,7 +327,10 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
             const id = Number(r?.id);
             if (!Number.isFinite(id) || id <= 0)
                 continue;
-            if (cachedIds.has(id))
+            if (String(r?.type ?? "").toLowerCase() !== "master")
+                continue;
+            // Skip already-cached and known-dead (previously-404'd) ids.
+            if (cachedIds.has(id) || deadIds.has(id))
                 continue;
             try {
                 // Pacing is now enforced process-wide by discogsGate() inside
@@ -330,6 +343,10 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
             }
             catch (err) {
                 await recordCacheWarmRunError(genreKey, styleKey, `master ${id}: ${err?.message ?? String(err)}`);
+                // Tombstone genuine 404s so future sweeps stop re-fetching them.
+                if (/Discogs API error 404/.test(String(err?.message ?? err))) {
+                    await recordDeadDiscogsId(id, "master").catch(() => { });
+                }
                 await _sleep(REQ_INTERVAL_MS);
             }
         }

@@ -16,7 +16,7 @@
 // every cataloged release gets a chance, regardless of how the
 // year/genre facet would have surfaced (or buried) it.
 import { getAdminDiscogsClient } from "./discogs-client.js";
-import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, backfillCachedMasterLabel, } from "./db.js";
+import { getCacheWarmCatnoRun, upsertCacheWarmCatnoRun, recordCacheWarmCatnoRunHit, recordCacheWarmCatnoRunSearched, recordCacheWarmCatnoRunError, bumpCacheWarmCatnoRunSkip, cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, backfillCachedMasterLabel, } from "./db.js";
 const ACTIVE_KEY = "cache_warm_catno_active_run";
 async function _writeActiveRun(seriesKey) {
     try {
@@ -425,13 +425,19 @@ async function _processSearchResults(client, series, results, opts = {}) {
             ids.push(id);
     }
     let cachedIds;
+    let deadIds;
     try {
-        cachedIds = await getCachedReleaseIds(ids, type);
+        [cachedIds, deadIds] = await Promise.all([
+            getCachedReleaseIds(ids, type),
+            getDeadDiscogsIds(ids, type),
+        ]);
     }
     catch {
         cachedIds = new Set();
+        deadIds = new Set();
     }
-    const skippedIds = ids.filter(id => cachedIds.has(id));
+    // Count both already-cached and known-dead ids as skips.
+    const skippedIds = ids.filter(id => cachedIds.has(id) || deadIds.has(id));
     if (skippedIds.length > 0)
         await bumpCacheWarmCatnoRunSkip(series.key, skippedIds.length);
     // GET /masters/{id} carries no `labels` field, so a master cached
@@ -457,7 +463,7 @@ async function _processSearchResults(client, series, results, opts = {}) {
         const id = Number(r?.id);
         if (!Number.isFinite(id) || id <= 0)
             continue;
-        if (cachedIds.has(id))
+        if (cachedIds.has(id) || deadIds.has(id))
             continue;
         try {
             await _sleep(REQ_INTERVAL_MS);
@@ -475,6 +481,10 @@ async function _processSearchResults(client, series, results, opts = {}) {
         }
         catch (err) {
             await recordCacheWarmCatnoRunError(series.key, `${type} ${id}: ${err?.message ?? String(err)}`);
+            // Tombstone genuine 404s so future sweeps stop re-fetching them.
+            if (/Discogs API error 404/.test(String(err?.message ?? err))) {
+                await recordDeadDiscogsId(id, type).catch(() => { });
+            }
             await _sleep(REQ_INTERVAL_MS);
         }
     }
