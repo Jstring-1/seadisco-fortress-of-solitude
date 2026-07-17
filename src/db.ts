@@ -6986,6 +6986,75 @@ export async function suggestTrackYtOverridesBatch(
   }
 }
 
+// Cascade an admin replace/block into saved playlists + play queues.
+// Swaps (or removes, when newVideoId is null) every 'yt' item whose
+// external_id is the displaced video. Scoped to items that were added
+// from THIS album — data.releaseId must match one of the album's ids
+// (master or pressing) or be absent (legacy rows with no release
+// context) — so a legitimate use of the same video on another album
+// isn't clobbered.
+export async function cascadeTrackYtVideoSwap(args: {
+  oldVideoId: string;
+  newVideoId: string | null;   // null → remove (block)
+  albumIds: string[];          // master + release ids of the album
+}): Promise<{ playlistRows: number; queueRows: number }> {
+  const albumIds = (args.albumIds || []).map(String).filter(Boolean);
+  const scopeSql = `source = 'yt'
+      AND external_id = $1
+      AND (COALESCE(data->>'releaseId', '') = '' OR data->>'releaseId' = ANY($2::text[]))`;
+  let playlistRows = 0;
+  let queueRows = 0;
+  if (args.newVideoId) {
+    // durationSec belonged to the old video — drop it so the player
+    // re-derives it; ytUrl (when present) must follow the new id.
+    const dataPatch = `(data - 'durationSec') ||
+      CASE WHEN data ? 'ytUrl'
+           THEN jsonb_build_object('ytUrl', 'https://www.youtube.com/watch?v=' || $3::text)
+           ELSE '{}'::jsonb END`;
+    const pr = await getPool().query(
+      `UPDATE user_playlist_items
+          SET external_id = $3, data = ${dataPatch}
+        WHERE ${scopeSql}
+        RETURNING playlist_id`,
+      [args.oldVideoId, albumIds, args.newVideoId]
+    );
+    playlistRows = pr.rowCount ?? 0;
+    const touched = [...new Set(pr.rows.map((r: any) => r.playlist_id))];
+    if (touched.length) {
+      await getPool().query(
+        `UPDATE user_playlists SET updated_at = NOW() WHERE id = ANY($1::int[])`,
+        [touched]
+      );
+    }
+    const qr = await getPool().query(
+      `UPDATE user_play_queue
+          SET external_id = $3, data = ${dataPatch}
+        WHERE ${scopeSql}`,
+      [args.oldVideoId, albumIds, args.newVideoId]
+    );
+    queueRows = qr.rowCount ?? 0;
+  } else {
+    const pr = await getPool().query(
+      `DELETE FROM user_playlist_items WHERE ${scopeSql} RETURNING playlist_id`,
+      [args.oldVideoId, albumIds]
+    );
+    playlistRows = pr.rowCount ?? 0;
+    const touched = [...new Set(pr.rows.map((r: any) => r.playlist_id))];
+    if (touched.length) {
+      await getPool().query(
+        `UPDATE user_playlists SET updated_at = NOW() WHERE id = ANY($1::int[])`,
+        [touched]
+      );
+    }
+    const qr = await getPool().query(
+      `DELETE FROM user_play_queue WHERE ${scopeSql}`,
+      [args.oldVideoId, albumIds]
+    );
+    queueRows = qr.rowCount ?? 0;
+  }
+  return { playlistRows, queueRows };
+}
+
 // ── YT review queue helpers (v1: human-reviewed background matcher) ──
 export async function insertReviewCandidate(args: {
   masterId: number | string;

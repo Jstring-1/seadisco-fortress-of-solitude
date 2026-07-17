@@ -4030,8 +4030,36 @@ function _trackYtAdminCtx(el) {
   };
 }
 
+// Pull an 11-char YouTube video id out of a URL / raw id string.
+function _trackYtVideoIdFrom(s) {
+  s = String(s || "").trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  if (typeof extractYouTubeId === "function") {
+    const id = extractYouTubeId(s);
+    if (id) return id;
+  }
+  const m = s.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : "";
+}
+
+// The video currently shown on a row (Discogs match or override) —
+// sent as oldVideoId so the server can cascade the swap/removal into
+// saved playlists + play queues.
+function _trackYtCurrentVideoId(ctx) {
+  const cur = ctx.row?.querySelector(".track-play-cell .track-link")?.getAttribute("data-video") || "";
+  return _trackYtVideoIdFrom(cur);
+}
+
+// Album ids that scope the playlist/queue cascade — items store the
+// releaseType/releaseId of the popup they were added from, which may
+// be the master OR a pressing.
+function _trackYtAlbumIds(ctx) {
+  return [...new Set([ctx.popupMasterId, ctx.popupReleaseId, ctx.scopeId].map(String).filter(Boolean))];
+}
+
 // POST to the admin set endpoint, then refresh the override cache +
-// DOM patch. Shared by replace and block.
+// DOM patch. Shared by replace and block. Toast reports how many
+// playlist/queue items the server-side cascade touched.
 async function _trackYtAdminSet(ctx, body, okMsg) {
   try {
     const r = await apiFetch("/api/admin/track-yt/set", {
@@ -4040,9 +4068,18 @@ async function _trackYtAdminSet(ctx, body, okMsg) {
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`save failed (${r.status})`);
+    const j = await r.json().catch(() => ({}));
     _trackYtOverridesCache.clear();
     await _trackYtKickFetchAndApply(ctx.targetId, ctx.popupMasterId, ctx.popupIsMaster ? "" : ctx.popupReleaseId, ctx.popupIsMaster);
-    if (typeof showToast === "function") showToast(okMsg, "info");
+    let msg = okMsg;
+    const c = j?.cascade;
+    if (c && (c.playlistRows || c.queueRows)) {
+      const bits = [];
+      if (c.playlistRows) bits.push(`${c.playlistRows} playlist item${c.playlistRows === 1 ? "" : "s"}`);
+      if (c.queueRows) bits.push(`${c.queueRows} queue item${c.queueRows === 1 ? "" : "s"}`);
+      msg += ` — updated ${bits.join(" + ")}`;
+    }
+    if (typeof showToast === "function") showToast(msg, "info");
   } catch (e) {
     if (typeof showToast === "function") showToast(e?.message || "Could not save", "error");
   }
@@ -4057,14 +4094,7 @@ async function _trackYtAdminReplace(el) {
   if (!ctx.pos || !ctx.scopeId) return;
   const raw = prompt(`YouTube URL (or 11-char video id) for "${ctx.trackTitle || ctx.pos}":`);
   if (raw == null) return;
-  const s = String(raw).trim();
-  let videoId = "";
-  if (/^[A-Za-z0-9_-]{11}$/.test(s)) videoId = s;
-  else if (typeof extractYouTubeId === "function") videoId = extractYouTubeId(s) || "";
-  if (!videoId) {
-    const m = s.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
-    videoId = m ? m[1] : "";
-  }
+  const videoId = _trackYtVideoIdFrom(raw);
   if (!videoId) {
     if (typeof showToast === "function") showToast("Could not read a YouTube video id from that", "error");
     return;
@@ -4076,6 +4106,8 @@ async function _trackYtAdminReplace(el) {
     trackTitle:    ctx.trackTitle || null,
     videoId,
     mode: "replace",
+    oldVideoId:    _trackYtCurrentVideoId(ctx) || undefined,
+    albumIds:      _trackYtAlbumIds(ctx),
   }, "Video set");
 }
 window._trackYtAdminReplace = _trackYtAdminReplace;
@@ -4087,7 +4119,7 @@ async function _trackYtAdminBlock(el) {
   if (!window._isAdmin) return;
   const ctx = _trackYtAdminCtx(el);
   if (!ctx.pos || !ctx.scopeId) return;
-  if (!confirm(`Hide the Discogs video for "${ctx.trackTitle || ctx.pos}"? The track will show as missing until a replacement is set.`)) return;
+  if (!confirm(`Hide the Discogs video for "${ctx.trackTitle || ctx.pos}"? The track will show as missing until a replacement is set, and it will be removed from playlists/queues that added it from this album.`)) return;
   await _trackYtAdminSet(ctx, {
     releaseId:     ctx.scopeId,
     releaseType:   ctx.scopeType,
@@ -4095,6 +4127,8 @@ async function _trackYtAdminBlock(el) {
     trackTitle:    ctx.trackTitle || null,
     videoId:       "",
     mode: "block",
+    oldVideoId:    _trackYtCurrentVideoId(ctx) || undefined,
+    albumIds:      _trackYtAlbumIds(ctx),
   }, "Discogs video hidden");
 }
 window._trackYtAdminBlock = _trackYtAdminBlock;
