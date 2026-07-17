@@ -3362,6 +3362,12 @@ async function _trackYtKickFetchAndApply(targetId, masterId, releaseId, isMaster
 }
 window._trackYtKickFetchAndApply = _trackYtKickFetchAndApply;
 
+// Original (Discogs-rendered) play-cell HTML stashed per row before an
+// admin 'replace' / 'block' override clobbers it — lets a same-popup
+// undo restore the Discogs affordances without a full re-render.
+// WeakMap so closed popups don't leak.
+const _trackYtOrigPlayCells = new WeakMap();
+
 // Patch tracklist rows in-place using the latest cached overrides.
 // Idempotent: rebuilds the override-driven affordances each call so a
 // post-suggest re-apply correctly reflects the new state.
@@ -3374,19 +3380,18 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
     const pos = row.dataset.pos || "";
     const titleCell = row.querySelector(".track-title");
     if (!titleCell) return;
-    // Strip prior override-driven affordances we own — leaves the
+    // Strip prior override/admin-driven affordances we own — leaves the
     // Discogs-supplied play/queue alone.
-    titleCell.querySelectorAll(".track-yt-override-badge, .track-yt-admin-delete, .track-yt-suggest").forEach(el => el.remove());
-    // If row has a Discogs-supplied play link (a .track-link with
-    // data-video set), the playCell is already correct and we don't
-    // need to touch it. We only inject when the row has NO play cell
-    // content at all.
+    titleCell.querySelectorAll(".track-yt-override-badge, .track-yt-admin-delete, .track-yt-admin-replace, .track-yt-admin-block, .track-yt-blocked-badge, .track-yt-suggest").forEach(el => el.remove());
     const playCell = row.querySelector(".track-play-cell");
-    const hasPlay = !!(playCell && playCell.querySelector(".track-link"));
     const ov = map.get(String(pos));
-    if (ov && !hasPlay) {
-      // Inject ▶ + ＋ using the override videoId.
-      const url = `https://www.youtube.com/watch?v=${ov.video_id}`;
+    const ovMode = ov ? (ov.mode || "gap") : "";
+    const isBlocked = ovMode === "block";
+    const link = playCell?.querySelector(".track-link") || null;
+    const linkVideo = link?.getAttribute("data-video") || "";
+
+    // Build + install the override-driven play cell (▶ ＋ ♪) for `url`.
+    const injectOverrideCell = (url) => {
       // The Full Album pseudo-row is rendered hidden for non-admins
       // when no override exists at boot. If an override has now landed,
       // reveal the row.
@@ -3394,7 +3399,7 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
         row.style.display = "";
       }
       const titleLink = titleCell.querySelector(".track-title-link");
-      const trackTitle = titleLink?.textContent || ov.track_title || "";
+      const trackTitle = titleLink?.textContent || ov?.track_title || "";
       // The popup root is #album-info / #version-info — there's no
       // .album-popup wrapper, so the previous closest() selector was
       // returning null and trackArtist was always blank. Use the
@@ -3435,24 +3440,52 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const stale = titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`);
       if (stale) stale.remove();
       row.dataset.ytOverride = "1";
-    } else if (!ov && row.dataset.ytOverride === "1") {
-      // The override was deleted (admin ✕). Revert the row we
-      // injected: clear the override-driven play affordances and the
-      // marker so the track immediately returns to its "no playable
-      // source" state — otherwise the stale ▶ ＋ ♪ for the removed
-      // video linger until a full page reload, and the track still
-      // looks playable / can't be re-suggested cleanly.
-      if (playCell) playCell.innerHTML = "";
+    };
+
+    if (isBlocked) {
+      // Admin hid a wrong Discogs match. Clear the play cell so the
+      // track reads as missing; stash the Discogs-rendered cell first
+      // so a same-popup unblock restores it.
+      if (link) {
+        if (playCell && row.dataset.ytOverride !== "1" && !_trackYtOrigPlayCells.has(row)) {
+          _trackYtOrigPlayCells.set(row, playCell.innerHTML);
+        }
+        if (playCell) playCell.innerHTML = "";
+        delete row.dataset.ytOverride;
+      }
+      row.dataset.ytBlocked = "1";
+    } else if (ov && ov.video_id) {
+      // gap-fill or replace. Inject when the row has no play cell, or
+      // when a 'replace' override should beat the Discogs-rendered
+      // video currently in the cell.
+      const needsInject = !link || (ovMode === "replace" && linkVideo && !linkVideo.includes(ov.video_id));
+      if (needsInject) {
+        if (link && row.dataset.ytOverride !== "1" && playCell && !_trackYtOrigPlayCells.has(row)) {
+          _trackYtOrigPlayCells.set(row, playCell.innerHTML);
+        }
+        injectOverrideCell(`https://www.youtube.com/watch?v=${ov.video_id}`);
+      }
+      delete row.dataset.ytBlocked;
+    } else if (!ov && (row.dataset.ytOverride === "1" || row.dataset.ytBlocked === "1")) {
+      // The override / block was deleted (admin ✕). Restore the
+      // stashed Discogs cell if we clobbered one this session,
+      // otherwise revert to the "no playable source" state so the
+      // stale ▶ ＋ ♪ don't linger until a reload.
+      const orig = _trackYtOrigPlayCells.get(row);
+      if (playCell) playCell.innerHTML = orig || "";
+      _trackYtOrigPlayCells.delete(row);
       delete row.dataset.ytOverride;
+      delete row.dataset.ytBlocked;
       // The Full Album pseudo-row is hidden by default when no
       // override exists — re-hide it now that the override is gone
       // (mirrors the reveal logic above).
-      if (row.classList.contains("track-fullalbum")) row.style.display = "none";
+      if (!orig && row.classList.contains("track-fullalbum")) row.style.display = "none";
     }
-    // Now decorate the row's title with the badge / admin delete /
-    // suggest button based on current state.
-    const stillNoPlay = !(row.querySelector(".track-play-cell .track-link"));
-    const isOverride = !!ov && !!row.querySelector(".track-play-cell .track-link") && row.dataset.ytOverride === "1";
+    // Now decorate the row's title with the badge / admin affordances
+    // based on current state.
+    const linkNow = row.querySelector(".track-play-cell .track-link");
+    const isOverride = !!(ov && ov.video_id && linkNow
+      && (linkNow.getAttribute("data-video") || "").includes(ov.video_id));
     const credits = titleCell.querySelector(".track-credits");
     const decorate = (html) => {
       if (!html) return;
@@ -3462,13 +3495,35 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       else titleCell.appendChild(tmpl.content);
     };
     if (isOverride) {
-      decorate(` <span class="track-yt-override-badge" title="User-suggested YouTube video">🎵</span>`);
-      if (window._isAdmin) {
-        decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`);
+      const badgeTitle = ovMode === "replace"
+        ? "Pinned YouTube video (replaces the Discogs match)"
+        : "User-suggested YouTube video";
+      decorate(` <span class="track-yt-override-badge" title="${badgeTitle}">🎵</span>`);
+    }
+    if (window._isAdmin) {
+      if (isBlocked) {
+        decorate(` <span class="track-yt-blocked-badge" title="Admin: the Discogs video for this track is hidden">🚫</span>`);
+      }
+      if (pos === "ALBUM") {
+        // Full Album pseudo-row keeps its original delete-only affordance.
+        if (isOverride) {
+          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this full-album video">✕</a>`);
+        }
+      } else {
+        // ✏ on every regular row: set/replace the video for this track
+        // (works for Discogs-matched, override, blocked, and missing rows).
+        decorate(` <a href="#" class="track-yt-admin-replace" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminReplace(this);return false" title="Admin: set/replace the YouTube video for this track">✏</a>`);
+        if (isOverride || isBlocked) {
+          const delTitle = isBlocked
+            ? "Admin: unhide the Discogs video (remove the block)"
+            : "Admin: remove this override (revert to the Discogs match, or missing)";
+          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="${delTitle}">✕</a>`);
+        } else if (linkNow) {
+          // Discogs-matched row: ✕ hides the wrong match.
+          decorate(` <a href="#" class="track-yt-admin-block" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminBlock(this);return false" title="Admin: hide this Discogs video (mark as wrong match)">✕</a>`);
+        }
       }
     }
-    // Per-row suggest button retired — handled by the album-level
-    // "🎵 N missing" link in the tracklist heading instead.
   });
   // Refresh the heading "🎵 N missing" link to reflect the post-patch
   // state. Without this the count is stuck at the render-time value
@@ -3586,6 +3641,19 @@ function _trackYtRefreshHeadingPlayableCount(root) {
   );
   span.append(" ");
   span.appendChild(queueAll);
+  // ♪ — add every playable track to a saved playlist (mirrors the
+  // static render in renderAlbumInfo's playableMeta).
+  const playlistAll = document.createElement("a");
+  playlistAll.href = "#";
+  playlistAll.className = "tracklist-queue-album tracklist-playlist-album";
+  playlistAll.title = "Add all playable tracks to a playlist";
+  playlistAll.textContent = "♪";
+  playlistAll.setAttribute(
+    "onclick",
+    "event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)"
+  );
+  span.append(" ");
+  span.appendChild(playlistAll);
   if (existingMissing) {
     span.append(" ");
     span.appendChild(existingMissing);
@@ -3887,7 +3955,12 @@ async function _trackYtAdminDelete(el) {
   }
   if (!overrideScopeId) return;
 
-  if (!confirm(`Remove the user-suggested YouTube video for track "${row?.querySelector('.track-title-link')?.dataset?.lkLabel || row?.querySelector('.track-title-link')?.textContent || pos}"?`)) return;
+  const wasBlocked = row?.dataset?.ytBlocked === "1";
+  const trackLabel = row?.querySelector('.track-title-link')?.dataset?.lkLabel || row?.querySelector('.track-title-link')?.textContent || pos;
+  const confirmMsg = wasBlocked
+    ? `Unhide the Discogs video for track "${trackLabel}"?`
+    : `Remove the YouTube override for track "${trackLabel}"? The Discogs match (if any) will show again.`;
+  if (!confirm(confirmMsg)) return;
   try {
     const r = await apiFetch("/api/admin/track-yt", {
       method: "DELETE",
@@ -3904,12 +3977,127 @@ async function _trackYtAdminDelete(el) {
     _trackYtOverridesCache.clear();
     const targetId = popupRoot?.id || popup.id || "album-info";
     await _trackYtKickFetchAndApply(targetId, popupMasterId, popupIsMaster ? "" : popupReleaseId, popupIsMaster);
-    if (typeof showToast === "function") showToast("Override removed", "info");
+    // An unblock can only restore the Discogs play cell if we stashed
+    // it in this popup session (the DOM patch can't rebuild what the
+    // original render suppressed). Nudge the admin when that happens.
+    if (wasBlocked && row && !row.querySelector(".track-play-cell .track-link")) {
+      if (typeof showToast === "function") showToast("Unblocked — reopen the album to see the Discogs video", "info");
+    } else {
+      if (typeof showToast === "function") showToast("Override removed", "info");
+    }
   } catch (e) {
     if (typeof showToast === "function") showToast(e?.message || "Could not remove override", "error");
   }
 }
 window._trackYtAdminDelete = _trackYtAdminDelete;
+
+// Shared context derivation for the admin ✏ (replace) / ✕ (block)
+// affordances. Scope rule: if an override row already exists for this
+// position, write at ITS scope (so the upsert overwrites the row that
+// actually wins client-side — release beats master on merge);
+// otherwise default to master when known so the fix lifts to all
+// pressings, mirroring the suggest flow.
+function _trackYtAdminCtx(el) {
+  const pos = el.dataset.pos || "";
+  const row = el.closest(".track");
+  const popup = el.closest(".album-popup, .modal-content, #album-info, #version-info") || document;
+  const popupRoot = popup.id ? popup : document.getElementById("album-info") || document.getElementById("version-info");
+  const popupReleaseId = popupRoot?.dataset?.releaseId || "";
+  const popupMasterId  = popupRoot?.dataset?.masterId  || "";
+  const popupIsMaster  = popupRoot?.dataset?.entityType === "master";
+  const masterCacheKey  = `master:${popupMasterId || (popupIsMaster ? popupReleaseId : "")}`;
+  const releaseCacheKey = `release:${popupReleaseId}`;
+  const masterMap  = _trackYtOverridesCache.get(masterCacheKey)?.byPosition;
+  const releaseMap = _trackYtOverridesCache.get(releaseCacheKey)?.byPosition;
+  const ov = (releaseMap && releaseMap.get(String(pos))) || (masterMap && masterMap.get(String(pos))) || null;
+  let scopeType, scopeId;
+  if (ov && ov.release_type && ov.release_id) {
+    scopeType = ov.release_type;
+    scopeId   = String(ov.release_id);
+  } else if (popupIsMaster || popupMasterId) {
+    scopeType = "master";
+    scopeId   = popupMasterId || popupReleaseId;
+  } else {
+    scopeType = "release";
+    scopeId   = popupReleaseId;
+  }
+  const titleEl = row?.querySelector(".track-title-link");
+  const trackTitle = (titleEl?.dataset?.lkLabel || titleEl?.textContent || "").trim();
+  return {
+    pos, row, popupRoot, popupMasterId, popupReleaseId, popupIsMaster,
+    targetId: popupRoot?.id || "album-info",
+    scopeType, scopeId, trackTitle,
+  };
+}
+
+// POST to the admin set endpoint, then refresh the override cache +
+// DOM patch. Shared by replace and block.
+async function _trackYtAdminSet(ctx, body, okMsg) {
+  try {
+    const r = await apiFetch("/api/admin/track-yt/set", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`save failed (${r.status})`);
+    _trackYtOverridesCache.clear();
+    await _trackYtKickFetchAndApply(ctx.targetId, ctx.popupMasterId, ctx.popupIsMaster ? "" : ctx.popupReleaseId, ctx.popupIsMaster);
+    if (typeof showToast === "function") showToast(okMsg, "info");
+  } catch (e) {
+    if (typeof showToast === "function") showToast(e?.message || "Could not save", "error");
+  }
+}
+
+// Admin ✏: set/replace the YouTube video for any track — including
+// tracks whose current video came from Discogs's videos[] (the
+// 'replace' override wins over the Discogs match for everyone).
+async function _trackYtAdminReplace(el) {
+  if (!window._isAdmin) return;
+  const ctx = _trackYtAdminCtx(el);
+  if (!ctx.pos || !ctx.scopeId) return;
+  const raw = prompt(`YouTube URL (or 11-char video id) for "${ctx.trackTitle || ctx.pos}":`);
+  if (raw == null) return;
+  const s = String(raw).trim();
+  let videoId = "";
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) videoId = s;
+  else if (typeof extractYouTubeId === "function") videoId = extractYouTubeId(s) || "";
+  if (!videoId) {
+    const m = s.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+    videoId = m ? m[1] : "";
+  }
+  if (!videoId) {
+    if (typeof showToast === "function") showToast("Could not read a YouTube video id from that", "error");
+    return;
+  }
+  await _trackYtAdminSet(ctx, {
+    releaseId:     ctx.scopeId,
+    releaseType:   ctx.scopeType,
+    trackPosition: ctx.pos,
+    trackTitle:    ctx.trackTitle || null,
+    videoId,
+    mode: "replace",
+  }, "Video set");
+}
+window._trackYtAdminReplace = _trackYtAdminReplace;
+
+// Admin ✕ on a Discogs-matched row: hide the wrong match. The track
+// renders as missing (and becomes suggestable) until a replacement
+// lands or the block is removed.
+async function _trackYtAdminBlock(el) {
+  if (!window._isAdmin) return;
+  const ctx = _trackYtAdminCtx(el);
+  if (!ctx.pos || !ctx.scopeId) return;
+  if (!confirm(`Hide the Discogs video for "${ctx.trackTitle || ctx.pos}"? The track will show as missing until a replacement is set.`)) return;
+  await _trackYtAdminSet(ctx, {
+    releaseId:     ctx.scopeId,
+    releaseType:   ctx.scopeType,
+    trackPosition: ctx.pos,
+    trackTitle:    ctx.trackTitle || null,
+    videoId:       "",
+    mode: "block",
+  }, "Discogs video hidden");
+}
+window._trackYtAdminBlock = _trackYtAdminBlock;
 
 // ▶ in the tracklist heading: play the first playable track immediately
 // AND queue the rest into the cross-source play queue (in append mode
@@ -4728,10 +4916,19 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const _overrideMap = _trackYtReadCache(d.master_id, releaseId, searchResult.type === "master") || new Map();
   function findVideo(trackTitle, trackPosition) {
     const unavailable = window._sdYtUnavailable;
-    // 1) Discogs-provided videos win — they're the canonical source.
-    //    Skip any whose videoId is in the global unavailable set so
-    //    the track reads as "missing" and contributes to the album-
-    //    suggest count + popup.
+    const ov = trackPosition ? _overrideMap.get(String(trackPosition)) : null;
+    // 0) Admin overrides trump everything. 'block' hides a wrong
+    //    Discogs match (track renders as missing); 'replace' pins a
+    //    different video over the Discogs videos[] match.
+    if (ov && ov.mode === "block") return null;
+    if (ov && ov.mode === "replace" && ov.video_id
+        && (!unavailable || !unavailable.has(ov.video_id))) {
+      return `https://www.youtube.com/watch?v=${ov.video_id}`;
+    }
+    // 1) Discogs-provided videos — the canonical source. Skip any
+    //    whose videoId is in the global unavailable set so the track
+    //    reads as "missing" and contributes to the album-suggest
+    //    count + popup.
     const tl = trackTitle.toLowerCase();
     for (const [vt, uri] of videoMap) {
       if (vt.includes(tl) || tl.includes(vt)) {
@@ -4746,11 +4943,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     //    The server-side query already excludes overrides whose video
     //    is unavailable, but check defensively in case the cache here
     //    is stale relative to the unavailable set.
-    if (trackPosition) {
-      const ov = _overrideMap.get(String(trackPosition));
-      if (ov && ov.video_id && (!unavailable || !unavailable.has(ov.video_id))) {
-        return `https://www.youtube.com/watch?v=${ov.video_id}`;
-      }
+    if (ov && ov.video_id && (!unavailable || !unavailable.has(ov.video_id))) {
+      return `https://www.youtube.com/watch?v=${ov.video_id}`;
     }
     return null;
   }
@@ -4884,7 +5078,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Stage YouTube URLs for missing tracks (paste links you found on youtube.com)">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a> <a href="#" class="tracklist-queue-album tracklist-playlist-album" onclick="event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)" title="Add all playable tracks to a playlist">♪</a>` : ""}${albumFindMissingLink})</span>`
     : (albumFindMissingLink ? `<span class="tracklist-playable">(${albumFindMissingLink})</span>` : "");
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   // Render the tracklist block whenever there's something to show in
@@ -4949,14 +5143,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       ${tracks.map(t => {
         const trackPos = t.position || "";
         const url = findVideo(t.title || "", trackPos);
-        // Was this URL provided by a crowd-sourced override? (vs. Discogs)
+        // Was this URL provided by an override? (vs. Discogs's videos[])
         // Used to mark the row so the badge / admin-delete affordance
-        // renders. Only true when no Discogs video matched.
-        const overrideRow = url && _overrideMap.has(String(trackPos)) && !(() => {
-          const tl = (t.title || "").toLowerCase();
-          for (const [vt] of videoMap) { if (vt.includes(tl) || tl.includes(vt)) return true; }
-          return false;
-        })();
+        // renders. URL-based so it covers both gap-fill (no Discogs
+        // match) and 'replace' (override beat the Discogs match).
+        const overrideRow = !!(url && (() => {
+          const ov = _overrideMap.get(String(trackPos));
+          return ov && ov.video_id && url.includes(ov.video_id);
+        })());
         const trackArtist = artists.length ? artists[0] : "";
         // YouTube search supports double-quoted exact-phrase matching too —
         // quote artist + track so search results match the literal strings

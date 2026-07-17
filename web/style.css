@@ -8591,7 +8591,9 @@ body.is-offline button.offline-disabled {
   opacity: 0.7;
   cursor: default;
 }
-.track-yt-admin-delete {
+.track-yt-admin-delete,
+.track-yt-admin-block,
+.track-yt-admin-replace {
   display: inline-block;
   font-size: 0.7em;
   margin-left: 0.15rem;
@@ -8604,11 +8606,26 @@ body.is-offline button.offline-disabled {
   line-height: 1.2;
   opacity: 0.6;
 }
-.track-yt-admin-delete:hover {
+.track-yt-admin-delete:hover,
+.track-yt-admin-block:hover {
   color: #ff7b7b;
   border-color: #ff7b7b;
   opacity: 1;
   background: rgba(255,123,123,0.08);
+}
+.track-yt-admin-replace:hover {
+  color: #c084fc;
+  border-color: #c084fc;
+  opacity: 1;
+  background: rgba(192, 132, 252, 0.08);
+}
+/* 🚫 admin-only marker on tracks whose Discogs video was blocked. */
+.track-yt-blocked-badge {
+  display: inline-block;
+  font-size: 0.72em;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  cursor: default;
 }
 .archive-btn-suggest {
   background: rgba(192, 132, 252, 0.12);

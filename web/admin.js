@@ -4129,7 +4129,11 @@ function _renderAdminSubmissionsTable() {
     </tr></thead>`;
   const body = sorted.map(o => {
     const albumLink = _adminAlbumLink(o.release_type, o.release_id);
-    const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
+    // mode 'block' rows have no video (admin hid a wrong Discogs match);
+    // 'replace' rows pin a video over the Discogs match.
+    const ytLink = (o.mode === "block" || !o.video_id)
+      ? `<span style="color:var(--muted)">🚫 Discogs video hidden</span>`
+      : `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>${o.mode === "replace" ? ` <span style="color:var(--muted);font-size:0.7rem" title="Pinned — wins over the Discogs videos[] match">📌</span>` : ""}`;
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.submitted_at))}</td>
       <td style="padding:0.35rem 0.5rem">${escHtml(o.release_type)}</td>

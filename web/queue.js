@@ -2406,7 +2406,9 @@ window._playlistClosePicker = _playlistClosePicker;
 // adding a new one: GET the chosen playlist, append this item (dedup
 // by externalId), PUT it back via the owner-only /replace route.
 let _trackPlaylistPickerEl = null;
-let _trackPlaylistPendingItem = null;
+// Pending items for the picker — always an array (1 item for the
+// per-track ♪ button, N for the album-level ♪ in the tracklist header).
+let _trackPlaylistPendingItems = null;
 
 function _trackPlaylistItemFromBtn(btn) {
   const url = btn?.dataset?.ytUrl || "";
@@ -2464,7 +2466,60 @@ async function _trackPlaylistAdd(btn) {
     if (typeof showToast === "function") showToast("No playable video for this track", "error");
     return;
   }
-  _trackPlaylistPendingItem = item;
+  await _trackPlaylistShowPicker([item], {
+    subject: item.data.title || "this track",
+    defaultName: String(item.data.title || "New playlist").slice(0, 80),
+  });
+}
+window._trackPlaylistAdd = _trackPlaylistAdd;
+
+// Album-level ♪ in the tracklist header: add EVERY playable track from
+// the popup to a playlist via the same picker. Mirrors queueAddAlbum's
+// row scan (skips the Full Album pseudo-row and the per-track ♪
+// buttons, which carry the same data attrs as the ＋ queue icons).
+async function _albumPlaylistAdd(el) {
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save to a playlist", "info");
+    return;
+  }
+  const scope = el?.closest("#album-info, #version-info, .tracklist") || document;
+  const nodes = scope.querySelectorAll(".queue-add-icon[data-yt-url]:not([data-fullalbum]):not(.track-playlist-add)");
+  const items = [];
+  const seen = new Set();
+  nodes.forEach(node => {
+    const url = node.dataset.ytUrl || "";
+    const id  = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    items.push({
+      source: "yt",
+      externalId: String(id),
+      data: {
+        title:       node.dataset.track       || "",
+        artist:      node.dataset.artist      || "",
+        albumTitle:  node.dataset.album       || "",
+        ytUrl:       url,
+        releaseType: node.dataset.releaseType || "",
+        releaseId:   node.dataset.releaseId   || "",
+      },
+    });
+  });
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("No playable tracks on this album", "error");
+    return;
+  }
+  const albumTitle = items[0].data.albumTitle || "Album";
+  await _trackPlaylistShowPicker(items, {
+    subject: albumTitle,
+    defaultName: String(albumTitle).slice(0, 80),
+  });
+}
+window._albumPlaylistAdd = _albumPlaylistAdd;
+
+// Shared picker: stashes `items`, opens the overlay, lists existing
+// playlists + the new-playlist row. opts = { subject, defaultName }.
+async function _trackPlaylistShowPicker(items, opts) {
+  _trackPlaylistPendingItems = items;
   if (!_trackPlaylistPickerEl) {
     _trackPlaylistPickerEl = document.createElement("div");
     _trackPlaylistPickerEl.className = "playlist-picker";
@@ -2488,12 +2543,13 @@ async function _trackPlaylistAdd(btn) {
   try {
     const r = await apiFetch("/api/user/playlists");
     if (!r.ok) { body.textContent = "Could not load playlists."; return; }
-    const { items } = await r.json();
-    const list = Array.isArray(items) ? items : [];
+    const j = await r.json();
+    const list = Array.isArray(j.items) ? j.items : [];
     const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
-    const titleSafe = esc(item.data.title || "this track");
-    // Default new-playlist name = the track title (handy starting point).
-    const def = String(item.data.title || "New playlist").slice(0, 80);
+    const titleSafe = esc(opts?.subject || "this track");
+    const countNote = items.length > 1 ? ` <span class="playlist-picker-count">(${items.length} tracks)</span>` : "";
+    // Default new-playlist name = the track/album title (handy starting point).
+    const def = String(opts?.defaultName || "New playlist").slice(0, 80);
     const existingHtml = list.length
       ? `<div class="playlist-picker-subnote" style="margin-top:0.7rem">Or add to an existing playlist:</div>
          <ul class="playlist-picker-list">${list.map(p => `
@@ -2506,7 +2562,7 @@ async function _trackPlaylistAdd(btn) {
            </li>`).join("")}</ul>`
       : `<div class="playlist-picker-empty" style="margin-top:0.7rem">No saved playlists yet.</div>`;
     body.innerHTML = `
-      <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong> to a new playlist:</div>
+      <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong>${countNote} to a new playlist:</div>
       <div class="playlist-save-newrow">
         <input type="text" id="track-playlist-new-name" class="playlist-save-input" maxlength="80" value="${esc(def)}" placeholder="Playlist name" />
         <button type="button" class="playlist-picker-load" onclick="_trackPlaylistAddToNew()">＋ Create</button>
@@ -2523,23 +2579,22 @@ async function _trackPlaylistAdd(btn) {
       });
     }
   } catch (e) {
-    console.warn("[_trackPlaylistAdd]", e);
+    console.warn("[_trackPlaylistShowPicker]", e);
     body.textContent = "Could not load playlists.";
   }
 }
-window._trackPlaylistAdd = _trackPlaylistAdd;
 
 function _trackPlaylistClosePicker() {
   if (!_trackPlaylistPickerEl) return;
   _trackPlaylistPickerEl.classList.remove("open");
   if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("track-playlist-picker");
-  _trackPlaylistPendingItem = null;
+  _trackPlaylistPendingItems = null;
 }
 window._trackPlaylistClosePicker = _trackPlaylistClosePicker;
 
 async function _trackPlaylistDoAdd(id) {
-  const item = _trackPlaylistPendingItem;
-  if (!item) { _trackPlaylistClosePicker(); return; }
+  const pending = Array.isArray(_trackPlaylistPendingItems) ? _trackPlaylistPendingItems : [];
+  if (!pending.length) { _trackPlaylistClosePicker(); return; }
   try {
     const gr = await apiFetch(`/api/playlists/${id}`);
     if (!gr.ok) { if (typeof showToast === "function") showToast("Playlist not found", "error"); return; }
@@ -2547,8 +2602,9 @@ async function _trackPlaylistDoAdd(id) {
     const existing = Array.isArray(playlist?.items) ? playlist.items : [];
     // Dedup by externalId — re-adding a track already in the playlist
     // just moves it to the end (kept once), matching queue behavior.
-    const filtered = existing.filter(it => String(it.externalId) !== String(item.externalId));
-    const combined = [...filtered, item].map(it => ({
+    const pendingIds = new Set(pending.map(it => String(it.externalId)));
+    const filtered = existing.filter(it => !pendingIds.has(String(it.externalId)));
+    const combined = [...filtered, ...pending].map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     }));
     const pr = await apiFetch(`/api/user/playlists/${id}/replace`, {
@@ -2561,13 +2617,17 @@ async function _trackPlaylistDoAdd(id) {
       if (typeof showToast === "function") showToast(msg, "error");
       return;
     }
-    if (typeof showToast === "function") showToast(`Saved to "${playlist?.name ?? "playlist"}"`);
+    if (typeof showToast === "function") {
+      showToast(pending.length > 1
+        ? `Saved ${pending.length} tracks to "${playlist?.name ?? "playlist"}"`
+        : `Saved to "${playlist?.name ?? "playlist"}"`);
+    }
     // If this playlist is the one currently loaded into the player,
     // mirror the add into the live queue so playback reflects what
     // the user just added without forcing a reload.
     if (_loadedPlaylistId != null && Number(id) === Number(_loadedPlaylistId)) {
       try {
-        await queueAdd([{ source: item.source, externalId: item.externalId, data: item.data || {} }], { mode: "append" });
+        await queueAdd(pending.map(it => ({ source: it.source, externalId: it.externalId, data: it.data || {} })), { mode: "append" });
       } catch (qe) {
         console.warn("[_trackPlaylistDoAdd queueAdd]", qe);
       }
@@ -2581,11 +2641,11 @@ async function _trackPlaylistDoAdd(id) {
 window._trackPlaylistDoAdd = _trackPlaylistDoAdd;
 
 // "+ Create": read the new-playlist name input, POST a fresh playlist
-// containing just the pending track. Same endpoint as the queue-save
-// flow, just with a single-item items array.
+// containing the pending track(s). Same endpoint as the queue-save
+// flow, just with the picker's items array.
 async function _trackPlaylistAddToNew() {
-  const item = _trackPlaylistPendingItem;
-  if (!item) { _trackPlaylistClosePicker(); return; }
+  const pending = Array.isArray(_trackPlaylistPendingItems) ? _trackPlaylistPendingItems : [];
+  if (!pending.length) { _trackPlaylistClosePicker(); return; }
   const input = _trackPlaylistPickerEl?.querySelector("#track-playlist-new-name");
   const name = String(input?.value || "").trim();
   if (!name) {
@@ -2598,7 +2658,7 @@ async function _trackPlaylistAddToNew() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        items: [{ source: item.source, externalId: item.externalId, data: item.data || {} }],
+        items: pending.map(it => ({ source: it.source, externalId: it.externalId, data: it.data || {} })),
       }),
     });
     if (!r.ok) {
@@ -2608,7 +2668,11 @@ async function _trackPlaylistAddToNew() {
       }
       return;
     }
-    if (typeof showToast === "function") showToast(`Created "${name}" with the track`);
+    if (typeof showToast === "function") {
+      showToast(pending.length > 1
+        ? `Created "${name}" with ${pending.length} tracks`
+        : `Created "${name}" with the track`);
+    }
     _trackPlaylistClosePicker();
   } catch (e) {
     console.warn("[_trackPlaylistAddToNew]", e);

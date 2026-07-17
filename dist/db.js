@@ -329,6 +329,13 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
+    // mode: 'gap' (crowd-sourced fill for tracks Discogs missed — the
+    // original behavior), 'replace' (admin-set; wins over the Discogs
+    // videos[] match on the client), 'block' (admin hid a wrong Discogs
+    // match; video_id is '' and the track renders as missing). A user
+    // suggestion landing on a 'block' slot upgrades it to 'replace' so
+    // the new video also beats the known-wrong Discogs match.
+    await getPool().query(`ALTER TABLE track_youtube_overrides ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'gap'`);
     // ── Unavailable / broken YouTube videos ─────────────────────────────────
     // When the IFrame Player fires onError 100/101/150 (video removed,
     // embed disabled, or region-blocked) we record the videoId here.
@@ -5517,7 +5524,7 @@ export async function getTrackYtOverrides(masterId, releaseId) {
         // override served to clients only contains videos that are likely
         // playable. Flagged-but-not-yet-unavailable rows still serve.
         const r = await getPool().query(`SELECT o.release_id, o.release_type, o.track_position, o.track_title,
-              o.video_id, o.video_title, o.submitted_by, o.submitted_at
+              o.video_id, o.video_title, o.submitted_by, o.submitted_at, o.mode
          FROM track_youtube_overrides o
          LEFT JOIN youtube_video_unavailable u
            ON u.video_id = o.video_id AND u.status = 'unavailable'
@@ -5530,12 +5537,22 @@ export async function getTrackYtOverrides(masterId, releaseId) {
     }
 }
 // First submission wins. Returns true if inserted, false if a row
-// already existed (ON CONFLICT DO NOTHING).
+// already existed. One exception to first-wins: a 'block' tombstone
+// (admin hid a wrong Discogs video, video_id='') is upgradable — the
+// suggestion fills the slot as mode='replace' so it also beats the
+// known-wrong Discogs videos[] match on the client.
 export async function suggestTrackYtOverride(args) {
     const r = await getPool().query(`INSERT INTO track_youtube_overrides
        (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+     ON CONFLICT (release_id, release_type, track_position) DO UPDATE
+       SET video_id     = EXCLUDED.video_id,
+           video_title  = EXCLUDED.video_title,
+           track_title  = COALESCE(EXCLUDED.track_title, track_youtube_overrides.track_title),
+           submitted_by = EXCLUDED.submitted_by,
+           submitted_at = NOW(),
+           mode         = 'replace'
+     WHERE track_youtube_overrides.mode = 'block'
      RETURNING release_id`, [
         String(args.releaseId),
         args.releaseType,
@@ -5546,6 +5563,32 @@ export async function suggestTrackYtOverride(args) {
         args.submittedBy,
     ]);
     return r.rowCount === 1;
+}
+// Admin upsert: unconditionally set the override for a track slot.
+// mode='replace' pins a video that wins over the Discogs videos[]
+// match; mode='block' (videoId '') hides a wrong Discogs match so the
+// track renders as missing. Deleting the row (deleteTrackYtOverride)
+// restores the natural Discogs behavior either way.
+export async function setTrackYtOverrideAdmin(args) {
+    await getPool().query(`INSERT INTO track_youtube_overrides
+       (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by, mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (release_id, release_type, track_position) DO UPDATE
+       SET video_id     = EXCLUDED.video_id,
+           video_title  = EXCLUDED.video_title,
+           track_title  = COALESCE(EXCLUDED.track_title, track_youtube_overrides.track_title),
+           submitted_by = EXCLUDED.submitted_by,
+           submitted_at = NOW(),
+           mode         = EXCLUDED.mode`, [
+        String(args.releaseId),
+        args.releaseType,
+        args.trackPosition,
+        args.trackTitle ?? null,
+        args.videoId,
+        args.videoTitle ?? null,
+        args.submittedBy,
+        args.mode,
+    ]);
 }
 // Batch insert: all-or-mostly-nothing wrapper around the singleton
 // suggest path. The album-level "Find missing tracks" popup hands us
@@ -5566,7 +5609,14 @@ export async function suggestTrackYtOverridesBatch(items) {
             const r = await client.query(`INSERT INTO track_youtube_overrides
            (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+         ON CONFLICT (release_id, release_type, track_position) DO UPDATE
+           SET video_id     = EXCLUDED.video_id,
+               video_title  = EXCLUDED.video_title,
+               track_title  = COALESCE(EXCLUDED.track_title, track_youtube_overrides.track_title),
+               submitted_by = EXCLUDED.submitted_by,
+               submitted_at = NOW(),
+               mode         = 'replace'
+         WHERE track_youtube_overrides.mode = 'block'
          RETURNING release_id`, [
                 String(it.releaseId),
                 it.releaseType,
@@ -5846,7 +5896,8 @@ export async function getVideoStatusBatch(items) {
     if (allIds.length) {
         const r = await getPool().query(`SELECT release_id AS id, release_type AS type
          FROM track_youtube_overrides
-        WHERE release_id = ANY($1::text[])`, [allIds]);
+        WHERE release_id = ANY($1::text[])
+          AND video_id <> ''`, [allIds]);
         overrideRows = r.rows;
     }
     const overrideSet = new Set(overrideRows.map(r => `${r.type}:${r.id}`));
@@ -5880,6 +5931,7 @@ export async function getUserSubmittedAlbums(clerkUserId, limit = 96) {
                 MAX(submitted_at) AS last_at
            FROM track_youtube_overrides
           WHERE submitted_by = $1
+            AND video_id <> ''
           GROUP BY release_id, release_type
        )
        SELECT c.release_id     AS id,
@@ -5927,6 +5979,7 @@ export async function getMostContributedAlbums(limit = 48, order = "most") {
                COUNT(*)::int AS n,
                MAX(submitted_at) AS last_at
           FROM track_youtube_overrides
+         WHERE video_id <> ''
          GROUP BY release_id, release_type
       ),
       cache_all AS (
@@ -5948,6 +6001,7 @@ export async function getMostContributedAlbums(limit = 48, order = "most") {
                COUNT(*)::int   AS n,
                MAX(submitted_at) AS last_at
           FROM track_youtube_overrides
+         WHERE video_id <> ''
          GROUP BY release_id, release_type
       )
       SELECT c.release_id   AS id,
@@ -6874,6 +6928,7 @@ export async function getTrackYtOverridesBatch(pairs) {
         WHERE (o.release_id, o.release_type) IN (
           SELECT * FROM unnest($1::text[], $2::text[])
         )
+          AND o.video_id <> ''
           AND u.video_id IS NULL`, [ids, types]);
         return r.rows;
     }
@@ -7830,7 +7885,7 @@ export async function getPersonalSuggestionsStats() {
 export async function listAllTrackYtOverrides(limit = 500) {
     try {
         const r = await getPool().query(`SELECT release_id, release_type, track_position, track_title,
-              video_id, video_title, submitted_by, submitted_at
+              video_id, video_title, submitted_by, submitted_at, mode
          FROM track_youtube_overrides
         ORDER BY submitted_at DESC
         LIMIT $1`, [limit]);
