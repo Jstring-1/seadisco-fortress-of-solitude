@@ -442,75 +442,96 @@ async function _processSearchResults(
   client: DiscogsClient,
   series: CatnoSeries,
   results: any[],
-  opts: { type?: "release" | "master"; orphansOnly?: boolean } = {},
+  opts: { mastersPlus?: boolean; orphansOnly?: boolean } = {},
 ): Promise<number> {
   await recordCacheWarmCatnoRunSearched(series.key, results.length);
 
-  const type = opts.type ?? "release";
+  const mastersPlus = !!opts.mastersPlus;
+  const orphansOnly = !!opts.orphansOnly;
 
-  // Year filter dropped intentionally — every label-matched release is
-  // cached regardless of year. The yearMax field on the seed entry is
-  // kept for documentation only.
-  let candidates = results.filter(r => _labelMatches(r, series.label));
-  // orphansOnly: the label-sweep's release pass only wants pressings
-  // with no parent master — masters themselves are covered by the
-  // separate master-type pass, so a release with a master_id would
-  // just be a duplicate of a pressing already represented by its
-  // master.
-  if (opts.orphansOnly) candidates = candidates.filter(r => !Number(r?.master_id));
+  // Year filter dropped intentionally — every label-matched hit is
+  // cached regardless of year. yearMax on the seed is documentation.
+  const matched = results.filter(r => _labelMatches(r, series.label));
+  // Stash the label-matched count so the catno walker can read it
+  // without re-walking the list.
+  (_processSearchResults as any).lastMatchedCount = matched.length;
 
-  const ids: number[] = [];
-  for (const r of candidates) {
-    const id = Number(r?.id);
-    if (Number.isFinite(id) && id > 0) ids.push(id);
+  // Resolve each hit to its masters+ target so we never cache a
+  // redundant pressing:
+  //   • a master-type hit stays a master
+  //   • a release WITH a master_id collapses to that master (mastersPlus)
+  //   • an orphan release (no master) is cached as-is
+  // orphansOnly keeps ONLY orphan releases (skips any pressing whose
+  // master already represents it) — used by the label-sweep orphan pass.
+  type Target = { id: number; type: "master" | "release" };
+  const targets: Target[] = [];
+  const seen = new Set<string>();
+  for (const r of matched) {
+    const kind = String(r?.type ?? "").toLowerCase();
+    const rid = Number(r?.id);
+    const mid = Number(r?.master_id) || 0;
+    let tId: number, tType: "master" | "release";
+    if (kind === "master") { tId = rid; tType = "master"; }
+    else if (mid > 0) {
+      if (orphansOnly) continue;                 // pressing w/ master — skip
+      if (mastersPlus) { tId = mid; tType = "master"; }
+      else { tId = rid; tType = "release"; }
+    } else { tId = rid; tType = "release"; }       // orphan
+    if (!Number.isFinite(tId) || tId <= 0) continue;
+    const key = `${tType}:${tId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    targets.push({ id: tId, type: tType });
   }
-  let cachedIds: Set<number>;
-  let deadIds: Set<number>;
+
+  const masterIds  = targets.filter(t => t.type === "master").map(t => t.id);
+  const releaseIds = targets.filter(t => t.type === "release").map(t => t.id);
+  let cachedM: Set<number>, deadM: Set<number>, cachedR: Set<number>, deadR: Set<number>;
   try {
-    [cachedIds, deadIds] = await Promise.all([
-      getCachedReleaseIds(ids, type),
-      getDeadDiscogsIds(ids, type),
+    [cachedM, deadM, cachedR, deadR] = await Promise.all([
+      getCachedReleaseIds(masterIds, "master"),
+      getDeadDiscogsIds(masterIds, "master"),
+      getCachedReleaseIds(releaseIds, "release"),
+      getDeadDiscogsIds(releaseIds, "release"),
     ]);
-  } catch { cachedIds = new Set(); deadIds = new Set(); }
-  // Count both already-cached and known-dead ids as skips.
-  const skippedIds = ids.filter(id => cachedIds.has(id) || deadIds.has(id));
-  if (skippedIds.length > 0) await bumpCacheWarmCatnoRunSkip(series.key, skippedIds.length);
-  // GET /masters/{id} carries no `labels` field, so a master cached
-  // by an earlier run (before this backfill existed, or via the
-  // genre/style warm worker) has nothing for the label directory to
-  // join on. Stamp it in now — cheap, no Discogs call — so a resweep
-  // over already-cached masters still fixes the Cache M count.
-  if (type === "master" && skippedIds.length > 0) {
-    try { await backfillCachedMasterLabel(skippedIds, series.label); }
+  } catch { cachedM = new Set(); deadM = new Set(); cachedR = new Set(); deadR = new Set(); }
+  const isSkip = (t: Target) => t.type === "master"
+    ? (cachedM.has(t.id) || deadM.has(t.id))
+    : (cachedR.has(t.id) || deadR.has(t.id));
+
+  const skipCount = targets.filter(isSkip).length;
+  if (skipCount > 0) await bumpCacheWarmCatnoRunSkip(series.key, skipCount);
+  // GET /masters/{id} carries no `labels` field, so stamp the label
+  // onto already-cached masters so the label directory join works even
+  // when the master was cached by another worker. Cheap — no API call.
+  const skippedMasterIds = targets.filter(t => t.type === "master" && isSkip(t)).map(t => t.id);
+  if (skippedMasterIds.length > 0) {
+    try { await backfillCachedMasterLabel(skippedMasterIds, series.label); }
     catch (err: any) { console.error(`[cache-warm-catno] master label backfill failed for ${series.key}:`, err?.message ?? err); }
   }
 
-  // Stash the label-matched count on the function so the catno walker
-  // can read it without re-walking the candidates list.
-  (_processSearchResults as any).lastMatchedCount = candidates.length;
   let fresh = 0;
-  for (const r of candidates) {
+  for (const t of targets) {
     if (_stopRequested) break;
-    const id = Number(r?.id);
-    if (!Number.isFinite(id) || id <= 0) continue;
-    if (cachedIds.has(id) || deadIds.has(id)) continue;
+    if (isSkip(t)) continue;
     try {
       await _sleep(REQ_INTERVAL_MS);
-      const full = type === "master"
-        ? await _withRetry(`master ${id}`, () => client.getMasterRelease(id)) as any
-        : await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
-      // See backfillCachedMasterLabel above — /masters/{id} has no
-      // `labels` field, so stamp one on before caching.
-      if (type === "master" && !Array.isArray(full?.labels)) full.labels = [{ name: series.label }];
-      await cacheRelease(id, type, full as object);
-      const title = String(full?.title ?? r?.title ?? "(untitled)");
-      await recordCacheWarmCatnoRunHit(series.key, title, id);
+      const full = t.type === "master"
+        ? await _withRetry(`master ${t.id}`,  () => client.getMasterRelease(t.id)) as any
+        : await _withRetry(`release ${t.id}`, () => client.getRelease(t.id)) as any;
+      // /masters/{id} has no `labels` field — stamp one before caching.
+      if (t.type === "master" && !Array.isArray(full?.labels)) full.labels = [{ name: series.label }];
+      // warmOnly: swept rows stay seen_at=NULL so the "never-viewed"
+      // prune reflects sweep output (a human open flips seen_at later).
+      await cacheRelease(t.id, t.type, full as object, { warmOnly: true });
+      const title = String(full?.title ?? "(untitled)");
+      await recordCacheWarmCatnoRunHit(series.key, title, t.id);
       fresh++;
     } catch (err: any) {
-      await recordCacheWarmCatnoRunError(series.key, `${type} ${id}: ${err?.message ?? String(err)}`);
+      await recordCacheWarmCatnoRunError(series.key, `${t.type} ${t.id}: ${err?.message ?? String(err)}`);
       // Tombstone genuine 404s so future sweeps stop re-fetching them.
       if (/Discogs API error 404/.test(String(err?.message ?? err))) {
-        await recordDeadDiscogsId(id, type).catch(() => {});
+        await recordDeadDiscogsId(t.id, t.type).catch(() => {});
       }
       await _sleep(REQ_INTERVAL_MS);
     }
@@ -566,7 +587,10 @@ async function _runCatnoPhase(
     }
 
     const results: any[] = Array.isArray(searchRes?.results) ? searchRes.results : [];
-    await _processSearchResults(client, series, results);
+    // masters+: each catno hit is a specific pressing; collapse it to
+    // its master (or keep it if it's an orphan) so the walk never caches
+    // a redundant pressing.
+    await _processSearchResults(client, series, results, { mastersPlus: true });
     const matched = Number((_processSearchResults as any).lastMatchedCount) || 0;
     if (matched > 0) emptyStreak = 0;
     else emptyStreak += 1;
@@ -646,7 +670,7 @@ async function _runLabelSweepPhase(
       }
       break; // orphan pagination exhausted — sweep done
     }
-    await _processSearchResults(client, series, results, { type: searchType, orphansOnly: subphase === "orphans" });
+    await _processSearchResults(client, series, results, { mastersPlus: true, orphansOnly: subphase === "orphans" });
     if (_stopRequested) break;
 
     const totalPages = Number(searchRes?.pagination?.pages);

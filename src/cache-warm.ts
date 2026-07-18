@@ -371,7 +371,9 @@ async function _runWorker(
         // DiscogsClient — no local sleep, so a solo run rides the gate
         // at ~1/sec instead of gate + local sleep ≈ 2s/item.
         const full = await _withRetry(`master ${id}`, () => client.getMasterRelease(id)) as any;
-        await cacheRelease(id, "master", full as object);
+        // warmOnly: swept rows stay seen_at=NULL so the "never-viewed"
+        // prune reflects sweep output until a human opens the album.
+        await cacheRelease(id, "master", full as object, { warmOnly: true });
         const title = String(full?.title ?? r?.title ?? "(untitled)");
         await recordCacheWarmRunHit(genreKey, styleKey, title, id);
       } catch (err: any) {
