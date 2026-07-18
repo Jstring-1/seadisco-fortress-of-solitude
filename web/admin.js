@@ -117,7 +117,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); loadCacheProjection(); },
+    load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); },
   },
   'labels': {
     panels: ['panel-labels'],

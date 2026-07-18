@@ -171,11 +171,8 @@
           <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache<span id="ca-totals-badge" style="font-weight:400;font-size:0.72rem;color:var(--muted);margin-left:0.6rem"></span></summary>
           <div id="cache-analytics-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)"></div>
         </details>
-        <!-- ── Split-cache projection backfill ─────────────────────── -->
-        <details>
-          <summary title="Migrates release_cache into the new split schema: discogs_cache_masters_plus (masters + orphan releases — the hot browse table) and discogs_cache_pressings (specific-pressing releases), plus normalized release_labels / release_artists / release_tags side tables. Idempotent — safe to stop / resume. Runs in the background; nothing in the UI changes until readers are flipped over in a later phase." style="cursor:pointer;font-weight:600;font-size:0.95rem">🧬 Project into split cache</summary>
-          <div id="cache-projection-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
+        <!-- Split-cache projection retired — the V2 split was dropped;
+             release_cache is the single source of truth. -->
         <!-- ── Cache exports (release_cache + blues_artists) ───────── -->
         <details>
           <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">📦 Exports — release_cache &amp; artist cache</summary>

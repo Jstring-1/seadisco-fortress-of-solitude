@@ -875,132 +875,20 @@ export async function initDb() {
     // smaller but only supports @>, which doesn't apply here.)
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_genres_idx
        ON release_cache USING GIN ((data->'genres'))`);
-    // ── Split release_cache into masters+ / pressings + side tables ────
-    // Migration target for the JSONB-heavy release_cache. Same source of
-    // truth (data JSONB) but split by usage pattern:
-    //   • discogs_cache_masters_plus  — masters AND orphan releases
-    //     (releases without a master_id). This is what feed / cards /
-    //     browse hit ~90% of the time, so it stays smaller and hotter.
-    //   • discogs_cache_pressings     — releases WITH a master_id
-    //     (specific pressings). Only read when a modal drills into one.
-    // Both tables promote the four scalars we query on constantly
-    // (year, country, master_id, primary_format) into indexed columns so
-    // no `data->>'year'` JSON traversal is needed at read time. Full
-    // Discogs blob stays in `data` for the modal / player.
-    //
-    // artist + master-versions cache types stay in the old release_cache
-    // — they're small lookup caches with a different query pattern.
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS discogs_cache_masters_plus (
-      discogs_id     INTEGER      NOT NULL,
-      type           TEXT         NOT NULL,     -- 'master' | 'release' (orphan only)
-      year           SMALLINT,
-      country        TEXT,
-      primary_format TEXT,
-      data           JSONB        NOT NULL,
-      cached_at      TIMESTAMPTZ  DEFAULT NOW(),
-      seen_at        TIMESTAMPTZ,
-      UNIQUE (discogs_id, type)
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_year_idx      ON discogs_cache_masters_plus (year)      WHERE year IS NOT NULL`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_country_idx   ON discogs_cache_masters_plus (country)   WHERE country IS NOT NULL`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_seen_at_idx   ON discogs_cache_masters_plus (seen_at DESC) WHERE seen_at IS NOT NULL`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_cached_at_idx ON discogs_cache_masters_plus (cached_at DESC)`);
-    // Promoted scalar columns for the Feed / catalog samplers. Adding
-    // them as nullable ints so pre-existing rows stay valid until the
-    // reprojection pass fills them in; each is INT (not SMALLINT) since
-    // community.want for very popular releases exceeds SMALLINT max.
-    await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS community_want  INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS community_have  INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS num_for_sale    INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS videos_count    SMALLINT`);
-    await getPool().query(`ALTER TABLE discogs_cache_masters_plus ADD COLUMN IF NOT EXISTS tracks_count    SMALLINT`);
-    // Partial index tuned to the Rare-tab predicate (want>20 AND have<10
-    // AND num_for_sale=0). Small — most rows don't qualify — but it
-    // lets the Rare sampler skip a full table scan.
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcmp_rare_idx
-       ON discogs_cache_masters_plus (year, community_want DESC)
-       WHERE community_want IS NOT NULL AND community_want > 20
-         AND community_have IS NOT NULL AND community_have < 10
-         AND num_for_sale = 0`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS discogs_cache_pressings (
-      discogs_id     INTEGER      PRIMARY KEY,  -- always type='release'
-      master_id      INTEGER      NOT NULL,
-      year           SMALLINT,
-      country        TEXT,
-      primary_format TEXT,
-      data           JSONB        NOT NULL,
-      cached_at      TIMESTAMPTZ  DEFAULT NOW(),
-      seen_at        TIMESTAMPTZ
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_master_id_idx  ON discogs_cache_pressings (master_id)`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_year_idx       ON discogs_cache_pressings (year)     WHERE year IS NOT NULL`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_seen_at_idx    ON discogs_cache_pressings (seen_at DESC) WHERE seen_at IS NOT NULL`);
-    // Same promoted-scalar shape as masters_plus (see comment there).
-    await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS community_want  INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS community_have  INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS num_for_sale    INT`);
-    await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS videos_count    SMALLINT`);
-    await getPool().query(`ALTER TABLE discogs_cache_pressings ADD COLUMN IF NOT EXISTS tracks_count    SMALLINT`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS dcp_rare_idx
-       ON discogs_cache_pressings (year, community_want DESC)
-       WHERE community_want IS NOT NULL AND community_want > 20
-         AND community_have IS NOT NULL AND community_have < 10
-         AND num_for_sale = 0`);
-    // Side tables. `bucket` is a small int denoting where the parent row
-    // lives: 0 = master, 1 = orphan (release without master_id), 2 =
-    // pressing (release with master_id). Baked in so aggregations don't
-    // need to join back to the primary tables just to know which bucket
-    // a row is in.
-    //
-    // Dedup is handled by the writer (DELETE-then-INSERT per (discogs_id,
-    // bucket)) so we don't need a natural-key PRIMARY KEY here — a plain
-    // SERIAL keeps schema simple and avoids expression-key limitations.
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS release_labels (
-      id          BIGSERIAL PRIMARY KEY,
-      discogs_id  INTEGER   NOT NULL,
-      bucket      SMALLINT  NOT NULL,
-      label_id    INTEGER,
-      label_name  TEXT      NOT NULL,
-      catno       TEXT
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_by_release_idx ON release_labels (discogs_id, bucket)`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_by_label_idx   ON release_labels (label_id) WHERE label_id IS NOT NULL`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_labels_name_lower_idx ON release_labels (LOWER(label_name))`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS release_artists (
-      id          BIGSERIAL PRIMARY KEY,
-      discogs_id  INTEGER   NOT NULL,
-      bucket      SMALLINT  NOT NULL,
-      artist_id   INTEGER   NOT NULL,
-      role        TEXT      NOT NULL           -- 'main' | 'extra'
-    )
-  `);
-    // Add name inline (mirrors release_labels.label_name) so the
-    // cache-analytics V2 reader can filter + facet on artist name
-    // without joining an out-of-band artist name table. Populated by
-    // the projector; old rows written before this column stay NULL
-    // until the backfill reprojects them.
-    await getPool().query(`ALTER TABLE release_artists ADD COLUMN IF NOT EXISTS name TEXT`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_release_idx ON release_artists (discogs_id, bucket)`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_by_artist_idx  ON release_artists (artist_id, role)`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_artists_name_lower_idx ON release_artists (LOWER(name)) WHERE name IS NOT NULL`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS release_tags (
-      id          BIGSERIAL PRIMARY KEY,
-      discogs_id  INTEGER   NOT NULL,
-      bucket      SMALLINT  NOT NULL,
-      kind        TEXT      NOT NULL,          -- 'genre' | 'style' | 'format'
-      value       TEXT      NOT NULL
-    )
-  `);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_tags_by_release_idx ON release_tags (discogs_id, bucket)`);
-    await getPool().query(`CREATE INDEX IF NOT EXISTS release_tags_by_value_idx   ON release_tags (kind, value)`);
+    // ── Retired: split cache (V2) ──────────────────────────────────────
+    // release_cache (V1) is the single source of truth; the split schema
+    // (discogs_cache_masters_plus / discogs_cache_pressings + the
+    // release_labels / release_artists / release_tags side tables) was
+    // dual-written but never read (reader flag stayed off), so it was pure
+    // duplicate storage. Dropped here to reclaim it. isSplitCacheReaderEnabled()
+    // is hard-wired false and the dual-write + projection worker are gone,
+    // so nothing writes or reads these any more. Idempotent — no-ops once
+    // already dropped. CASCADE covers the SERIAL sequences.
+    await getPool().query(`DROP TABLE IF EXISTS discogs_cache_masters_plus CASCADE`);
+    await getPool().query(`DROP TABLE IF EXISTS discogs_cache_pressings   CASCADE`);
+    await getPool().query(`DROP TABLE IF EXISTS release_labels            CASCADE`);
+    await getPool().query(`DROP TABLE IF EXISTS release_artists           CASCADE`);
+    await getPool().query(`DROP TABLE IF EXISTS release_tags              CASCADE`);
     // ── Cache-fetch queue ───────────────────────────────────────────────
     // Generic backlog of "fetch this album from Discogs and cache it".
     // Multiple sources enqueue (suggestion generator, future hover-to-
@@ -1503,8 +1391,7 @@ export async function initDb() {
     // app_setting so it runs exactly once.
     if (await getAppSetting("year_backfill_removed") !== "1") {
         await getPool().query(`UPDATE release_cache SET data = (data - 'year') - '_year_backfilled_from' WHERE data ? '_year_backfilled_from'`);
-        await getPool().query(`UPDATE discogs_cache_masters_plus SET year = NULL, data = (data - 'year') - '_year_backfilled_from' WHERE data ? '_year_backfilled_from'`);
-        await getPool().query(`UPDATE discogs_cache_pressings SET year = NULL, data = (data - 'year') - '_year_backfilled_from' WHERE data ? '_year_backfilled_from'`);
+        // (Split-cache V2 UPDATEs removed — those tables were dropped above.)
         await getPool().query(`DROP TABLE IF EXISTS year_backfill_log`);
         await setAppSetting("year_backfill_removed", "1");
         console.log("[init] year-backfill feature removed; guessed years stripped");
@@ -4768,16 +4655,8 @@ export async function cacheRelease(discogsId, type, data, opts) {
        DO UPDATE SET data = EXCLUDED.data, cached_at = NOW(),
                      seen_at = COALESCE(release_cache.seen_at, NOW())`, [discogsId, type, JSON.stringify(data)]);
     }
-    // Dual-write into the new split schema. Fire-and-forget from the
-    // caller's perspective — a projection failure MUST NOT break the
-    // main cache write, since the old release_cache is still the
-    // source of truth until we flip readers over.
-    try {
-        await writeProjectedCache(discogsId, type, data, { warmOnly });
-    }
-    catch (err) {
-        console.error(`[cache-project] dual-write failed id=${discogsId} type=${type}:`, err?.message ?? err);
-    }
+    // (Split-cache V2 dual-write removed — release_cache is the single
+    // source of truth; the split tables were dropped. See initDb.)
 }
 // ── Prune redundant cached pressings ─────────────────────────────────
 // A cached release (type='release') is "redundant" when it is a
@@ -4857,12 +4736,6 @@ export async function pruneRedundantReleases(mode = "warm_only") {
         const del = await client.query(`DELETE FROM release_cache
         WHERE type = 'release'
           AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
-        // Mirror the removal into the split schema (best-effort — these
-        // tables may be empty/partial; DELETE just no-ops on missing rows).
-        await client.query(`DELETE FROM discogs_cache_pressings WHERE discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
-        await client.query(`DELETE FROM release_labels  WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
-        await client.query(`DELETE FROM release_artists WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
-        await client.query(`DELETE FROM release_tags    WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
         await client.query("COMMIT");
         return { deleted: del.rowCount ?? 0 };
     }
@@ -8933,17 +8806,16 @@ export async function listLabelIdsNeedingUpstreamRefresh(opts = {}) {
 // read from release_cache. Set via the toggle in the Cache tab after
 // the projection backfill has drained.
 const SPLIT_READERS_KEY = "use_split_cache_readers";
+// Hard-wired false: the split cache (V2) was retired and its tables
+// dropped, so every reader must use the release_cache (V1) path. The
+// v2 branches downstream are now dead code kept only to avoid churning
+// ~30 hot-path functions; this gate guarantees they never execute.
 export async function isSplitCacheReaderEnabled() {
-    try {
-        const raw = await getAppSetting(SPLIT_READERS_KEY);
-        return raw === "1" || raw === "true";
-    }
-    catch {
-        return false;
-    }
+    return false;
 }
-export async function setSplitCacheReaderEnabled(v) {
-    await setAppSetting(SPLIT_READERS_KEY, v ? "1" : "0");
+export async function setSplitCacheReaderEnabled(_v) {
+    // no-op — split cache retired; kept for the (now-unregistered) route's
+    // import to resolve.
 }
 export async function listLabelDirectory(opts = {}) {
     const limit = Math.max(1, Math.min(50000, opts.limit ?? 1000));
@@ -9542,30 +9414,7 @@ export async function backfillCachedMasterLabel(ids, labelName) {
         SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
       WHERE type = 'master' AND discogs_id = ANY($1::int[])
         AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`, [ids, labelsJson]);
-    // Mirror the stamp into the split schema so the label directory /
-    // analytics see the same label attribution the mini-player would
-    // read out of release_cache. Two touches: patch data->labels on
-    // masters_plus (masters live there), and INSERT a row into
-    // release_labels so the aggregate GROUP BY picks it up. We only
-    // insert when the release_labels side is empty for this master, so
-    // repeat calls (idempotent) don't multiply the row.
-    const pool = getPool();
-    try {
-        await pool.query(`UPDATE discogs_cache_masters_plus
-          SET data = jsonb_set(data, '{labels}', $2::jsonb, true)
-        WHERE type = 'master' AND discogs_id = ANY($1::int[])
-          AND jsonb_array_length(COALESCE(data->'labels', '[]'::jsonb)) = 0`, [ids, labelsJson]);
-        await pool.query(`INSERT INTO release_labels (discogs_id, bucket, label_id, label_name, catno)
-       SELECT id, 0::smallint, NULL, $2, NULL
-         FROM unnest($1::int[]) AS id
-        WHERE NOT EXISTS (
-          SELECT 1 FROM release_labels rl
-           WHERE rl.discogs_id = id AND rl.bucket = 0
-        )`, [ids, labelName]);
-    }
-    catch (err) {
-        console.error("[backfillCachedMasterLabel split mirror]", err?.message ?? err);
-    }
+    // (Split-cache V2 mirror removed — those tables were dropped.)
     return r.rowCount ?? 0;
 }
 // Patch a single blues_lyrics row's tuning + artist fields. Both are
@@ -9803,8 +9652,7 @@ export async function runReadonlyQuery(sql, opts = {}) {
 // blues / label / lyrics tables here — user-account + OAuth tables stay
 // out of the advertised surface and the AI context.
 const _QUERYABLE_TABLES = [
-    "release_cache", "discogs_cache_masters_plus", "discogs_cache_pressings",
-    "release_labels", "release_artists", "release_tags",
+    "release_cache",
     "blues_artists", "blues_lyrics", "blues_tunings_grid",
     "blues_words", "blues_word_citations",
     "external_discography",
