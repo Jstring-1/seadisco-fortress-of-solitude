@@ -470,6 +470,27 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_errors_ts_idx ON track_yt_review_errors (ts DESC)`);
 
+  // Learned per-channel trust. Some curator channels (e.g. "Traveler
+  // Into the Blue") post correct transfers consistently enough that a
+  // title+artist match on them is as reliable as an official Topic
+  // upload. Rather than hard-coding a list, derive it from the
+  // admin's OWN approve/reject history — see refreshDerivedChannelTrust.
+  //   source='derived' rows are recomputed from that history.
+  //   source='manual'  rows are the admin's explicit trust/block and
+  //                    are never touched by a refresh.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS yt_channel_trust (
+      channel_id    TEXT PRIMARY KEY,
+      channel_title TEXT,
+      state         TEXT NOT NULL CHECK (state IN ('trusted','blocked')),
+      source        TEXT NOT NULL DEFAULT 'derived' CHECK (source IN ('derived','manual')),
+      approvals     INT NOT NULL DEFAULT 0,
+      rejections    INT NOT NULL DEFAULT 0,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS yt_channel_trust_state_idx ON yt_channel_trust (state)`);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -7251,6 +7272,139 @@ export async function reviewQueueDeleteApproval(id: number, reviewer: string | n
     [id, reviewer],
   );
   return { ok: true, masterId, trackPosition };
+}
+
+// ── Channel trust ─────────────────────────────────────────────────
+// Evidence for trust comes ONLY from decisions a human made. Rows the
+// auto-approver decided (reviewed_by = 'auto') are excluded on
+// purpose: counting them would let a channel that cleared the Topic
+// gate once bootstrap itself into blanket trust, and the whole point
+// of the list is that it encodes YOUR judgement, not the machine's.
+const _CHANNEL_TRUST_HUMAN_WHERE = `
+  candidate_channel_id IS NOT NULL AND candidate_channel_id <> ''
+  AND reviewed_by IS NOT NULL AND reviewed_by <> 'auto'
+  AND status IN ('approved','rejected')
+`;
+
+export type ChannelTrustRow = {
+  channel_id: string;
+  channel_title: string | null;
+  approvals: number;
+  rejections: number;
+  auto_approvals: number;
+  state: "trusted" | "blocked" | null;
+  source: "derived" | "manual" | null;
+};
+
+// Per-channel approve/reject tallies joined to whatever trust state
+// the channel currently carries. Powers the admin table.
+export async function listChannelTrust(limit = 200): Promise<ChannelTrustRow[]> {
+  const r = await getPool().query(
+    `WITH human AS (
+       SELECT candidate_channel_id AS channel_id,
+              MAX(candidate_channel_title) AS channel_title,
+              COUNT(*) FILTER (WHERE status = 'approved')::int AS approvals,
+              COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejections
+         FROM track_yt_review_queue
+        WHERE ${_CHANNEL_TRUST_HUMAN_WHERE}
+        GROUP BY candidate_channel_id
+     ), auto AS (
+       SELECT candidate_channel_id AS channel_id,
+              COUNT(*)::int AS auto_approvals
+         FROM track_yt_review_queue
+        WHERE status = 'approved' AND reviewed_by = 'auto'
+          AND candidate_channel_id IS NOT NULL AND candidate_channel_id <> ''
+        GROUP BY candidate_channel_id
+     )
+     SELECT COALESCE(h.channel_id, a.channel_id, t.channel_id) AS channel_id,
+            COALESCE(h.channel_title, t.channel_title)         AS channel_title,
+            COALESCE(h.approvals, 0)                           AS approvals,
+            COALESCE(h.rejections, 0)                          AS rejections,
+            COALESCE(a.auto_approvals, 0)                      AS auto_approvals,
+            t.state, t.source
+       FROM human h
+       FULL OUTER JOIN auto a ON a.channel_id = h.channel_id
+       FULL OUTER JOIN yt_channel_trust t
+         ON t.channel_id = COALESCE(h.channel_id, a.channel_id)
+      ORDER BY (t.state = 'trusted') DESC NULLS LAST,
+               COALESCE(h.approvals, 0) DESC,
+               COALESCE(a.auto_approvals, 0) DESC
+      LIMIT $1`,
+    [Math.max(1, Math.min(1000, limit))],
+  );
+  return r.rows as ChannelTrustRow[];
+}
+
+// Recompute the derived trust list. A channel qualifies when the admin
+// has approved it at least minApprovals times AND the approval share
+// of their decisions on it is at least minRatio. Manual rows are left
+// completely alone; derived rows that no longer qualify are dropped so
+// trust decays if a channel starts producing bad matches.
+export async function refreshDerivedChannelTrust(
+  minApprovals = 5, minRatio = 0.9,
+): Promise<{ trusted: number; removed: number }> {
+  const qualifying = `
+    SELECT candidate_channel_id AS channel_id,
+           MAX(candidate_channel_title) AS channel_title,
+           COUNT(*) FILTER (WHERE status = 'approved')::int AS approvals,
+           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejections
+      FROM track_yt_review_queue
+     WHERE ${_CHANNEL_TRUST_HUMAN_WHERE}
+     GROUP BY candidate_channel_id
+    HAVING COUNT(*) FILTER (WHERE status = 'approved') >= $1
+       AND COUNT(*) FILTER (WHERE status = 'approved')::float
+           / NULLIF(COUNT(*), 0) >= $2
+  `;
+  // Drop derived rows that fell below the bar (manual rows untouched).
+  const removed = await getPool().query(
+    `DELETE FROM yt_channel_trust
+      WHERE source = 'derived'
+        AND channel_id NOT IN (SELECT channel_id FROM (${qualifying}) q)`,
+    [minApprovals, minRatio],
+  );
+  const ins = await getPool().query(
+    `INSERT INTO yt_channel_trust (channel_id, channel_title, state, source, approvals, rejections, updated_at)
+     SELECT q.channel_id, q.channel_title, 'trusted', 'derived', q.approvals, q.rejections, NOW()
+       FROM (${qualifying}) q
+     ON CONFLICT (channel_id) DO UPDATE
+        SET channel_title = EXCLUDED.channel_title,
+            approvals     = EXCLUDED.approvals,
+            rejections    = EXCLUDED.rejections,
+            updated_at    = NOW()
+      WHERE yt_channel_trust.source = 'derived'`,
+    [minApprovals, minRatio],
+  );
+  return { trusted: ins.rowCount ?? 0, removed: removed.rowCount ?? 0 };
+}
+
+// The set the worker gates on. A manual 'blocked' row wins over a
+// derived 'trusted' one because the PK collision means only one row
+// per channel can exist — a manual block simply replaces it.
+export async function getTrustedChannelIds(): Promise<Set<string>> {
+  const r = await getPool().query(
+    `SELECT channel_id FROM yt_channel_trust WHERE state = 'trusted'`,
+  );
+  return new Set(r.rows.map((x: any) => String(x.channel_id)));
+}
+
+// Admin override. state=null clears the row entirely, letting the next
+// refresh re-derive it from history.
+export async function setChannelTrust(
+  channelId: string, channelTitle: string | null, state: "trusted" | "blocked" | null,
+): Promise<void> {
+  if (!state) {
+    await getPool().query(`DELETE FROM yt_channel_trust WHERE channel_id = $1`, [channelId]);
+    return;
+  }
+  await getPool().query(
+    `INSERT INTO yt_channel_trust (channel_id, channel_title, state, source, updated_at)
+     VALUES ($1, $2, $3, 'manual', NOW())
+     ON CONFLICT (channel_id) DO UPDATE
+        SET state = EXCLUDED.state, source = 'manual',
+            channel_title = COALESCE(EXCLUDED.channel_title, yt_channel_trust.channel_title),
+            updated_at = NOW()`,
+    [channelId, channelTitle, state],
+  );
 }
 
 export async function getReviewState(): Promise<any> {

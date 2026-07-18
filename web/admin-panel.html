@@ -343,6 +343,13 @@
           <span id="ytr-auto-note" style="font-size:0.72rem;color:var(--muted)"></span>
           <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" oninput="ytrFilterInput(this.value)" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
         </div>
+        <details id="ytr-channels-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadYtChannels()">
+          <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">Trusted channels</summary>
+          <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.5rem">
+            Channels you've approved at least 5 times with a 90%+ approval rate are trusted automatically, and a trusted channel auto-pins on artist + title alone (duration only vetoes when both times are known). Only <em>your</em> decisions count — auto-approvals are excluded so a channel can't vouch for itself. Trust decays: a channel that starts producing rejects drops off on the next run.
+          </div>
+          <div id="ytr-channels">Loading…</div>
+        </details>
         <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>
         <div id="ytr-pager" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.6rem;font-size:0.8rem"></div>
       </div>

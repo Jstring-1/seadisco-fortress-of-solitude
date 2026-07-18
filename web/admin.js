@@ -3289,6 +3289,65 @@ async function ytrToggleAuto(enabled) {
   loadYtReview();
 }
 window.ytrToggleAuto = ytrToggleAuto;
+// Per-channel trust table: approve/reject tallies from YOUR decisions,
+// plus manual trust/block overrides.
+async function loadYtChannels() {
+  const el = document.getElementById("ytr-channels");
+  if (!el) return;
+  const esc = escHtml;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/yt-review/channels");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const { rows = [] } = await r.json();
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);font-style:italic">No channel history yet — approve some candidates and channels will start qualifying.</div>`;
+      return;
+    }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+      <tr style="color:var(--muted);text-align:left">
+        <th style="padding:0.25rem 0.4rem">Channel</th>
+        <th style="padding:0.25rem 0.4rem;text-align:right" title="Candidates from this channel you approved by hand.">You approved</th>
+        <th style="padding:0.25rem 0.4rem;text-align:right" title="Candidates from this channel you rejected by hand.">You rejected</th>
+        <th style="padding:0.25rem 0.4rem;text-align:right" title="Pinned automatically. Not counted toward trust.">Auto</th>
+        <th style="padding:0.25rem 0.4rem">Trust</th>
+        <th style="padding:0.25rem 0.4rem"></th>
+      </tr>
+      ${rows.map(c => {
+        const id = esc(c.channel_id);
+        const badge = c.state === "trusted"
+          ? `<span style="color:#7ed196;font-weight:600">trusted</span> <span style="color:var(--muted)">(${esc(c.source || "")})</span>`
+          : c.state === "blocked"
+            ? `<span style="color:#e88;font-weight:600">blocked</span>`
+            : `<span style="color:var(--muted)">—</span>`;
+        return `<tr style="border-top:1px solid var(--border)">
+          <td style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(c.channel_title || c.channel_id)}</a></td>
+          <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums">${Number(c.approvals || 0)}</td>
+          <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;${Number(c.rejections) ? "color:#e88" : ""}">${Number(c.rejections || 0)}</td>
+          <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${Number(c.auto_approvals || 0)}</td>
+          <td style="padding:0.25rem 0.4rem">${badge}</td>
+          <td style="padding:0.25rem 0.4rem;white-space:nowrap">
+            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','trusted')" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
+            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','blocked')" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
+            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','')" title="Clear the manual override and let the tally decide again.">Auto</button>
+          </td>
+        </tr>`;
+      }).join("")}
+    </table>`;
+  } catch (e) { el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(e?.message || e)}</span>`; }
+}
+window.loadYtChannels = loadYtChannels;
+async function ytrSetChannelTrust(channelId, state) {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/channel-trust", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ channelId, state: state || null }),
+    });
+    if (!r.ok) { alert(`Failed: HTTP ${r.status}`); return; }
+    loadYtChannels();
+  } catch (e) { alert(`Failed: ${e?.message || e}`); }
+}
+window.ytrSetChannelTrust = ytrSetChannelTrust;
 async function ytrStart() {
   try {
     const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
