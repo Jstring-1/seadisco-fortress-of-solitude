@@ -4779,6 +4779,101 @@ export async function cacheRelease(discogsId, type, data, opts) {
         console.error(`[cache-project] dual-write failed id=${discogsId} type=${type}:`, err?.message ?? err);
     }
 }
+// ── Prune redundant cached pressings ─────────────────────────────────
+// A cached release (type='release') is "redundant" when it is a
+// specific pressing (has a numeric master_id) whose MASTER is also
+// cached — the master already represents it, so the pressing row is
+// dead weight from over-eager sweeps. We never touch:
+//   • orphan releases (no master_id) — the only representation there is
+//   • pressings whose master isn't cached — nothing else covers them
+//   • any pressing referenced by user data (collection, wantlist,
+//     inventory, lists, recent views, favorites, playlists, queue, or a
+//     track YouTube override) — the protected set below
+// 'warm_only' mode additionally keeps anything a human has opened
+// (seen_at IS NOT NULL); 'all' prunes every redundant pressing.
+// CTE: every specific release id pinned by user data. Kept broad on
+// purpose — over-protecting only keeps a few extra rows, under-
+// protecting could delete something in use.
+const _PRUNE_PROTECTED_CTE = `
+  protected_ids AS (
+    SELECT discogs_release_id AS id FROM user_collection WHERE discogs_release_id IS NOT NULL
+    UNION SELECT discogs_release_id FROM user_wantlist  WHERE discogs_release_id IS NOT NULL
+    UNION SELECT discogs_release_id FROM user_inventory WHERE discogs_release_id IS NOT NULL
+    UNION SELECT discogs_id FROM user_list_items  WHERE entity_type = 'release'
+    UNION SELECT discogs_id FROM user_recent_views WHERE entity_type = 'release'
+    UNION SELECT discogs_id FROM user_favorites    WHERE entity_type = 'release'
+    UNION SELECT (data->>'releaseId')::int FROM user_playlist_items WHERE data->>'releaseId' ~ '^[0-9]+$'
+    UNION SELECT (data->>'releaseId')::int FROM user_play_queue     WHERE data->>'releaseId' ~ '^[0-9]+$'
+    UNION SELECT release_id::int FROM track_youtube_overrides WHERE release_type = 'release' AND release_id ~ '^[0-9]+$'
+  )`;
+// Redundant-candidate predicate (references alias `r` for release_cache).
+const _PRUNE_CANDIDATE_WHERE = `
+  r.type = 'release'
+    AND (r.data->>'master_id') ~ '^[0-9]+$'
+    AND (r.data->>'master_id')::int > 0
+    AND EXISTS (
+      SELECT 1 FROM release_cache m
+       WHERE m.type = 'master' AND m.discogs_id = (r.data->>'master_id')::int
+    )
+    AND NOT EXISTS (SELECT 1 FROM protected_ids p WHERE p.id = r.discogs_id)`;
+export async function previewRedundantReleases() {
+    const r = await getPool().query(`WITH ${_PRUNE_PROTECTED_CTE},
+     candidates AS (
+       SELECT r.discogs_id, r.seen_at
+         FROM release_cache r
+        WHERE ${_PRUNE_CANDIDATE_WHERE}
+     )
+     SELECT
+       (SELECT COUNT(*) FROM candidates WHERE seen_at IS NULL)::bigint AS warm_only,
+       (SELECT COUNT(*) FROM candidates)::bigint                       AS total,
+       (SELECT COUNT(*) FROM release_cache WHERE type = 'release')::bigint AS release_rows,
+       (SELECT COUNT(*) FROM release_cache WHERE type = 'master')::bigint  AS master_rows`);
+    const row = r.rows[0] ?? {};
+    return {
+        warmOnly: Number(row.warm_only ?? 0),
+        total: Number(row.total ?? 0),
+        releaseRows: Number(row.release_rows ?? 0),
+        masterRows: Number(row.master_rows ?? 0),
+    };
+}
+// Deletes the redundant pressings from release_cache AND the mirrored
+// rows in the split cache (discogs_cache_pressings + the bucket=2 side
+// tables) so space is actually reclaimed and the two stores stay
+// consistent. Runs in one transaction; returns rows removed from
+// release_cache (the source of truth).
+export async function pruneRedundantReleases(mode = "warm_only") {
+    const seenFilter = mode === "warm_only" ? "AND r.seen_at IS NULL" : "";
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        // Materialize the id set once so every DELETE targets the same rows
+        // even though user data could change mid-transaction.
+        await client.query(`CREATE TEMP TABLE _prune_ids ON COMMIT DROP AS
+       WITH ${_PRUNE_PROTECTED_CTE}
+       SELECT r.discogs_id
+         FROM release_cache r
+        WHERE ${_PRUNE_CANDIDATE_WHERE} ${seenFilter}`);
+        await client.query(`CREATE INDEX ON _prune_ids (discogs_id)`);
+        const del = await client.query(`DELETE FROM release_cache
+        WHERE type = 'release'
+          AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
+        // Mirror the removal into the split schema (best-effort — these
+        // tables may be empty/partial; DELETE just no-ops on missing rows).
+        await client.query(`DELETE FROM discogs_cache_pressings WHERE discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
+        await client.query(`DELETE FROM release_labels  WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
+        await client.query(`DELETE FROM release_artists WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
+        await client.query(`DELETE FROM release_tags    WHERE bucket = 2 AND discogs_id IN (SELECT discogs_id FROM _prune_ids)`);
+        await client.query("COMMIT");
+        return { deleted: del.rowCount ?? 0 };
+    }
+    catch (e) {
+        await client.query("ROLLBACK").catch(() => { });
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
 function _projCoerceInt(v) {
     if (v == null)
         return null;

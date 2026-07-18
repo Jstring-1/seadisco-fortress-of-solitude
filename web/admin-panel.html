@@ -145,6 +145,27 @@
             <div id="cache-rate-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
           </div>
         </details>
+        <!-- ── Prune redundant releases ────────────────────────────── -->
+        <details>
+          <summary title="Deletes cached pressings (type='release' with a master_id) whose master is ALSO cached — the master already represents them. Orphan releases (no master), pressings whose master isn't cached, and anything in a user's collection/wantlist/inventory/list/recent-views/favorites/playlist/queue or a track YouTube override are always kept." style="cursor:pointer;font-weight:600;font-size:0.95rem">🧹 Prune redundant releases</summary>
+          <div style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">
+            <p style="margin:0 0 0.6rem">Removes pressings whose master is already cached, so the master covers them. Never touches orphan releases, pressings with no cached master, or anything referenced by a user library / playlist / queue / override.</p>
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.6rem">
+              <button class="admin-btn" onclick="loadRedundantPreview(this)">Preview</button>
+              <span id="rr-preview" style="font-size:0.8rem"></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+              <label>Scope
+                <select id="rr-mode" class="admin-input">
+                  <option value="warm_only">Never-viewed only (safest)</option>
+                  <option value="all">All redundant pressings</option>
+                </select>
+              </label>
+              <button class="admin-btn admin-btn-danger" onclick="pruneRedundant(this)">Prune now</button>
+              <span id="rr-result" style="font-size:0.8rem"></span>
+            </div>
+          </div>
+        </details>
         <!-- ── Cache analytics (faceted drilldown) ─────────────────── -->
         <details>
           <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache<span id="ca-totals-badge" style="font-weight:400;font-size:0.72rem;color:var(--muted);margin-left:0.6rem"></span></summary>

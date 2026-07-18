@@ -2196,6 +2196,56 @@ async function loadCacheRate(_elRetry = 0) {
 }
 window.loadCacheRate = loadCacheRate;
 
+// ── Prune redundant releases ──────────────────────────────────────────
+async function loadRedundantPreview(btn) {
+  const out = document.getElementById("rr-preview");
+  if (out) out.textContent = "Checking…";
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/redundant-releases/preview");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (out) {
+      out.innerHTML =
+        `<strong>${j.warmOnly.toLocaleString()}</strong> never-viewed · ` +
+        `<strong>${j.total.toLocaleString()}</strong> total redundant ` +
+        `<span style="color:var(--muted)">(of ${j.releaseRows.toLocaleString()} releases / ${j.masterRows.toLocaleString()} masters cached)</span>`;
+    }
+  } catch (e) {
+    if (out) out.textContent = `Error: ${e.message || e}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.loadRedundantPreview = loadRedundantPreview;
+
+async function pruneRedundant(btn) {
+  const mode = document.getElementById("rr-mode")?.value === "all" ? "all" : "warm_only";
+  const label = mode === "all" ? "ALL redundant pressings" : "never-viewed redundant pressings";
+  if (!confirm(`Delete ${label}? This removes cached pressings whose master is already cached. Protected items (libraries, playlists, queues, overrides) are always kept. This can't be undone (the data re-fetches from Discogs on demand).`)) return;
+  const out = document.getElementById("rr-result");
+  if (out) out.textContent = "Pruning…";
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/redundant-releases/prune", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (out) out.innerHTML = `<span style="color:var(--success)">Removed ${Number(j.deleted).toLocaleString()} pressings.</span>`;
+    if (typeof showToast === "function") showToast(`Pruned ${Number(j.deleted).toLocaleString()} redundant releases`, "info");
+    // Refresh the preview so the counts reflect the deletion.
+    loadRedundantPreview();
+  } catch (e) {
+    if (out) out.textContent = `Error: ${e.message || e}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.pruneRedundant = pruneRedundant;
+
 async function loadCacheProjection() {
   const el = document.getElementById("cache-projection-content");
   if (!el) return;
