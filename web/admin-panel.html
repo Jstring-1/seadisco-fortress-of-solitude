@@ -250,26 +250,16 @@
                 <input id="rcx-has-yt" type="checkbox"> Only rows with YouTube videos
               </label>
               <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
-                <label style="font-size:0.78rem;color:var(--muted);display:inline-flex;gap:0.3rem;align-items:center"
-                       title="V2 reads from the projected split schema (discogs_cache_masters_plus + pressings + release_labels/artists/tags). Fastest, but only complete once the projection backfill has drained + reprojection filled the promoted columns. Auto picks V2 when the global split-cache readers flag is on.">Source
-                  <select id="rcx-reader" style="padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-                    <option value="">(auto)</option>
-                    <option value="v2">Split cache (V2)</option>
-                    <option value="v1">release_cache (V1)</option>
-                  </select>
-                </label>
                 <button class="admin-btn" type="button" onclick="rcxPreview()">Preview row count</button>
                 <select id="rcx-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                   <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option>
                 </select>
                 <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
-                <button class="admin-btn" type="button" onclick="rcxDumpSplit()"
-                        title="Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file, one row per line, with a __table field. Ignores the filters — this is a full split-cache dump.">📦 Dump split cache (V2)</button>
                 <button class="admin-btn" type="button" onclick="rcxDumpV1()"
-                        title="Stream every row of the old single-table release_cache (V1) as NDJSON — straight SELECT *, all columns. Ignores the filters.">📦 Dump release_cache (V1)</button>
+                        title="Stream every row of release_cache as NDJSON — straight SELECT *, all columns. Ignores the filters.">📦 Dump release_cache</button>
                 <button class="admin-btn" type="button" onclick="rcxDumpAll()"
                         title="Stream EVERY base table in the database as one NDJSON file, each row tagged with __table. The true whole-DB export. Large — this is everything.">🗄 Dump whole DB</button>
-                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every row matching these filters — from release_cache AND the split schema tables when Source=V2. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
+                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every row of release_cache matching these filters. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
                 <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>
             </div>

@@ -271,12 +271,7 @@ async function loadAdminWorkerStatus() {
       const cur = j.currentLabel?.labelName ? ` · ${j.currentLabel.labelName}` : '';
       badges.push({ label: `Bulk sweep${pos}${cur}`, tab: 'labels' });
     }
-    if (w.projection?.running) {
-      const j = w.projection;
-      const total = j.total ?? j.stats?.releaseCacheProjectable;
-      const pos = total ? ` (${j.processed}/${total})` : ` (${j.processed})`;
-      badges.push({ label: `Split-cache projection${pos}`, tab: 'cache' });
-    }
+    // (Split-cache projection retired — no badge.)
     if (w.catno?.running && !bulkRunning) {
       // Suppress this badge while the bulk sweep is running — that
       // badge already shows the current label name. Standalone catno
@@ -2268,18 +2263,10 @@ async function loadCacheProjection() {
 // masters_plus + pressings tables — apples-to-apples so a gap means
 // the projection backfill hasn't fully drained.
 function _renderCaTotalsBadge() {
+  // Split cache retired — the V1-vs-V2 gap badge is gone. release_cache
+  // totals live in the "Cache write rate" card now.
   const badge = document.getElementById("ca-totals-badge");
-  if (!badge) return;
-  const st = _cacheProjectionStatus && _cacheProjectionStatus.stats;
-  if (!st) { badge.textContent = ""; return; }
-  const v1 = Number(st.releaseCacheProjectable ?? 0);
-  const v2 = Number(st.mastersPlusRows ?? 0) + Number(st.pressingsRows ?? 0);
-  const gap = v1 - v2;
-  const gapTxt = gap === 0 ? "" : ` · Δ${gap > 0 ? "+" : ""}${gap.toLocaleString()}`;
-  badge.innerHTML =
-    `<span title="release_cache rows, release+master only (V1)">V1 ${v1.toLocaleString()}</span>` +
-    ` · <span title="discogs_cache_masters_plus + discogs_cache_pressings (V2)">V2 ${v2.toLocaleString()}</span>` +
-    (gap !== 0 ? `<span title="V1 minus V2 — nonzero means the split projection is behind" style="color:#e8a">${gapTxt}</span>` : "");
+  if (badge) badge.textContent = "";
 }
 function _renderCacheProjection() {
   const el = document.getElementById("cache-projection-content");
@@ -2388,11 +2375,6 @@ async function _cacheProjectionForceClear() {
 let _cacheAnalyticsFilters = { label:"", artist:"", genre:"", style:"", country:"", yearFrom:"", yearTo:"", type:"" };
 let _cacheAnalyticsResult = null;
 let _cacheAnalyticsLoading = false;
-// Default to V1 (release_cache) — it's the complete dual-write source
-// of truth, so broad genre/style searches always resolve even when the
-// split projection (release_tags etc.) is behind. Selector still offers
-// Auto / V2 for comparison against what the live site reads.
-let _cacheAnalyticsReader = "v1";  // "" = auto (follows split-cache flag), "v1", "v2"
 
 function loadCacheAnalytics() {
   // Just render the form on first tab open — running the query is
@@ -2488,22 +2470,12 @@ function _renderCacheAnalytics() {
           <option value=""${f.type === "" ? " selected" : ""}>Both</option>
           <option value="release"${f.type === "release" ? " selected" : ""}>Release</option>
           <option value="master"${f.type === "master" ? " selected" : ""}>Master</option>
-          <option value="masters_plus"${f.type === "masters_plus" ? " selected" : ""}>Masters+ (masters + orphans)</option>
         </select>
       </label>
     </div>
     <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center;flex-wrap:wrap">
       <button class="admin-btn" type="button" onclick="_caRun()" ${_cacheAnalyticsLoading ? "disabled" : ""}>▶ Analyze</button>
       <button class="admin-btn" type="button" onclick="_caReset()">Reset</button>
-      <label style="font-size:0.75rem;color:var(--muted);display:inline-flex;gap:0.3rem;align-items:center"
-             title="Which cache to read. Auto follows the split-cache readers flag. If Auto returns nothing, try V1 (release_cache) — empty V2 results mean the split projection hasn't populated those tables.">Source
-        <select id="ca-reader" onchange="_caReaderChange(event)"
-                style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-          <option value=""${_cacheAnalyticsReader === "" ? " selected" : ""}>Auto</option>
-          <option value="v1"${_cacheAnalyticsReader === "v1" ? " selected" : ""}>release_cache (V1)</option>
-          <option value="v2"${_cacheAnalyticsReader === "v2" ? " selected" : ""}>Split cache (V2)</option>
-        </select>
-      </label>
     </div>
     ${resultsHtml}
   `;
@@ -2529,11 +2501,6 @@ function _caReset() {
   _cacheAnalyticsResult = null;
   _renderCacheAnalytics();
 }
-function _caReaderChange(ev) {
-  const v = ev.target.value;
-  _cacheAnalyticsReader = (v === "v1" || v === "v2") ? v : "";
-}
-window._caReaderChange = _caReaderChange;
 async function _caRun() {
   _cacheAnalyticsLoading = true;
   _renderCacheAnalytics();
@@ -2541,8 +2508,7 @@ async function _caRun() {
     const body = { ...(_cacheAnalyticsFilters) };
     // Blank strings should not be sent as filter values.
     for (const k of Object.keys(body)) if (body[k] === "") delete body[k];
-    const qs = _cacheAnalyticsReader ? `?reader=${_cacheAnalyticsReader}` : "";
-    const r = await apiFetch(`/api/admin/cache-analytics${qs}`, {
+    const r = await apiFetch(`/api/admin/cache-analytics`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -2879,25 +2845,13 @@ function _rcxBuildParams() {
   add("sort",  document.getElementById("rcx-sort")?.value);
   add("order", document.getElementById("rcx-order")?.value);
   add("limit", document.getElementById("rcx-limit")?.value);
-  // ?reader= override for the export panel — empty means "let the
-  // server decide based on the global split-cache readers flag".
-  add("reader", document.getElementById("rcx-reader")?.value);
   return q;
 }
 
-async function rcxDumpSplit() {
-  if (!confirm("Stream every row across all 5 split-cache tables (masters_plus + pressings + release_labels + release_artists + release_tags) as one NDJSON file?\n\nFilters are ignored. Uncompressed — file size scales with your cache; expect gigabytes at millions of rows.")) return;
-  const link = document.createElement("a");
-  link.href = "/api/admin/release-cache/dump-split";
-  link.download = "";
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => link.remove(), 0);
-}
-window.rcxDumpSplit = rcxDumpSplit;
-
+// Dump the entire release_cache as NDJSON (straight SELECT *). The old
+// split-cache dump was removed with the V2 retirement.
 async function rcxDumpV1() {
-  if (!confirm("Stream every row of the old single-table release_cache (V1) as NDJSON — straight SELECT *, all columns?\n\nFilters are ignored. Uncompressed — expect gigabytes at millions of rows.")) return;
+  if (!confirm("Stream every row of release_cache as NDJSON — straight SELECT *, all columns?\n\nFilters are ignored. Uncompressed — expect gigabytes at millions of rows.")) return;
   const link = document.createElement("a");
   link.href = "/api/admin/release-cache/dump-v1";
   link.download = "";
