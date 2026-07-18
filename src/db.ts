@@ -506,6 +506,22 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS youtube_search_cache_age_idx ON youtube_search_cache (cached_at)`);
 
+  // ── Discogs search cache ────────────────────────────────────────────
+  // /search was a straight pass-through: every repeat query, every
+  // page-back, every "load more" re-fetch paid the full ~1s rate-gate
+  // wait plus upstream latency. Catalogue data barely moves, so a short
+  // TTL buys a lot. Keyed on the full normalised param set, NOT per
+  // user — the response depends only on the query, and sharing it
+  // across users is the whole point.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS discogs_search_cache (
+      cache_key  TEXT PRIMARY KEY,
+      body       JSONB NOT NULL,
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS discogs_search_cache_age_idx ON discogs_search_cache (cached_at)`);
+
   // ── archive.org search cache ─────────────────────────────────────────
   // Long-TTL cache for archive.org's advancedsearch responses. Each
   // (q, page, rows) tuple gets its own row; once cached, repeat queries
@@ -9688,6 +9704,46 @@ export async function setYoutubeSearchCache(cacheKey: string, body: any): Promis
       [cacheKey, JSON.stringify(body)]
     );
   } catch { /* cache is best-effort */ }
+}
+
+// ── Discogs search cache (DB-backed) ────────────────────────────────
+// Same shape as the YouTube cache above. Shared across users on
+// purpose: a /search response is a pure function of its params, so
+// there's nothing user-specific to leak, and one person's search
+// warms it for everyone.
+
+export async function getDiscogsSearchCache(cacheKey: string, maxAgeSeconds: number): Promise<any | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT body, cached_at FROM discogs_search_cache WHERE cache_key = $1 LIMIT 1`,
+      [cacheKey]
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    const ageMs = Date.now() - new Date(row.cached_at).getTime();
+    if (ageMs > maxAgeSeconds * 1000) return null;
+    return row.body ?? null;
+  } catch { return null; }
+}
+
+export async function setDiscogsSearchCache(cacheKey: string, body: any): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO discogs_search_cache (cache_key, body, cached_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (cache_key) DO UPDATE SET body = EXCLUDED.body, cached_at = NOW()`,
+      [cacheKey, JSON.stringify(body)]
+    );
+  } catch { /* cache is best-effort */ }
+}
+
+export async function pruneDiscogsSearchCache(): Promise<number> {
+  try {
+    const r = await getPool().query(
+      `DELETE FROM discogs_search_cache WHERE cached_at < NOW() - INTERVAL '3 days'`
+    );
+    return r.rowCount ?? 0;
+  } catch { return 0; }
 }
 
 // Periodic prune of stale rows so the table stays bounded. Anything

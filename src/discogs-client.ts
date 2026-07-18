@@ -27,11 +27,26 @@ const BASE_URL = "https://api.discogs.com";
 // DISCOGS_MIN_INTERVAL_MS.
 const DISCOGS_MIN_INTERVAL_MS = Math.max(0, Number(process.env.DISCOGS_MIN_INTERVAL_MS) || 1050);
 
+// After a realtime (user-facing) dispatch, hold sweep-tier calls off the
+// lane entirely for this long. Priority ordering alone was NOT enough:
+// it decides who wins the next slot, but pacing is measured from the
+// last dispatch regardless of tier, so a sweep that grabbed the slot
+// 50ms before a search arrived still pushed that search out a full
+// interval. A multi-call search (masters+ fires two) paid that twice.
+// Holding sweeps briefly gives an interactive search the whole lane.
+const DISCOGS_SWEEP_PAUSE_MS = Math.max(0, Number(process.env.DISCOGS_SWEEP_PAUSE_MS) || 3000);
+// How often the pump re-checks while only paused sweeps are queued.
+// Short so an arriving realtime call is picked up promptly; the pause
+// window is seconds, so this tops out at ~100 no-op ticks.
+const _SWEEP_POLL_MS = 25;
+
 export type DiscogsPriority = "realtime" | "scheduled" | "sweep";
 const _PRIORITY_ORDER: DiscogsPriority[] = ["realtime", "scheduled", "sweep"];
 
 interface GateLane {
   lastDispatch: number;
+  // Timestamp of the last realtime dispatch — drives the sweep hold-off.
+  lastRealtime: number;
   queues: Record<DiscogsPriority, Array<() => void>>;
   pumping: boolean;
 }
@@ -40,16 +55,28 @@ const _gateLanes = new Map<string, GateLane>();
 function _laneFor(keyId: string): GateLane {
   let lane = _gateLanes.get(keyId);
   if (!lane) {
-    lane = { lastDispatch: 0, queues: { realtime: [], scheduled: [], sweep: [] }, pumping: false };
+    lane = { lastDispatch: 0, lastRealtime: 0, queues: { realtime: [], scheduled: [], sweep: [] }, pumping: false };
     _gateLanes.set(keyId, lane);
   }
   return lane;
 }
 
-function _nextWaiter(lane: GateLane): (() => void) | undefined {
+// Is the sweep tier currently held off because a user-facing call went
+// out recently?
+function _sweepsPaused(lane: GateLane): boolean {
+  return DISCOGS_SWEEP_PAUSE_MS > 0
+    && lane.lastRealtime > 0
+    && (Date.now() - lane.lastRealtime) < DISCOGS_SWEEP_PAUSE_MS;
+}
+
+// Highest-priority waiter that is allowed to dispatch right now.
+// Returns undefined when the only waiters are paused sweeps.
+function _nextWaiter(lane: GateLane): { resolve: () => void; priority: DiscogsPriority } | undefined {
+  const paused = _sweepsPaused(lane);
   for (const p of _PRIORITY_ORDER) {
+    if (p === "sweep" && paused) continue;
     const q = lane.queues[p];
-    if (q.length) return q.shift();
+    if (q.length) return { resolve: q.shift()!, priority: p };
   }
   return undefined;
 }
@@ -63,17 +90,37 @@ function _pump(lane: GateLane): void {
   lane.pumping = true;
   const tick = () => {
     if (!_hasWaiter(lane)) { lane.pumping = false; return; }
-    const wait = Math.max(0, lane.lastDispatch + DISCOGS_MIN_INTERVAL_MS - Date.now());
+    const now = Date.now();
+    const paceWait = Math.max(0, lane.lastDispatch + DISCOGS_MIN_INTERVAL_MS - now);
+    let wait = paceWait;
+    // If every waiter is a paused sweep, POLL rather than sleeping out
+    // the whole hold-off. Sleeping the full window looks right but
+    // starves the very traffic the pause exists to protect: a realtime
+    // call arriving 1ms later finds `pumping` already true, can't
+    // reschedule the pending timer, and inherits its remaining delay.
+    // That made a 2-call search take a full pause window between calls.
+    if (!_nextWaiterEligible(lane)) {
+      wait = Math.max(paceWait, _SWEEP_POLL_MS);
+    }
     setTimeout(() => {
       // Re-pick the highest-priority waiter AT dispatch time — a realtime
       // call that arrived during the wait jumps ahead of a queued sweep.
-      const resolve = _nextWaiter(lane);
-      lane.lastDispatch = Date.now();
-      if (resolve) resolve();
+      const picked = _nextWaiter(lane);
+      if (picked) {
+        lane.lastDispatch = Date.now();
+        if (picked.priority === "realtime") lane.lastRealtime = lane.lastDispatch;
+        picked.resolve();
+      }
       tick();
     }, wait);
   };
   tick();
+}
+
+// Peek: would _nextWaiter return something right now?
+function _nextWaiterEligible(lane: GateLane): boolean {
+  const paused = _sweepsPaused(lane);
+  return _PRIORITY_ORDER.some(p => (p !== "sweep" || !paused) && lane.queues[p].length > 0);
 }
 
 // Acquire a rate slot on `keyId`'s lane at the given priority. Resolves

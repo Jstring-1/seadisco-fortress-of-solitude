@@ -1,3 +1,9 @@
+// Results requested per Discogs page. 100 is Discogs's hard ceiling and
+// costs exactly the same as any smaller page — it's one API call either
+// way — so anything below it is throwing away free results and forcing
+// an extra rate-gated round trip to see them.
+const _SD_PAGE_SIZE = 100;
+
 // ── Masters+ merged sort ──────────────────────────────────────────────────
 function _catnoNum(item) {
   // Extract trailing number from catno for secondary sort (e.g. "TOM-2-1305" → 1305)
@@ -373,10 +379,10 @@ async function doSearch(page = 1, skipPushState = false) {
     // releases-only — there's no master sub-call to make. Collapses
     // the master+ result type to release-only for that route.
     if (useLabelById) {
-      searchPromise = apiFetch(`${API}/label-releases?${buildLabelByIdParams(48)}`);
+      searchPromise = apiFetch(`${API}/label-releases?${buildLabelByIdParams(_SD_PAGE_SIZE)}`);
     } else if (isMasterPlus) {
-      const masterParams  = useArtistById ? buildArtistByIdParams(48, "master")  : (() => { const p = buildParams(48); p.set("type", "master");  return p; })();
-      const releaseParams = useArtistById ? buildArtistByIdParams(48, "release") : (() => { const p = buildParams(48); p.set("type", "release"); return p; })();
+      const masterParams  = useArtistById ? buildArtistByIdParams(_SD_PAGE_SIZE, "master")  : (() => { const p = buildParams(_SD_PAGE_SIZE); p.set("type", "master");  return p; })();
+      const releaseParams = useArtistById ? buildArtistByIdParams(_SD_PAGE_SIZE, "release") : (() => { const p = buildParams(_SD_PAGE_SIZE); p.set("type", "release"); return p; })();
       const endpoint = useArtistById ? "artist-releases" : "search";
       searchPromise = Promise.all([
         apiFetch(`${API}/${endpoint}?${masterParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
@@ -403,10 +409,15 @@ async function doSearch(page = 1, skipPushState = false) {
         // Any release with a master_id has a master somewhere in Discogs,
         // so the master search already covers it.
         const orphans = releases.filter(r => !r.master_id);
-        const seen = new Set(masters.map(m => m.id));
+        // Key on type:id, NOT bare id — master and release ids are
+        // separate Discogs namespaces, so a bare-id set silently drops
+        // an orphan release whose id collides with a master id on this
+        // page. Matches the load-more dedup below.
+        const seen = new Set(masters.map(m => `${m.type}:${m.id}`));
         const uniqueOrphans = orphans.filter(r => {
-          if (seen.has(r.id)) return false;
-          seen.add(r.id);
+          const k = `${r.type}:${r.id}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
           return true;
         });
         let merged = [...masters, ...uniqueOrphans];
@@ -434,9 +445,9 @@ async function doSearch(page = 1, skipPushState = false) {
       // /artist-releases route, just one call. type=all returns both
       // masters and releases mixed.
       const typeForId = (resultType === "master" || resultType === "release") ? resultType : "all";
-      searchPromise = apiFetch(`${API}/artist-releases?${buildArtistByIdParams(48, typeForId === "all" ? "" : typeForId)}`);
+      searchPromise = apiFetch(`${API}/artist-releases?${buildArtistByIdParams(_SD_PAGE_SIZE, typeForId === "all" ? "" : typeForId)}`);
     } else {
-      searchPromise = apiFetch(`${API}/search?${buildParams(48)}`);
+      searchPromise = apiFetch(`${API}/search?${buildParams(_SD_PAGE_SIZE)}`);
     }
 
     const [res, bioRes] = await Promise.all([
@@ -554,7 +565,7 @@ async function doSearch(page = 1, skipPushState = false) {
         try {
           if (isMasterPlus) {
             // Masters+ constrained: parallel master+release with artist constraint
-            const base = { q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist };
+            const base = { q: q || constrainedArtist, page, per_page: _SD_PAGE_SIZE, artist: constrainedArtist };
             const mp = new URLSearchParams(base); mp.set("type", "master");
             const rp = new URLSearchParams(base); rp.set("type", "release");
             [mp, rp].forEach(p => {
@@ -572,8 +583,10 @@ async function doSearch(page = 1, skipPushState = false) {
               const masters = mD.results ?? [];
               const releases = rD.results ?? [];
               const orphans = releases.filter(r => !r.master_id);
-              const seen = new Set(masters.map(m => m.id));
-              const uniqueOrphans = orphans.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+              // type:id — see the merge above; master and release ids
+              // live in different namespaces and can collide.
+              const seen = new Set(masters.map(m => `${m.type}:${m.id}`));
+              const uniqueOrphans = orphans.filter(r => { const k = `${r.type}:${r.id}`; if (seen.has(k)) return false; seen.add(k); return true; });
               let merged = [...masters, ...uniqueOrphans];
               if (sort) _sortMerged(merged, sort);
               if (merged.length > 0) {
@@ -583,7 +596,7 @@ async function doSearch(page = 1, skipPushState = false) {
               }
             }
           } else {
-            const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist });
+            const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: _SD_PAGE_SIZE, artist: constrainedArtist });
             if (resultType) cp.set("type", resultType);
             if (release)    cp.set("release_title", release);
             if (year)       cp.set("year", year);
@@ -707,7 +720,21 @@ async function doSearch(page = 1, skipPushState = false) {
       const existingKeys = new Set(window._lastResults.map(it => `${it.type}:${it.id}`));
       items = items.filter(it => !existingKeys.has(`${it.type}:${it.id}`));
     }
-    const shown = _appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
+    // Masters+ "load more" with an explicit sort: Discogs returns the
+    // master stream and the release stream each globally sorted, but we
+    // merge them a page at a time, so _sortMerged only ever ordered
+    // WITHIN a page. Appending page 2 after page 1 therefore restarted
+    // the sequence — sort by oldest and page 2's first row could easily
+    // predate page 1's last. Re-sort the ACCUMULATED set and re-render
+    // in place so the on-screen order stays monotonic.
+    let _resortAll = null;
+    if (_appendMode && isMasterPlus && sort && window._lastResults?.length) {
+      _resortAll = window._lastResults.concat(items); // items already deduped above
+      _sortMerged(_resortAll, sort);
+    }
+    const shown = _resortAll
+      ? _resortAll.length
+      : (_appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length);
     const returnedMsg = barcode
       ? `Barcode ${barcode} :: ${totalItems_new.toLocaleString()} results — showing ${shown}`
       : `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
@@ -715,7 +742,13 @@ async function doSearch(page = 1, skipPushState = false) {
     retEl.textContent = returnedMsg;
     retEl.title = returnedMsg;
     document.getElementById("search-info-block").style.display = "";
-    renderResults(items, _appendMode);
+    if (_resortAll) {
+      // Full replace: renderResults(append=false) resets _lastResults to
+      // the freshly-sorted union and re-indexes the cards from zero.
+      renderResults(_resortAll, false);
+    } else {
+      renderResults(items, _appendMode);
+    }
     renderPagination();
 
     if (typeof gtag === "function") {
