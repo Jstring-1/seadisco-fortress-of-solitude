@@ -3215,6 +3215,7 @@ async function loadYtReview() {
         ${ytrTile("Skipped",  c.skipped,  "var(--muted)", "skipped")}
         ${ytrTile("Searched", st.total_searched || 0, "var(--text)")}
         ${ytrTile("Queued",   st.total_queued   || 0, "var(--text)")}
+        ${ytrTile("Auto-pinned", st.total_auto_approved || 0, (st.total_auto_approved ? "#7ed196" : "var(--muted)"))}
         <div style="cursor:pointer" onclick="ytrShowErrors()" title="Click to view recent worker errors.">
           ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
         </div>
@@ -3228,6 +3229,15 @@ async function loadYtReview() {
       dailyNext.textContent = s.dailyEnabled && s.nextDailyRun
         ? `next auto-run ${new Date(s.nextDailyRun).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
         : (s.dailyEnabled ? "" : "auto-run off");
+    }
+    // Reflect the auto-approve gate (static markup, survives polls).
+    const autoToggle = document.getElementById("ytr-auto-toggle");
+    if (autoToggle) autoToggle.checked = !!s.autoApprove;
+    const autoNote = document.getElementById("ytr-auto-note");
+    if (autoNote) {
+      autoNote.textContent = s.autoApprove
+        ? `Topic + artist + title + duration ±${s.autoToleranceS ?? 5}s`
+        : "all candidates queued for review";
     }
     // Poll while running so the cursor + counters stay live.
     if (_ytrPollTimer) { clearTimeout(_ytrPollTimer); _ytrPollTimer = null; }
@@ -3267,6 +3277,18 @@ async function ytrToggleDaily(enabled) {
   loadYtReview();
 }
 window.ytrToggleDaily = ytrToggleDaily;
+// Toggle auto-approve of exact Topic-channel matches.
+async function ytrToggleAuto(enabled) {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/auto", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: !!enabled }),
+    });
+    if (!r.ok) { alert(`Failed to update auto-approve: HTTP ${r.status}`); }
+  } catch (e) { alert(`Failed to update auto-approve: ${e?.message || e}`); }
+  loadYtReview();
+}
+window.ytrToggleAuto = ytrToggleAuto;
 async function ytrStart() {
   try {
     const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
@@ -3345,8 +3367,8 @@ function ytrRowHtml(r) {
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
     <div style="min-width:0">
       <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
-      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(r.candidate_title || "")}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")} <span style="color:#555">·</span> match ${score}</div>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}</div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(r.candidate_title || "")}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${r.auto_reason ? ` <span style="color:#555">·</span> <span title="Why the auto-approve gate did or didn't take this candidate.">${esc(r.auto_reason)}</span>` : ""}</div>
     </div>
     ${showActions
       ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
@@ -3366,6 +3388,20 @@ function ytrRowHtml(r) {
           </div>`
         : `<div style="color:var(--muted);font-size:0.74rem">${esc(r.status || "")}</div>`}
   </div>`;
+}
+// "3:12 vs 3:14" — Discogs track time against the YouTube duration,
+// green when they agree closely enough to have cleared the auto gate.
+function ytrDurationHtml(r) {
+  const fmt = (n) => {
+    const s = Number(n);
+    if (!Number.isFinite(s) || s <= 0) return null;
+    return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+  };
+  const want = fmt(r.track_duration_seconds);
+  const got = fmt(r.candidate_duration_seconds);
+  if (!want && !got) return "";
+  const color = r.duration_ok === true ? "#7ed196" : r.duration_ok === false ? "#e88" : "var(--muted)";
+  return ` <span style="color:#555">·</span> <span style="color:${color}" title="Discogs track time vs YouTube duration.">${want || "—"} / ${got || "—"}</span>`;
 }
 function ytrRenderPager(total) {
   const el = document.getElementById("ytr-pager");

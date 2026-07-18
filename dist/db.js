@@ -389,6 +389,13 @@ export async function initDb() {
     await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_status_idx ON track_yt_review_queue (status, created_at)`);
     await getPool().query(`CREATE INDEX IF NOT EXISTS track_yt_review_queue_master_idx ON track_yt_review_queue (master_id, track_position)`);
     await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS track_yt_review_queue_uniq_idx ON track_yt_review_queue (master_id, track_position, candidate_video_id)`);
+    // v2 auto-approve: a candidate on an "Artist - Topic" channel whose
+    // artist, title AND duration all match exactly is pinned without
+    // human review. auto_reason records WHY a row was (or wasn't) taken
+    // automatically so the decision is auditable after the fact.
+    await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS is_topic_channel BOOLEAN`);
+    await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS auto_reason TEXT`);
+    await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS track_duration_seconds INTEGER`);
     // Single-row state for the YT-review worker. id is pinned to 1 so
     // upserts and reads stay trivial.
     await getPool().query(`
@@ -411,6 +418,7 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_date TEXT`);
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_worker_searches INT NOT NULL DEFAULT 0`);
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_project_units INT NOT NULL DEFAULT 0`);
+    await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS total_auto_approved INT NOT NULL DEFAULT 0`);
     // Per (master, track) search log so the worker can skip what it
     // already tried, and the admin can later trigger "retry tracks
     // that got 0 candidates" without re-walking every other track.
@@ -5657,12 +5665,15 @@ export async function cascadeTrackYtVideoSwap(args) {
 }
 // ── YT review queue helpers (v1: human-reviewed background matcher) ──
 export async function insertReviewCandidate(args) {
+    const status = args.status === "approved" ? "approved" : "pending";
     const r = await getPool().query(`INSERT INTO track_yt_review_queue
        (master_id, track_position, track_title, track_artist, master_year, master_cover_url,
         candidate_video_id, candidate_title, candidate_channel_title, candidate_channel_id,
         candidate_duration_seconds, candidate_thumbnail_url, candidate_published_at,
-        title_score, duration_ok)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        title_score, duration_ok, track_duration_seconds, is_topic_channel, auto_reason,
+        status, reviewed_at, reviewed_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+             $19, CASE WHEN $19 = 'pending' THEN NULL ELSE NOW() END, $20)
      ON CONFLICT (master_id, track_position, candidate_video_id) DO NOTHING
      RETURNING id`, [
         Number(args.masterId), args.trackPosition, args.trackTitle, args.trackArtist ?? null,
@@ -5672,8 +5683,21 @@ export async function insertReviewCandidate(args) {
         args.candidateThumbnailUrl ?? null,
         args.candidatePublishedAt ?? null,
         args.titleScore ?? null, args.durationOk ?? null,
+        args.trackDurationSeconds ?? null, args.isTopicChannel ?? null, args.autoReason ?? null,
+        status, status === "pending" ? null : (args.reviewedBy ?? "auto"),
     ]);
     return (r.rowCount ?? 0) > 0;
+}
+// Collapse every OTHER candidate for a (master, track) to 'superseded'
+// once one has been auto-approved, mirroring what reviewQueueDecide
+// does on a manual approve so the queue keeps one resolved row per
+// track and the admin isn't asked to review a decided track.
+export async function supersedeOtherCandidates(masterId, trackPosition, keepVideoId) {
+    const r = await getPool().query(`UPDATE track_yt_review_queue
+        SET status = 'superseded', reviewed_at = NOW(), reviewed_by = 'auto'
+      WHERE master_id = $1 AND track_position = $2
+        AND candidate_video_id <> $3 AND status = 'pending'`, [Number(masterId), trackPosition, keepVideoId]);
+    return r.rowCount ?? 0;
 }
 // Mark a (master, track) pair as searched (regardless of outcome) so
 // the next worker pass skips it. candidate_count tracks how many
@@ -5789,6 +5813,7 @@ export async function updateReviewState(patch) {
     const allowed = new Set([
         "running", "cursor_year", "cursor_master_id", "cursor_track_pos",
         "total_searched", "total_queued", "total_skipped", "total_errors",
+        "total_auto_approved",
         "last_run_at", "last_error", "message",
     ]);
     const cols = [];

@@ -329,7 +329,7 @@
           <h2 style="margin:0">YT Review worker</h2>
           <button class="admin-refresh-btn" id="ytr-refresh-btn" onclick="_adminClickRefresh(this, loadYtReview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="ytr-refresh-status" class="admin-refresh-status"></span>
-          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">v1 — every candidate is human-reviewed; nothing auto-pinned.</span>
+          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Exact matches can auto-pin; everything else is human-reviewed.</span>
         </div>
         <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.6rem">
@@ -337,6 +337,10 @@
             <input type="checkbox" id="ytr-daily-toggle" onchange="ytrToggleDaily(this.checked)"> Run automatically once a day
           </label>
           <span id="ytr-daily-next" style="font-size:0.72rem;color:var(--muted)"></span>
+          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);cursor:pointer" title="Auto-pin a candidate only when ALL of these hold: it's on an official &quot;Artist - Topic&quot; channel whose name matches the track artist exactly; the video title equals the track title once decorations are stripped; there's no live/alternate-take/remix marker; the video is embeddable and not US-blocked; and the YouTube duration is within a few seconds of the Discogs track time. Anything short of that still goes to the pending queue.">
+            <input type="checkbox" id="ytr-auto-toggle" onchange="ytrToggleAuto(this.checked)"> Auto-approve exact Topic matches
+          </label>
+          <span id="ytr-auto-note" style="font-size:0.72rem;color:var(--muted)"></span>
           <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" oninput="ytrFilterInput(this.value)" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
         </div>
         <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>

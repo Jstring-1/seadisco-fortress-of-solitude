@@ -10,7 +10,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader, type DiscogsPriority } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
 } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
@@ -11566,6 +11566,155 @@ function _ytReviewScoreTitle(candTitle: string, artist: string, track: string): 
   return 1.0;
 }
 
+// ── Auto-approve gate ─────────────────────────────────────────────
+// YouTube auto-generates "<Artist> - Topic" channels from audio the
+// labels/distributors deliver (Art Tracks). A hit on one of those is
+// the strongest signal available that we're looking at the real
+// commercial recording rather than a fan upload, a lyric video or a
+// reaction. It is NOT proof we have the right *recording* though —
+// the same artist+title exists across dozens of blues reissue comps,
+// and Topic serves whichever master the distributor delivered, so an
+// alternate take / live cut / re-record can match on name alone.
+//
+// So auto-approve demands all four of:
+//   1. Topic channel, whose name (minus " - Topic") IS the artist
+//   2. video title == track title once decorations are stripped
+//   3. no disqualifying decoration (live / alternate take / remix …)
+//   4. Discogs duration and YouTube duration within tolerance
+// plus embeddable + not region-blocked, since a match that won't play
+// on the site is worse than no match at all. Anything short of that
+// falls through to the human queue exactly as before.
+const _YT_AUTO_DURATION_TOLERANCE_S = 5;
+
+function _ytIsTopicChannel(channelTitle: string): boolean {
+  return /\s-\s*topic\s*$/i.test(String(channelTitle || ""));
+}
+function _ytTopicChannelArtist(channelTitle: string): string {
+  return String(channelTitle || "").replace(/\s-\s*topic\s*$/i, "").trim();
+}
+
+// "PT3M12S" / "PT1H2M3S" → seconds. Returns null when unparseable.
+function _ytParseIsoDuration(iso: string): number | null {
+  const m = /^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(String(iso || ""));
+  if (!m) return null;
+  const [, d, h, mi, s] = m;
+  const total = (Number(d || 0) * 86400) + (Number(h || 0) * 3600) + (Number(mi || 0) * 60) + Number(s || 0);
+  return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+// Discogs tracklist durations are "3:12" or "1:03:12" (occasionally
+// blank — plenty of pre-war sides have no timing recorded at all).
+function _ytParseDiscogsDuration(dur: string): number | null {
+  const parts = String(dur || "").trim().split(":");
+  if (parts.length < 2 || parts.length > 3) return null;
+  if (!parts.every(p => /^\d+$/.test(p.trim()))) return null;
+  const nums = parts.map(p => Number(p.trim()));
+  const total = nums.length === 3
+    ? nums[0] * 3600 + nums[1] * 60 + nums[2]
+    : nums[0] * 60 + nums[1];
+  return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+// Decorations that mean "this is a DIFFERENT recording of the song".
+// "Remastered" / "mono" / "stereo" deliberately absent — those are the
+// same take, just a different transfer, which is fine to pin.
+const _YT_VERSION_MARKERS = /\b(live|alternate|alt\.?\s*take|take\s*\d|outtake|remix|rework|re-?recorded|re-?record|version|karaoke|instrumental|demo|rehearsal|acoustic|cover|tribute|edit|medley|interview|reprise)\b/i;
+
+// Strip a leading "Artist - " and any trailing (…) / […] decoration
+// off a YouTube title, returning { core, decorations }.
+function _ytSplitTitleDecorations(videoTitle: string, artist: string): { core: string; decorations: string } {
+  let t = String(videoTitle || "").trim();
+  const a = _ytNormTitleTS(artist);
+  // Topic titles are usually bare, but some carry "Artist - Title".
+  const dashIdx = t.search(/\s[-–—]\s/);
+  if (a && dashIdx > 0 && _ytNormTitleTS(t.slice(0, dashIdx)) === a) {
+    t = t.slice(dashIdx).replace(/^\s[-–—]\s/, "").trim();
+  }
+  const decorations: string[] = [];
+  t = t.replace(/[（(\[][^)\]）]*[)\]）]/g, (m) => { decorations.push(m); return " "; });
+  return { core: t.trim(), decorations: decorations.join(" ") };
+}
+
+type YtAutoVerdict = { auto: boolean; reason: string };
+function _ytAutoApproveVerdict(args: {
+  candidateTitle: string;
+  channelTitle: string;
+  trackArtist: string;
+  trackTitle: string;
+  trackDurationSeconds: number | null;
+  videoDurationSeconds: number | null;
+  embeddable: boolean | null;
+  regionBlocked: boolean;
+}): YtAutoVerdict {
+  const { candidateTitle, channelTitle, trackArtist, trackTitle } = args;
+  if (!_ytIsTopicChannel(channelTitle)) return { auto: false, reason: "not_topic_channel" };
+  const chanArtist = _ytNormTitleTS(_ytTopicChannelArtist(channelTitle));
+  const wantArtist = _ytNormTitleTS(trackArtist);
+  if (!wantArtist) return { auto: false, reason: "no_track_artist" };
+  // The Topic channel name IS the registered artist — far stronger
+  // than hunting for the artist inside the video title.
+  if (chanArtist !== wantArtist) return { auto: false, reason: `artist_mismatch: "${chanArtist}" vs "${wantArtist}"` };
+  const { core, decorations } = _ytSplitTitleDecorations(candidateTitle, trackArtist);
+  if (_ytNormTitleTS(core) !== _ytNormTitleTS(trackTitle)) return { auto: false, reason: "title_not_exact" };
+  const marker = _YT_VERSION_MARKERS.exec(`${decorations} ${candidateTitle}`);
+  if (marker) return { auto: false, reason: `version_marker: ${marker[0]}` };
+  if (args.embeddable === false) return { auto: false, reason: "not_embeddable" };
+  if (args.regionBlocked) return { auto: false, reason: "region_blocked" };
+  if (args.trackDurationSeconds == null) return { auto: false, reason: "no_discogs_duration" };
+  if (args.videoDurationSeconds == null) return { auto: false, reason: "no_video_duration" };
+  const delta = Math.abs(args.videoDurationSeconds - args.trackDurationSeconds);
+  if (delta > _YT_AUTO_DURATION_TOLERANCE_S) {
+    return { auto: false, reason: `duration_off_by_${delta}s` };
+  }
+  return { auto: true, reason: `topic+artist+title+duration(±${delta}s)` };
+}
+
+// videos.list is 1 quota unit for up to 50 ids — negligible next to
+// the 100-unit search that produced them. Returns a map keyed by video
+// id; ids missing from the response (deleted/private) are simply absent.
+type YtVideoDetail = { durationSeconds: number | null; embeddable: boolean | null; regionBlocked: boolean };
+async function _ytReviewFetchVideoDetails(ids: string[]): Promise<Map<string, YtVideoDetail>> {
+  const out = new Map<string, YtVideoDetail>();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!unique.length || !_youtubeApiKey) return out;
+  for (let i = 0; i < unique.length; i += 50) {
+    const batch = unique.slice(i, i + 50);
+    _ytQuotaMaybeReset();
+    if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) break;
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,status`
+      + `&id=${encodeURIComponent(batch.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.warn(`[yt-review] videos.list failed: HTTP ${resp.status}`);
+        continue;
+      }
+      const body: any = await resp.json();
+      _bumpYtQuotaPersisted(0, 1);
+      for (const it of (Array.isArray(body?.items) ? body.items : [])) {
+        const id = String(it?.id || "");
+        if (!id) continue;
+        const blocked = it?.contentDetails?.regionRestriction?.blocked;
+        out.set(id, {
+          durationSeconds: _ytParseIsoDuration(String(it?.contentDetails?.duration || "")),
+          embeddable: typeof it?.status?.embeddable === "boolean" ? it.status.embeddable : null,
+          // Treat a US block as "blocked" — that's where the bulk of
+          // traffic is and a blocked-list that big means trouble anyway.
+          regionBlocked: Array.isArray(blocked) && blocked.includes("US"),
+        });
+      }
+    } catch (e: any) {
+      console.warn("[yt-review] videos.list threw:", e?.message ?? e);
+    }
+  }
+  return out;
+}
+
+async function _ytReviewAutoApproveEnabled(): Promise<boolean> {
+  try { return (await getAppSetting("yt_review_auto_approve")) !== "0"; }
+  catch { return true; }
+}
+
 // Worker-side YouTube search. Uses the existing DB cache via
 // getYoutubeSearchCache / setYoutubeSearchCache so a query the regular
 // search already paid for is free. Returns the raw Google API body or
@@ -11661,7 +11810,7 @@ async function _runYtReviewWorker(): Promise<void> {
       // skip ones with an existing override OR a prior search log row
       // (v1.1 album-search runs only once per master per cursor pass).
       const masterTitle = String(data.title ?? "").trim();
-      const eligibleTracks: Array<{ position: string; title: string; artist: string }> = [];
+      const eligibleTracks: Array<{ position: string; title: string; artist: string; durationSeconds: number | null }> = [];
       for (const tr of tracklist) {
         const pos = String(tr?.position ?? "").trim();
         const tTitle = String(tr?.title ?? "").trim();
@@ -11671,7 +11820,10 @@ async function _runYtReviewWorker(): Promise<void> {
         const tArtist = Array.isArray(tr.artists) && tr.artists[0]?.name
           ? String(tr.artists[0].name)
           : masterArtist;
-        eligibleTracks.push({ position: pos, title: tTitle, artist: tArtist });
+        eligibleTracks.push({
+          position: pos, title: tTitle, artist: tArtist,
+          durationSeconds: _ytParseDiscogsDuration(String(tr?.duration ?? "")),
+        });
       }
       if (!eligibleTracks.length) {
         // Nothing left to consider on this master — advance cursor.
@@ -11742,24 +11894,87 @@ async function _runYtReviewWorker(): Promise<void> {
         arr.push({ videoId: vid, sn });
         matchesByTrack.set(m.position, arr);
       }
+      // Pull durations + embeddability for every matched candidate in
+      // one videos.list call (1 unit for up to 50 ids). Only Topic-
+      // channel hits can ever auto-approve, so when auto-approve is
+      // off we skip the call entirely and keep the old behaviour.
+      const autoEnabled = await _ytReviewAutoApproveEnabled();
+      const detailIds: string[] = [];
+      for (const hits of matchesByTrack.values()) {
+        for (const h of hits) {
+          if (!autoEnabled) continue;
+          if (_ytIsTopicChannel(String(h.sn.channelTitle || ""))) detailIds.push(h.videoId);
+        }
+      }
+      const details = detailIds.length
+        ? await _ytReviewFetchVideoDetails(detailIds)
+        : new Map<string, YtVideoDetail>();
+
       let queuedThisMaster = 0;
+      let autoThisMaster = 0;
       for (const tr of eligibleTracks) {
         const hits = matchesByTrack.get(tr.position) || [];
+        // One track can only be auto-pinned once; the first candidate
+        // that clears the gate wins and the rest are superseded.
+        let autoTakenForTrack = false;
         for (const h of hits) {
-          const titleScore = _ytReviewScoreTitle(String(h.sn.title || ""), tr.artist, tr.title);
+          const candTitle = String(h.sn.title || "");
+          const chanTitle = String(h.sn.channelTitle || "");
+          const titleScore = _ytReviewScoreTitle(candTitle, tr.artist, tr.title);
+          const det = details.get(h.videoId) || null;
+          const verdict = autoTakenForTrack
+            ? { auto: false, reason: "track_already_auto_approved" }
+            : _ytAutoApproveVerdict({
+                candidateTitle: candTitle,
+                channelTitle: chanTitle,
+                trackArtist: tr.artist,
+                trackTitle: tr.title,
+                trackDurationSeconds: tr.durationSeconds,
+                videoDurationSeconds: det?.durationSeconds ?? null,
+                embeddable: det?.embeddable ?? null,
+                regionBlocked: det?.regionBlocked ?? false,
+              });
+          const takeAuto = autoEnabled && verdict.auto;
+          const durationOk = (tr.durationSeconds != null && det?.durationSeconds != null)
+            ? Math.abs(det.durationSeconds - tr.durationSeconds) <= _YT_AUTO_DURATION_TOLERANCE_S
+            : null;
           const ins = await insertReviewCandidate({
             masterId, trackPosition: tr.position, trackTitle: tr.title, trackArtist: tr.artist,
             masterYear: year, masterCoverUrl: cover || null,
             candidateVideoId: h.videoId,
-            candidateTitle: String(h.sn.title || ""),
-            candidateChannelTitle: String(h.sn.channelTitle || ""),
+            candidateTitle: candTitle,
+            candidateChannelTitle: chanTitle,
             candidateChannelId: String(h.sn.channelId || ""),
+            candidateDurationSeconds: det?.durationSeconds ?? null,
             candidateThumbnailUrl: String(h.sn.thumbnails?.high?.url || h.sn.thumbnails?.default?.url || ""),
             candidatePublishedAt: h.sn.publishedAt || null,
             titleScore,
-            durationOk: null,
+            durationOk,
+            trackDurationSeconds: tr.durationSeconds,
+            isTopicChannel: _ytIsTopicChannel(chanTitle),
+            autoReason: verdict.reason,
+            status: takeAuto ? "approved" : "pending",
+            reviewedBy: takeAuto ? "auto" : null,
           });
           if (ins) { queuedThisMaster++; await bumpReviewCounter("total_queued", 1); }
+          if (takeAuto && ins) {
+            // Pin it exactly as a manual approve would, then collapse
+            // the track's other candidates so it leaves the queue.
+            await suggestTrackYtOverride({
+              releaseId: masterId,
+              releaseType: "master",
+              trackPosition: tr.position,
+              trackTitle: tr.title,
+              videoId: h.videoId,
+              videoTitle: candTitle,
+              submittedBy: "auto",
+            });
+            await supersedeOtherCandidates(masterId, tr.position, h.videoId);
+            await bumpReviewCounter("total_auto_approved", 1);
+            autoTakenForTrack = true;
+            autoThisMaster++;
+            console.log(`[yt-review] auto-approved ${masterId}/${tr.position} "${tr.title}" → ${h.videoId} (${verdict.reason})`);
+          }
         }
         // Always log the searched row so the next pass skips this
         // (master, track) even if the album-level search produced
@@ -11768,6 +11983,9 @@ async function _runYtReviewWorker(): Promise<void> {
         await logTrackSearched(masterId, tr.position, hits.length, "album");
       }
       if (queuedThisMaster === 0) await bumpReviewCounter("total_skipped", 1);
+      if (autoThisMaster > 0) {
+        await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — auto-pinned ${autoThisMaster} exact match${autoThisMaster === 1 ? "" : "es"}.` });
+      }
       await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
       // Advance cursor past this master regardless of how many tracks
       // were searched — resumability matters more than completeness.
@@ -11831,6 +12049,18 @@ app.post("/api/admin/yt-review/daily", express.json({ limit: "1kb" }), async (re
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// Toggle auto-approve of exact matches (Topic channel + artist +
+// title + duration). Off means every candidate lands in the human
+// queue, exactly as before this feature existed.
+app.post("/api/admin/yt-review/auto", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const enabled = !!req.body?.enabled;
+  try {
+    await setAppSetting("yt_review_auto_approve", enabled ? "1" : "0");
+    res.json({ ok: true, autoApprove: enabled });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
 app.post("/api/admin/yt-review/start", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   if (_ytReviewRunning) { res.status(409).json({ error: "already_running" }); return; }
@@ -11886,9 +12116,12 @@ app.get("/api/admin/yt-review/status", async (req, res) => {
   _ytReviewMaybeReset();
   _ytQuotaMaybeReset();
   const dailyEnabled = await _ytReviewDailyEnabled();
+  const autoApprove = await _ytReviewAutoApproveEnabled();
   res.json({
     state,
     counts,
+    autoApprove,
+    autoToleranceS: _YT_AUTO_DURATION_TOLERANCE_S,
     running: _ytReviewRunning,
     dailyBudget: _YT_REVIEW_DAILY_BUDGET,
     searchesToday: _ytReviewSearchesToday,
