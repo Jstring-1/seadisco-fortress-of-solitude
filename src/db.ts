@@ -414,6 +414,23 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS is_topic_channel BOOLEAN`);
   await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS auto_reason TEXT`);
   await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS track_duration_seconds INTEGER`);
+  // One-time cleanup (idempotent): an early auto-approve bug left
+  // 'pending' straggler candidates for tracks that were already
+  // auto-pinned — they showed up in the review queue tagged
+  // 'track_already_auto_approved'. Collapse any pending row whose
+  // (master, track) already has an approved row to 'superseded' so the
+  // queue only ever shows genuinely undecided tracks.
+  await getPool().query(`
+    UPDATE track_yt_review_queue p
+       SET status = 'superseded', reviewed_at = NOW(), reviewed_by = 'auto'
+     WHERE p.status = 'pending'
+       AND EXISTS (
+         SELECT 1 FROM track_yt_review_queue a
+          WHERE a.master_id = p.master_id
+            AND a.track_position = p.track_position
+            AND a.status = 'approved'
+       )
+  `);
 
   // Single-row state for the YT-review worker. id is pinned to 1 so
   // upserts and reads stay trivial.
@@ -7100,10 +7117,10 @@ export async function insertReviewCandidate(args: {
   trackDurationSeconds?: number | null;
   isTopicChannel?: boolean | null;
   autoReason?: string | null;
-  status?: "pending" | "approved";
+  status?: "pending" | "approved" | "superseded";
   reviewedBy?: string | null;
 }): Promise<boolean> {
-  const status = args.status === "approved" ? "approved" : "pending";
+  const status = (args.status === "approved" || args.status === "superseded") ? args.status : "pending";
   const r = await getPool().query(
     `INSERT INTO track_yt_review_queue
        (master_id, track_position, track_title, track_artist, master_year, master_cover_url,

@@ -12117,6 +12117,12 @@ async function _runYtReviewWorker(): Promise<void> {
           const durationOk = (tr.durationSeconds != null && det?.durationSeconds != null)
             ? Math.abs(det.durationSeconds - tr.durationSeconds) <= _YT_AUTO_DURATION_TOLERANCE_S
             : null;
+          // Once a track is auto-pinned, later candidates for it must NOT
+          // land in the pending queue — the track is decided. Insert them
+          // as 'superseded' (audit-visible, out of review) rather than
+          // 'pending'. The winner's inline supersede only catches rows
+          // that existed at approve time; these are inserted afterward.
+          const insStatus = takeAuto ? "approved" : autoTakenForTrack ? "superseded" : "pending";
           const ins = await insertReviewCandidate({
             masterId, trackPosition: tr.position, trackTitle: tr.title, trackArtist: tr.artist,
             masterYear: year, masterCoverUrl: cover || null,
@@ -12132,10 +12138,12 @@ async function _runYtReviewWorker(): Promise<void> {
             trackDurationSeconds: tr.durationSeconds,
             isTopicChannel: _ytIsTopicChannel(chanTitle),
             autoReason: verdict.reason,
-            status: takeAuto ? "approved" : "pending",
-            reviewedBy: takeAuto ? "auto" : null,
+            status: insStatus,
+            reviewedBy: insStatus === "pending" ? null : "auto",
           });
-          if (ins) { queuedThisMaster++; await bumpReviewCounter("total_queued", 1); }
+          // Only pending/approved rows count as "queued" work; a
+          // superseded straggler isn't something to review.
+          if (ins && insStatus !== "superseded") { queuedThisMaster++; await bumpReviewCounter("total_queued", 1); }
           if (takeAuto && ins) {
             // Pin it exactly as a manual approve would, then collapse
             // the track's other candidates so it leaves the queue.
