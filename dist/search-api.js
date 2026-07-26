@@ -8565,9 +8565,6 @@ app.get("/api/admin/users-unified", async (req, res) => {
             r.suggestionsFavorited = b.suggestions_favorited ?? 0;
             if (r.lastActiveAt == null && b.last_active)
                 r.lastActiveAt = new Date(b.last_active).getTime();
-            // Signup: Clerk created_at is the real signup; fall back to the
-            // Discogs-connect timestamp.
-            r.signedUpAt = b.clerk_created_at ?? b.signed_up_at ?? r.signedUpAt ?? null;
         }
         for (const s of sugg) {
             const r = get(s.clerkUserId);
@@ -8578,6 +8575,11 @@ app.get("/api/admin/users-unified", async (req, res) => {
         // gets the canonical Clerk username.
         for (const [id, r] of rows) {
             r.clerkUsername = clerkUsernames.get(id) ?? null;
+            // Signup = the Clerk account creation moment, NOT the Discogs-
+            // connect timestamp. Null when the Clerk cache hasn't seen this
+            // user yet — better blank than the wrong (sync) date.
+            const clerkCreatedMs = _clerkCreatedAtCache.get(id);
+            r.signedUpAt = clerkCreatedMs ? new Date(clerkCreatedMs).toISOString() : null;
             // Fill zeros for metric fields a partial row never set, so the
             // client can sort numerically without null-guarding every cell.
             for (const k of ["favoriteCount", "albumClicksTotal", "albumClicks30d", "playsTotal", "plays30d",
