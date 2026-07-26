@@ -7934,6 +7934,124 @@ app.get("/api/admin/behavior-stats", async (req, res) => {
   }
 });
 
+// Admin: unified per-user table. Merges the three per-user datasets
+// (sync-status, behavior, suggestions) into ONE row per clerk_user_id
+// so the admin sees every metric for a user on a single aligned row —
+// no more matching usernames across separately-sorted grids. Reuses
+// the exact same DB functions the individual panels use, so the
+// numbers can't disagree with them. (The "User Stats" overview panel
+// is site-wide KPIs, not per-user, so it stays separate.)
+app.get("/api/admin/users-unified", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const [sync, favCounts, behavior, sugg, clerkUsernames] = await Promise.all([
+      getAllUsersSyncStatus(),
+      getAllFavoriteCounts(),
+      getUserBehaviorStats(),
+      getPersonalSuggestionsStats(),
+      _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
+    ]);
+
+    // Best-effort Clerk session lookup for the online dot + accurate
+    // last-active, mirroring /api/admin/sync-status. Skipped when no
+    // Clerk secret is configured.
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    const lastActiveMap = new Map<string, number>();
+    if (clerkSecret) {
+      for (const u of sync) {
+        if (!u.clerkUserId) continue;
+        try {
+          let latest = 0;
+          for (const status of ["active", "ended", "expired"] as const) {
+            const resp = await fetch(
+              `https://api.clerk.com/v1/sessions?user_id=${u.clerkUserId}&status=${status}&limit=5`,
+              { headers: { Authorization: `Bearer ${clerkSecret}` } }
+            );
+            if (!resp.ok) continue;
+            const sessions = await resp.json() as Array<{ last_active_at: number }>;
+            for (const s of sessions) {
+              const ts = s.last_active_at > 1e12 ? s.last_active_at : s.last_active_at * 1000;
+              if (ts > latest) latest = ts;
+            }
+            if (latest > 0) break;
+          }
+          if (latest > 0) lastActiveMap.set(u.clerkUserId, latest);
+        } catch { /* skip user */ }
+      }
+    }
+    const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
+
+    // Merge by clerk_user_id. Seed from every source's key so a user
+    // that only appears in one dataset still gets a row.
+    type URow = Record<string, any>;
+    const rows = new Map<string, URow>();
+    const get = (id: string): URow => {
+      let r = rows.get(id);
+      if (!r) { r = { clerkUserId: id }; rows.set(id, r); }
+      return r;
+    };
+
+    for (const u of sync) {
+      const r = get(u.clerkUserId);
+      const lastActiveAt = lastActiveMap.get(u.clerkUserId) ?? null;
+      r.discogsUsername    = u.username ?? null;
+      r.collectionSyncedAt = u.collectionSyncedAt ?? null;
+      r.wantlistSyncedAt   = u.wantlistSyncedAt ?? null;
+      r.syncStatus         = u.syncStatus ?? null;
+      r.syncProgress       = u.syncProgress ?? null;
+      r.syncTotal          = u.syncTotal ?? null;
+      r.syncError          = u.syncError ?? null;
+      r.authMethod         = u.authMethod ?? null;
+      r.hasOAuth           = !!u.hasOAuth;
+      r.favoriteCount      = favCounts.get(u.clerkUserId) ?? 0;
+      r.online             = lastActiveAt ? lastActiveAt > oneDayAgoMs : false;
+      r.lastActiveAt       = lastActiveAt;
+    }
+
+    for (const b of behavior as any[]) {
+      const r = get(b.clerk_user_id);
+      if (b.username && !r.discogsUsername) r.discogsUsername = b.username;
+      // favoriteCount from getAllFavoriteCounts is canonical; fall back
+      // to the behavior count for users with no sync row.
+      if (r.favoriteCount == null) r.favoriteCount = b.favorites ?? 0;
+      r.albumClicksTotal = b.album_clicks_total ?? 0;
+      r.albumClicks30d   = b.album_clicks_30d ?? 0;
+      r.playsTotal       = b.player_plays_total ?? 0;
+      r.plays30d         = b.player_plays_30d ?? 0;
+      r.searchesTotal    = b.searches_total ?? 0;
+      r.searches30d      = b.searches_30d ?? 0;
+      r.suggestionsFavorited = b.suggestions_favorited ?? 0;
+      if (r.lastActiveAt == null && b.last_active) r.lastActiveAt = new Date(b.last_active).getTime();
+      // Signup: Clerk created_at is the real signup; fall back to the
+      // Discogs-connect timestamp.
+      r.signedUpAt = b.clerk_created_at ?? b.signed_up_at ?? r.signedUpAt ?? null;
+    }
+
+    for (const s of sugg as any[]) {
+      const r = get(s.clerkUserId);
+      r.suggestionsCount = s.count ?? 0;
+      r.suggestionsLastGeneratedAt = s.lastGeneratedAt ?? null;
+    }
+
+    // Stamp the display name last so every row (whatever it came from)
+    // gets the canonical Clerk username.
+    for (const [id, r] of rows) {
+      r.clerkUsername = clerkUsernames.get(id) ?? null;
+      // Fill zeros for metric fields a partial row never set, so the
+      // client can sort numerically without null-guarding every cell.
+      for (const k of ["favoriteCount","albumClicksTotal","albumClicks30d","playsTotal","plays30d",
+                        "searchesTotal","searches30d","suggestionsFavorited","suggestionsCount"]) {
+        if (r[k] == null) r[k] = 0;
+      }
+    }
+
+    res.json({ items: Array.from(rows.values()) });
+  } catch (e: any) {
+    console.error("[/api/admin/users-unified]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // Admin: cache-fetch queue stats — total queued, oldest waiter, by
 // source breakdown. Useful for sizing the nightly window.
 app.get("/api/admin/cache-fetch-queue/stats", async (req, res) => {

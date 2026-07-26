@@ -84,14 +84,24 @@
         <div id="admin-user-stats" class="admin-kpi-grid">Loading…</div>
       </div>
 
-      <!-- User Sync Status (Users group) -->
-      <div class="admin-tab-panel admin-grp-users" id="panel-sync-status" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-          <h2 style="margin:0">User Sync Status</h2>
-          <button class="admin-refresh-btn" id="sync-status-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSyncStatus)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="sync-status-refresh-status" class="admin-refresh-status"></span>
+      <!-- Unified per-user table (Users group). One row per user; a
+           column-group toggle swaps Sync / Behavior / Suggestions
+           without reordering rows, so a user stays on the same line
+           across every metric. Merges what used to be three panels. -->
+      <div class="admin-tab-panel admin-grp-users" id="panel-users-unified" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0" title="Every per-user metric on one aligned row. Toggle the column group below; rows keep their position so you can compare a user across groups without re-matching names.">Users</h2>
+          <button class="admin-refresh-btn" id="users-unified-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUsersUnified)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="users-unified-refresh-status" class="admin-refresh-status"></span>
+          <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user suggestion generator for the admin user only">Run suggestions for me</button>
+          <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user suggestion generator for every user (background, may take minutes)">Run for everyone</button>
+          <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
-        <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
+          <div id="users-unified-groupbar" style="display:flex;gap:0.25rem"></div>
+          <input type="search" id="users-unified-filter" class="sd-filter-input" placeholder="filter by name…" oninput="_adminUnifiedFilterInput(this.value)" style="margin-left:auto;width:14rem" title="Filter by Clerk username, Discogs handle, or Clerk user id.">
+        </div>
+        <div id="users-unified-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
 
       <!-- System bar — top of the System tab. Hosts the Active APIs
@@ -448,29 +458,6 @@
           <span id="submissions-count" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-      </div>
-
-      <!-- Personal suggestions stats + manual triggers (Users group) -->
-      <div class="admin-tab-panel admin-grp-users" id="panel-suggestions" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0" title="Hourly background job populates each user's personal feed by searching Discogs for masters in their top genre/style/year combos that they don't already own.">Suggestions</h2>
-          <button class="admin-refresh-btn" id="suggestions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSuggestions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="suggestions-refresh-status" class="admin-refresh-status"></span>
-          <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user generator for the admin user only">Run for me</button>
-          <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user generator for every user (background, may take minutes)">Run for everyone</button>
-          <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
-        </div>
-        <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-      </div>
-
-      <!-- Per-user behavior stats (Users group) -->
-      <div class="admin-tab-panel admin-grp-users" id="panel-behavior" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0" title="Per-user activity counts. Favs = total favorites. Sugg pool = current personal-suggestion row count. Sugg fav'd = how many of those suggestions the user has actually favorited. Album clicks = release/master modal opens (last 30d / lifetime). Plays = media-player track plays (last 30d / lifetime). Searches = Discogs main-search calls (last 30d / lifetime).">User Behavior</h2>
-          <button class="admin-refresh-btn" id="behavior-refresh-btn" onclick="_adminClickRefresh(this, loadAdminBehavior)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="behavior-refresh-status" class="admin-refresh-status"></span>
-        </div>
-        <div id="behavior-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
 
       <!-- Unavailable YouTube videos (Content group) -->

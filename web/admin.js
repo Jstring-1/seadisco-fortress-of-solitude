@@ -104,8 +104,11 @@ const _adminGroups = {
     load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminMediaStats(); },
   },
   'users': {
-    panels: ['panel-user-stats', 'panel-sync-status', 'panel-behavior', 'panel-suggestions'],
-    load: () => { loadAdminUserStats(); loadAdminSyncStatus(); loadAdminBehavior(); loadAdminSuggestions(); },
+    // panel-user-stats = site-wide KPI header (not per-user). The three
+    // former per-user panels (sync/behavior/suggestions) are merged into
+    // panel-users-unified so a user stays on one aligned row.
+    panels: ['panel-user-stats', 'panel-users-unified'],
+    load: () => { loadAdminUserStats(); loadAdminUsersUnified(); },
   },
   'content': {
     panels: ['panel-submissions', 'panel-unavailable'],
@@ -4483,6 +4486,200 @@ function _adminBehaviorSortBy(col) {
 }
 window._adminBehaviorSortBy = _adminBehaviorSortBy;
 
+// ── Unified users table ───────────────────────────────────────────
+// One row per user merged from sync + behavior + suggestions
+// (/api/admin/users-unified). A column-group toggle swaps which
+// metric columns show WITHOUT refetching or reordering, so a user
+// keeps its row across groups — no more matching names across grids.
+let _adminUnifiedData = [];
+let _adminUnifiedGroup = "all";           // all | sync | behavior | suggestions
+let _adminUnifiedSort = { col: "signedUpAt", dir: "desc" };
+let _adminUnifiedFilter = "";
+let _adminUnifiedFilterTimer = null;
+
+// Column descriptors. group 'id' always first, 'meta' always last;
+// 'sync'/'behavior'/'suggestions' show when their tab (or All) is on.
+// type drives both sort comparison and default sort direction.
+const _ADMIN_UNIFIED_COLS = [
+  { key: "clerkUsername",              label: "User",            group: "id",          type: "str",  align: "left" },
+  { key: "discogsUsername",            label: "Discogs",         group: "sync",        type: "str",  align: "left" },
+  { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
+  { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
+  { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
+  { key: "syncStatus",                 label: "Sync",            group: "sync",        type: "str",  align: "left" },
+  { key: "albumClicksTotal",           label: "Clicks 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "albumClicks30d" },
+  { key: "playsTotal",                 label: "Plays 30d/tot",   group: "behavior",    type: "num",  align: "right", pair: "plays30d" },
+  { key: "searchesTotal",              label: "Search 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "searches30d" },
+  { key: "suggestionsCount",           label: "Sugg saved",      group: "suggestions", type: "num",  align: "right" },
+  { key: "suggestionsFavorited",       label: "Sugg fav'd",      group: "suggestions", type: "num",  align: "right" },
+  { key: "suggestionsLastGeneratedAt", label: "Last gen",        group: "suggestions", type: "date", align: "left" },
+  { key: "signedUpAt",                 label: "Signed up",       group: "meta",        type: "date", align: "left" },
+  { key: "lastActiveAt",               label: "Last active",     group: "meta",        type: "date", align: "left" },
+];
+const _ADMIN_UNIFIED_GROUPS = [
+  { key: "all",         label: "All" },
+  { key: "sync",        label: "Sync" },
+  { key: "behavior",    label: "Behavior" },
+  { key: "suggestions", label: "Suggestions" },
+];
+
+function _adminUnifiedVisibleCols() {
+  return _ADMIN_UNIFIED_COLS.filter(c =>
+    c.group === "id" || c.group === "meta" ||
+    _adminUnifiedGroup === "all" || c.group === _adminUnifiedGroup);
+}
+
+// ms number OR ISO string OR null → "3/17/26 7:20p"
+function _adminUnifiedFmtDate(v) {
+  if (v == null || v === "") return "—";
+  const dt = (typeof v === "number") ? new Date(v) : new Date(v);
+  if (isNaN(dt.getTime())) return "—";
+  const M = dt.getMonth() + 1, D = dt.getDate(), YY = String(dt.getFullYear()).slice(-2);
+  let h = dt.getHours(); const m = String(dt.getMinutes()).padStart(2, "0");
+  const ap = h >= 12 ? "p" : "a"; h = h % 12; if (h === 0) h = 12;
+  return `${M}/${D}/${YY} ${h}:${m}${ap}`;
+}
+
+async function loadAdminUsersUnified() {
+  const el = document.getElementById("users-unified-list");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/users-unified");
+    if (!r.ok) { el.textContent = `Could not load users (HTTP ${r.status}).`; return; }
+    const j = await r.json();
+    _adminUnifiedData = Array.isArray(j?.items) ? j.items : [];
+    _adminUnifiedRender();
+  } catch (e) { el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(e?.message || e)}</span>`; }
+}
+window.loadAdminUsersUnified = loadAdminUsersUnified;
+
+function _adminUnifiedRenderGroupBar() {
+  const bar = document.getElementById("users-unified-groupbar");
+  if (!bar) return;
+  bar.innerHTML = _ADMIN_UNIFIED_GROUPS.map(g => {
+    const on = _adminUnifiedGroup === g.key;
+    return `<button class="admin-btn${on ? " active" : ""}" onclick="_adminUnifiedSetGroup('${g.key}')" ${on ? 'style="background:var(--accent);color:#000;font-weight:600"' : ""}>${g.label}</button>`;
+  }).join("");
+}
+
+function _adminUnifiedSetGroup(g) {
+  _adminUnifiedGroup = g;
+  // If the active sort column just left the view, fall back to signup.
+  if (!_adminUnifiedVisibleCols().some(c => c.key === _adminUnifiedSort.col)) {
+    _adminUnifiedSort = { col: "signedUpAt", dir: "desc" };
+  }
+  _adminUnifiedRender();
+}
+window._adminUnifiedSetGroup = _adminUnifiedSetGroup;
+
+function _adminUnifiedSortBy(col) {
+  const desc = _ADMIN_UNIFIED_COLS.find(c => c.key === col);
+  if (_adminUnifiedSort.col === col) {
+    _adminUnifiedSort.dir = _adminUnifiedSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _adminUnifiedSort.col = col;
+    _adminUnifiedSort.dir = (desc && desc.type === "str") ? "asc" : "desc";
+  }
+  _adminUnifiedRender();
+}
+window._adminUnifiedSortBy = _adminUnifiedSortBy;
+
+function _adminUnifiedFilterInput(v) {
+  if (_adminUnifiedFilterTimer) clearTimeout(_adminUnifiedFilterTimer);
+  _adminUnifiedFilterTimer = setTimeout(() => {
+    _adminUnifiedFilter = String(v || "").trim().toLowerCase();
+    _adminUnifiedRender();
+  }, 250);
+}
+window._adminUnifiedFilterInput = _adminUnifiedFilterInput;
+
+function _adminUnifiedSortRows(rows) {
+  const desc = _ADMIN_UNIFIED_COLS.find(c => c.key === _adminUnifiedSort.col);
+  const type = desc ? desc.type : "str";
+  const mul = _adminUnifiedSort.dir === "asc" ? 1 : -1;
+  const key = _adminUnifiedSort.col;
+  const val = (row) => {
+    let v = row[key];
+    if (type === "num") return (v == null || v === "") ? null : Number(v);
+    if (type === "date") { if (v == null || v === "") return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; }
+    return (v == null || v === "") ? null : String(v).toLowerCase();
+  };
+  return rows.slice().sort((a, b) => {
+    const av = val(a), bv = val(b);
+    // Missing values always sink, regardless of direction.
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (type === "str") return av.localeCompare(bv) * mul;
+    return (av - bv) * mul;
+  });
+}
+
+function _adminUnifiedUserCell(u) {
+  const primary = u.clerkUsername || u.discogsUsername || "(no name)";
+  const dot = u.online
+    ? `<span title="Active in last 24h" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#7ed196;margin-right:0.35rem"></span>`
+    : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--border);margin-right:0.35rem"></span>`;
+  const disc = u.discogsUsername ? `<div style="font-size:0.7rem;color:var(--muted)">discogs: ${escHtml(u.discogsUsername)}</div>` : "";
+  const id = `<div style="font-size:0.66rem;color:#555;font-family:monospace">${escHtml(u.clerkUserId || "")}</div>`;
+  return `<div style="min-width:11rem">${dot}<span style="font-weight:600;color:var(--text)">${escHtml(primary)}</span>${disc}${id}</div>`;
+}
+
+function _adminUnifiedCell(u, col) {
+  if (col.key === "clerkUsername") return _adminUnifiedUserCell(u);
+  if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
+  if (col.key === "syncStatus") {
+    const s = u.syncStatus || "—";
+    if (s === "syncing" && u.syncTotal) {
+      const pct = Math.round((Number(u.syncProgress || 0) / Number(u.syncTotal)) * 100);
+      return `<span style="color:#f0c674">syncing ${pct}%</span>`;
+    }
+    if (u.syncError) return `<span style="color:#e88" title="${escHtml(String(u.syncError))}">error</span>`;
+    return escHtml(s);
+  }
+  if (col.pair != null) {
+    // "30d / total" pair; sorts by the total (col.key).
+    const recent = Number(u[col.pair] || 0), total = Number(u[col.key] || 0);
+    return `<span style="color:#fff">${recent}</span><span style="color:var(--muted)"> / ${total}</span>`;
+  }
+  if (col.type === "num") return String(Number(u[col.key] || 0));
+  const v = u[col.key];
+  return v == null || v === "" ? "—" : escHtml(String(v));
+}
+
+function _adminUnifiedRender() {
+  _adminUnifiedRenderGroupBar();
+  const el = document.getElementById("users-unified-list");
+  if (!el) return;
+  let rows = _adminUnifiedData;
+  if (_adminUnifiedFilter) {
+    const q = _adminUnifiedFilter;
+    rows = rows.filter(u =>
+      String(u.clerkUsername || "").toLowerCase().includes(q) ||
+      String(u.discogsUsername || "").toLowerCase().includes(q) ||
+      String(u.clerkUserId || "").toLowerCase().includes(q));
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">${_adminUnifiedData.length ? "No users match the filter." : "No users yet."}</div>`;
+    return;
+  }
+  rows = _adminUnifiedSortRows(rows);
+  const cols = _adminUnifiedVisibleCols();
+  const th = (c) => {
+    const active = _adminUnifiedSort.col === c.key;
+    const arrow = active ? (_adminUnifiedSort.dir === "asc" ? " ↑" : " ↓") : "";
+    return `<th style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy('${c.key}')" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
+  };
+  const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)"><tr>${cols.map(th).join("")}</tr></thead>`;
+  const body = rows.map(u => {
+    const tds = cols.map(c => `<td style="padding:0.3rem 0.5rem;text-align:${c.align};vertical-align:top;white-space:nowrap">${_adminUnifiedCell(u, c)}</td>`).join("");
+    return `<tr style="border-top:1px solid var(--border)">${tds}</tr>`;
+  }).join("");
+  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.78rem">${head}<tbody>${body}</tbody></table></div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">${rows.length} user${rows.length === 1 ? "" : "s"}${_adminUnifiedFilter ? ` (filtered from ${_adminUnifiedData.length})` : ""}</div>`;
+}
+
 async function loadAdminBehavior() {
   const el = document.getElementById("behavior-list");
   if (!el) return;
@@ -4627,7 +4824,7 @@ async function adminSuggestionsRunSelf() {
       if (f && f.finishedAt >= startedAt) {
         if (status) status.textContent = _adminSuggRenderLine(f);
         console.log("[adminSuggestionsRunSelf]", f);
-        loadAdminSuggestions();
+        loadAdminUsersUnified();   // refresh the merged users table
         return;
       }
       if (status) status.textContent = "Running" + ".".repeat((dots++ % 3) + 1);
