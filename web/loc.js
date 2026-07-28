@@ -158,7 +158,10 @@ async function _locFetchSearch(params) {
 // ── View mount ──────────────────────────────────────────────────────────
 
 async function initLocView() {
-  const root = document.getElementById("loc-view");
+  // Render into #loc-app, NOT #loc-view — the wrapper also holds a
+  // static crawlable .view-intro block that must survive the shell
+  // render. Falls back to #loc-view if the app node is ever missing.
+  const root = document.getElementById("loc-app") || document.getElementById("loc-view");
   if (!root) return;
 
   // LOC is open to anons — the backend's /api/loc/search uses

@@ -9,7 +9,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
@@ -6916,6 +6916,36 @@ async function _ytBackfillDurationsIfNeeded(cacheKey, body) {
     }
     return body;
 }
+// ── Banned YouTube channels ───────────────────────────────────────
+// A banned channel is filtered out of ALL YouTube results — live
+// search below and the yt-review worker. The set is cached in-memory
+// for a short TTL so we don't hit the DB on every search response;
+// _bumpBannedChannelCache() clears it immediately after an admin edit.
+let _bannedChannelSet = new Set();
+let _bannedChannelAt = 0;
+const _BANNED_CACHE_TTL_MS = 60_000;
+async function _getBannedChannelIds() {
+    if (Date.now() - _bannedChannelAt < _BANNED_CACHE_TTL_MS)
+        return _bannedChannelSet;
+    try {
+        _bannedChannelSet = await getBannedYoutubeChannelIds();
+        _bannedChannelAt = Date.now();
+    }
+    catch { /* keep the last-known set on error */ }
+    return _bannedChannelSet;
+}
+function _invalidateBannedChannelCache() { _bannedChannelAt = 0; }
+// Strip banned-channel items from a YouTube search body. Returns a
+// NEW body (doesn't mutate the cached original) only when something is
+// removed; otherwise returns the input untouched.
+function _ytFilterBannedBody(body, banned) {
+    if (!banned.size || !body || !Array.isArray(body.items) || !body.items.length)
+        return body;
+    const kept = body.items.filter((it) => !banned.has(String(it?.channelId || "")));
+    if (kept.length === body.items.length)
+        return body;
+    return { ...body, items: kept };
+}
 // GET /api/youtube/search?q=…&pageToken=…
 //   q          — search query (required)
 //   pageToken  — YouTube pagination cursor (optional)
@@ -6937,6 +6967,10 @@ app.get("/api/youtube/search", async (req, res) => {
         return;
     }
     const pageToken = String(req.query?.pageToken ?? "").trim().slice(0, 200);
+    // Banned-channel filter, applied to EVERY response path below
+    // (cached + fresh) so a ban takes effect retroactively over already-
+    // cached search bodies without needing to purge the cache.
+    const _banned = await _getBannedChannelIds();
     // Normalize the cache key so trivial differences (case, leading/
     // trailing whitespace, repeated spaces) hit the same cache row.
     // The actual call to YouTube uses the original `q` so result quality
@@ -6959,7 +6993,7 @@ app.get("/api/youtube/search", async (req, res) => {
             // subsequent reads return the enriched body straight from cache.
             const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, memCached);
             res.setHeader("X-SeaDisco-Cache", "hit-mem");
-            res.json(enriched);
+            res.json(_ytFilterBannedBody(enriched, _banned));
             return;
         }
         const dbCached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000).catch(() => null);
@@ -6967,7 +7001,7 @@ app.get("/api/youtube/search", async (req, res) => {
             _ytCacheSet(cacheKey, dbCached);
             const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, dbCached);
             res.setHeader("X-SeaDisco-Cache", "hit-db");
-            res.json(enriched);
+            res.json(_ytFilterBannedBody(enriched, _banned));
             return;
         }
     }
@@ -7017,7 +7051,7 @@ app.get("/api/youtube/search", async (req, res) => {
         try {
             const body = await inflight;
             res.setHeader("X-SeaDisco-Cache", "hit-inflight");
-            res.json(body);
+            res.json(_ytFilterBannedBody(body, _banned));
             return;
         }
         catch (e) {
@@ -7149,7 +7183,7 @@ app.get("/api/youtube/search", async (req, res) => {
     try {
         const body = await work;
         res.setHeader("X-SeaDisco-Cache", "miss");
-        res.json(body);
+        res.json(_ytFilterBannedBody(body, _banned));
     }
     catch (e) {
         if (e?.status) {
@@ -12836,12 +12870,16 @@ async function _runYtReviewWorker() {
             // matches by track position. Each (track, video) pair becomes
             // one review-queue row; the UNIQUE index already de-dupes
             // re-runs of the same query.
+            const bannedChannels = await _getBannedChannelIds();
             const matchesByTrack = new Map();
             for (const it of items) {
                 const vid = String(it?.id?.videoId || "");
                 if (!vid)
                     continue;
                 const sn = it.snippet || {};
+                // Banned channels never enter the review queue.
+                if (bannedChannels.has(String(sn.channelId || "")))
+                    continue;
                 const m = _ytAlbumAutoMatch(String(sn.title || ""), eligibleTracks);
                 if (!m)
                     continue;
@@ -13084,6 +13122,67 @@ app.post("/api/admin/yt-review/channel-trust", express.json({ limit: "2kb" }), a
     try {
         await setChannelTrust(channelId, channelTitle, state);
         res.json({ ok: true, channelId, state });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/admin/yt-review/bans — the hard-ban list.
+app.get("/api/admin/yt-review/bans", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json({ rows: await listYoutubeChannelBans() });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Pull a YouTube channel id out of a raw id or a channel URL. Only the
+// /channel/UC… form carries the id; @handle and /c/ custom URLs need an
+// API resolve we don't do here (use the Ban button on a result row for
+// those — it already has the channelId).
+function _parseYtChannelId(input) {
+    const s = String(input || "").trim();
+    if (/^UC[\w-]{20,}$/.test(s))
+        return s;
+    const m = /youtube\.com\/channel\/(UC[\w-]{20,})/i.exec(s);
+    return m ? m[1] : null;
+}
+// POST /api/admin/yt-review/bans — body: { channelId?, url?, channelTitle?, reason? }
+// Bans a channel: filtered from all results, pending queue rows from it
+// superseded, auto-approved overrides from it removed.
+app.post("/api/admin/yt-review/bans", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const raw = String(req.body?.channelId ?? req.body?.url ?? "").trim();
+    const channelId = _parseYtChannelId(raw) || (raw && /^UC/.test(raw) ? raw : null);
+    if (!channelId) {
+        res.status(400).json({ error: "bad_channel", message: "Provide a channel id (UC…) or a youtube.com/channel/UC… URL. For @handles, use the Ban button on a result." });
+        return;
+    }
+    try {
+        const out = await banYoutubeChannel(channelId, req.body?.channelTitle ?? null, req.body?.reason ?? null);
+        _invalidateBannedChannelCache();
+        res.json(out);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// DELETE /api/admin/yt-review/bans — body: { channelId }
+app.delete("/api/admin/yt-review/bans", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const channelId = String(req.body?.channelId ?? "").trim();
+    if (!channelId) {
+        res.status(400).json({ error: "bad_request" });
+        return;
+    }
+    try {
+        const removed = await unbanYoutubeChannel(channelId);
+        _invalidateBannedChannelCache();
+        res.json({ ok: removed });
     }
     catch (err) {
         res.status(500).json({ error: err?.message ?? String(err) });

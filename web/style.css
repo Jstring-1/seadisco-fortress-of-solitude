@@ -2268,6 +2268,14 @@ main {
 /* ── Content narrow utility ── */
 .content-narrow { max-width: 900px; margin-left: auto; margin-right: auto; }
 
+/* Crawlable per-view intro blurb (LOC / Wikipedia / Archive). Real
+   body copy for search engines; doubles as a short section header. */
+.view-intro { margin: 0 0 1rem; }
+.view-intro h1 { font-size: 1.35rem; margin: 0 0 0.35rem; color: var(--text, var(--fg)); }
+.view-intro p { font-size: 0.9rem; line-height: 1.5; color: var(--muted); margin: 0 0 0.4rem; max-width: 60ch; }
+.view-intro-examples a { color: var(--accent); text-decoration: none; }
+.view-intro-examples a:hover { text-decoration: underline; }
+
 /* ── Search form ── */
 .search-row {
   display: flex;

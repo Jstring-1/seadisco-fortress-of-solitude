@@ -780,13 +780,32 @@ e.g.  miles davis | coltrane
   </div>
 </div>
 
-<div id="loc-view" class="content-narrow" style="display:none"></div>
+<div id="loc-view" class="content-narrow" style="display:none">
+  <!-- Crawlable intro: persists because loc.js renders into #loc-app,
+       not #loc-view. Gives the view real body copy for search engines
+       and doubles as the page header. -->
+  <div class="view-intro">
+    <h1>Library of Congress recordings</h1>
+    <p>Stream historical audio from the Library of Congress — the National Jukebox's acoustic-era 78s, field recordings, and spoken-word collections — right alongside your Discogs library. Free to search, no account required.</p>
+    <p class="view-intro-examples">Try:
+      <a href="/?v=loc&amp;q=blues">early blues</a> ·
+      <a href="/?v=loc&amp;q=jazz">1920s jazz</a> ·
+      <a href="/?v=loc&amp;q=field%20recording">field recordings</a> ·
+      <a href="/?v=loc&amp;q=gospel">gospel</a>
+    </p>
+  </div>
+  <div id="loc-app"></div>
+</div>
 
 <!-- Archive.org curated-collection page (admin-only). The list is fetched
      once via /api/archive/aadamjacobs and rendered as cards with ▶ Play
      and ➕ Queue actions. Audio plays through the unified mini-player
      (same engine as LOC — archive.org serves direct mp3 URLs). -->
 <div id="archive-view" class="content-narrow" style="display:none">
+  <div class="view-intro">
+    <h1>Live show archive</h1>
+    <p>Browse and stream live concert and radio recordings from the Internet Archive's Live Music Archive — soundboard tapes, vintage broadcasts, and taper recordings — playing through the same mini-player as the rest of SeaDisco.</p>
+  </div>
   <div class="loc-header">
     <h2 class="loc-title">Archive.org</h2>
     <!-- Tab strip lives inside loc-header so the title→tabs gap
@@ -804,6 +823,10 @@ e.g.  miles davis | coltrane
 </div>
 
 <div id="wiki-view" class="content-narrow" style="display:none">
+  <div class="view-intro">
+    <h1>Wikipedia music lookup</h1>
+    <p>Pull artist, album, and label background straight from Wikipedia without leaving the music — SeaDisco keeps playing while you read the history behind what you're hearing.</p>
+  </div>
   <div class="loc-header">
     <h2 class="loc-title">Wikipedia</h2>
     <div class="loc-tabs">

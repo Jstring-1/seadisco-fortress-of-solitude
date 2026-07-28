@@ -3333,6 +3333,7 @@ async function loadYtChannels() {
             <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','trusted')" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
             <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','blocked')" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
             <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','')" title="Clear the manual override and let the tally decide again.">Auto</button>
+            <button class="admin-btn" style="color:#e88" onclick="ytrBanChannel('${id}', ${JSON.stringify(String(c.channel_title || "")).replace(/"/g,'&quot;')})" title="Ban: remove this channel from ALL YouTube results, drop its pending candidates and auto-approvals.">Ban</button>
           </td>
         </tr>`;
       }).join("")}
@@ -3351,6 +3352,73 @@ async function ytrSetChannelTrust(channelId, state) {
   } catch (e) { alert(`Failed: ${e?.message || e}`); }
 }
 window.ytrSetChannelTrust = ytrSetChannelTrust;
+
+// ── Channel bans ──────────────────────────────────────────────────
+async function loadYtBans() {
+  const el = document.getElementById("ytr-bans");
+  if (!el) return;
+  const esc = escHtml;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/yt-review/bans");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const { rows = [] } = await r.json();
+    if (!rows.length) { el.innerHTML = `<div style="color:var(--muted);font-style:italic">No banned channels.</div>`; return; }
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+      ${rows.map(b => {
+        const id = esc(b.channel_id);
+        return `<tr style="border-top:1px solid var(--border)">
+          <td style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(b.channel_title || b.channel_id)}</a></td>
+          <td style="padding:0.25rem 0.4rem;color:var(--muted);font-size:0.72rem">${esc(b.reason || "")}</td>
+          <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" onclick="ytrUnban('${id}')" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
+        </tr>`;
+      }).join("")}
+    </table>`;
+  } catch (e) { el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(e?.message || e)}</span>`; }
+}
+window.loadYtBans = loadYtBans;
+
+async function _ytrPostBan(payload) {
+  const r = await apiFetch("/api/admin/yt-review/bans", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(`Ban failed: ${j.message || j.error || r.status}`); return false; }
+  const bits = [];
+  if (j.supersededPending) bits.push(`${j.supersededPending} pending dropped`);
+  if (j.removedAutoApproved) bits.push(`${j.removedAutoApproved} auto-approval${j.removedAutoApproved === 1 ? "" : "s"} removed`);
+  if (bits.length) showToast(`Banned · ${bits.join(", ")}`, "info", 5000);
+  return true;
+}
+async function ytrBanChannel(channelId, channelTitle) {
+  if (!confirm(`Ban this channel from ALL YouTube results?\n\n${channelTitle || channelId}\n\nIts pending review candidates and auto-approved videos will be removed. Your hand-picked overrides are kept.`)) return;
+  if (await _ytrPostBan({ channelId, channelTitle })) {
+    loadYtBans(); loadYtChannels(); loadYtReview();
+  }
+}
+window.ytrBanChannel = ytrBanChannel;
+async function ytrBanFromInput() {
+  const inp = document.getElementById("ytr-ban-input");
+  const val = (inp?.value || "").trim();
+  if (!val) return;
+  if (await _ytrPostBan({ url: val })) {
+    if (inp) inp.value = "";
+    loadYtBans();
+  }
+}
+window.ytrBanFromInput = ytrBanFromInput;
+async function ytrUnban(channelId) {
+  try {
+    const r = await apiFetch("/api/admin/yt-review/bans", {
+      method: "DELETE", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ channelId }),
+    });
+    if (!r.ok) { alert(`Unban failed: HTTP ${r.status}`); return; }
+    loadYtBans();
+  } catch (e) { alert(`Unban failed: ${e?.message || e}`); }
+}
+window.ytrUnban = ytrUnban;
 async function ytrStart() {
   try {
     const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
@@ -3438,6 +3506,7 @@ function ytrRowHtml(r) {
             <button class="admin-btn" onclick="ytrDecide(${r.id},'approve')" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
             <button class="admin-btn" onclick="ytrDecide(${r.id},'reject')" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
             <button class="admin-btn" onclick="ytrDecide(${r.id},'skip')" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+            ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" onclick="ytrBanChannel('${esc(r.candidate_channel_id)}', ${JSON.stringify(String(r.candidate_channel_title || "")).replace(/"/g,'&quot;')})" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
           </div>
           <div style="display:flex;gap:0.3rem;align-items:center">
             <input type="text" id="ytr-custom-${r.id}" placeholder="paste YouTube URL or ID" style="width:14rem;padding:0.15rem 0.35rem;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrCustomApprove(${r.id});}">

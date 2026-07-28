@@ -508,6 +508,19 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS yt_channel_trust_state_idx ON yt_channel_trust (state)`);
 
+  // Hard channel ban. Distinct from yt_channel_trust 'blocked' (which
+  // only means "never auto-approve"): a banned channel is filtered out
+  // of YouTube results ENTIRELY — live album-popup search AND the
+  // background yt-review worker. Keyed on the YouTube channel id.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS yt_channel_bans (
+      channel_id    TEXT PRIMARY KEY,
+      channel_title TEXT,
+      reason        TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -7438,6 +7451,68 @@ export async function setChannelTrust(
             updated_at = NOW()`,
     [channelId, channelTitle, state],
   );
+}
+
+// ── Channel bans ──────────────────────────────────────────────────
+export type ChannelBanRow = { channel_id: string; channel_title: string | null; reason: string | null; created_at: string };
+
+export async function listYoutubeChannelBans(): Promise<ChannelBanRow[]> {
+  const r = await getPool().query(
+    `SELECT channel_id, channel_title, reason, created_at
+       FROM yt_channel_bans ORDER BY created_at DESC`,
+  );
+  return r.rows as ChannelBanRow[];
+}
+
+export async function getBannedYoutubeChannelIds(): Promise<Set<string>> {
+  const r = await getPool().query(`SELECT channel_id FROM yt_channel_bans`);
+  return new Set(r.rows.map((x: any) => String(x.channel_id)));
+}
+
+// Ban a channel and clean up after it: any pending review-queue
+// candidate from that channel is superseded so it leaves the queue,
+// and any auto-approved (reviewed_by='auto') override sourced from it
+// is dropped. User-submitted overrides are left alone — a human chose
+// those deliberately. Returns what was cleaned so the admin sees it.
+export async function banYoutubeChannel(
+  channelId: string, channelTitle: string | null, reason: string | null,
+): Promise<{ ok: boolean; supersededPending: number; removedAutoApproved: number }> {
+  const id = String(channelId || "").trim();
+  if (!id) return { ok: false, supersededPending: 0, removedAutoApproved: 0 };
+  await getPool().query(
+    `INSERT INTO yt_channel_bans (channel_id, channel_title, reason)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (channel_id) DO UPDATE
+       SET channel_title = COALESCE(EXCLUDED.channel_title, yt_channel_bans.channel_title),
+           reason = COALESCE(EXCLUDED.reason, yt_channel_bans.reason)`,
+    [id, channelTitle, reason],
+  );
+  const sup = await getPool().query(
+    `UPDATE track_yt_review_queue
+        SET status = 'superseded', reviewed_at = NOW(), reviewed_by = 'auto'
+      WHERE candidate_channel_id = $1 AND status = 'pending'`,
+    [id],
+  );
+  // Drop AUTO-approved overrides sourced from this channel — matched by
+  // video_id against the channel's approved queue rows. submitted_by =
+  // 'auto' guard keeps human-submitted overrides (a deliberate choice)
+  // untouched even if they happen to reuse the same video.
+  const removed = await getPool().query(
+    `DELETE FROM track_youtube_overrides
+      WHERE submitted_by = 'auto'
+        AND video_id IN (
+          SELECT candidate_video_id FROM track_yt_review_queue
+           WHERE candidate_channel_id = $1 AND status = 'approved'
+             AND candidate_video_id IS NOT NULL AND candidate_video_id <> ''
+        )`,
+    [id],
+  );
+  return { ok: true, supersededPending: sup.rowCount ?? 0, removedAutoApproved: removed.rowCount ?? 0 };
+}
+
+export async function unbanYoutubeChannel(channelId: string): Promise<boolean> {
+  const r = await getPool().query(`DELETE FROM yt_channel_bans WHERE channel_id = $1`, [String(channelId || "").trim()]);
+  return (r.rowCount ?? 0) > 0;
 }
 
 export async function getReviewState(): Promise<any> {
