@@ -15,6 +15,11 @@
      the live value and apply. Brief flash possible but anon users
      no longer get stuck on the default theme. */
   if(!s||!/^[a-z0-9-]+$/.test(s)){fetch("/api/site-theme",{cache:"no-store"}).then(function(r){return r.ok?r.json():null;}).then(function(j){var v=j&&j.theme;if(v&&/^[a-z0-9-]+$/.test(v))document.documentElement.setAttribute("data-theme",v);}).catch(function(){});}}catch(e){}})();</script>
+  <!-- SD_HEAD_START — the server rewrites everything between these two
+       markers per view (title / description / canonical / OG / Twitter)
+       so each ?v= URL is a distinct indexable page. The tags below are
+       the homepage defaults and the fallback when served un-templated.
+       See _sendHtml / _VIEW_META in search-api.ts. -->
   <title>SeaDisco — Music Discovery Platform | Search, Collection &amp; Wantlist</title>
   <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." />
   <meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
@@ -33,6 +38,7 @@
   <meta name="twitter:title" content="SeaDisco — Music Discovery Platform" />
   <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, and rate releases." />
   <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
+  <!-- SD_HEAD_END -->
 
   <!-- No PNG asset — point apple-touch-icon at the same inline-SVG 💿
        as the favicon. iOS Safari 10+ accepts data URLs here; users

@@ -727,10 +727,66 @@ function _loadHtmlTemplated(relPath) {
         return null;
     }
 }
-function _sendHtml(res, relPath) {
-    const html = _loadHtmlTemplated(relPath);
+// Per-view <head> metadata. Only the views that are public + worth
+// ranking get an entry; anything else (records, account, youtube,
+// chronam, blues-archive, admin, search results) falls through to the
+// homepage default, which canonicalises them to "/" so Google doesn't
+// treat the SPA's transient states as thin duplicate pages. `path` is
+// the query-string that identifies the view (matches sitemap.xml).
+const _SITE_ORIGIN = "https://seadisco.com";
+const _VIEW_META = {
+    home: { path: "", title: "SeaDisco — Music Discovery Platform | Search, Collection & Wantlist", desc: "SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." },
+    loc: { path: "?v=loc", title: "Library of Congress Recordings — SeaDisco", desc: "Search and stream historical audio from the Library of Congress, including the National Jukebox, alongside your Discogs collection." },
+    archive: { path: "?v=archive", title: "Live Show Archive — SeaDisco", desc: "Browse and stream live concert recordings from the Internet Archive while you dig through your record collection." },
+    wiki: { path: "?v=wiki", title: "Wikipedia Music Lookup — SeaDisco", desc: "Pull artist and album background from Wikipedia without leaving the music — SeaDisco keeps playing while you read." },
+    info: { path: "?v=info", title: "About SeaDisco", desc: "What SeaDisco is: a Discogs-powered music discovery site for searching, collecting, and streaming records old and new." },
+    privacy: { path: "?v=privacy", title: "Privacy Policy — SeaDisco", desc: "How SeaDisco handles your data, Discogs OAuth connection, and account information." },
+    terms: { path: "?v=terms", title: "Terms of Service — SeaDisco", desc: "The terms governing use of SeaDisco." },
+};
+function _escAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+// Build the per-view head block that replaces the SD_HEAD_START..END
+// region. Unknown views use the homepage entry so they canonicalise
+// to "/" (index,follow, but deduped) — exactly today's behaviour.
+function _headTagsForView(view) {
+    const m = _VIEW_META[view] || _VIEW_META.home;
+    const url = _SITE_ORIGIN + "/" + m.path;
+    const t = _escAttr(m.title), d = _escAttr(m.desc), u = _escAttr(url);
+    const img = `${_SITE_ORIGIN}/seadisco-logo.png`;
+    return [
+        `<title>${t}</title>`,
+        `<meta name="description" content="${d}" />`,
+        `<meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile" />`,
+        `<meta name="robots" content="index, follow" />`,
+        `<link rel="canonical" href="${u}" />`,
+        `<meta property="og:type" content="website" />`,
+        `<meta property="og:url" content="${u}" />`,
+        `<meta property="og:title" content="${t}" />`,
+        `<meta property="og:description" content="${d}" />`,
+        `<meta property="og:image" content="${img}" />`,
+        `<meta name="twitter:card" content="summary_large_image" />`,
+        `<meta name="twitter:title" content="${t}" />`,
+        `<meta name="twitter:description" content="${d}" />`,
+        `<meta name="twitter:image" content="${img}" />`,
+    ].join("\n  ");
+}
+// Matches the whole marked region. The START marker may carry a trailing
+// explanatory comment (…START — notes -->), so consume up to the first
+// SD_HEAD_END rather than requiring a bare `<!-- SD_HEAD_START -->`.
+const _SD_HEAD_RE = /<!--\s*SD_HEAD_START[\s\S]*?SD_HEAD_END\s*-->/;
+function _sendHtml(res, relPath, req) {
+    let html = _loadHtmlTemplated(relPath);
     if (!html)
         return false;
+    // Per-view <head> injection (index.html only; admin.html has no
+    // markers and stays noindex). String-replace on the cached template
+    // returns a fresh string — the shared cache entry is not mutated.
+    if (relPath === "index.html" && _SD_HEAD_RE.test(html)) {
+        const rawView = req?.query?.v;
+        const view = (typeof rawView === "string" ? rawView : "").trim().toLowerCase();
+        html = html.replace(_SD_HEAD_RE, _headTagsForView(view));
+    }
     // Stronger cache directive — `no-cache` is browser-honored but some
     // edge caches (Railway proxies, Cloudflare, etc.) still hold pages.
     // `no-store` is unambiguous: don't cache anywhere. The HTML is
@@ -746,9 +802,9 @@ function _sendHtml(res, relPath) {
 }
 // Serve the main HTML pages with Clerk script inlined in <head>.
 // Must come BEFORE express.static so the static handler doesn't intercept.
-app.get("/", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
+app.get("/", (req, res, next) => { if (!_sendHtml(res, "index.html", req))
     next(); });
-app.get("/index.html", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
+app.get("/index.html", (req, res, next) => { if (!_sendHtml(res, "index.html", req))
     next(); });
 // Legacy /account.html URL: the standalone account page was merged into the
 // SPA (see account.js). Redirect old bookmarks to the SPA account view.

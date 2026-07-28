@@ -308,7 +308,7 @@ function switchView(view, skipPushState = false) {
     }
   }
   if (typeof gtag === "function") {
-    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia", archive: "Archive — Live Shows", gutenberg: "Project Gutenberg" };
+    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia", archive: "Archive — Live Shows", gutenberg: "Project Gutenberg", youtube: "YouTube", chronam: "Chronicling America", "blues-archive": "Blues Archive", admin: "Admin" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
