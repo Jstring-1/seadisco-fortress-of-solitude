@@ -12750,6 +12750,14 @@ async function _runYtReviewWorker() {
     let searchesThisRun = 0;
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 5;
+    // Tier cycling: walk 'strict' (sole-genre Blues) to the end, flip to
+    // 'loose' (Blues among other genres), then back to strict, forever —
+    // picking up masters newly cached since the last pass. `passSearches`
+    // counts YouTube searches in the current tier pass; two passes in a
+    // row that find zero new work means both tiers are exhausted, so we
+    // stop instead of busy-looping over already-searched masters.
+    let passSearches = 0;
+    let prevPassEmpty = false;
     // Re-derive channel trust from the admin's approve/reject history at
     // the start of every run, so channels vetted since the last run count
     // (and ones that went bad decay out). Held for the whole run — a
@@ -12778,10 +12786,32 @@ async function _runYtReviewWorker() {
             const state = await getReviewState();
             const cursorYear = state?.cursor_year ?? null;
             const cursorMasterId = state?.cursor_master_id ?? null;
-            const master = await getNextBluesMasterAfter(cursorYear, cursorMasterId);
+            const tier = state?.walk_tier === "loose" ? "loose" : "strict";
+            const master = await getNextBluesMasterAfter(cursorYear, cursorMasterId, tier);
             if (!master) {
-                await updateReviewState({ message: "Reached end of Blues masters — nothing more to walk.", running: false });
-                break;
+                // End of this tier's masters. If this pass and the previous one
+                // both found nothing new, the whole catalog is caught up — stop.
+                const thisPassEmpty = passSearches === 0;
+                if (thisPassEmpty && prevPassEmpty) {
+                    await updateReviewState({
+                        message: "Caught up — every strict + multi-genre Blues master searched. Restart to re-scan, or it'll re-check as new masters cache.",
+                        running: false,
+                    });
+                    break;
+                }
+                prevPassEmpty = thisPassEmpty;
+                passSearches = 0;
+                const nextTier = tier === "strict" ? "loose" : "strict";
+                await updateReviewState({
+                    walk_tier: nextTier,
+                    cursor_year: null,
+                    cursor_master_id: null,
+                    cursor_track_pos: null,
+                    message: nextTier === "loose"
+                        ? "Strict Blues pass complete — widening to multi-genre Blues from 1900."
+                        : "Multi-genre pass complete — restarting strict Blues from 1900.",
+                });
+                continue;
             }
             const masterId = Number(master.master_id);
             const data = master.data ?? {};
@@ -12864,6 +12894,7 @@ async function _runYtReviewWorker() {
             consecutiveErrors = 0;
             const { body } = result;
             searchesThisRun++;
+            passSearches++;
             await bumpReviewCounter("total_searched", 1);
             const items = Array.isArray(body?.items) ? body.items : [];
             // Run every result through the popup's auto-matcher and group
@@ -13224,6 +13255,7 @@ app.post("/api/admin/yt-review/reset-cursor", express.json({ limit: "1kb" }), as
             cursor_year: null,
             cursor_master_id: null,
             cursor_track_pos: null,
+            walk_tier: "strict",
             last_error: null,
             message: alsoResetSearchLog
                 ? "Cursor + search log cleared — next Start walks every Blues master + retries every track."

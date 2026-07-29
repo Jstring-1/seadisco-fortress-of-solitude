@@ -436,6 +436,10 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_worker_searches INT NOT NULL DEFAULT 0`);
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS quota_project_units INT NOT NULL DEFAULT 0`);
     await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS total_auto_approved INT NOT NULL DEFAULT 0`);
+    // Which slice of Blues masters the walk is currently on. 'strict' =
+    // sole-genre Blues; 'loose' = Blues among multiple genres. The worker
+    // walks strict first, then loose, then cycles — see _runYtReviewWorker.
+    await getPool().query(`ALTER TABLE track_yt_review_state ADD COLUMN IF NOT EXISTS walk_tier TEXT NOT NULL DEFAULT 'strict'`);
     // Per (master, track) search log so the worker can skip what it
     // already tried, and the admin can later trigger "retry tracks
     // that got 0 candidates" without re-walking every other track.
@@ -6020,7 +6024,7 @@ export async function updateReviewState(patch) {
     const allowed = new Set([
         "running", "cursor_year", "cursor_master_id", "cursor_track_pos",
         "total_searched", "total_queued", "total_skipped", "total_errors",
-        "total_auto_approved",
+        "total_auto_approved", "walk_tier",
         "last_run_at", "last_error", "message",
     ]);
     const cols = [];
@@ -6082,14 +6086,23 @@ export async function bumpReviewQuota(workerSearches, projectUnits) {
 // also skipped for now per the v1.1 spec; revisit when the dated
 // catalog is exhausted. Returns null when no more matches exist past
 // the cursor.
-export async function getNextBluesMasterAfter(cursorYear, cursorMasterId) {
+// Next Blues master to walk, ordered by year then id, after the given
+// cursor. `tier` selects which slice of the catalog:
+//   'strict' — Blues is the SOLE genre (genres length == 1)
+//   'loose'  — Blues is present ALONGSIDE other genres (length > 1)
+// The two tiers are disjoint, so the worker can walk strict to the end,
+// flip to loose, and never re-consider a strict master in the loose pass.
+export async function getNextBluesMasterAfter(cursorYear, cursorMasterId, tier = "strict") {
+    const genreCountClause = tier === "loose"
+        ? "jsonb_array_length(rc.data->'genres') > 1"
+        : "jsonb_array_length(rc.data->'genres') = 1";
     const r = await getPool().query(`SELECT rc.discogs_id AS master_id,
             (rc.data->>'year')::int AS year,
             rc.data
        FROM release_cache rc
       WHERE rc.type = 'master'
         AND jsonb_typeof(rc.data->'genres') = 'array'
-        AND jsonb_array_length(rc.data->'genres') = 1
+        AND ${genreCountClause}
         AND rc.data->'genres' ? 'Blues'
         AND rc.data->>'year' ~ '^[0-9]+$'
         AND (rc.data->>'year')::int > 0
