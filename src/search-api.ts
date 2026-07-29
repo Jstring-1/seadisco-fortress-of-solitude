@@ -12574,6 +12574,105 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// POST /api/admin/yt-review/apply-trust
+// Retroactively apply the CURRENT trust picture to the EXISTING pending
+// queue. The worker only consults trust at insert time, so rows queued
+// before a channel earned trust never auto-resolve. This sweep:
+//   1. refreshes derived trust from your approve/reject history,
+//   2. rejects any pending row from a hard-banned channel (cleanup),
+//   3. for every remaining pending row on a Topic or trusted channel,
+//      re-fetches video details (embeddable/duration) and runs the same
+//      auto-approve gate the worker uses; the first candidate that
+//      clears the gate for a track is pinned and its siblings collapse.
+// Nothing is force-approved: a row only pins if it passes the identical
+// exact-title / duration / embeddable checks. Non-eligible rows are left
+// pending for manual review.
+app.post("/api/admin/yt-review/apply-trust", express.json({ limit: "1kb" }), async (req, res) => {
+  const adminUserId = await requireAdmin(req, res);
+  if (!adminUserId) return;
+  try {
+    await refreshDerivedChannelTrust().catch(() => {});
+    const trusted = await getTrustedChannelIds();
+    const banned = await _getBannedChannelIds();
+
+    // Pull all pending rows (listReviewQueue caps at 200/page).
+    const pending: any[] = [];
+    for (let offset = 0; offset < 20000; offset += 200) {
+      const { rows } = await listReviewQueue({ status: "pending", limit: 200, offset });
+      pending.push(...rows);
+      if (rows.length < 200) break;
+    }
+
+    // 1) Banned-channel cleanup — reject any that slipped in before a ban.
+    let rejectedBanned = 0;
+    const handled = new Set<number>();
+    for (const r of pending) {
+      if (!banned.has(String(r.candidate_channel_id || ""))) continue;
+      const out = await reviewQueueDecide(Number(r.id), "reject", "auto");
+      if (out.ok) rejectedBanned++;
+      handled.add(Number(r.id));
+    }
+
+    // 2) Topic/trusted candidates — re-verify and auto-approve exact hits.
+    const eligible = pending.filter(r =>
+      !handled.has(Number(r.id)) &&
+      (_ytIsTopicChannel(String(r.candidate_channel_title || "")) ||
+        trusted.has(String(r.candidate_channel_id || ""))));
+
+    const details = eligible.length
+      ? await _ytReviewFetchVideoDetails(eligible.map(r => String(r.candidate_video_id)))
+      : new Map<string, YtVideoDetail>();
+
+    // eligible is ordered year→master→track→title_score desc, so the
+    // best candidate per track is considered first and wins the track.
+    const decidedTracks = new Set<string>();
+    let approved = 0;
+    for (const r of eligible) {
+      const key = `${r.master_id}:${r.track_position}`;
+      if (decidedTracks.has(key)) continue;
+      const det = details.get(String(r.candidate_video_id)) || null;
+      const verdict = _ytAutoApproveVerdict({
+        candidateTitle: String(r.candidate_title || ""),
+        channelTitle: String(r.candidate_channel_title || ""),
+        trackArtist: String(r.track_artist || ""),
+        trackTitle: String(r.track_title || ""),
+        trackDurationSeconds: r.track_duration_seconds ?? null,
+        videoDurationSeconds: det?.durationSeconds ?? r.candidate_duration_seconds ?? null,
+        embeddable: det?.embeddable ?? null,
+        regionBlocked: det?.regionBlocked ?? false,
+        trustedChannel: trusted.has(String(r.candidate_channel_id || "")),
+      });
+      if (!verdict.auto) continue;
+      const out = await reviewQueueDecide(Number(r.id), "approve", "auto");
+      if (out.ok && out.videoId && out.masterId && out.trackPosition) {
+        await suggestTrackYtOverride({
+          releaseId: out.masterId,
+          releaseType: "master",
+          trackPosition: out.trackPosition,
+          trackTitle: out.trackTitle ?? null,
+          videoId: out.videoId,
+          videoTitle: null,
+          submittedBy: "auto",
+        });
+        await bumpReviewCounter("total_auto_approved", 1);
+        decidedTracks.add(key);
+        approved++;
+      }
+    }
+    res.json({
+      ok: true,
+      scannedPending: pending.length,
+      channelEligible: eligible.length,
+      approved,
+      rejectedBanned,
+      trustedChannels: trusted.size,
+    });
+  } catch (err: any) {
+    console.error("[yt-review apply-trust]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // POST /api/admin/yt-review/custom-approve
 // Body: { id: number, url: string }
 // Pin a user-supplied YouTube URL to the track referenced by review

@@ -351,6 +351,8 @@
             <input type="checkbox" id="ytr-auto-toggle" onchange="ytrToggleAuto(this.checked)"> Auto-approve exact Topic matches
           </label>
           <span id="ytr-auto-note" style="font-size:0.72rem;color:var(--muted)"></span>
+          <button class="admin-btn" id="ytr-apply-trust-btn" onclick="ytrApplyTrust()" title="Re-check every PENDING candidate against the current trust picture (refreshed from your approve/reject history first). Rows on a Topic or trusted channel that pass the same exact-title / duration / embeddable gate get auto-pinned; banned-channel rows are cleared. Nothing is force-approved. Re-fetches video details, so it spends a little YouTube quota.">✓ Apply trust to pending</button>
+          <span id="ytr-apply-trust-note" style="font-size:0.72rem;color:var(--muted)"></span>
           <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" oninput="ytrFilterInput(this.value)" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
         </div>
         <details id="ytr-channels-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadYtChannels()">

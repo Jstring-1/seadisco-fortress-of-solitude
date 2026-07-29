@@ -3454,6 +3454,31 @@ async function ytrRestartFromTop() {
   } catch (e) { alert(`Reset failed: ${e?.message || e}`); }
 }
 window.ytrRestartFromTop = ytrRestartFromTop;
+async function ytrApplyTrust() {
+  const btn = document.getElementById("ytr-apply-trust-btn");
+  const note = document.getElementById("ytr-apply-trust-note");
+  if (!confirm("Re-check every pending candidate against the current trust picture?\n\nTrust is refreshed from your approve/reject history first. Pending rows on a Topic or trusted channel that pass the exact-title / duration / embeddable gate get auto-pinned; banned-channel rows are cleared. Nothing is force-approved. This re-fetches video details, so it spends a little YouTube quota.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Applying…"; }
+  if (note) note.textContent = "";
+  try {
+    const r = await apiFetch("/api/admin/yt-review/apply-trust", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (note) { note.style.color = "#e88"; note.textContent = `Failed: ${j.error || r.status}`; }
+      return;
+    }
+    if (note) {
+      note.style.color = "var(--muted)";
+      note.textContent = `Auto-pinned ${j.approved} of ${j.channelEligible} trusted/Topic pending (${j.scannedPending} scanned)${j.rejectedBanned ? `, cleared ${j.rejectedBanned} banned` : ""}.`;
+    }
+    loadYtReview();
+  } catch (e) {
+    if (note) { note.style.color = "#e88"; note.textContent = `Failed: ${e?.message || e}`; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "✓ Apply trust to pending"; }
+  }
+}
+window.ytrApplyTrust = ytrApplyTrust;
 async function ytrStop() {
   try {
     await apiFetch("/api/admin/yt-review/stop", { method: "POST" });
