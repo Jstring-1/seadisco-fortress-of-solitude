@@ -1705,14 +1705,9 @@ async function queueRemove(position, externalId) {
 }
 
 async function queueClear() {
-  // Destructive — wipes every queued item server-side and stops
-  // playback. Other destructive actions (sign-out, account delete,
-  // offline-cache wipe) all confirm; this used to fire on the bare
-  // click. Add a guard so a stray tap doesn't dump a 30-track queue.
-  const count = Array.isArray(_queue) ? _queue.length : 0;
-  if (count > 0 && !confirm(`Clear all ${count} queued track${count === 1 ? "" : "s"}? This stops playback and can't be undone.`)) {
-    return;
-  }
+  // No confirm — clearing the queue is reversible (items are still in
+  // the source playlists/favorites) and the prompt fired on every
+  // playlist-load too, which made loading feel hostile.
   // Drop the loaded-playlist label — once the queue is wiped the
   // label no longer represents what's in front of the user. Reset
   // before the render path so _syncLoadedPlaylistLabel sees null,
