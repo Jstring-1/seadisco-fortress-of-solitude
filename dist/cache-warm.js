@@ -39,6 +39,69 @@ async function _readActiveRun() {
         return null;
     }
 }
+const QUEUE_KEY = "cache_warm_queue";
+async function _readQueue() {
+    try {
+        const raw = await getAppSetting(QUEUE_KEY);
+        if (!raw)
+            return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+    }
+    catch {
+        return [];
+    }
+}
+async function _writeQueue(items) {
+    try {
+        await setAppSetting(QUEUE_KEY, items.length ? JSON.stringify(items) : null);
+    }
+    catch { }
+}
+export async function getCacheWarmQueue() {
+    return _readQueue();
+}
+export async function clearCacheWarmQueue() {
+    await _writeQueue([]);
+}
+// Start `combos` back-to-back. The first fires immediately (if nothing
+// is running); the rest are appended to the persisted queue and drained
+// as each run finishes. If a run is already going, every combo is queued.
+export async function enqueueCacheWarmRuns(combos) {
+    const clean = (combos || []).filter(c => c && String(c.genreKey || "").trim());
+    if (!clean.length)
+        return { ok: false, started: 0, queued: 0, error: "no combos" };
+    if (_runningKey) {
+        const q = await _readQueue();
+        q.push(...clean);
+        await _writeQueue(q);
+        return { ok: true, started: 0, queued: clean.length };
+    }
+    const [first, ...rest] = clean;
+    const out = await startCacheWarmRun(first);
+    if (!out.ok)
+        return { ok: false, started: 0, queued: 0, error: out.error };
+    if (rest.length) {
+        const q = await _readQueue();
+        q.push(...rest);
+        await _writeQueue(q);
+    }
+    return { ok: true, started: 1, queued: rest.length };
+}
+// Pop the next queued combo and start it. Called from the worker's
+// exit path once the in-memory lock is clear. No-op if a run somehow
+// started in between or the queue is empty.
+async function _pumpQueue() {
+    if (_runningKey)
+        return;
+    const q = await _readQueue();
+    if (!q.length)
+        return;
+    const next = q.shift();
+    await _writeQueue(q);
+    console.log(`[cache-warm] queue: starting ${next.genreKey}::${next.styleKey || ""} (${q.length} left)`);
+    startCacheWarmRun(next).catch(err => console.error("[cache-warm] queue pump start failed:", err));
+}
 const PER_PAGE = 100;
 const REQ_INTERVAL_MS = 1000;
 // In-memory state only — survives process lifetime, resets on
@@ -83,6 +146,9 @@ export function requestCacheWarmStop() {
     // a stopped run back. Fire-and-forget — worker's finally clause
     // also clears it on natural exit; both paths are safe.
     _clearActiveRun().catch(() => { });
+    // Stop halts the whole batch — drop any queued combos too, so the
+    // worker's exit doesn't pump the next one after the admin said stop.
+    _writeQueue([]).catch(() => { });
 }
 // Admin override: force-clear the in-memory lock even if the worker
 // is theoretically running. Use when the state is wedged — e.g. a
@@ -225,9 +291,15 @@ export async function startCacheWarmRun(opts) {
         }
         finally {
             console.log(`[cache-warm] clearing in-memory lock for ${key}`);
+            const wasStopped = _stopRequested;
             _runningKey = null;
             _stopRequested = false;
             _activeParams = null;
+            // Drain the batch queue: start the next combo unless the admin
+            // hit Stop (which also emptied the queue). Deferred so this run's
+            // teardown fully settles before the next lock is taken.
+            if (!wasStopped)
+                _pumpQueue().catch(err => console.error(`[cache-warm] pump after ${key} failed:`, err));
         }
     })().catch(err => console.error(`[cache-warm] outer IIFE rejected for ${key}:`, err));
     return { ok: true };

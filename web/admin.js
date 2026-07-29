@@ -948,6 +948,11 @@ let _cwSort = { col: "in_cache", dir: "desc" };
 // When true, the per-combo grid hides rows that have a style_key —
 // only genre-only rows are shown so you can see total cache by genre.
 let _cwGenresOnly = false;
+// Combos checked for a back-to-back batch run. Held as a Set of
+// "genre||style" keys so the selection survives the 20s poll re-render
+// (each checkbox re-derives its checked state from this Set).
+let _cwSelected = new Set();
+function _cwSelKey(g, s) { return String(g == null ? "" : g) + "||" + String(s == null ? "" : s); }
 // Last /status response, kept so display-only toggles (genres-only
 // filter, sort header clicks) can re-render without paying for
 // another network round-trip + heavy server-side CTE.
@@ -2544,7 +2549,7 @@ async function loadCacheWarm(opts) {
     }
     // let (not const) on rows because the sort-headers helper
     // re-assigns it to the sorted copy before rendering tbody.
-    let { rows = [], release_cache_total = 0, active = null, running = false } = resp;
+    let { rows = [], release_cache_total = 0, active = null, running = false, queue = [] } = resp;
     const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
     const fmt = n => Number(n || 0).toLocaleString();
     // Preserve form values across re-renders (poll, refresh).
@@ -2642,6 +2647,10 @@ async function loadCacheWarm(opts) {
       </div>
 
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
+        <button class="admin-btn" type="button" onclick="_cwRunSelected()" title="Queue every checked row to run 1900–1970 (each chains a no-year sweep), back-to-back. Works while a run is active — they line up behind it.">▶ Run selected (1900-1970)</button>
+        <span id="cw-sel-count" style="font-size:0.76rem;color:var(--muted)">${_cwSelected.size ? _cwSelected.size + " selected" : ""}</span>
+        ${queue.length ? `<span style="font-size:0.76rem;color:var(--accent)" title="${esc(queue.map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}">queued: <strong>${queue.length}</strong> — ${esc(queue.slice(0, 4).map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}${queue.length > 4 ? "…" : ""}</span>
+             <button class="admin-btn" type="button" onclick="_cwClearQueue()" title="Remove all pending queued combos. Doesn't stop the active run.">✕ Clear queue</button>` : ""}
         <button class="admin-btn" type="button" onclick="_cwToggleGenresOnly()" style="margin-left:auto" title="Hide rows that have a style set so only top-level genre rows remain.">${_cwGenresOnly ? "Show all (genres + styles)" : "Hide styles (genres only)"}</button>
       </div>
       ${rows.length
@@ -2660,17 +2669,19 @@ async function loadCacheWarm(opts) {
           };
           return `<div class="cw-table-wrap" style="overflow-x:auto"><table class="api-log-table cw-stats-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
-              <col style="width:15%">
-              <col style="width:15%">
+              <col style="width:4%">
+              <col style="width:14%">
+              <col style="width:14%">
               <col style="width:8%">
               <col style="width:8%">
               <col style="width:7%">
               <col style="width:7%">
               <col style="width:7%">
               <col style="width:11%">
-              <col style="width:22%">
+              <col style="width:20%">
             </colgroup>
             <thead><tr>
+              <th style="text-align:center"><input type="checkbox" onclick="_cwSelectAllVisible(this.checked)" title="Select / deselect all visible rows"></th>
               ${th("genre_key",     "Genre",       "left")}
               ${th("style_key",     "Style",       "left")}
               ${th("in_cache",      "In cache",    "right")}
@@ -2705,6 +2716,7 @@ async function loadCacheWarm(opts) {
               const isAuto = !r.has_run;
               const styleLabel = r.style_key || "(all)";
               return `<tr${isActive ? ' style="background:rgba(125,225,150,0.06)"' : (isAuto ? ' style="opacity:0.78"' : "")}>
+                <td style="text-align:center"><input type="checkbox" class="cw-sel" data-g="${esc(r.genre_key)}" data-s="${esc(r.style_key || "")}" ${_cwSelected.has(_cwSelKey(r.genre_key, r.style_key)) ? "checked" : ""} onchange="_cwSelToggle(this)"></td>
                 <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.genre_key)}">${esc(r.genre_key)}</td>
                 <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${r.style_key ? "var(--text)" : "var(--muted)"}" title="${esc(styleLabel)}">${esc(styleLabel)}</td>
                 <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${fmt(r.in_cache)}</strong></td>
@@ -2746,6 +2758,55 @@ function _cwLoadIntoForm(genre, style) {
   _cwSyncStyleList();
 }
 window._cwLoadIntoForm = _cwLoadIntoForm;
+// ── Batch selection (checkbox column) ─────────────────────────────
+function _cwSelToggle(el) {
+  const k = _cwSelKey(el.dataset.g, el.dataset.s);
+  if (el.checked) _cwSelected.add(k); else _cwSelected.delete(k);
+  _cwUpdateSelCount();
+}
+window._cwSelToggle = _cwSelToggle;
+function _cwSelectAllVisible(checked) {
+  document.querySelectorAll("input.cw-sel").forEach(cb => {
+    cb.checked = checked;
+    const k = _cwSelKey(cb.dataset.g, cb.dataset.s);
+    if (checked) _cwSelected.add(k); else _cwSelected.delete(k);
+  });
+  _cwUpdateSelCount();
+}
+window._cwSelectAllVisible = _cwSelectAllVisible;
+function _cwUpdateSelCount() {
+  const el = document.getElementById("cw-sel-count");
+  if (el) el.textContent = _cwSelected.size ? _cwSelected.size + " selected" : "";
+}
+async function _cwRunSelected() {
+  if (!_cwSelected.size) { alert("Check one or more rows first."); return; }
+  const combos = [..._cwSelected].map(k => {
+    const i = k.indexOf("||");
+    return { genreKey: k.slice(0, i), styleKey: k.slice(i + 2), fromYear: 1900, toYear: 1970, alsoNoYear: true };
+  });
+  const label = combos.map(c => c.styleKey ? `${c.genreKey}/${c.styleKey}` : c.genreKey).join(", ");
+  if (!confirm(`Queue ${combos.length} combo(s) to run 1900–1970 back-to-back (each chains a no-year sweep)?\n\n${label}`)) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-runs/start-batch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ combos }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(j.error || `HTTP ${r.status}`); return; }
+    _cwSelected.clear();
+    loadCacheWarm();
+  } catch (e) { alert("Batch start failed: " + ((e && e.message) || e)); }
+}
+window._cwRunSelected = _cwRunSelected;
+async function _cwClearQueue() {
+  if (!confirm("Clear all pending queued combos? The active run keeps going.")) return;
+  try {
+    const r = await apiFetch("/api/admin/cache-warm-runs/queue/clear", { method: "POST" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    loadCacheWarm();
+  } catch (e) { alert("Clear queue failed: " + ((e && e.message) || e)); }
+}
+window._cwClearQueue = _cwClearQueue;
 
 // Per-row delete from the grid. Reuses the export's delete endpoint
 // so the same filter pipeline applies. Requires a typed-N confirm

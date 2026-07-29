@@ -13,7 +13,7 @@ import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader,
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, reviewQueueDecide, reviewQueueDeleteApproval, getReviewState, getReviewQuotaToday, bumpReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, logTrackSearched, isTrackAlreadySearched, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
 } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
-import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning } from "./cache-warm.js";
+import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning, enqueueCacheWarmRuns, getCacheWarmQueue, clearCacheWarmQueue } from "./cache-warm.js";
 import {
   initCacheWarmCatnoModule,
 } from "./cache-warm-catno.js";
@@ -10650,6 +10650,7 @@ app.get("/api/admin/cache-warm-runs/status", async (req, res) => {
       release_cache_total: stats.release_cache_total,
       active: getActiveCacheWarmParams(),
       running: isCacheWarmRunning(),
+      queue: await getCacheWarmQueue().catch(() => []),
     });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
@@ -10677,6 +10678,45 @@ app.post("/api/admin/cache-warm-runs/start", express.json({ limit: "4kb" }), asy
     _invalidateCwStats();
     res.json({ ok: true });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Queue several combos to run back-to-back. Body: { combos: [{genreKey,
+// styleKey?, fromYear?, toYear?, alsoNoYear?, resetCursor?}, ...] }.
+// The first starts immediately (if idle); the rest drain as each run
+// finishes. If a run is already going, all combos are queued behind it.
+app.post("/api/admin/cache-warm-runs/start-batch", express.json({ limit: "16kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const raw = Array.isArray(req.body?.combos) ? req.body.combos : [];
+  const num = (v: any) => { const n = parseInt(String(v ?? ""), 10); return Number.isFinite(n) ? n : undefined; };
+  const combos = raw
+    .map((c: any) => ({
+      genreKey: String(c?.genreKey ?? "").trim(),
+      styleKey: String(c?.styleKey ?? "").trim(),
+      fromYear: num(c?.fromYear),
+      toYear: num(c?.toYear),
+      alsoNoYear: !!c?.alsoNoYear,
+      resetCursor: !!c?.resetCursor,
+    }))
+    .filter((c: any) => c.genreKey);
+  if (!combos.length) { res.status(400).json({ error: "no combos" }); return; }
+  try {
+    const out = await enqueueCacheWarmRuns(combos);
+    if (!out.ok) { res.status(409).json({ error: out.error || "could not start" }); return; }
+    _invalidateCwStats();
+    res.json({ ok: true, started: out.started, queued: out.queued });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// Read or clear the pending batch queue (does not touch the active run).
+app.get("/api/admin/cache-warm-runs/queue", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { res.json({ queue: await getCacheWarmQueue() }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.post("/api/admin/cache-warm-runs/queue/clear", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { await clearCacheWarmQueue(); _invalidateCwStats(); res.json({ ok: true }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
 app.post("/api/admin/cache-warm-runs/stop", async (req, res) => {
