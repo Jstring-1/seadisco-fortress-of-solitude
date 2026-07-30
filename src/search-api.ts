@@ -12455,15 +12455,58 @@ app.get("/api/admin/yt-review/bans", async (req, res) => {
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
-// Pull a YouTube channel id out of a raw id or a channel URL. Only the
-// /channel/UC… form carries the id; @handle and /c/ custom URLs need an
-// API resolve we don't do here (use the Ban button on a result row for
-// those — it already has the channelId).
+// Pull a YouTube channel id out of a raw id or a /channel/UC… URL —
+// the only forms that carry the id inline (no network needed).
 function _parseYtChannelId(input: string): string | null {
   const s = String(input || "").trim();
   if (/^UC[\w-]{20,}$/.test(s)) return s;
   const m = /youtube\.com\/channel\/(UC[\w-]{20,})/i.exec(s);
   return m ? m[1] : null;
+}
+
+// Resolve a channel id from any of: a UC… id, a /channel/UC… URL, an
+// @handle (bare, or a youtube.com/@handle URL), a legacy /user/NAME URL,
+// or a /c/NAME custom URL. Handles/usernames can't be parsed offline, so
+// they go through the YouTube Data API (channels.list, 1 quota unit).
+// Returns null when there's no key, the handle is unknown, or the input
+// is unrecognisable.
+async function _ytResolveChannelId(input: string): Promise<string | null> {
+  const s = String(input || "").trim();
+  if (!s) return null;
+  const direct = _parseYtChannelId(s);
+  if (direct) return direct;
+
+  // Figure out what kind of name we're resolving.
+  let username: string | null = null;   // legacy /user/NAME → forUsername
+  let handle: string | null = null;     // @handle / /c/NAME → forHandle
+  const mUser = /youtube\.com\/user\/([A-Za-z0-9._-]+)/i.exec(s);
+  const mHandleUrl = /youtube\.com\/@([A-Za-z0-9._-]+)/i.exec(s);
+  const mCustom = /youtube\.com\/c\/([A-Za-z0-9._-]+)/i.exec(s);
+  const mBareHandle = /^@([A-Za-z0-9._-]+)$/.exec(s);
+  if (mUser) username = mUser[1];
+  else if (mHandleUrl) handle = mHandleUrl[1];
+  else if (mCustom) handle = mCustom[1];
+  else if (mBareHandle) handle = mBareHandle[1];
+  else if (/^[A-Za-z0-9._-]+$/.test(s)) handle = s;   // bare name, no @ / URL
+
+  if (!username && !handle) return null;
+  if (!_youtubeApiKey) return null;
+  const param = username
+    ? `forUsername=${encodeURIComponent(username)}`
+    : `forHandle=${encodeURIComponent(handle!)}`;
+  try {
+    _ytQuotaMaybeReset();
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=id&${param}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const body: any = await resp.json();
+    _bumpYtQuotaPersisted(0, 1);
+    const id = body?.items?.[0]?.id;
+    return typeof id === "string" && /^UC[\w-]{20,}$/.test(id) ? id : null;
+  } catch (e: any) {
+    console.warn("[yt-review] channel-id resolve failed:", e?.message ?? e);
+    return null;
+  }
 }
 
 // POST /api/admin/yt-review/bans — body: { channelId?, url?, channelTitle?, reason? }
@@ -12472,9 +12515,9 @@ function _parseYtChannelId(input: string): string | null {
 app.post("/api/admin/yt-review/bans", express.json({ limit: "2kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const raw = String(req.body?.channelId ?? req.body?.url ?? "").trim();
-  const channelId = _parseYtChannelId(raw) || (raw && /^UC/.test(raw) ? raw : null);
+  const channelId = await _ytResolveChannelId(raw);
   if (!channelId) {
-    res.status(400).json({ error: "bad_channel", message: "Provide a channel id (UC…) or a youtube.com/channel/UC… URL. For @handles, use the Ban button on a result." });
+    res.status(400).json({ error: "bad_channel", message: "Couldn't resolve that to a channel. Paste a UC… id, a youtube.com/channel/UC… URL, or a youtube.com/@handle URL. (Handle lookups need the YouTube API key configured.)" });
     return;
   }
   try {

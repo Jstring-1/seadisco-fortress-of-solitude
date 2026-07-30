@@ -365,10 +365,10 @@
         <details id="ytr-bans-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadYtBans()">
           <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">Banned channels</summary>
           <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.5rem">
-            A banned channel is removed from YouTube results <em>everywhere</em> — the album-popup search and the background review worker — retroactively, even from already-cached results. Banning also drops that channel's pending review candidates and any videos it got auto-approved into (your hand-picked overrides are left alone). Use the Ban button on a channel or queue row, or paste a channel id / youtube.com/channel/UC… URL below.
+            A banned channel is removed from YouTube results <em>everywhere</em> — the album-popup search and the background review worker — retroactively, even from already-cached results. Banning also drops that channel's pending review candidates and any videos it got auto-approved into (your hand-picked overrides are left alone). Use the Ban button on a channel or queue row, or paste a channel id, a youtube.com/channel/UC… URL, or a youtube.com/@handle URL below (handles are resolved via the YouTube API).
           </div>
           <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem">
-            <input type="text" id="ytr-ban-input" class="sd-filter-input" placeholder="UC… channel id or youtube.com/channel/… URL" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrBanFromInput();}">
+            <input type="text" id="ytr-ban-input" class="sd-filter-input" placeholder="UC… id, youtube.com/channel/… or youtube.com/@handle URL" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrBanFromInput();}">
             <button class="admin-btn" onclick="ytrBanFromInput()">Ban</button>
           </div>
           <div id="ytr-bans">Loading…</div>
