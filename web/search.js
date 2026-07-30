@@ -305,7 +305,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (page === 1) {
       if (artistRaw) {
         const bioUrl = `${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`
-                     + (currentArtistId ? `&id=${currentArtistId}` : "");
+                     + (window.currentArtistId ? `&id=${window.currentArtistId}` : "");
         bioFetch = apiFetch(bioUrl).catch(() => null);
       } else if (label) {
         bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`).catch(() => null);
@@ -2551,7 +2551,7 @@ function selectAltArtist(event, el) {
   event.preventDefault();
   clearForm();
   document.getElementById("f-artist").value = el.dataset.altName;
-  currentArtistId = el.dataset.altId || null;
+  window.currentArtistId = el.dataset.altId || null;
   applyEntityLinkDefaults();
   toggleAdvanced(true);
   doSearch(1);
@@ -2584,7 +2584,11 @@ function searchByEntity(event, el) {
   document.getElementById("f-genre").value   = "";
   if (type === "artist") {
     document.getElementById("f-artist").value = name;
-    currentArtistId = el.dataset.entityId || null;
+    window.currentArtistId = el.dataset.entityId || null;
+  } else {
+    // Clicking a non-artist entity link must clear any prior artist pin,
+    // otherwise the by-id route below still fires against the old artist.
+    window.currentArtistId = null;
   }
   if (type === "label")  document.getElementById("f-label").value  = name;
   applyEntityLinkDefaults();
@@ -2602,7 +2606,7 @@ function searchBioArtist(event, el) {
   document.getElementById("f-year").value    = "";
   document.getElementById("f-label").value   = "";
   document.getElementById("f-genre").value   = "";
-  currentArtistId = el.dataset.artistId || null;
+  window.currentArtistId = el.dataset.artistId || null;
   toggleAdvanced(true);
   doSearch(1);
 }

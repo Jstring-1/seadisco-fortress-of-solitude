@@ -22,7 +22,8 @@ function stripHtml(html) {
 let currentPage = 1;
 let totalPages  = 1;
 const itemCache = new Map();
-let currentArtistId  = null;
+// currentArtistId is stored on `window` so every setter/reader across
+// search.js + shared.js sees the same value. See search.js `useArtistById`.
 let detectedArtist   = null;
 
 // ── Genre → Style mapping ────────────────────────────────────────────────
