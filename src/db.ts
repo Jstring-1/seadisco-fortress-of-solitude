@@ -7597,6 +7597,19 @@ export async function getReviewQuotaToday(): Promise<{ workerSearches: number; p
   }
   return { workerSearches: Number(row.w) || 0, projectUnits: Number(row.p) || 0 };
 }
+// Force the persisted daily-quota counters back to zero for today.
+// Used by the admin "resync quota" action when Google Console shows
+// headroom but the app's counter drifted high (e.g. it accumulated
+// searches on the far side of a Pacific-midnight reset).
+export async function resetReviewQuota(): Promise<void> {
+  const today = _quotaDayString();
+  await getPool().query(
+    `UPDATE track_yt_review_state
+        SET quota_date = $1, quota_worker_searches = 0, quota_project_units = 0
+      WHERE id = 1`,
+    [today],
+  );
+}
 export async function bumpReviewQuota(workerSearches: number, projectUnits: number): Promise<void> {
   const today = _quotaDayString();
   await getPool().query(

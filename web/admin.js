@@ -3266,10 +3266,11 @@ async function loadYtReview() {
         ${running
           ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
           : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
-             <button class="admin-btn" onclick="ytrRestartFromTop()" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>`}
+             <button class="admin-btn" onclick="ytrRestartFromTop()" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>
+             <button class="admin-btn" onclick="ytrResetQuota()" title="Zero the app's daily search counter. Use ONLY when Google Cloud Console shows the 'Search Queries per day' quota has headroom — the app's count can drift high after a Pacific-midnight reset and block the worker while Google still has budget.">↺ Resync quota</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
         <span style="font-size:0.74rem;color:var(--muted)" title="Worker searches today / daily cap. Hard cap so manual searches always have budget left.">worker: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.searchesToday||0).toLocaleString()}</strong>/${Number(s.dailyBudget||9000).toLocaleString()}</span>
-        <span style="font-size:0.74rem;color:var(--muted)" title="Project-wide YouTube quota units consumed today (worker + manual). Resets at UTC midnight.">project: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.projectUnitsToday||0).toLocaleString()}</strong>/${Number(s.projectUnitsCap||950000).toLocaleString()} u</span>
+        <span style="font-size:0.74rem;color:var(--muted)" title="Project-wide YouTube quota units consumed today (worker + manual). Resets at midnight Pacific — Google's quota window.">project: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.projectUnitsToday||0).toLocaleString()}</strong>/${Number(s.projectUnitsCap||950000).toLocaleString()} u</span>
         <span style="font-size:0.78rem;color:var(--muted);margin-left:auto">${esc(st.message || "Idle.")}</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;font-size:0.82rem">
@@ -3515,6 +3516,16 @@ async function ytrRestartFromTop() {
   } catch (e) { alert(`Reset failed: ${e?.message || e}`); }
 }
 window.ytrRestartFromTop = ytrRestartFromTop;
+async function ytrResetQuota() {
+  if (!confirm("Zero the app's daily YouTube search counter?\n\nOnly do this when Google Cloud Console shows the 'Search Queries per day' quota still has headroom. If Google is actually near 100/day, resetting here will just make the worker hit Google's real limit and log 403 errors.")) return;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/quota/reset", { method: "POST" });
+    if (r.status === 409) { alert("Stop the worker first, then resync."); return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert(`Resync failed: ${j.error || r.status}`); return; }
+    loadYtReview();
+  } catch (e) { alert(`Resync failed: ${e?.message || e}`); }
+}
+window.ytrResetQuota = ytrResetQuota;
 async function ytrApplyTrust() {
   const btn = document.getElementById("ytr-apply-trust-btn");
   const note = document.getElementById("ytr-apply-trust-note");
