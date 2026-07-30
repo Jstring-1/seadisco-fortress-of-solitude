@@ -6053,14 +6053,20 @@ export async function listReviewErrors(limit = 100) {
 export async function bumpReviewCounter(field, by = 1) {
     await getPool().query(`UPDATE track_yt_review_state SET ${field} = ${field} + $1, last_run_at = NOW() WHERE id = 1`, [by]);
 }
-// Persisted daily-quota counters. quota_date is the UTC YYYY-MM-DD the
-// counters apply to; if today's UTC date differs, the counters reset.
-// Reads return the post-reset values so callers can gate on them.
-function _utcDateString(d = new Date()) {
-    return d.toISOString().slice(0, 10);
+// Persisted daily-quota counters. quota_date is the YYYY-MM-DD the
+// counters apply to, in America/Los_Angeles — YouTube's quota resets at
+// midnight Pacific, so keying off the LA calendar day keeps the app's
+// counters in step with Google's window (a UTC key trips ~8h early and
+// leaves the worker idle while Google still has search budget). Reads
+// return the post-reset values so callers can gate on them.
+function _quotaDayString(d = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(d);
 }
 export async function getReviewQuotaToday() {
-    const today = _utcDateString();
+    const today = _quotaDayString();
     const r = await getPool().query(`SELECT quota_date, quota_worker_searches AS w, quota_project_units AS p
        FROM track_yt_review_state WHERE id = 1`);
     const row = r.rows[0];
@@ -6073,7 +6079,7 @@ export async function getReviewQuotaToday() {
     return { workerSearches: Number(row.w) || 0, projectUnits: Number(row.p) || 0 };
 }
 export async function bumpReviewQuota(workerSearches, projectUnits) {
-    const today = _utcDateString();
+    const today = _quotaDayString();
     await getPool().query(`UPDATE track_yt_review_state
         SET quota_date = $1,
             quota_worker_searches = CASE WHEN quota_date = $1 THEN quota_worker_searches + $2 ELSE $2 END,

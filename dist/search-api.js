@@ -1335,7 +1335,7 @@ app.get("/api/admin/youtube-quota", async (req, res) => {
             usedToday: _ytQuotaUnitsToday,
             cap: _YT_DAILY_SOFT_CAP_UNITS,
             perCallUnits: 100,
-            resetAtIso: new Date(_ytQuotaResetAt).toISOString(),
+            resetAtIso: new Date(_ytQuotaResetAtMs()).toISOString(),
         },
         cache: {
             memEntries: _ytSearchCache.size,
@@ -1373,9 +1373,10 @@ app.get("/api/youtube/quota", async (req, res) => {
     const projectSearchesLeft = Math.max(0, Math.floor((_YT_DAILY_SOFT_CAP_UNITS - _ytQuotaUnitsToday) / 100));
     const userSearchesLeft = Math.max(0, userLimit - userUsed);
     const searchesLeft = Math.min(projectSearchesLeft, userSearchesLeft);
-    // Reset is whichever the user actually cares about. Both wrap at
-    // UTC midnight in practice, so they coincide.
-    const resetAt = userEntry ? userEntry.resetAt : _ytQuotaResetAt;
+    // Reset is whichever the user actually cares about. The project quota
+    // wraps at midnight Pacific (Google's window); the per-user throttle
+    // uses its own rolling reset.
+    const resetAt = userEntry ? userEntry.resetAt : _ytQuotaResetAtMs();
     res.json({
         searchesLeft,
         perCallUnits: 100,
@@ -6735,20 +6736,41 @@ const _ytInflight = new Map();
 // on whatever happens to land first. Reset at UTC midnight.
 let _ytQuotaUnitsToday = 0;
 let _ytReviewSearchesToday = 0;
-let _ytQuotaResetAt = (() => {
-    const d = new Date();
-    d.setUTCHours(24, 0, 0, 0);
-    return d.getTime();
-})();
+// YouTube quota resets at midnight America/Los_Angeles, not UTC. Key the
+// daily counters off the LA calendar date so "cap reached" tracks
+// Google's real window. A UTC key trips ~8h early and leaves the worker
+// idle while Google's search-per-day quota still has budget (the exact
+// symptom: app shows 90/90 while Console shows 17%). Keep this in sync
+// with _quotaDayString in db.ts (the persisted counterpart).
+function _ytQuotaDayLA(d = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(d);
+}
+let _ytQuotaDay = _ytQuotaDayLA();
 function _ytQuotaMaybeReset() {
-    const now = Date.now();
-    if (now >= _ytQuotaResetAt) {
+    const today = _ytQuotaDayLA();
+    if (today !== _ytQuotaDay) {
         _ytQuotaUnitsToday = 0;
         _ytReviewSearchesToday = 0;
-        const d = new Date();
-        d.setUTCHours(24, 0, 0, 0);
-        _ytQuotaResetAt = d.getTime();
+        _ytQuotaDay = today;
     }
+}
+// Epoch ms of the next midnight America/Los_Angeles — the moment the
+// quota window rolls over. Used only for the "resets at" display, so an
+// approximate value on the twice-yearly DST day is harmless.
+function _ytQuotaResetAtMs(now = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles", hour12: false,
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }).formatToParts(now);
+    const get = (t) => Number(parts.find(p => p.type === t)?.value || "0");
+    let h = get("hour");
+    if (h === 24)
+        h = 0;
+    const msIntoDayLA = ((h * 60 + get("minute")) * 60 + get("second")) * 1000 + now.getMilliseconds();
+    return now.getTime() + (24 * 60 * 60 * 1000 - msIntoDayLA);
 }
 // Persist + bump. Mirrors the in-memory counters into
 // track_yt_review_state so a Railway redeploy doesn't lose the day's
@@ -12483,24 +12505,20 @@ let _ytReviewRunning = false;
 let _ytReviewStopRequested = false;
 const _YT_REVIEW_THROTTLE_MS = 8_000;
 const _YT_REVIEW_RATE_LIMIT_BACKOFF_MS = 60_000;
-// Worker-only cap, distinct from the project-wide soft cap. 9,000
-// searches/day leaves ~1,000 (100k units) for manual admin / user
-// searches so the worker can't starve you out. Persists across worker
-// runs within the same UTC day; reset alongside the project counter.
-const _YT_REVIEW_DAILY_BUDGET = 90;
-let _ytReviewSearchesResetAt = (() => {
-    const d = new Date();
-    d.setUTCHours(24, 0, 0, 0);
-    return d.getTime();
+// Worker-only cap, distinct from the project-wide unit soft cap. Google
+// limits search.list to 100 calls/day (the "Search Queries per day"
+// quota), so this sits just under that to leave a handful for manual
+// admin / user searches. Override via YT_REVIEW_DAILY_BUDGET once you've
+// raised that Google quota. Resets on the LA calendar day, in step with
+// Google's window (see _ytQuotaMaybeReset).
+const _YT_REVIEW_DAILY_BUDGET = (() => {
+    const n = parseInt(String(process.env.YT_REVIEW_DAILY_BUDGET ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : 95;
 })();
 function _ytReviewMaybeReset() {
-    const now = Date.now();
-    if (now >= _ytReviewSearchesResetAt) {
-        _ytReviewSearchesToday = 0;
-        const d = new Date();
-        d.setUTCHours(24, 0, 0, 0);
-        _ytReviewSearchesResetAt = d.getTime();
-    }
+    // Worker + project counters share the LA-day reset — delegate so the
+    // two can't reset on different clocks and double-zero the tally.
+    _ytQuotaMaybeReset();
 }
 // Normalise + score a candidate title against the (artist, track)
 // pair. Cheap word-bag overlap — title must mention BOTH artist and
@@ -12836,11 +12854,11 @@ async function _runYtReviewWorker() {
             _ytReviewMaybeReset();
             _ytQuotaMaybeReset();
             if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET) {
-                await updateReviewState({ message: `Worker daily search cap reached (${_YT_REVIEW_DAILY_BUDGET}). Resumes after UTC midnight.`, running: false });
+                await updateReviewState({ message: `Worker daily search cap reached (${_YT_REVIEW_DAILY_BUDGET}). Resumes after midnight Pacific (Google's quota reset).`, running: false });
                 break;
             }
             if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) {
-                await updateReviewState({ message: `Project daily quota cap reached. Resumes after UTC midnight.`, running: false });
+                await updateReviewState({ message: `Project daily quota cap reached. Resumes after midnight Pacific (Google's quota reset).`, running: false });
                 break;
             }
             const state = await getReviewState();
