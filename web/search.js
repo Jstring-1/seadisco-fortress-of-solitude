@@ -2687,14 +2687,21 @@ function _shShow(field) {
   _shHide();
   const all = _shData[field.id];
   if (!all?.length) return;
-  // Type-to-filter: only surface recents that match what's currently
-  // typed. An empty field shows nothing (so focusing a field, or
-  // clearing it, never pops the list) — the dropdown only appears once
-  // the typed text matches a stored entry. Exact matches are dropped so
-  // it never echoes what you've already fully typed.
-  const q = (field.value || "").trim().toLowerCase();
-  if (!q) return;
-  const entries = all.filter(e => { const el = e.toLowerCase(); return el !== q && el.includes(q); });
+  // Type-to-filter: surface recents that match what's currently typed.
+  // A truly empty field shows nothing (so focusing or clearing never
+  // pops the list). Exception: a whitespace-only value (e.g. a single
+  // leading space) opens the FULL list so there's still a way to browse
+  // all recents. Otherwise filter by substring, dropping the exact
+  // typed match so it never echoes what you've already fully typed.
+  const raw = field.value || "";
+  const q = raw.trim().toLowerCase();
+  let entries;
+  if (!q) {
+    if (raw.length === 0) return;      // empty → nothing
+    entries = all.slice();             // whitespace-only → browse everything
+  } else {
+    entries = all.filter(e => { const el = e.toLowerCase(); return el !== q && el.includes(q); });
+  }
   if (!entries.length) return;
   _shActiveField = field;
 
