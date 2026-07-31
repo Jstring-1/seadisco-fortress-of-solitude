@@ -2767,6 +2767,10 @@ function _shInit() {
     const el = e.target;
     if (!el || el.tagName !== "INPUT") return;
     if (!_shFieldIds.has(el.id)) return;
+    // A refocus triggered by the × clear button sets this flag — skip the
+    // dropdown for that one focus so clearing a field never pops recents.
+    // Only a genuine cursor-in-field should surface the history.
+    if (window._shSuppressNextFocus) { window._shSuppressNextFocus = false; return; }
     _shShow(el);
   });
   document.addEventListener("input", (e) => {

@@ -396,8 +396,14 @@ function _attachInputClearButtons(ids) {
       ev.preventDefault();
       ev.stopPropagation();
       input.value = "";
+      // Clearing refocuses the field, which would otherwise re-open the
+      // recent-search dropdown. Flag it so the focusin handler skips the
+      // dropdown for this programmatic focus — only a real cursor-in
+      // should show recents. Reset after the event loop settles.
+      window._shSuppressNextFocus = true;
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.focus();
+      setTimeout(() => { window._shSuppressNextFocus = false; }, 0);
     });
   });
 }
@@ -454,8 +460,12 @@ function _attachClearToOneInput(input) {
     ev.preventDefault();
     ev.stopPropagation();
     input.value = "";
+    // See note in _attachInputClearButtons: suppress the recent-search
+    // dropdown that would otherwise pop from the refocus below.
+    window._shSuppressNextFocus = true;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();
+    setTimeout(() => { window._shSuppressNextFocus = false; }, 0);
   });
 }
 

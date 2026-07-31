@@ -25,16 +25,18 @@ html { overflow-x: hidden; }
   line-height: 1;
   padding: 0.05rem 0.35rem;
   cursor: pointer;
-  display: none;
-  border-radius: 3px;
-  z-index: 2;
-}
-.input-clear-wrap.has-text .input-clear-btn {
+  /* Always visible (even on an empty field), per request. The wrapper's
+     reserved padding-right means it never overlaps typed text. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 3px;
+  z-index: 2;
 }
-.input-clear-btn:hover { color: var(--text); background: var(--border); }
+/* Dim the × on an empty field so it reads as inactive, but keep it
+   shown; brighten once there's something to clear. */
+.input-clear-wrap:not(.has-text) .input-clear-btn { opacity: 0.4; }
+.input-clear-btn:hover { color: var(--text); background: var(--border); opacity: 1; }
 /* When the wrapped input contains text, tint its border with the
    theme's catno (off-spectrum accent) so users can see at a glance
    which fields are populated. Wins over the input's own focus state
