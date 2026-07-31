@@ -2685,8 +2685,17 @@ function saveSearchHistory(context) {
 
 function _shShow(field) {
   _shHide();
-  const entries = _shData[field.id];
-  if (!entries?.length) return;
+  const all = _shData[field.id];
+  if (!all?.length) return;
+  // Type-to-filter: only surface recents that match what's currently
+  // typed. An empty field shows nothing (so focusing a field, or
+  // clearing it, never pops the list) — the dropdown only appears once
+  // the typed text matches a stored entry. Exact matches are dropped so
+  // it never echoes what you've already fully typed.
+  const q = (field.value || "").trim().toLowerCase();
+  if (!q) return;
+  const entries = all.filter(e => { const el = e.toLowerCase(); return el !== q && el.includes(q); });
+  if (!entries.length) return;
   _shActiveField = field;
 
   const drop = document.createElement("div");
@@ -2763,19 +2772,13 @@ function _shInit() {
   // a single handler at document level and react to whichever
   // tracked input the user lands on. Same for input (which also
   // bubbles) — typing in any tracked field hides the dropdown.
-  document.addEventListener("focusin", (e) => {
-    const el = e.target;
-    if (!el || el.tagName !== "INPUT") return;
-    if (!_shFieldIds.has(el.id)) return;
-    // A refocus triggered by the × clear button sets this flag — skip the
-    // dropdown for that one focus so clearing a field never pops recents.
-    // Only a genuine cursor-in-field should surface the history.
-    if (window._shSuppressNextFocus) { window._shSuppressNextFocus = false; return; }
-    _shShow(el);
-  });
+  // Recents are type-to-filter only: the dropdown surfaces as you type
+  // matching text, never on focus alone. _shShow re-filters on every
+  // keystroke and hides itself when nothing matches (so an empty field
+  // or a just-cleared field shows nothing).
   document.addEventListener("input", (e) => {
     const el = e.target;
-    if (el && _shFieldIds.has(el.id)) _shHide();
+    if (el && _shFieldIds.has(el.id)) _shShow(el);
   });
   document.addEventListener("mousedown", (e) => {
     // Dismiss when the click target is outside the dropdown AND
