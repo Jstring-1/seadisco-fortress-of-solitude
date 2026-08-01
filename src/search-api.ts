@@ -4448,6 +4448,14 @@ const _GUTENBERG_TOPIC_PRESETS: Record<string, string[]> = {
 // upstream calls; once a user lands the merged set, caching makes
 // browsing snappy (and saves bandwidth + courtesy).
 const _GUTENBERG_PRESET_TTL_MS = 60 * 60 * 1000;
+// Gutendex (behind Cloudflare) and gutenberg.org now 403 requests that
+// arrive with no User-Agent — which is exactly what Node's global fetch
+// sends by default. Send a descriptive UA on every Gutenberg call so the
+// WAF lets us through (this was surfacing to users as "Search failed
+// (HTTP 502)"). _FETCH_HEADERS for the JSON API, _HTML_HEADERS for the
+// gutenberg.org book HTML.
+const _GUTENBERG_FETCH_HEADERS = { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" } as const;
+const _GUTENBERG_HTML_HEADERS = { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "text/html" } as const;
 const _gutenbergPresetCache = new Map<string, { at: number; body: any }>();
 // Separate, shorter-TTL cache for plain (non-preset) Gutendex queries.
 // Gutendex itself can be slow (1–3 s) for broad substring searches like
@@ -4518,6 +4526,7 @@ app.get("/api/gutenberg/search", async (req, res) => {
         p.set("topic", t);
         return loggedFetch("gutendex", `https://gutendex.com/books/?${p.toString()}`, {
           context: `search-preset:${t}`,
+          headers: _GUTENBERG_FETCH_HEADERS,
           signal: AbortSignal.timeout(15000),
         })
           .then(r => r.ok ? r.json() : null)
@@ -4592,6 +4601,7 @@ app.get("/api/gutenberg/search", async (req, res) => {
     // "upstream slow" than a 30 s hang the user can't escape.
     const r = await loggedFetch("gutendex", url, {
       context: "search",
+      headers: _GUTENBERG_FETCH_HEADERS,
       signal: AbortSignal.timeout(15000),
     });
     console.log(`[gutenberg/search] q="${q}" topic="${topicRaw}" page=${page} upstream=${Date.now() - t0}ms status=${r.status}`);
@@ -4847,7 +4857,7 @@ app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
     // Live fetch — gutendex single-book endpoint. Read-only; no DB
     // write here so we don't half-cache a row that the reader code
     // path expects to also have html populated.
-    const r = await loggedFetch("gutendex", `https://gutendex.com/books/${bookId}`, { context: "book-meta-live" });
+    const r = await loggedFetch("gutendex", `https://gutendex.com/books/${bookId}`, { context: "book-meta-live", headers: _GUTENBERG_FETCH_HEADERS });
     if (!r.ok) {
       res.status(r.status === 404 ? 404 : 502).json({ error: "upstream", status: r.status });
       return;
@@ -4931,8 +4941,8 @@ app.get("/api/gutenberg/book/:id", async (req, res) => {
       `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.html`,
     ];
     const [metaRes, ...htmlResults] = await Promise.all([
-      loggedFetch("gutendex", metaUrl, { context: "book-meta" }).catch(() => null),
-      ...htmlUrls.map(u => loggedFetch("gutenberg-html", u, { context: "book-html" }).catch(() => null)),
+      loggedFetch("gutendex", metaUrl, { context: "book-meta", headers: _GUTENBERG_FETCH_HEADERS }).catch(() => null),
+      ...htmlUrls.map(u => loggedFetch("gutenberg-html", u, { context: "book-html", headers: _GUTENBERG_HTML_HEADERS }).catch(() => null)),
     ]);
     const htmlOk = htmlResults.find(r => r && r.ok);
     if (!htmlOk) {
