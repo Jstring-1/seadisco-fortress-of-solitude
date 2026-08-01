@@ -773,7 +773,7 @@ e.g.  miles davis | coltrane
     <!-- Blues Archive tab — admin-only unified view: blues artists +
          their lyrics + their releases. Mirrors the chronam gating. -->
     <span id="extras-tab-blues-archive-sep" class="rr-tab-sep" style="display:none">/</span>
-    <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Blues Archive — admin-only lyrics + tunings reference" style="display:none">Blues Archive</span>
+    <span id="extras-tab-blues-archive" class="rr-tab rr-tab-restricted" onclick="switchView('blues-archive')" title="Lyrics — blues lyrics + tunings reference" style="display:none">Lyrics</span>
     <!-- YouTube tab — admin/demo-only, parked at the end of the strip. -->
     <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
     <span id="extras-tab-youtube" class="rr-tab rr-tab-restricted" onclick="switchView('youtube')" title="YouTube submissions tools (admin/demo only)" style="display:none">YouTube</span>
@@ -803,16 +803,12 @@ e.g.  miles davis | coltrane
      (same engine as LOC — archive.org serves direct mp3 URLs). -->
 <div id="archive-view" class="content-narrow" style="display:none">
   <div class="view-intro">
-    <h1>Live show archive</h1>
-    <p>Browse and stream live concert and radio recordings from the Internet Archive's Live Music Archive — soundboard tapes, vintage broadcasts, and taper recordings — playing through the same mini-player as the rest of SeaDisco.</p>
+    <h1>Internet Archive audio</h1>
+    <p>Search and stream audio from the Internet Archive — live concert and radio tapes, vintage broadcasts, and curated collections — all through SeaDisco's mini-player.</p>
   </div>
   <div class="loc-header">
-    <h2 class="loc-title">Archive.org</h2>
-    <!-- Tab strip lives inside loc-header so the title→tabs gap
-         matches the loc-title margin pattern used by every other
-         discovery view (LOC / Wiki / YT / Gutenberg / Chronam /
-         MB / Blues Archive). archive.js updates `active` on each
-         click instead of re-rendering this strip. -->
+    <!-- Tabs only; the view-intro above is the heading. archive.js
+         updates `active` on each click instead of re-rendering this strip. -->
     <div class="loc-tabs archive-tabs">
       <button type="button" class="loc-tab archive-tab archive-tab-search active" onclick="_archiveSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab archive-tab archive-tab-saved" onclick="_archiveSwitchTab('saved')">Saved</button>
@@ -824,11 +820,10 @@ e.g.  miles davis | coltrane
 
 <div id="wiki-view" class="content-narrow" style="display:none">
   <div class="view-intro">
-    <h1>Wikipedia music lookup</h1>
+    <h1>Wikipedia</h1>
     <p>Pull artist, album, and label background straight from Wikipedia without leaving the music — SeaDisco keeps playing while you read the history behind what you're hearing.</p>
   </div>
   <div class="loc-header">
-    <h2 class="loc-title">Wikipedia</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_wikiSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_wikiSwitchTab('saved')" title="Sign in to save Wikipedia articles for later">Saved</button>
@@ -856,8 +851,11 @@ e.g.  miles davis | coltrane
      identically to clicking a YouTube link from anywhere else on the
      site. Saving requires sign-in (any user, not admin-gated). -->
 <div id="youtube-view" class="content-narrow" style="display:none">
+  <div class="view-intro">
+    <h1>YouTube</h1>
+    <p>Search YouTube and play results in SeaDisco's mini-player without leaving the site — save the ones worth keeping to your account.</p>
+  </div>
   <div class="loc-header">
-    <h2 class="loc-title">YouTube</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_youtubeSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_youtubeSwitchTab('saved')" title="Sign in to save YouTube videos for later">Saved</button>
@@ -894,8 +892,11 @@ e.g.  miles davis | coltrane
      book reader, mirrors LOC/Archive pattern: Search tab + Library tab,
      reader overlay with auto-resume scroll + manual bookmarks. -->
 <div id="gutenberg-view" class="content-narrow" style="display:none">
+  <div class="view-intro">
+    <h1>Project Gutenberg</h1>
+    <p>Search and read tens of thousands of free public-domain books — music histories, biographies, and more — right in the browser, with your place saved as you go.</p>
+  </div>
   <div class="loc-header">
-    <h2 class="loc-title">Project Gutenberg</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_gutenbergSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_gutenbergSwitchTab('saved')" title="Sign in to save books to your library">Saved</button>
@@ -976,8 +977,11 @@ e.g.  miles davis | coltrane
      only on the server side, the tab nav above hides it for everyone
      else. -->
 <div id="chronam-view" class="content-narrow" style="display:none">
+  <div class="view-intro">
+    <h1>Historic newspapers</h1>
+    <p>Search millions of digitized U.S. newspaper pages from the Library of Congress's Chronicling America — dig up reviews, ads, and mentions from the era you're listening to.</p>
+  </div>
   <div class="loc-header">
-    <h2 class="loc-title">Historic Newspapers</h2>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_chronamSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_chronamSwitchTab('saved')" title="Sign in to save newspaper pages for later">Saved</button>
@@ -1051,13 +1055,14 @@ e.g.  miles davis | coltrane
 
 <div id="blues-archive-view" class="content-narrow" style="display:none">
   <div class="blues-archive-list">
-    <!-- Header: title + subtab nav, mirroring the loc-header pattern
-         used by wiki/youtube/gutenberg/chronam so every discovery
-         page presents the same top affordance. Bulk action buttons
-         that used to live up here have moved into their respective
-         per-subtab toolbars to cut top-of-page clutter. -->
+    <!-- Header mirrors the other discovery pages: a view-intro blurb,
+         then the subtab strip in a title-less loc-header. The item
+         count rides in the h1 so it's not lost. -->
+    <div class="view-intro">
+      <h1>Lyrics <span id="blues-archive-count" style="font-size:0.72rem;color:var(--muted);font-weight:normal;margin-left:0.5rem"></span></h1>
+      <p>A growing reference of blues lyrics and guitar tunings, cross-linked to the recordings they belong to — search the words, browse the tunings, or export either.</p>
+    </div>
     <div class="loc-header">
-      <h2 class="loc-title">Blues Archive <span id="blues-archive-count" style="font-size:0.72rem;color:var(--muted);font-weight:normal;margin-left:0.5rem"></span></h2>
       <div class="loc-tabs" id="blues-archive-subtabs">
         <button type="button" class="loc-tab loc-tab-search active ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
         <button type="button" class="loc-tab ba-subtab" data-ba-tab="tunings" onclick="_baSwitchSubtab('tunings')">Tunings</button>

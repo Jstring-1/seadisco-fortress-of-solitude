@@ -289,7 +289,6 @@ async function _locResumeFromUrl(li, lp) {
 function _locRenderShell() {
   return `
     <div class="loc-header">
-      <h2 class="loc-title">Library of Congress</h2>
       <div class="loc-tabs">
         <button type="button" class="loc-tab loc-tab-search active" onclick="_locSwitchTab('search')">Search</button>
         <button type="button" class="loc-tab loc-tab-saved" onclick="_locSwitchTab('saved')">Saved</button>
