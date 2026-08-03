@@ -1890,6 +1890,25 @@ function setVideoUrl(id) {
 let _ytLoadTimer = null;
 let _ytHasPlayed = false;  // true once the current video reaches "playing" state
 let _ytVideoToken = 0;     // increments per video load — guards against stale per-video callbacks
+// The video id the app most recently asked the iframe to play. YouTube's
+// IFrame embed still autoplays a "related / up next" video when a clip
+// ends and we don't navigate away first (playerVars.rel:0 no longer
+// disables this — since 2018 it only limits picks to the same channel).
+// When that happens the iframe starts a video we have no queue entry or
+// metadata for, so the mini-bar shows a raw 11-char id and playback
+// wanders off the user's queue. We compare this against the iframe's
+// live video_id in onStateChange and stop any foreign playback.
+let _ytIntendedId = null;
+// True when the iframe is actively presenting (playing/buffering/cued) a
+// video that isn't the one we asked for — i.e. a YouTube-initiated
+// autoplay pick. video_id is only trusted when it's a non-empty string.
+function _ytIsForeignVideo() {
+  if (!_ytIntendedId) return false;
+  try {
+    const vid = ytPlayer?.getVideoData?.()?.video_id;
+    return typeof vid === "string" && vid.length > 0 && vid !== _ytIntendedId;
+  } catch { return false; }
+}
 // Whether the user has interacted with the page yet this session.
 // Used by the YT watchdog to distinguish "autoplay blocked because no
 // gesture" (don't prune — show Tap ▶) from "video genuinely dead"
@@ -1918,6 +1937,7 @@ const _YT_PLAYER_ROTATE_EVERY = 10;
 function loadYTVideo(id) {
   _ytHasPlayed = false;
   window._ytRetried = false;  // reset retry flag for new video
+  _ytIntendedId = id;         // the id we're asking for — foreign-autoplay guard compares against this
   _ytVideoToken++;
   _ytPlayCount++;
   // Periodic player rotation (memory hygiene). On the rotation tick,
@@ -2262,6 +2282,24 @@ function _createYTPlayer(id) {
       onStateChange: function(e) {
         if (session !== _ytSession) return;   // player was destroyed/recreated
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+        // Foreign-autoplay guard: when a clip ends and we don't navigate
+        // away, YouTube's embed rolls into its own "up next" pick. That
+        // video isn't in the user's queue and we have no metadata for it,
+        // so the mini-bar shows a raw id and playback wanders off-list.
+        // As soon as the iframe reports it's presenting a video we didn't
+        // ask for, stop it and mark playback ended. (Runs only for
+        // active states — a stale "ended"/"paused" for the prior clip
+        // must fall through to the real end handling below.)
+        if ((e.data === 1 || e.data === 3 || e.data === 5) && _ytIsForeignVideo()) {
+          console.debug("[yt] foreign autoplay blocked", {
+            intended: _ytIntendedId,
+            got: (() => { try { return ytPlayer?.getVideoData?.()?.video_id; } catch { return "?"; } })(),
+          });
+          try { if (typeof ytPlayer?.stopVideo === "function") ytPlayer.stopVideo(); } catch {}
+          if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+          updatePlayerStatus("ended");
+          return;
+        }
         if (e.data === 1) {
           _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false;
           // Begin polling for YT progress (timeupdate-equivalent — the
@@ -4402,6 +4440,9 @@ function playNextVideo() {
       // album tracks the user didn't add. Stop cleanly.
       const hasQueue = (typeof _queueHasPlayable === "function") && _queueHasPlayable();
       if (hasQueue) {
+        // Stop the iframe so YouTube can't roll into its own "up next"
+        // autoplay pick now that the queue is exhausted.
+        try { if (typeof ytPlayer?.stopVideo === "function") ytPlayer.stopVideo(); } catch {}
         updatePlayerStatus("ended");
         updateVideoNavButtons();
         return;
@@ -4426,7 +4467,9 @@ function _playNextVideoInternal() {
     }
     next++;
   }
-  // No more tracks in queue
+  // No more tracks in queue. Stop the iframe so YouTube can't roll into
+  // its own "up next" autoplay pick.
+  try { if (typeof ytPlayer?.stopVideo === "function") ytPlayer.stopVideo(); } catch {}
   updatePlayerStatus("ended");
   updateVideoNavButtons();
 }
