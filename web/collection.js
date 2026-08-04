@@ -105,7 +105,14 @@ function restoreFilterState() {
       const allRadio = document.querySelector('input[name="cw-result-type"][value=""]');
       if (allRadio) allRadio.checked = true;
     }
-    if (state["cw-advOpen"]) toggleCwAdvanced(true);
+    // Open the Filters panel if it was left open OR if any advanced field
+    // (everything except the always-visible cw-query box, plus a
+    // non-default result type) carries a value — so restored filters are
+    // never hidden behind a collapsed panel.
+    const advIds = _cwFilterIds.filter(id => id !== "cw-query");
+    const anyAdvSet = advIds.some(id => (document.getElementById(id)?.value ?? "").trim() !== "")
+      || (document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "") !== "";
+    if (state["cw-advOpen"] || anyAdvSet) toggleCwAdvanced(true);
     else toggleCwAdvanced(false);
   } catch {}
 }

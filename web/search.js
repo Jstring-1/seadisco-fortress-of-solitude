@@ -43,6 +43,42 @@ function toggleAdvanced(forceOpen) {
   arrow.classList.toggle("is-open", open);
 }
 
+// The advanced-panel inputs. Sort / result-type / the icon toggles live
+// OUTSIDE the panel (always visible) so they don't count toward "should
+// the panel be open".
+const _SD_ADVANCED_FIELD_IDS = ["f-artist","f-release","f-label","f-format","f-year","f-country","f-genre","f-style"];
+// Open the Advanced panel whenever any of its fields carries a non-default
+// value, so a restored / prefilled / swapped search never hides the
+// filters that are actually shaping the results. Called from every path
+// that populates the form. Never auto-collapses — only reveals.
+function _sdSyncAdvancedPanel() {
+  const anySet = _SD_ADVANCED_FIELD_IDS.some(id => (document.getElementById(id)?.value ?? "").trim() !== "");
+  if (anySet && typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
+}
+window._sdSyncAdvancedPanel = _sdSyncAdvancedPanel;
+
+// ── "Hide results with no year" on-the-fly filter ─────────────────────────
+// Client-side only: flips a class on the shared #results grid; renderCard
+// tags year-less release/master cards with .card-no-year and CSS hides
+// them. No refetch, persists across searches/pagination until toggled off.
+// Both the main-search and My-Records control rows carry a button; they
+// share this one state so the toggle stays in sync across views.
+let _sdHideNoYear = false;
+function _sdApplyHideNoYear() {
+  const grid = document.getElementById("results");
+  if (grid) grid.classList.toggle("hide-no-year", _sdHideNoYear);
+  document.querySelectorAll(".f-noyear-btn").forEach(b => {
+    b.classList.toggle("active", _sdHideNoYear);
+    b.setAttribute("aria-pressed", _sdHideNoYear ? "true" : "false");
+  });
+}
+function _sdToggleHideNoYear() {
+  _sdHideNoYear = !_sdHideNoYear;
+  _sdApplyHideNoYear();
+}
+window._sdToggleHideNoYear = _sdToggleHideNoYear;
+window._sdApplyHideNoYear = _sdApplyHideNoYear;
+
 // ── URL state helpers ────────────────────────────────────────────────────
 function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
   const p = new URLSearchParams();
@@ -93,8 +129,8 @@ function restoreFromParams(p) {
   // window.currentBarcode and threads it through to /search?barcode=.
   const bcParam = (p.get("bc") || "").replace(/[^0-9]/g, "");
   try { window.currentBarcode = bcParam || null; } catch {}
-  const hasAdvanced = p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn") || p.get("t") || p.get("st") || p.get("f") || p.get("fm") || p.get("c") || p.get("co");
-  if (hasAdvanced) toggleAdvanced(true);
+  // Reveal the panel whenever any advanced field ended up populated.
+  _sdSyncAdvancedPanel();
 }
 
 // Reset every form field + status row, but DON'T touch the AI results
@@ -159,10 +195,7 @@ function _sdRunPrefilledSearch(opts) {
   }
   // Open the advanced panel when any of its fields are populated so
   // the user can see the artist / label / etc. that drove the search.
-  const hasAdvanced = !!(opts.a || opts.l || opts.e || opts.y);
-  if (hasAdvanced && typeof toggleAdvanced === "function") {
-    try { toggleAdvanced(true); } catch {}
-  }
+  _sdSyncAdvancedPanel();
   if (typeof doSearch === "function") doSearch(1);
 }
 window._sdRunPrefilledSearch = _sdRunPrefilledSearch;
@@ -1394,7 +1427,14 @@ function renderCard(item, index, opts) {
   }
   const animClass = index != null ? " card-animate" : "";
   const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
-  const typeClass = `card card-type-${type}${animClass}`;
+  // Tag release/master cards that have no year so the "hide results with
+  // no year" toggle (_sdToggleHideNoYear) can filter them out client-side
+  // via a container class — no refetch. Artist/label cards never carry a
+  // year, so they're deliberately left untagged (the filter must not hide
+  // them when the user is browsing artists/labels).
+  const _yrStr = String(year).trim();
+  const noYearClass = (isRelease && (!_yrStr || _yrStr === "0")) ? " card-no-year" : "";
+  const typeClass = `card card-type-${type}${noYearClass}${animClass}`;
   const fullTitle = artist ? `${artist} - ${title}` : title;
   // data-card-id / data-card-type let the wide-card enrichment
   // helper (_sdEnrichWideCards) batch-look-up cached release data

@@ -209,6 +209,14 @@
             aria-pressed="false">
       <span class="f-exclude-cd-glyph">💿</span>
     </button>
+    <!-- Hide results with no year — client-side toggle (search.js
+         _sdToggleHideNoYear); hides release/master cards lacking a year. -->
+    <button type="button" id="f-noyear" class="f-exclude-cd-btn f-noyear-btn"
+            onclick="_sdToggleHideNoYear()"
+            title="Hide results with no year"
+            aria-pressed="false">
+      <span class="f-exclude-cd-glyph">📅</span>
+    </button>
   </div>
 
   <div id="advanced-panel">
@@ -421,6 +429,15 @@ e.g.  miles davis | coltrane
       </label>
       <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
+      <span style="color:#333;margin:0 0.25rem">|</span>
+      <!-- Hide results with no year — shares the main-search toggle state
+           (search.js _sdToggleHideNoYear); both grids render into #results. -->
+      <button type="button" id="cw-noyear" class="f-exclude-cd-btn f-noyear-btn"
+              onclick="_sdToggleHideNoYear()"
+              title="Hide results with no year"
+              aria-pressed="false">
+        <span class="f-exclude-cd-glyph">📅</span>
+      </button>
       <!-- Wide-cards + Clear moved up into the search-row to match the
            main search page. -->
     </div>

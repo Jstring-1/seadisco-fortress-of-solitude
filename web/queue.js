@@ -181,6 +181,16 @@ let _queueCurrentPosition = null;
 // playback at page boot is the common trigger). Falling back to
 // externalId match keeps the indicator stable across that window.
 let _queuePlayingExternalId = null;
+// True once the cross-source queue has driven a play this session. When
+// set, auto-advance must NOT fall back to the legacy album-mode list
+// (window._videoQueue) after the queue is exhausted — that list can hold
+// a whole album (from a single-track click) or a stale scrape from an
+// earlier context, and playing it makes the player wander into tracks
+// the user never queued ("it's playing other playlists / cached
+// tracks"). Reset only when the queue is cleared. Exposed for modal.js's
+// playNextVideo / onVideoEnded fallback guards.
+let _queueWasDriving = false;
+window._queueIsDriving = () => _queueWasDriving;
 
 // ── Anon queue persistence (localStorage) ───────────────────────────
 // Anon visitors don't have a server-backed queue, but we want them to
@@ -637,6 +647,9 @@ async function _queuePlayNext() {
 // fired by _locPlay/openVideo doesn't re-insert the same item.
 let _queueDispatching = false;
 async function _queuePlayItem(entry, opts = {}) {
+  // The cross-source queue is now the playback driver — latch the flag so
+  // auto-advance never falls back to the legacy album-mode list.
+  _queueWasDriving = true;
   // Shuffle history: push the externalId we're about to play unless
   // the caller is doing a Prev-walk (where the history is already
   // accurate after _shufflePickPrevExt mutated it). Also drop the id
@@ -837,6 +850,7 @@ function _queueOnExternalPlay(itemPayload) {
     _queue = combined;
     _queueCurrentPosition = 1;
     _queuePlayingExternalId = ext;
+    _queueWasDriving = true;
     _saveAnonQueue(combined);
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     _refreshPlayerNavButtons();
@@ -936,6 +950,7 @@ function _queueOnExternalPlay(itemPayload) {
   _queue = [optimistic, ...existing];
   _queueCurrentPosition = tempPos;
   _queuePlayingExternalId = String(itemPayload.externalId);
+  _queueWasDriving = true;
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
   // Now fire the server insert in the background and reconcile our
@@ -1719,6 +1734,8 @@ async function queueClear() {
   // Reset shuffle state — a cleared queue means there's no history
   // worth preserving, and the next add+play should start a fresh deck.
   _shuffleResetState();
+  // Queue is gone — the next play starts a fresh driver latch.
+  _queueWasDriving = false;
   // Anon path: clear localStorage, stop playback, drop the drawer.
   if (!window._clerk?.user) {
     _queue = [];

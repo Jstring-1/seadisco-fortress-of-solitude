@@ -4439,7 +4439,14 @@ function playNextVideo() {
       // Queue handled it as "exhausted" — don't auto-advance into
       // album tracks the user didn't add. Stop cleanly.
       const hasQueue = (typeof _queueHasPlayable === "function") && _queueHasPlayable();
-      if (hasQueue) {
+      // Once the cross-source queue has driven playback, it is the SOLE
+      // source of truth. When it's exhausted (or has no live rows left),
+      // stop — never fall back to the legacy album-mode window._videoQueue,
+      // which can still hold a whole album (from a single-track click) or
+      // a stale scrape from an earlier view. Playing that list is the
+      // "it's playing songs not in my queue" bug.
+      const queueDriving = (typeof window._queueIsDriving === "function") && window._queueIsDriving();
+      if (hasQueue || queueDriving) {
         // Stop the iframe so YouTube can't roll into its own "up next"
         // autoplay pick now that the queue is exhausted.
         try { if (typeof ytPlayer?.stopVideo === "function") ytPlayer.stopVideo(); } catch {}
@@ -4514,6 +4521,15 @@ function onVideoEnded() {
     // case.
     if (typeof _queueHasPlayable === "function" && _queueHasPlayable()) {
       playNextVideo();
+      return;
+    }
+    // If the cross-source queue drove playback, it's the sole source of
+    // truth — don't loop the legacy album-mode list (stale album / scrape
+    // the user never queued). Stop cleanly.
+    if (typeof window._queueIsDriving === "function" && window._queueIsDriving()) {
+      try { if (typeof ytPlayer?.stopVideo === "function") ytPlayer.stopVideo(); } catch {}
+      updatePlayerStatus("ended");
+      updateVideoNavButtons();
       return;
     }
     const queue = window._videoQueue ?? [];

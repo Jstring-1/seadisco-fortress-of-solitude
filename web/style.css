@@ -8814,6 +8814,18 @@ body.is-offline button.offline-disabled {
 }
 .f-exclude-cd-btn.active::after { opacity: 1; }
 
+/* "Hide results with no year" — same circular exclusion shape as the
+   CD-exclude button, but a blue strike/accent so the two adjacent
+   exclusion toggles read as distinct at a glance. */
+.f-noyear-btn::after { background: #5aa0ff; }
+.f-noyear-btn.active {
+  background: rgba(90, 160, 255, 0.14);
+  border-color: rgba(90, 160, 255, 0.55);
+}
+/* When the toggle is on, hide year-less release/master cards in the
+   shared results grid. renderCard tags them with .card-no-year. */
+#results.hide-no-year .card-no-year { display: none !important; }
+
 /* "Hard to Find" toggle — same circular button shape as the CD-exclude
    above, but uses a 💎 glyph and accent-orange active state so the
    two filters read as a deliberate pair without looking identical.
