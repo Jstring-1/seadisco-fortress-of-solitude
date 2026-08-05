@@ -9637,14 +9637,18 @@ async function _computeCacheAnalyticsV2(f) {
 }
 export async function resetCacheWarmRun(genreKey, styleKey) {
     await getPool().query(`UPDATE cache_warm_runs
-        SET current_year    = NULL,
-            current_page    = 1,
-            total_searched  = 0,
-            total_cached    = 0,
-            total_skipped   = 0,
-            total_errors    = 0,
-            recent_cached   = '[]'::jsonb,
-            recent_errors   = '[]'::jsonb
+        SET current_year        = NULL,
+            current_page        = 1,
+            total_searched      = 0,
+            total_cached        = 0,
+            total_skipped       = 0,
+            total_errors        = 0,
+            last_run_at         = NULL,
+            last_cached_at      = NULL,
+            no_year_last_run_at = NULL,
+            no_year_pages_seen  = 0,
+            recent_cached       = '[]'::jsonb,
+            recent_errors       = '[]'::jsonb
       WHERE genre_key = $1 AND style_key = $2`, [genreKey, styleKey || ""]);
 }
 export async function deleteCacheWarmRun(genreKey, styleKey) {

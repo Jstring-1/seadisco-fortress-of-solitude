@@ -2728,7 +2728,7 @@ async function loadCacheWarm(opts) {
                 <td style="text-align:right;white-space:nowrap">
                   <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues('${safeG}','${safeS}')" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
                   <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo('${safeG}','${safeS}', ${r.in_cache || 0})" title="Delete every release_cache row for this (genre, style) combo. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo('${safeG}','${safeS}', ${r.in_cache || 0}, this)" title="Delete every release_cache row for this (genre, style) combo. Deletes immediately; toast confirms the count. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
                 </td>
               </tr>`;
             }).join("")}</tbody>
@@ -2812,10 +2812,13 @@ window._cwClearQueue = _cwClearQueue;
 // so the same filter pipeline applies. Requires a typed-N confirm
 // above 1000 rows so the bigger ⌫ in a popular genre can't fire on
 // a misclick. Refreshes the grid on success.
-async function _cwDeleteCombo(genre, style, expectedCount) {
+async function _cwDeleteCombo(genre, style, expectedCount, btn) {
   if (!genre) return;
-  // Confirmation removed per request — the grid ⌫ deletes immediately.
-  // Safe-ish: the data re-fetches from Discogs on demand.
+  // No up-front confirm (removed per request) — deletes immediately, then
+  // reports the result via toast so it's clearly "working". Data re-fetches
+  // from Discogs on demand, so this is recoverable.
+  const label = style ? `${genre} / ${style}` : `${genre} (all styles)`;
+  if (btn) { btn.disabled = true; btn.dataset._t = btn.textContent; btn.textContent = "…"; }
   try {
     const body = { genre };
     if (style) body.style = style;
@@ -2825,9 +2828,30 @@ async function _cwDeleteCombo(genre, style, expectedCount) {
       body: JSON.stringify(body),
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Delete failed: ${j.error || r.status}`); return; }
+    if (!r.ok) {
+      if (typeof showToast === "function") showToast(`Delete failed: ${j.error || r.status}`, "error");
+      else alert(`Delete failed: ${j.error || r.status}`);
+      return;
+    }
+    const n = Number(j.deleted ?? 0);
+    // Also zero the run-stat columns (cached/skipped/errors/cursor/last-run)
+    // for this combo — those live in cache_warm_runs, not release_cache, so
+    // deleting cached rows alone leaves them showing a stale history.
+    try {
+      await apiFetch("/api/admin/cache-warm-runs/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ genreKey: genre, styleKey: style || "" }),
+      });
+    } catch {}
+    if (typeof showToast === "function") showToast(`Deleted ${n.toLocaleString()} row${n === 1 ? "" : "s"} — ${label}`, "info");
     if (typeof loadCacheWarm === "function") { try { loadCacheWarm(); } catch {} }
-  } catch (e) { alert(`Delete failed: ${e}`); }
+  } catch (e) {
+    if (typeof showToast === "function") showToast(`Delete failed: ${e}`, "error");
+    else alert(`Delete failed: ${e}`);
+  } finally {
+    if (btn && btn.isConnected) { btn.disabled = false; if (btn.dataset._t) btn.textContent = btn.dataset._t; }
+  }
 }
 window._cwDeleteCombo = _cwDeleteCombo;
 async function cacheWarmStartFromForm(resetCursor) {
