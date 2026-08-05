@@ -2648,6 +2648,7 @@ async function loadCacheWarm(opts) {
 
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
         <button class="admin-btn" type="button" onclick="_cwRunSelected()" title="Queue every checked row to run 1900–1970 (each chains a no-year sweep), back-to-back. Works while a run is active — they line up behind it.">▶ Run selected (1900-1970)</button>
+        <button id="cw-del-selected-btn" class="admin-btn" type="button" onclick="_cwDeleteSelected()" title="Delete every release_cache row for all checked combos and zero their run-stat columns. One confirm for the batch. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫ Delete selected</button>
         <span id="cw-sel-count" style="font-size:0.76rem;color:var(--muted)">${_cwSelected.size ? _cwSelected.size + " selected" : ""}</span>
         ${queue.length ? `<span style="font-size:0.76rem;color:var(--accent)" title="${esc(queue.map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}">queued: <strong>${queue.length}</strong> — ${esc(queue.slice(0, 4).map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}${queue.length > 4 ? "…" : ""}</span>
              <button class="admin-btn" type="button" onclick="_cwClearQueue()" title="Remove all pending queued combos. Doesn't stop the active run.">✕ Clear queue</button>` : ""}
@@ -2798,6 +2799,50 @@ async function _cwRunSelected() {
   } catch (e) { alert("Batch start failed: " + ((e && e.message) || e)); }
 }
 window._cwRunSelected = _cwRunSelected;
+// Bulk delete every checked combo: delete its cached rows + zero its
+// run-stat columns, same as the per-row ⌫ but for the whole selection.
+// One confirm for the batch (each combo can be huge), then a summary toast.
+async function _cwDeleteSelected() {
+  if (!_cwSelected.size) { alert("Check one or more rows first."); return; }
+  const combos = [..._cwSelected].map(k => {
+    const i = k.indexOf("||");
+    return { genre: k.slice(0, i), style: k.slice(i + 2) };
+  });
+  const label = combos.map(c => c.style ? `${c.genre}/${c.style}` : `${c.genre} (all)`).join(", ");
+  if (!confirm(`Delete cached rows for ${combos.length} combo${combos.length === 1 ? "" : "s"} and zero their counters?\n\n${label}\n\nData re-fetches from Discogs on demand.`)) return;
+  const btn = document.getElementById("cw-del-selected-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
+  let totalDeleted = 0, failures = 0;
+  for (const c of combos) {
+    try {
+      const body = { genre: c.genre };
+      if (c.style) body.style = c.style;
+      const r = await apiFetch("/api/admin/release-cache/delete", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { failures++; continue; }
+      totalDeleted += Number(j.deleted ?? 0);
+      // Zero the run-stat columns for this combo (same as single delete).
+      try {
+        await apiFetch("/api/admin/cache-warm-runs/reset", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ genreKey: c.genre, styleKey: c.style || "" }),
+        });
+      } catch {}
+    } catch { failures++; }
+  }
+  _cwSelected.clear();
+  if (typeof showToast === "function") {
+    showToast(
+      `Deleted ${totalDeleted.toLocaleString()} row${totalDeleted === 1 ? "" : "s"} across ${combos.length} combo${combos.length === 1 ? "" : "s"}${failures ? ` — ${failures} failed` : ""}`,
+      failures ? "error" : "info",
+    );
+  }
+  if (typeof loadCacheWarm === "function") { try { loadCacheWarm(); } catch {} }
+}
+window._cwDeleteSelected = _cwDeleteSelected;
 async function _cwClearQueue() {
   if (!confirm("Clear all pending queued combos? The active run keeps going.")) return;
   try {
