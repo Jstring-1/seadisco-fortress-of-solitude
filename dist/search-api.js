@@ -576,6 +576,24 @@ async function authorizeAdminDownload(req, res) {
     }
     return requireAdmin(req, res);
 }
+// Non-consuming ticket check — used by the blanket /api/admin guard so a
+// ticketed download navigation (which carries no Bearer header) can reach
+// its route, where authorizeAdminDownload then consumes the ticket.
+function _peekDownloadTicket(req) {
+    const ticket = String(req.query.ticket ?? "");
+    if (!ticket)
+        return false;
+    const rec = _downloadTickets.get(ticket);
+    return !!rec && rec.exp > Date.now() && rec.userId === ADMIN_CLERK_ID;
+}
+const _TICKETED_DOWNLOAD_PATHS = [
+    "/api/admin/release-cache/dump-v1",
+    "/api/admin/db/dump-all",
+];
+function _isTicketedDownloadReq(req) {
+    const p = (req.originalUrl || req.url || "").split("?")[0];
+    return _TICKETED_DOWNLOAD_PATHS.includes(p);
+}
 // Temporary toggle: open the YouTube submission flow + standalone
 // /?v=youtube view to ALL signed-in users (instead of admin-only).
 // Off by default; flip on with YT_OPEN_TO_USERS=1 on Railway when
@@ -970,6 +988,16 @@ app.use("/api", apiLimiter);
 // above, so it never reaches this gate. requireAdmin sends its own
 // 401/403 on failure; we only call next() when it returns a userId.
 app.use("/api/admin", async (req, res, next) => {
+    // Streaming dump downloads are triggered by a plain <a href> navigation
+    // that can't carry the Bearer header; they authenticate via a one-time
+    // ?ticket= instead. Let those specific GETs past the header gate when a
+    // valid (unconsumed) ticket is present — the route's
+    // authorizeAdminDownload then consumes and re-validates it. Without this
+    // exemption the blanket gate 401s the download before the route runs.
+    if (req.method === "GET" && _isTicketedDownloadReq(req) && _peekDownloadTicket(req)) {
+        next();
+        return;
+    }
     const userId = await requireAdmin(req, res);
     if (userId)
         next();
