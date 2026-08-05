@@ -2814,12 +2814,8 @@ window._cwClearQueue = _cwClearQueue;
 // a misclick. Refreshes the grid on success.
 async function _cwDeleteCombo(genre, style, expectedCount) {
   if (!genre) return;
-  const label = style ? `${genre} / ${style}` : `${genre} (all styles)`;
-  if (!confirm(`Delete ${Number(expectedCount || 0).toLocaleString()} release_cache row${expectedCount === 1 ? "" : "s"} for ${label}? This cannot be undone.`)) return;
-  if (expectedCount > 1000) {
-    const typed = prompt(`Type "delete ${expectedCount}" to confirm:`);
-    if (typed !== `delete ${expectedCount}`) { alert("Confirmation didn't match — cancelled."); return; }
-  }
+  // Confirmation removed per request — the grid ⌫ deletes immediately.
+  // Safe-ish: the data re-fetches from Discogs on demand.
   try {
     const body = { genre };
     if (style) body.style = style;
