@@ -4804,6 +4804,26 @@ function openPlayerRelease() {
 }
 window.openPlayerRelease = openPlayerRelease;
 
+// Copy the raw YouTube watch URL for the currently-playing video. Unlike
+// sharePlayerUrl (which copies a SeaDisco deep-link), this hands back the
+// plain youtube.com/watch?v=… link for pasting elsewhere. Reads the id
+// we're actually playing (_ytIntendedId), falling back to the ?vd= param.
+function copyYoutubeUrl(btn) {
+  const id = _ytIntendedId || new URLSearchParams(location.search).get("vd") || "";
+  if (!id) { if (typeof showToast === "function") showToast("No YouTube track playing", "error"); return; }
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  const ok = () => {
+    if (typeof showToast === "function") showToast("YouTube URL copied");
+    // Brief inline confirmation on the button itself.
+    if (btn) { btn.dataset.copied = "true"; setTimeout(() => { try { delete btn.dataset.copied; } catch {} }, 1200); }
+  };
+  const fail = () => { if (typeof showToast === "function") showToast("Could not copy URL", "error"); };
+  try {
+    navigator.clipboard.writeText(url).then(ok).catch(fail);
+  } catch { fail(); }
+}
+window.copyYoutubeUrl = copyYoutubeUrl;
+
 function sharePlayerUrl() {
   const u = new URL(window.location.origin);
   const cur = new URLSearchParams(location.search);

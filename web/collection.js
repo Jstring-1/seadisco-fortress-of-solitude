@@ -1241,6 +1241,235 @@ function getCwFilters() {
   return f;
 }
 
+// ══ List-view research filters (library tabs only) ══════════════════════
+// When the shared List card-mode is active on the collection / wantlist /
+// favorites tabs, show a per-column filter + sort strip above the results
+// grid. Filters are live, case-insensitive substring (Year also accepts
+// ranges "1960-1970" and comparators ">=1965"), AND-combined across
+// columns. Sort carets reorder the grid by any column. "Load all" pulls
+// the whole tab in one big-per_page fetch from the local cache so filters
+// and sorting cover the entire library, not just the first page. All of
+// this is client-side over the already-rendered .card DOM — no per-
+// keystroke refetch.
+const _RF_TABS = ["collection", "wantlist", "favorites"];
+const _RF_COLS = [
+  { key: "type",   label: "Type",   ds: "cardType"   },
+  { key: "title",  label: "Title",  ds: "cardTitle"  },
+  { key: "artist", label: "Artist", ds: "cardArtist" },
+  { key: "year",   label: "Year",   ds: "cardYear"   },
+  { key: "label",  label: "Label",  ds: "cardLabel"  },
+  { key: "cat",    label: "Cat #",  ds: "cardCat"    },
+  { key: "format", label: "Format", ds: "cardFormat" },
+];
+let _rfSort = { col: null, dir: 1 };
+const _RF_LOAD_CAP = 2000;
+
+function _rfEligible() {
+  const rw = document.getElementById("records-wrap");
+  const onRecords = !!rw && rw.style.display !== "none" && rw.offsetParent !== null;
+  return onRecords && _RF_TABS.includes(_cwTab) && document.body.classList.contains("card-mode-list");
+}
+
+// Central sync: create + refresh the bar when eligible, remove it
+// otherwise. Called after each library render, on card-mode change, and
+// when leaving to a non-eligible surface.
+function _rfSync() {
+  // Re-entry guard: our own _rfResort reorders cards via appendChild,
+  // which the shared card-grid MutationObserver sees as new nodes and
+  // would use to re-trigger _rfSync — an infinite loop. Hold the guard
+  // until AFTER the reorder's observer microtask has been delivered
+  // (setTimeout(0) runs after microtasks), so that churn is ignored.
+  if (window._rfSyncing) return;
+  window._rfSyncing = true;
+  try {
+    if (_rfEligible()) { _rfEnsureBar(); _rfResort(); _rfApply(); }
+    else _rfRemoveBar();
+  } finally {
+    setTimeout(() => { window._rfSyncing = false; }, 0);
+  }
+}
+window._rfSync = _rfSync;
+
+function _rfRemoveBar() {
+  document.getElementById("rf-bar")?.remove();
+}
+
+function _rfEnsureBar() {
+  if (document.getElementById("rf-bar")) return;
+  const results = document.getElementById("results");
+  if (!results || !results.parentNode) return;
+  const cols = _RF_COLS.map(c => `
+    <div class="rf-col">
+      <button type="button" class="rf-sort" data-col="${c.key}" onclick="_rfToggleSort('${c.key}')" title="Sort by ${c.label}">
+        ${c.label}<span class="rf-caret" data-col="${c.key}"></span>
+      </button>
+      <input type="text" class="rf-filter" data-col="${c.key}" placeholder="filter…" oninput="_rfApply()" autocomplete="off" />
+    </div>`).join("");
+  const bar = document.createElement("div");
+  bar.id = "rf-bar";
+  bar.className = "rf-bar";
+  bar.innerHTML = `
+    <div class="rf-cols">${cols}</div>
+    <div class="rf-actions">
+      <span class="rf-count" id="rf-count"></span>
+      <button type="button" class="rf-btn" onclick="_rfLoadAll(this)" title="Load every item in this tab so filters + sort cover the whole library">⤓ Load all</button>
+      <button type="button" class="rf-btn" onclick="_rfClear()" title="Clear all column filters + sort">✕ Clear</button>
+    </div>`;
+  results.parentNode.insertBefore(bar, results);
+  _rfUpdateCarets();
+}
+
+function _rfReadFilters() {
+  const out = [];
+  document.querySelectorAll("#rf-bar .rf-filter").forEach(inp => {
+    const v = (inp.value || "").trim().toLowerCase();
+    if (!v) return;
+    const col = _RF_COLS.find(c => c.key === inp.dataset.col);
+    if (col) out.push({ ds: col.ds, key: col.key, q: v });
+  });
+  return out;
+}
+
+function _rfYearMatch(val, q) {
+  const y = parseInt(val, 10);
+  let m;
+  if ((m = q.match(/^(\d{1,4})\s*-\s*(\d{1,4})$/))) {
+    const a = +m[1], b = +m[2];
+    return Number.isFinite(y) && y >= Math.min(a, b) && y <= Math.max(a, b);
+  }
+  if ((m = q.match(/^(>=|<=|>|<)\s*(\d{1,4})$/))) {
+    if (!Number.isFinite(y)) return false;
+    const n = +m[2];
+    return m[1] === ">" ? y > n : m[1] === "<" ? y < n : m[1] === ">=" ? y >= n : y <= n;
+  }
+  return String(val).toLowerCase().includes(q);
+}
+
+// Stamp every card so its data-card-* attributes exist, whatever mode the
+// grid was last rendered in.
+function _rfStampAll(grid) {
+  grid.querySelectorAll(":scope > .card").forEach(c => {
+    if (typeof _sdStampListCells === "function") { try { _sdStampListCells(c); } catch {} }
+  });
+}
+
+function _rfApply() {
+  const grid = document.getElementById("results");
+  if (!grid || !document.getElementById("rf-bar")) return;
+  _rfStampAll(grid);
+  const filters = _rfReadFilters();
+  const cards = grid.querySelectorAll(":scope > .card");
+  let shown = 0;
+  cards.forEach(card => {
+    let ok = true;
+    for (const f of filters) {
+      const val = card.dataset[f.ds] || "";
+      if (f.key === "year") { if (!_rfYearMatch(val, f.q)) { ok = false; break; } }
+      else if (!val.toLowerCase().includes(f.q)) { ok = false; break; }
+    }
+    card.classList.toggle("rf-hidden", !ok);
+    if (ok) shown++;
+  });
+  const countEl = document.getElementById("rf-count");
+  if (countEl) countEl.textContent = filters.length ? `${shown} of ${cards.length}` : `${cards.length} shown`;
+}
+window._rfApply = _rfApply;
+
+// Reorder the grid by the active sort column/direction (no toggle).
+function _rfResort() {
+  if (!_rfSort.col) return;
+  const grid = document.getElementById("results");
+  const cdef = _RF_COLS.find(c => c.key === _rfSort.col);
+  if (!grid || !cdef) return;
+  _rfStampAll(grid);
+  const cards = [...grid.querySelectorAll(":scope > .card")];
+  cards.sort((a, b) => {
+    const va = a.dataset[cdef.ds] || "", vb = b.dataset[cdef.ds] || "";
+    if (_rfSort.col === "year") return ((parseInt(va, 10) || 0) - (parseInt(vb, 10) || 0)) * _rfSort.dir;
+    return va.localeCompare(vb, undefined, { numeric: true, sensitivity: "base" }) * _rfSort.dir;
+  });
+  cards.forEach(c => grid.appendChild(c));
+  _rfUpdateCarets();
+}
+
+function _rfToggleSort(col) {
+  if (_rfSort.col === col) _rfSort.dir *= -1;
+  else { _rfSort.col = col; _rfSort.dir = 1; }
+  _rfResort();
+  _rfApply();
+}
+window._rfToggleSort = _rfToggleSort;
+
+function _rfUpdateCarets() {
+  document.querySelectorAll("#rf-bar .rf-caret").forEach(sp => {
+    sp.textContent = (sp.dataset.col === _rfSort.col) ? (_rfSort.dir > 0 ? " ▲" : " ▼") : "";
+  });
+  document.querySelectorAll("#rf-bar .rf-sort").forEach(b => {
+    b.classList.toggle("is-active", b.dataset.col === _rfSort.col);
+  });
+}
+
+function _rfClear() {
+  document.querySelectorAll("#rf-bar .rf-filter").forEach(i => { i.value = ""; });
+  _rfSort = { col: null, dir: 1 };
+  _rfUpdateCarets();
+  _rfApply();
+}
+window._rfClear = _rfClear;
+
+// Pull the entire current tab (one big-per_page fetch from the local
+// cache) so filters + sort span the whole library. Capped at
+// _RF_LOAD_CAP; anything beyond that is reported honestly.
+async function _rfLoadAll(btn) {
+  if (!_RF_TABS.includes(_cwTab)) return;
+  const grid = document.getElementById("results");
+  if (!grid) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    // Favorites are already fully loaded (server caps them at 200).
+    if (_cwTab === "favorites") { _rfResort(); _rfApply(); return; }
+    const f = getCwFilters();
+    const base = _cwTab === "wantlist" ? "/api/user/wantlist" : "/api/user/collection";
+    let url = `${base}?page=1&per_page=${_RF_LOAD_CAP}`;
+    if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
+    if (f.artist)  url += `&artist=${encodeURIComponent(f.artist)}`;
+    if (f.release) url += `&release=${encodeURIComponent(f.release)}`;
+    if (f.label)   url += `&label=${encodeURIComponent(f.label)}`;
+    if (f.year)    url += `&year=${encodeURIComponent(f.year)}`;
+    if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
+    if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
+    if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
+    if (_cwTab === "collection" && _cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
+    const cwRating = document.getElementById("cw-rating")?.value || "";
+    if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
+    const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();
+    if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
+    const cwSort = document.getElementById("cw-sort")?.value || "";
+    if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
+    const r = await apiFetch(url);
+    const data = await r.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = data.total ?? items.length;
+    grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+    if (typeof _sdScheduleCardEnrich === "function") _sdScheduleCardEnrich();
+    _rfResort();
+    _rfApply();
+    const lm = document.getElementById("search-load-more"); if (lm) lm.style.display = "none";
+    const pg = document.getElementById("pagination"); if (pg) pg.style.display = "none";
+    if (typeof showToast === "function") {
+      if (total > items.length) showToast(`Loaded ${items.length} of ${total} — narrow filters to see the rest`, "info");
+      else showToast(`Loaded all ${items.length}`);
+    }
+  } catch (e) {
+    console.warn("[_rfLoadAll]", e);
+    if (typeof showToast === "function") showToast("Could not load all items", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "⤓ Load all"; }
+  }
+}
+window._rfLoadAll = _rfLoadAll;
+
 // ── Swap search criteria between main ↔ collection ──────────────────────
 function swapSearchToCollection() {
   // Gather current main search fields and store as pending swap

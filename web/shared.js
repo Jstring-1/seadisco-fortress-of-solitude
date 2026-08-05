@@ -360,6 +360,9 @@ function _sdApplyCardMode() {
   if (mode === "list") {
     document.querySelectorAll(".card-grid .card").forEach(_sdStampListCells);
   }
+  // Show/hide the list-view research filter bar (library tabs) to match
+  // the new mode.
+  if (typeof window._rfSync === "function") { try { window._rfSync(); } catch {} }
 }
 function _sdToggleCardMode() {
   const i = _SD_CARD_MODES.indexOf(_sdGetCardMode());
@@ -419,6 +422,13 @@ function _sdStampListCells(card) {
   else if (card.classList.contains("card-type-release")) typeLetter = "R";
   else if (card.classList.contains("card-type-artist"))  typeLetter = "A";
   else if (card.classList.contains("card-type-label"))   typeLetter = "L";
+  // Title + artist for the list-view research filter/sort. Read the
+  // card's own title/artist elements (textContent strips the inner
+  // lookup-link markup, leaving the plain name).
+  const titleEl  = card.querySelector(".card-title");
+  const artistEl = card.querySelector(".card-artist");
+  card.dataset.cardTitle  = (titleEl?.textContent  || "").trim();
+  card.dataset.cardArtist = (artistEl?.textContent || "").trim();
   card.dataset.cardYear   = year;
   card.dataset.cardLabel  = label;
   card.dataset.cardCat    = cat;
@@ -482,8 +492,23 @@ function _sdStampAllVisibleCards() {
     root.querySelectorAll?.(".card").forEach(_sdStampListCells);
   };
   const obs = new MutationObserver(muts => {
+    let sawCard = false;
     for (const m of muts) {
-      for (const n of m.addedNodes) apply(n);
+      for (const n of m.addedNodes) {
+        apply(n);
+        if (n instanceof Element && (n.classList?.contains("card") || n.querySelector?.(".card"))) sawCard = true;
+      }
+    }
+    // New cards rendered into a grid → let the list-view research filter
+    // bar (collection.js) re-sync. Guarded + rAF-debounced so our own
+    // reorder churn (which also adds nodes) doesn't loop; _rfSync's
+    // _rfSyncing flag stays up across the reorder's microtask.
+    if (sawCard && typeof window._rfSync === "function" && !window._rfSyncing) {
+      if (window._rfSyncRaf) cancelAnimationFrame(window._rfSyncRaf);
+      window._rfSyncRaf = requestAnimationFrame(() => {
+        window._rfSyncRaf = null;
+        try { window._rfSync(); } catch {}
+      });
     }
   });
   // Wait for body to exist (this file is loaded before DOMContentLoaded

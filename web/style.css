@@ -3300,6 +3300,8 @@ button.wiki-link-btn:active {
   color: var(--muted);
   font-size: 0.7em;
 }
+/* Brief green flash on the "⧉ YT url" copy button after a successful copy. */
+.video-nav-btn[data-copied="true"] { color: var(--success) !important; }
 .catno-collection-search {
   color: var(--accent);
   text-decoration: none;
@@ -8825,6 +8827,46 @@ body.is-offline button.offline-disabled {
 /* When the toggle is on, hide year-less release/master cards in the
    shared results grid. renderCard tags them with .card-no-year. */
 #results.hide-no-year .card-no-year { display: none !important; }
+
+/* ── List-view research filter bar (library tabs) ─────────────────────── */
+.rf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.45rem 0.7rem;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.rf-cols { display: flex; flex-wrap: wrap; gap: 0.4rem 0.55rem; flex: 1 1 auto; }
+.rf-col { display: flex; flex-direction: column; gap: 0.15rem; flex: 1 1 8rem; min-width: 6rem; }
+.rf-sort {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.2rem;
+  background: none; border: none; padding: 0 0.1rem;
+  color: var(--muted); font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase;
+  cursor: pointer; white-space: nowrap;
+}
+.rf-sort:hover { color: var(--text); }
+.rf-sort.is-active { color: var(--accent); }
+.rf-caret { font-size: 0.68rem; }
+.rf-filter {
+  width: 100%;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 0.2rem 0.35rem; font-size: 0.78rem;
+}
+.rf-filter:focus { outline: none; border-color: var(--accent); }
+.rf-actions { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+.rf-count { font-size: 0.74rem; color: var(--muted); white-space: nowrap; }
+.rf-btn {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.74rem; cursor: pointer; white-space: nowrap;
+}
+.rf-btn:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.rf-btn:disabled { opacity: 0.6; cursor: default; }
+.card.rf-hidden { display: none !important; }
 
 /* "Hard to Find" toggle — same circular button shape as the CD-exclude
    above, but uses a 💎 glyph and accent-orange active state so the
