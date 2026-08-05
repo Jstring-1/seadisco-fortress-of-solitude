@@ -2914,25 +2914,46 @@ function _rcxBuildParams() {
 
 // Dump the entire release_cache as NDJSON (straight SELECT *). The old
 // split-cache dump was removed with the V2 retirement.
-async function rcxDumpV1() {
-  if (!confirm("Stream every row of release_cache as NDJSON — straight SELECT *, all columns?\n\nFilters are ignored. Uncompressed — expect gigabytes at millions of rows.")) return;
+// Native <a href> downloads can't carry the admin Bearer header, so these
+// streaming dumps 401'd ("File wasn't available on site"). Mint a one-time
+// ticket via an authenticated POST first, then append it to the URL so the
+// server authorizes the streaming download without buffering it in the
+// browser (a multi-GB blob would OOM the tab).
+async function _rcxDownloadTicket() {
+  const r = await apiFetch("/api/admin/download-ticket", { method: "POST" });
+  if (!r.ok) throw new Error("ticket request failed (" + r.status + ")");
+  const j = await r.json();
+  if (!j?.ticket) throw new Error("no ticket returned");
+  return j.ticket;
+}
+function _rcxTriggerDownload(url) {
   const link = document.createElement("a");
-  link.href = "/api/admin/release-cache/dump-v1";
+  link.href = url;
   link.download = "";
   document.body.appendChild(link);
   link.click();
   setTimeout(() => link.remove(), 0);
 }
+
+async function rcxDumpV1() {
+  if (!confirm("Stream every row of release_cache as NDJSON — straight SELECT *, all columns?\n\nFilters are ignored. Uncompressed — expect gigabytes at millions of rows.")) return;
+  try {
+    const ticket = await _rcxDownloadTicket();
+    _rcxTriggerDownload("/api/admin/release-cache/dump-v1?ticket=" + encodeURIComponent(ticket));
+  } catch (e) {
+    alert("Could not authorize download: " + (e?.message || e));
+  }
+}
 window.rcxDumpV1 = rcxDumpV1;
 
 async function rcxDumpAll() {
   if (!confirm("Dump the ENTIRE database — every base table, all columns — as one NDJSON file (each row tagged __table)?\n\nThis is everything, including lyrics, words, artists, logs. Uncompressed and potentially very large.")) return;
-  const link = document.createElement("a");
-  link.href = "/api/admin/db/dump-all";
-  link.download = "";
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => link.remove(), 0);
+  try {
+    const ticket = await _rcxDownloadTicket();
+    _rcxTriggerDownload("/api/admin/db/dump-all?ticket=" + encodeURIComponent(ticket));
+  } catch (e) {
+    alert("Could not authorize download: " + (e?.message || e));
+  }
 }
 window.rcxDumpAll = rcxDumpAll;
 

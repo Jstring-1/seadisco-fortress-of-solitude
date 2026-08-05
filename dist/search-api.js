@@ -539,6 +539,43 @@ async function requireAdmin(req, res) {
     }
     return userId;
 }
+// ── One-time download tickets ───────────────────────────────────────
+// Native browser file downloads are triggered by a plain <a href>
+// navigation, which browsers will NOT attach the Authorization: Bearer
+// header to — so admin streaming dumps (dump-v1 / dump-all) 401'd before
+// a byte was written, and Chrome reported "File wasn't available on
+// site". Rather than buffer a multi-GB response into a browser blob
+// (which would OOM the tab), the admin mints a short-lived, single-use
+// ticket via an authenticated POST (apiFetch DOES send the header), then
+// appends it as ?ticket= to the download URL. The dump route accepts the
+// ticket in place of the header, so the native streaming download works.
+// In-memory + single-instance; a ticket minted on one dyno won't validate
+// on another, which is fine for this single-instance admin tool.
+const _downloadTickets = new Map();
+function _mintDownloadTicket(userId) {
+    const now = Date.now();
+    for (const [k, v] of _downloadTickets)
+        if (v.exp <= now)
+            _downloadTickets.delete(k);
+    const ticket = crypto.randomBytes(24).toString("hex");
+    _downloadTickets.set(ticket, { userId, exp: now + 120_000 });
+    return ticket;
+}
+// Authorize an admin download via a one-time ?ticket= (consumed on use)
+// OR the normal Bearer-header admin check. Writes the error response and
+// returns null when unauthorized.
+async function authorizeAdminDownload(req, res) {
+    const ticket = String(req.query.ticket ?? "");
+    if (ticket) {
+        const rec = _downloadTickets.get(ticket);
+        _downloadTickets.delete(ticket); // single-use regardless of validity
+        if (rec && rec.exp > Date.now() && rec.userId === ADMIN_CLERK_ID)
+            return rec.userId;
+        res.status(403).json({ error: "invalid_or_expired_ticket" });
+        return null;
+    }
+    return requireAdmin(req, res);
+}
 // Temporary toggle: open the YouTube submission flow + standalone
 // /?v=youtube view to ALL signed-in users (instead of admin-only).
 // Off by default; flip on with YT_OPEN_TO_USERS=1 on Railway when
@@ -10454,8 +10491,17 @@ app.get("/api/admin/release-cache/dump-split", async (req, res) => {
 // cached_at/data), this is a straight SELECT * so any future columns
 // on release_cache come along too. Keyset-paged on (discogs_id, type)
 // so memory stays flat regardless of table size.
+// Mint a one-time ticket that authorizes a single streaming dump download
+// (see authorizeAdminDownload). Authenticated via the normal admin Bearer
+// header (apiFetch sends it); the ticket then rides on the download URL.
+app.post("/api/admin/download-ticket", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    res.json({ ticket: _mintDownloadTicket(userId) });
+});
 app.get("/api/admin/release-cache/dump-v1", async (req, res) => {
-    if (!await requireAdmin(req, res))
+    if (!await authorizeAdminDownload(req, res))
         return;
     const CHUNK = 5000;
     const date = new Date().toISOString().slice(0, 10);
@@ -10510,7 +10556,7 @@ app.get("/api/admin/release-cache/dump-v1", async (req, res) => {
 // known primary key) so server memory stays flat even on the biggest
 // tables. This is the true "entire database" export.
 app.get("/api/admin/db/dump-all", async (req, res) => {
-    if (!await requireAdmin(req, res))
+    if (!await authorizeAdminDownload(req, res))
         return;
     const CHUNK = 5000;
     const date = new Date().toISOString().slice(0, 10);
