@@ -65,8 +65,16 @@ window._sdSyncAdvancedPanel = _sdSyncAdvancedPanel;
 // share this one state so the toggle stays in sync across views.
 let _sdHideNoYear = false;
 function _sdApplyHideNoYear() {
-  const grid = document.getElementById("results");
-  if (grid) grid.classList.toggle("hide-no-year", _sdHideNoYear);
+  // Applies to the main/library results grid AND the home-strip grid
+  // (Recent / Feed / Active / Played / Rare / Dig). Both hold renderCard
+  // output, so year-less release/master cards carry .card-no-year and the
+  // container class hides them via CSS — no re-render, works instantly
+  // and persists across tab switches (the grid element stays; only its
+  // innerHTML changes).
+  ["results", "random-records-grid"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("hide-no-year", _sdHideNoYear);
+  });
   document.querySelectorAll(".f-noyear-btn").forEach(b => {
     b.classList.toggle("active", _sdHideNoYear);
     b.setAttribute("aria-pressed", _sdHideNoYear ? "true" : "false");

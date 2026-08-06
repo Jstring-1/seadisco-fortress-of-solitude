@@ -428,7 +428,7 @@ e.g.  miles davis | coltrane
         </select>
       </label>
       <span style="color:#333;margin:0 0.25rem">|</span>
-      <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
+      <button type="button" id="cw-export-btn" onclick="_cwExport()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
       <span style="color:#333;margin:0 0.25rem">|</span>
       <!-- Hide results with no year — shares the main-search toggle state
            (search.js _sdToggleHideNoYear); both grids render into #results. -->
@@ -594,6 +594,12 @@ e.g.  miles davis | coltrane
             <option value="artist:asc">Artist A→Z</option>
           </select>
         </label>
+        <!-- Hide results with no year — shares the site-wide toggle state
+             (search.js _sdToggleHideNoYear); filters the home-strip grid. -->
+        <button type="button" id="rr-noyear" class="f-exclude-cd-btn f-noyear-btn"
+                onclick="_sdToggleHideNoYear()"
+                title="Hide results with no year"
+                aria-pressed="false"><span class="f-exclude-cd-glyph">📅</span></button>
         <button id="recent-clear-btn" type="button" onclick="_sdHomeStripClearFilters()" title="Clear filter, genre &amp; sort for this tab" aria-label="Clear filters" class="rr-clear-btn rr-filter-clear">×</button>
       </div>
     </div>

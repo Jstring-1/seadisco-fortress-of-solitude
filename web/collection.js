@@ -1678,7 +1678,7 @@ function switchRecordsTab(tab, skipPush) {
     // filtering / sorting itself is client-side (see _favTabFilterSort).
     if (controlsRow) controlsRow.style.display = "";
     if (folderCloud) folderCloud.style.display = "none";
-    if (exportBtn) exportBtn.style.display = "none"; // CSV export only for collection/wantlist
+    if (exportBtn) exportBtn.style.display = ""; // Favorites CSV built client-side (exportFavorites)
     loadFavoritesTab();
   }
 }
@@ -2134,6 +2134,52 @@ async function exportWantlist() {
     URL.revokeObjectURL(url);
   } catch (e) { alert("Export failed: " + e.message); }
 }
+
+// Favorites CSV export — built client-side from the already-loaded set
+// (_favTabItems, capped at 200), honoring the current filter/sort so the
+// download matches what's on screen. No server endpoint needed.
+function _csvCell(v) {
+  const s = String(v ?? "");
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function exportFavorites() {
+  try {
+    const items = (typeof _favTabFilterSort === "function")
+      ? _favTabFilterSort(_favTabItems || [])
+      : (_favTabItems || []);
+    if (!items.length) { alert("No favorites to export."); return; }
+    const rows = [["Type", "Artist", "Title", "Year", "Genre", "Format", "Label", "Discogs ID", "Added"]];
+    for (const it of items) {
+      const type = it._entityType || it.type || "";
+      let title = String(it.title ?? "");
+      let artist = Array.isArray(it.artists) ? it.artists.map(a => a?.name).filter(Boolean).join(", ") : "";
+      if (!artist && (type === "release" || type === "master") && title.includes(" - ")) {
+        const i = title.indexOf(" - "); artist = title.slice(0, i); title = title.slice(i + 3);
+      }
+      const genre  = Array.isArray(it.genre)  ? it.genre.join("; ")  : (it.genre  ?? "");
+      const format = Array.isArray(it.format) ? it.format.join("; ") : (it.format ?? "");
+      const label  = Array.isArray(it.label)  ? it.label.join("; ")  : (it.label  ?? "");
+      const added  = it._addedAt ? new Date(it._addedAt).toISOString().slice(0, 10) : "";
+      rows.push([type, artist, title, it.year ?? "", genre, format, label, it.id ?? "", added]);
+    }
+    const csv = rows.map(r => r.map(_csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "seadisco-favorites.csv"; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert("Export failed: " + (e?.message || e)); }
+}
+window.exportFavorites = exportFavorites;
+
+// Dispatcher for the shared ⬇ CSV button — routes to the active tab's
+// exporter so the one button works across collection / wantlist / favorites.
+function _cwExport() {
+  if (_cwTab === "wantlist") return exportWantlist();
+  if (_cwTab === "favorites") return exportFavorites();
+  return exportCollection();
+}
+window._cwExport = _cwExport;
 
 function clearCwFilters() {
   ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes"].forEach(id => {

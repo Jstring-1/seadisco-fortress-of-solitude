@@ -8827,6 +8827,12 @@ body.is-offline button.offline-disabled {
 /* When the toggle is on, hide year-less release/master cards in the
    shared results grid. renderCard tags them with .card-no-year. */
 #results.hide-no-year .card-no-year { display: none !important; }
+/* Same toggle for the home-strip grid (Recent / Feed / Active / Played /
+   Rare / Dig). Its cards are wrapped in .recent-wrap, so hide the whole
+   wrapper when it contains a year-less card (plus a direct-child fallback
+   for any unwrapped card). */
+#random-records-grid.hide-no-year .recent-wrap:has(.card-no-year),
+#random-records-grid.hide-no-year > .card-no-year { display: none !important; }
 
 /* ── List-view research filter bar (library tabs) ─────────────────────── */
 .rf-bar {
@@ -9023,6 +9029,40 @@ body.is-offline button.offline-disabled {
 }
 .hide-owned-btn.active::after { opacity: 1; }
 .hide-owned-btn.active .hide-owned-glyph { filter: grayscale(0); }
+
+/* ── Unified on/off look for the round filter toggles ─────────────────
+   The pressed / ON state must be obvious at a glance. OFF = neutral: no
+   fill, a dimmed grayscale glyph, muted strike. ON = a strong green fill
+   + ring + full-colour glyph, consistent across 💿 (exclude CD), 📅
+   (no-year), 💎 (hard-to-find), C (hide-owned) and the ! (genre-strict)
+   toggles. Placed last so it wins the cascade over the earlier per-button
+   red / blue / orange accents. */
+.f-exclude-cd-btn,
+.f-hard2find-btn,
+.hide-owned-btn,
+.genre-strict-btn {
+  background: transparent;
+}
+/* OFF: mute the glyphs + exclusion strikes so nothing reads as "engaged"
+   until the toggle is actually on. */
+.f-exclude-cd-btn .f-exclude-cd-glyph,
+.f-hard2find-btn .f-hard2find-glyph { filter: grayscale(0.75); opacity: 0.7; }
+.f-exclude-cd-btn::after { background: var(--muted); opacity: 0.3; }
+/* ON: unmistakable green — fill, ring/glow, full-colour glyph. */
+.f-exclude-cd-btn.active,
+.f-hard2find-btn.active,
+.hide-owned-btn.active,
+.genre-strict-btn.active,
+.genre-strict-btn[aria-pressed="true"] {
+  background: rgba(109, 223, 112, 0.22) !important;
+  border-color: rgba(109, 223, 112, 0.9) !important;
+  color: #6ddf70 !important;
+  box-shadow: 0 0 0 1px rgba(109, 223, 112, 0.55), 0 0 9px rgba(109, 223, 112, 0.4);
+}
+.f-exclude-cd-btn.active .f-exclude-cd-glyph,
+.f-hard2find-btn.active .f-hard2find-glyph { filter: grayscale(0) !important; opacity: 1 !important; }
+.f-exclude-cd-btn.active::after,
+.hide-owned-btn.active::after { background: #6ddf70 !important; opacity: 1 !important; }
 
 /* Bookmark / saved-search dropdown is appended to the END of the
    form's top row by buildSavedSearchUI; pin it to the LEFT via flex
