@@ -2478,12 +2478,12 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   box-shadow: 0 -8px 28px rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.04) inset;
   font-family: inherit;
 }
-.mini-player.open { display: block; }
+.mini-player.open { display: flex; flex-direction: column; }
 /* Reserve space at the bottom of the page whenever either bottom-docked
    audio bar is visible so the last row of album cards doesn't disappear
    behind it. The expanded YouTube mini-player needs more headroom. */
 body.player-open { padding-bottom: 78px; }
-body.player-open.expanded-mini { padding-bottom: 168px; }
+body.player-open.expanded-mini { padding-bottom: 190px; }
 /* Hide-bar mode: user clicked × to push the player out of view so the
    bottom of open popups (master/version lists on mobile especially)
    becomes reachable. Playback continues — only the chrome moves.
@@ -2852,6 +2852,26 @@ body.sd-anon .youtube-saved-tab {
   .mini-player.expanded #mini-player-expand-toggle {
     transform: scaleX(5) rotate(180deg);
   }
+}
+
+/* Expanded layout: the video panel opens ABOVE the docked bar so the
+   now-playing text, transport controls, and progress strip stay pinned
+   exactly where they sit when collapsed — only the video grows the player
+   upward. The expand/collapse toggle relocates to the very top of the
+   video. Placed after the mobile block so it wins the cascade at every
+   width (equal specificity → later source order). The bar goes
+   position:static while expanded so the absolute toggle anchors to
+   #mini-player, whose fixed position becomes its containing block. */
+.mini-player.expanded .mini-player-expanded { order: -1; padding-top: 1.4rem; }
+.mini-player.expanded .mini-player-bar { position: static; }
+.mini-player.expanded #mini-player-expand-toggle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  bottom: auto;
+  margin: 0;
+  transform: translateX(-50%) scaleX(5) rotate(180deg);
+  z-index: 3;
 }
 
 /* ── Modal ── */
