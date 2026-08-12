@@ -573,16 +573,27 @@ async function adminSyncAll() {
   finally { btn.disabled = false; btn.textContent = "Sync All"; }
 }
 
-async function adminSyncUser(username) {
+async function adminSyncUser(username, btn) {
+  const prev = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Starting…"; }
   try {
-    await apiFetch("/api/admin/sync-user", {
+    const r = await apiFetch("/api/admin/sync-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
     });
-    loadAdminSyncStatus();
-  } catch { alert("Sync failed for " + username); }
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    // Refresh the unified Users table so the row flips to "syncing…".
+    loadAdminUsersUnified();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = prev; }
+    alert("Sync failed for " + username + (e?.message ? `: ${e.message}` : ""));
+  }
 }
+window.adminSyncUser = adminSyncUser;
 
 async function adminSyncStop() {
   const btn = document.getElementById("admin-sync-stop-btn");
@@ -4883,12 +4894,18 @@ function _adminUnifiedCell(u, col) {
   if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
   if (col.key === "syncStatus") {
     const s = u.syncStatus || "—";
-    if (s === "syncing" && u.syncTotal) {
-      const pct = Math.round((Number(u.syncProgress || 0) / Number(u.syncTotal)) * 100);
-      return `<span style="color:#f0c674">syncing ${pct}%</span>`;
+    // Syncing → live progress, no button (avoid re-triggering an in-flight run).
+    if (s === "syncing") {
+      const pct = u.syncTotal ? Math.round((Number(u.syncProgress || 0) / Number(u.syncTotal)) * 100) : null;
+      return `<span style="color:#f0c674">syncing${pct != null ? ` ${pct}%` : "…"}</span>`;
     }
-    if (u.syncError) return `<span style="color:#e88" title="${escHtml(String(u.syncError))}">error</span>`;
-    return escHtml(s);
+    // Manual per-user sync button. Only offered when the user has a linked
+    // Discogs handle (the sync endpoint keys on discogs_username).
+    const btn = u.discogsUsername
+      ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(&quot;${escHtml(u.discogsUsername)}&quot;, this)" title="Run a full Discogs library sync for this user">Sync</button>`
+      : "";
+    if (u.syncError) return `<span style="color:#e88" title="${escHtml(String(u.syncError))}">error</span>${btn}`;
+    return `${escHtml(s)}${btn}`;
   }
   if (col.pair != null) {
     // "30d / total" pair; sorts by the total (col.key).
