@@ -12504,3 +12504,58 @@ body.gutenberg-reader-open { overflow: hidden; }
   border-radius: 6px;
   padding: 0.6rem 0.8rem;
 }
+
+/* ── YouTube review queue ─────────────────────────────────────────────
+   Candidates for the same track are grouped into a bordered block with a
+   header (song + how many candidates compete). Base border/background of
+   each candidate card lives here (not inline) so the :hover highlight can
+   win the cascade. */
+.ytr-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.45rem;
+  background: rgba(255, 255, 255, 0.015);
+}
+.ytr-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.1rem 0.15rem 0.15rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  overflow: hidden;
+}
+.ytr-group-count {
+  flex-shrink: 0;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  background: var(--accent);
+  color: #000;
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ytr-group-song {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ytr-card {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.015);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.ytr-card:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+}

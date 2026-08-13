@@ -3696,19 +3696,56 @@ async function loadYtReviewQueue() {
       ytrRenderPager(total);
       return;
     }
-    el.innerHTML = rows.map(ytrRowHtml).join("");
+    el.innerHTML = ytrGroupedHtml(rows);
     ytrRenderPager(total);
   } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
+}
+// Group consecutive queue rows by (master_id, track_position) — the
+// server already orders candidates for the same track contiguously — and
+// wrap each track's candidates in a bordered block with a header showing
+// the song and a count badge, so it's obvious how many candidates compete
+// for each track.
+function ytrGroupedHtml(rows) {
+  const decode = s => String(s ?? "").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
+  const esc = s => decode(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
+  const key = r => `${r.master_id}||${r.track_position ?? ""}`;
+  let html = "";
+  for (let i = 0; i < rows.length; ) {
+    const k = key(rows[i]);
+    const group = [];
+    while (i < rows.length && key(rows[i]) === k) group.push(rows[i++]);
+    const first = group[0];
+    const n = group.length;
+    const yr = first.master_year || "?";
+    const head = `<div class="ytr-group-head">
+      <span class="ytr-group-count" title="${n} candidate${n === 1 ? "" : "s"} for this track">${n}</span>
+      <span class="ytr-group-song"><span style="color:var(--muted);font-weight:normal">${esc(String(yr))} · ${esc(first.track_position || "")}</span> ${esc(first.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(first.track_artist || "")}</span></span>
+    </div>`;
+    html += `<div class="ytr-group">${head}${group.map(ytrRowHtml).join("")}</div>`;
+  }
+  return html;
 }
 function ytrRowHtml(r) {
   const decode = s => String(s ?? "").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
   const esc = s => decode(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
   const ytUrl = `https://www.youtube.com/watch?v=${esc(r.candidate_video_id)}`;
   const score = r.title_score != null ? Number(r.title_score).toFixed(2) : "—";
+  // Highlight a 4-digit year (19xx/20xx) inside the escaped candidate
+  // title so the pressing year jumps out when scanning the queue. Safe
+  // to run on the escaped string — years contain no HTML-special chars.
+  const candTitleHtml = esc(r.candidate_title || "")
+    .replace(/\b(?:19|20)\d{2}\b/g, m => `<span style="color:#f0c674;font-weight:700">${m}</span>`);
+  // Color-code the auto-approve reason (each distinct reason a unique
+  // hue) and bold any "trusted_channel_but…" reason so the trusted-path
+  // near-misses stand out.
+  const reasonHtml = r.auto_reason ? (() => {
+    const st = _ytrReasonStyle(r.auto_reason);
+    return ` <span style="color:#555">·</span> <span style="color:${st.color}${st.bold ? ";font-weight:700" : ""}" title="Why the auto-approve gate did or didn't take this candidate.">${esc(r.auto_reason)}</span>`;
+  })() : "";
   const showActions = _ytrStatus === "pending";
   const showDelete = _ytrStatus === "approved";
   const yr = r.master_year || "?";
-  return `<div style="border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center;background:rgba(255,255,255,0.015)">
+  return `<div class="ytr-card" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
     ${r.master_cover_url
       ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy">`
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
@@ -3717,8 +3754,8 @@ function ytrRowHtml(r) {
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
     <div style="min-width:0">
       <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
-      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(r.candidate_title || "")}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${r.auto_reason ? ` <span style="color:#555">·</span> <span title="Why the auto-approve gate did or didn't take this candidate.">${esc(r.auto_reason)}</span>` : ""}</div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${candTitleHtml}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${reasonHtml}</div>
     </div>
     ${showActions
       ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
@@ -3753,6 +3790,34 @@ function ytrDurationHtml(r) {
   if (!want && !got) return "";
   const color = r.duration_ok === true ? "#7ed196" : r.duration_ok === false ? "#e88" : "var(--muted)";
   return ` <span style="color:#555">·</span> <span style="color:${color}" title="Discogs track time vs YouTube duration.">${want || "—"} / ${got || "—"}</span>`;
+}
+// Map an auto-approve reason to a display style. Each distinct gate
+// reason gets its own hue so the queue is scannable at a glance; the
+// positive (auto-pinned) reasons read green, and any trusted-path
+// near-miss ("trusted_channel_but…") is bolded per request. The reason
+// key is the token before ":" / "(" — the tail (quoted values, ±Ns)
+// varies per row but the category doesn't.
+function _ytrReasonStyle(reason) {
+  const s = String(reason || "");
+  // Auto-pinned verdicts: "topic+…" / "trusted+…".
+  if (/^(?:topic|trusted)\+/.test(s)) return { color: "#7ed196", bold: false };
+  const key = s.split(/[:(]/)[0].trim();
+  const MAP = {
+    not_topic_or_trusted_channel:          "#8a8f98",
+    no_track_artist:                       "#c9a24b",
+    artist_mismatch:                       "#e0894f",
+    trusted_channel_but_artist_not_in_title: "#e05c5c",
+    title_not_exact:                       "#d76d9e",
+    version_marker:                        "#b07fd8",
+    not_embeddable:                        "#9a7b5c",
+    region_blocked:                        "#6a9fd8",
+    no_discogs_duration:                   "#5fb0c9",
+    no_video_duration:                     "#4f9ab0",
+  };
+  let color = MAP[key];
+  if (!color && /^duration_off_by_/.test(key)) color = "#e0704f";
+  const bold = /^trusted_channel_but/.test(key);
+  return { color: color || "var(--muted)", bold };
 }
 function ytrRenderPager(total) {
   const el = document.getElementById("ytr-pager");
