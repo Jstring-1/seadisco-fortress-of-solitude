@@ -3011,6 +3011,21 @@ export async function resetAllSyncingStatuses() {
     const r = await getPool().query(`UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing' RETURNING clerk_user_id`);
     return r.rowCount ?? 0;
 }
+// Reset any row still marked 'syncing' whose user is NOT in `activeIds`
+// (the in-memory set of live runs in this process). Such a row is
+// orphaned — its run died without writing a terminal status (e.g. the
+// container was idled/suspended overnight, so neither the stall guard nor
+// the catch block fired). Single-instance assumption: with >1 web
+// instance this would wrongly clear another instance's live sync.
+export async function resetOrphanedSyncingStatuses(activeIds) {
+    const r = await getPool().query(`UPDATE user_tokens
+        SET sync_status = 'stopped',
+            sync_error  = 'Auto-recovered: sync process no longer running'
+      WHERE sync_status = 'syncing'
+        AND NOT (clerk_user_id = ANY($1::text[]))
+    RETURNING clerk_user_id`, [activeIds]);
+    return r.rows.map(row => row.clerk_user_id);
+}
 export async function getSyncStatus(clerkUserId) {
     const r = await getPool().query("SELECT collection_synced_at, wantlist_synced_at, sync_status, sync_progress, sync_total, sync_error FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
     return {
