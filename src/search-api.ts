@@ -1768,6 +1768,12 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
   };
   let totalSynced = 0;
   let lastProgressAt = Date.now(); // tracks last time progress was made
+  // Set if a page ultimately failed (usually a transient Discogs HTTP 500
+  // on a big collection). We skip the page and keep going rather than
+  // failing the whole sync, but a gapped fetch must NOT prune — the
+  // "missing" items may just live in a page we skipped.
+  let collectionHadGaps = false;
+  let wantlistHadGaps = false;
 
   // Timeout guard — checks every 60s if sync has stalled
   let _syncDone = false;
@@ -1848,13 +1854,29 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
     if (syncCollection) {
       const allInstanceIds: number[] = [];
       const pace = makePacer(1100);
+      let consecFail = 0;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         await pace(); // adaptive — only sleeps if last request started <1.1s ago
-        const r = await fetchWithRetry(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
-        );
-        const data = await r.json() as any;
+        let data: any;
+        try {
+          const r = await fetchWithRetry(
+            `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
+          );
+          data = await r.json() as any;
+          consecFail = 0;
+        } catch (err) {
+          // A single page failing (usually a transient Discogs HTTP 500 on
+          // a large collection) shouldn't sink the whole sync. Skip it,
+          // flag the gap, and move on; bail only if several pages in a row
+          // fail. Keep lastProgressAt fresh so the stall guard doesn't also
+          // trip while we push through.
+          console.error(`Sync ${username}: collection page ${page} failed, skipping: ${err}`);
+          collectionHadGaps = true;
+          lastProgressAt = Date.now();
+          if (++consecFail >= 3) { console.error(`Sync ${username}: ${consecFail} consecutive collection page failures — ending collection phase`); break; }
+          continue;
+        }
         const releases: any[] = data.releases ?? [];
         if (!releases.length) break;
         const items = releases.map((item: any) => ({
@@ -1875,12 +1897,18 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
         if (releases.length < 500) break;
       }
-      // Remove local instances that are no longer in Discogs collection
-      if (allInstanceIds.length > 0) {
-        const pruned = await pruneCollectionItems(userId, allInstanceIds);
-        if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale collection instances`);
+      // Only prune / stamp synced-at when we saw the FULL collection —
+      // pruning against a gapped fetch would delete items that live in the
+      // pages we skipped, and a stale synced-at makes the next run retry.
+      if (!collectionHadGaps) {
+        if (allInstanceIds.length > 0) {
+          const pruned = await pruneCollectionItems(userId, allInstanceIds);
+          if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale collection instances`);
+        }
+        await updateCollectionSyncedAt(userId);
+      } else {
+        console.warn(`Sync ${username}: collection synced with gaps — skipping prune + synced-at stamp`);
       }
-      await updateCollectionSyncedAt(userId);
 
       // Sync folder list
       try {
@@ -1898,13 +1926,24 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
     if (syncWantlist) {
       const allWantlistIds: number[] = [];
       const pace = makePacer(1100);
+      let consecFail = 0;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         await pace();
-        const r = await fetchWithRetry(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`
-        );
-        const data = await r.json() as any;
+        let data: any;
+        try {
+          const r = await fetchWithRetry(
+            `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`
+          );
+          data = await r.json() as any;
+          consecFail = 0;
+        } catch (err) {
+          console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
+          wantlistHadGaps = true;
+          lastProgressAt = Date.now();
+          if (++consecFail >= 3) { console.error(`Sync ${username}: ${consecFail} consecutive wantlist page failures — ending wantlist phase`); break; }
+          continue;
+        }
         const wants: any[] = data.wants ?? [];
         if (!wants.length) break;
         const items = wants.map((item: any) => ({
@@ -1922,16 +1961,25 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
         if (wants.length < 500) break;
       }
-      // Remove local items that are no longer in Discogs wantlist
-      if (allWantlistIds.length > 0) {
-        const pruned = await pruneWantlistItems(userId, allWantlistIds);
-        if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale wantlist items`);
+      // Only prune / stamp synced-at on a complete fetch (see collection note).
+      if (!wantlistHadGaps) {
+        if (allWantlistIds.length > 0) {
+          const pruned = await pruneWantlistItems(userId, allWantlistIds);
+          if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale wantlist items`);
+        }
+        await updateWantlistSyncedAt(userId);
+      } else {
+        console.warn(`Sync ${username}: wantlist synced with gaps — skipping prune + synced-at stamp`);
       }
-      await updateWantlistSyncedAt(userId);
     }
 
-    await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
-    console.log(`Full sync complete for ${username}: ${totalSynced} items`);
+    // Gapped fetches still land here (not the catch) so the 30k+ items we
+    // DID pull are usable; the note records that some pages were skipped
+    // and the un-stamped synced-at makes the next run retry the gaps.
+    const hadGaps = collectionHadGaps || wantlistHadGaps;
+    await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal,
+      hadGaps ? "Completed with gaps — some Discogs pages returned errors; re-run to fill." : undefined);
+    console.log(`Full sync ${hadGaps ? "complete WITH GAPS" : "complete"} for ${username}: ${totalSynced} items`);
   } catch (err) {
     console.error(`Background sync error for ${username}:`, err);
     await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
