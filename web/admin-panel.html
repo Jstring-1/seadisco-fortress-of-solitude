@@ -95,6 +95,7 @@
           <span id="users-unified-refresh-status" class="admin-refresh-status"></span>
           <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user suggestion generator for the admin user only">Run suggestions for me</button>
           <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user suggestion generator for every user (background, may take minutes)">Run for everyone</button>
+          <button class="admin-btn" id="admin-sync-stop-btn" onclick="adminSyncStop(this)" title="Reset any sync stuck on 'syncing' (e.g. a run whose server process died mid-sync during a redeploy). Flips those rows to 'stopped' so the user can be re-synced.">Reset stuck syncs</button>
           <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">

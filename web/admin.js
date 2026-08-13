@@ -610,16 +610,27 @@ async function adminSyncUser(username, btn) {
 }
 window.adminSyncUser = adminSyncUser;
 
-async function adminSyncStop() {
-  const btn = document.getElementById("admin-sync-stop-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Stopping\u2026";
+// Reset stuck syncs. Aborts any in-flight run and flips every DB row
+// still on "syncing" to "stopped" \u2014 the fix for a sync orphaned at a
+// fixed % because its server process died mid-run (e.g. a redeploy).
+async function adminSyncStop(btn) {
+  btn = btn || document.getElementById("admin-sync-stop-btn");
+  const statusEl = document.getElementById("suggestions-action-status");
+  const prev = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Resetting\u2026"; }
   try {
-    const r = await apiFetch("/api/admin/sync-stop", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = r.message || "Stop signal sent.";
-  } catch { statusEl.textContent = "Stop request failed."; }
-  finally { btn.disabled = false; btn.textContent = "Stop All"; }
+    const r = await apiFetch("/api/admin/sync-stop", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    if (statusEl) statusEl.textContent = j.message || "Syncs reset.";
+    loadAdminUsersUnified();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Reset failed" + (e?.message ? `: ${e.message}` : ".");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = prev || "Reset stuck syncs"; }
+  }
 }
+window.adminSyncStop = adminSyncStop;
 
 async function toggleApiKill() {
   const btn = document.getElementById("admin-api-kill-btn");
