@@ -598,7 +598,7 @@ async function adminSyncUser(username, btn) {
     if (btn) btn.textContent = "Syncing…";
     let polls = 0;
     const poll = () => {
-      loadAdminUsersUnified();
+      loadAdminUsersUnified(true); // silent — no "Loading…" flash
       if (++polls < 4) setTimeout(poll, polls * 2500);
     };
     setTimeout(poll, 2000);
@@ -4894,10 +4894,12 @@ function _adminUnifiedFmtDate(v) {
   return `${M}/${D}/${YY} ${h}:${m}${ap}`;
 }
 
-async function loadAdminUsersUnified() {
+async function loadAdminUsersUnified(silent) {
   const el = document.getElementById("users-unified-list");
   if (!el) return;
-  el.textContent = "Loading…";
+  // `silent` skips the "Loading…" placeholder — used by the post-sync
+  // re-poll so the section doesn't collapse+expand on every refresh.
+  if (!silent) el.textContent = "Loading…";
   try {
     const r = await apiFetch("/api/admin/users-unified");
     if (!r.ok) { el.textContent = `Could not load users (HTTP ${r.status}).`; return; }
