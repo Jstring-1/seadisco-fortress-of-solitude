@@ -582,15 +582,30 @@ async function adminSyncUser(username, btn) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
     });
+    // The endpoint 4xx's synchronously for the fixable-here problems
+    // (no such user, no valid Discogs auth). Surface that message rather
+    // than silently leaving the row on its old status.
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.error || `HTTP ${r.status}`);
     }
-    // Refresh the unified Users table so the row flips to "syncing…".
-    loadAdminUsersUnified();
+    // 200 only means the run was QUEUED. runBackgroundSync flips the DB
+    // status to "syncing" ~1-2s later (after fetching page counts) and
+    // may re-write "error" if the run itself fails (expired token,
+    // private/renamed Discogs account). Refreshing immediately would just
+    // re-show the stale status, so keep the button in a pending state and
+    // re-poll a few times to catch the real outcome.
+    if (btn) btn.textContent = "Syncing…";
+    let polls = 0;
+    const poll = () => {
+      loadAdminUsersUnified();
+      if (++polls < 4) setTimeout(poll, polls * 2500);
+    };
+    setTimeout(poll, 2000);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = prev; }
-    alert("Sync failed for " + username + (e?.message ? `: ${e.message}` : ""));
+    alert("Sync failed for " + username + (e?.message ? `: ${e.message}` : "")
+      + "\n\nIf the row stays on “error”, hover it to read the reason — an expired or revoked Discogs token can't be fixed by re-syncing; the user has to reconnect Discogs.");
   }
 }
 window.adminSyncUser = adminSyncUser;
