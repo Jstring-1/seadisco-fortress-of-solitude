@@ -255,6 +255,25 @@ function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   saveFilterState();
 
+  // Keep the browser-tab title in sync with the active view. The server
+  // injects a per-view <title> on initial load (e.g. ?v=loc →
+  // "Library of Congress Recordings — SeaDisco"); without this, an SPA
+  // navigation AWAY from that view leaves the stale title in the tab.
+  // Mirrors src/search-api.ts _VIEW_META for the public views; everything
+  // else falls back to the home title.
+  try {
+    const _VIEW_TITLES = {
+      loc:     "Library of Congress Recordings — SeaDisco",
+      archive: "Live Show Archive — SeaDisco",
+      wiki:    "Wikipedia Music Lookup — SeaDisco",
+      info:    "About SeaDisco",
+      privacy: "Privacy Policy — SeaDisco",
+      terms:   "Terms of Service — SeaDisco",
+    };
+    document.title = _VIEW_TITLES[view]
+      || "SeaDisco — Music Discovery Platform | Search, Collection & Wantlist";
+  } catch {}
+
   // Highlight nav — single row has both data-view and data-rtab tabs
   const isRecords = view === "records";
   // The Discover tab covers the LOC/Wiki/Archive/YouTube/Gutenberg/
