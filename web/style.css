@@ -3721,6 +3721,11 @@ body.sd-anon .anon-cta {
 .rr-tab.rr-tab-restricted { color: #8a7a4a; }
 .rr-tab.rr-tab-restricted:hover { color: #c9b377; }
 .rr-tab.rr-tab-restricted.rr-tab-active { color: #d9c281; }
+/* Footer admin-only links (YouTube / Gutenberg / Newspapers / Lyrics /
+   Admin) — same muted-gold as the restricted sub-nav tabs so they read
+   as admin surfaces in the footer too. */
+.footer-restricted { color: #8a7a4a; }
+.footer-restricted:hover { color: #c9b377; }
 /* External-source sub-nav strip (LOC / Wikipedia / Archive / YouTube).
    Shares .rr-header + .rr-tab styling so it visually matches the home
    Recent / Suggestions / Submitted / Feed strip. The bottom border

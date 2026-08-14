@@ -1995,10 +1995,10 @@ function renderSharedFooter(opts) {
         ${link("LOC",       "loc")}
         ${link("Wikipedia", "wiki")}
         ${link("Archive",   "archive")}
-        <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
-        <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
-        <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
-        <a id="footer-blues-archive-link" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Lyrics</a>
+        <a id="footer-youtube-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
+        <a id="footer-gutenberg-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
+        <a id="footer-chronam-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
+        <a id="footer-blues-archive-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Lyrics</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -2007,7 +2007,7 @@ function renderSharedFooter(opts) {
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
-        <a id="footer-admin-link" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
+        <a id="footer-admin-link" class="footer-restricted" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
       </div>
     </div>
     <div><a href="#" onclick="_seaDiscoOpenJimmy(event);return false;" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
