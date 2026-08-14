@@ -343,6 +343,10 @@
           <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Exact matches can auto-pin; everything else is human-reviewed.</span>
         </div>
         <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.7rem;padding:0.5rem 0.7rem;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)">
+          <button class="admin-btn" id="ytr-coverage-btn" onclick="ytrLoadCoverage(this)" title="Count cached-master songs that have NO YouTube source — no Discogs video on the master AND no pin — out of the total, overall and for strict-Blues masters (genres = exactly ['Blues']). Heavy query: scans every cached master's tracklist, so it can take a bit.">▶ Compute YT coverage</button>
+          <span id="ytr-coverage-out" style="font-size:0.8rem;color:var(--muted)">Songs missing a YouTube track, out of the cache — click to compute.</span>
+        </div>
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.6rem">
           <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);cursor:pointer" title="Run the worker automatically once a day (just after midnight UTC) so candidates accumulate for review on your own schedule. Manual Start/Stop still work.">
             <input type="checkbox" id="ytr-daily-toggle" onchange="ytrToggleDaily(this.checked)"> Run automatically once a day

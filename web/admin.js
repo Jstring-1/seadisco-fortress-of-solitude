@@ -3366,6 +3366,37 @@ const _YTR_LIMIT = 50;
 let _ytrPollTimer = null;
 let _ytrQuery = "";
 let _ytrFilterTimer = null;
+// On-demand YouTube coverage stat: how many cached-master songs have no
+// YouTube source (no Discogs video on the master + no pin), overall and
+// for strict-Blues masters. Heavy server query — button-triggered.
+async function ytrLoadCoverage(btn) {
+  const out = document.getElementById("ytr-coverage-out");
+  const prev = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Computing…"; }
+  if (out) { out.style.color = "var(--muted)"; out.textContent = "Computing… (scanning every cached master's tracklist — this can take a bit)"; }
+  try {
+    const r = await apiFetch("/api/admin/yt-review/coverage");
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `HTTP ${r.status}`); }
+    const s = await r.json();
+    const fmt = n => Number(n || 0).toLocaleString();
+    const pct = (m, t) => t ? ((Number(m) / Number(t)) * 100).toFixed(1) : "0.0";
+    if (out) {
+      out.style.color = "var(--text)";
+      out.innerHTML =
+        `<strong>All masters:</strong> <strong style="color:#e88">${fmt(s.allMissing)}</strong> missing / ${fmt(s.allTotal)} songs `
+        + `<span style="color:var(--muted)">(${pct(s.allMissing, s.allTotal)}% missing)</span>`
+        + ` <span style="color:#555">·</span> `
+        + `<strong>Strict Blues:</strong> <strong style="color:#e88">${fmt(s.bluesMissing)}</strong> missing / ${fmt(s.bluesTotal)} songs `
+        + `<span style="color:var(--muted)">(${pct(s.bluesMissing, s.bluesTotal)}% missing)</span>`;
+    }
+  } catch (e) {
+    if (out) { out.style.color = "#e88"; out.textContent = "Failed: " + ((e && e.message) || e); }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = prev || "▶ Compute YT coverage"; }
+  }
+}
+window.ytrLoadCoverage = ytrLoadCoverage;
+
 async function loadYtReview() {
   const stEl = document.getElementById("ytr-status");
   if (!stEl) return;

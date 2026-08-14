@@ -7294,6 +7294,69 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
   return out;
 }
 
+// YouTube coverage of the cached catalogue. A "song" is a real track
+// (non-heading, non-empty position) inside a cached MASTER. A song counts
+// as COVERED when its master carries at least one Discogs video[] OR the
+// track has a non-block pin in track_youtube_overrides; otherwise it's
+// MISSING. (Per-track Discogs-video matching is a fuzzy client-side title
+// match not stored in the DB, so the Discogs side is per-master here.)
+// "strict blues" = master whose genres array is exactly ['Blues'].
+// Expanding every master's tracklist is heavy, so this runs under a
+// raised statement_timeout and is meant to be called on demand.
+export async function getYtCoverageStats(): Promise<{
+  allTotal: number; allMissing: number; bluesTotal: number; bluesMissing: number;
+}> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET LOCAL statement_timeout = '180000'");
+    const r = await client.query(`
+      WITH tracks AS (
+        SELECT
+          (jsonb_typeof(rc.data->'videos') = 'array'
+             AND jsonb_array_length(rc.data->'videos') > 0)               AS has_video,
+          (jsonb_typeof(rc.data->'genres') = 'array'
+             AND jsonb_array_length(rc.data->'genres') = 1
+             AND jsonb_exists(rc.data->'genres', 'Blues'))                AS strict_blues,
+          rc.discogs_id                                                   AS mid,
+          t->>'position'                                                  AS pos
+        FROM release_cache rc
+        CROSS JOIN LATERAL jsonb_array_elements(rc.data->'tracklist') t
+        WHERE rc.type = 'master'
+          AND jsonb_typeof(rc.data->'tracklist') = 'array'
+          AND COALESCE(t->>'type_', 'track') <> 'heading'
+          AND COALESCE(t->>'position', '') <> ''
+      )
+      SELECT
+        COUNT(*)::bigint                                                             AS all_total,
+        COUNT(*) FILTER (WHERE NOT has_video AND o.release_id IS NULL)::bigint       AS all_missing,
+        COUNT(*) FILTER (WHERE strict_blues)::bigint                                 AS blues_total,
+        COUNT(*) FILTER (WHERE strict_blues AND NOT has_video
+                               AND o.release_id IS NULL)::bigint                     AS blues_missing
+      FROM tracks
+      LEFT JOIN track_youtube_overrides o
+        ON o.release_type = 'master'
+       AND o.release_id = tracks.mid::text
+       AND o.track_position = tracks.pos
+       AND COALESCE(o.video_id, '') <> ''
+       AND o.mode <> 'block'
+    `);
+    await client.query("COMMIT");
+    const row = r.rows[0] || {};
+    return {
+      allTotal:     Number(row.all_total     || 0),
+      allMissing:   Number(row.all_missing   || 0),
+      bluesTotal:   Number(row.blues_total   || 0),
+      bluesMissing: Number(row.blues_missing || 0),
+    };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function reviewQueueDecide(id: number, action: "approve" | "reject" | "skip", reviewer: string | null): Promise<{ ok: boolean; videoId?: string; masterId?: number; trackPosition?: string; trackTitle?: string }> {
   const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "skipped";
   const upd = await getPool().query(
