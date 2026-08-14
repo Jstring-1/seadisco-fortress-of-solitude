@@ -5714,6 +5714,9 @@ async function _baOpenLyricPublic(lyricId) {
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   }
+  // Stack above any album / version modal already open (was fixed z 320,
+  // which sat behind the album modal at 350).
+  window._sdBringToFront?.(overlay);
   const shell = (inner) => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(680px,100%)">
       <div style="display:flex;justify-content:flex-end;margin-bottom:0.3rem">

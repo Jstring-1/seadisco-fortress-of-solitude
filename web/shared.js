@@ -2192,6 +2192,29 @@ function renderSharedFooter(opts) {
   })();
 }
 
+// ── Popup stacking ───────────────────────────────────────────────────────
+// Floating popups (the lyric viewer, the entity-lookup menu) are created
+// with a fixed z-index, so one opened while an album / version / series
+// modal (z 350–370) is up would land BEHIND it. _sdBringToFront hands out
+// the next z in a band just above those modals but below the docked mini-
+// player (z 400, kept interactive on purpose), and resets to the base when
+// none are open so the band never creeps into the player over a long
+// session. Net: each newly opened popup lands on top of the last.
+// Closed popups are removed from the DOM, so a querySelectorAll only
+// returns the ones currently open.
+window._sdPopupZBase = 380;
+window._sdPopupZTop  = 380;
+window._SD_STACK_SELECTOR = "#ba-lyric-public-overlay, .lookup-popup";
+window._sdBringToFront = function (el) {
+  if (!el) return;
+  try {
+    const openOthers = Array.from(document.querySelectorAll(window._SD_STACK_SELECTOR))
+      .filter(n => n !== el);
+    if (!openOthers.length || window._sdPopupZTop > 398) window._sdPopupZTop = window._sdPopupZBase;
+    el.style.zIndex = String(window._sdPopupZTop++);
+  } catch {}
+};
+
 // ── Unified entity-lookup popup ──────────────────────────────────────────
 // One small floating menu replaces the cluster of W / 🏛 / 📺 icons that
 // used to hang next to every track-title or artist-name link. The text
@@ -2444,6 +2467,7 @@ function openLookupPopup(ev, scope, label, ctx) {
   `;
   document.body.appendChild(wrap);
   _lookupPopupEl = wrap;
+  window._sdBringToFront?.(wrap); // stack above any open modal
 
   // Position near the click; clamp so the popup stays in-viewport.
   const popupW = 220;

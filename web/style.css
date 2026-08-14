@@ -8279,6 +8279,17 @@ tr.ba-lyric-visited .ba-lyric-snippet { color: #555; opacity: 0.7; }
   display: inline-flex;
   flex-shrink: 0;
 }
+/* Clickable cover — opens the album/release modal. */
+.queue-row-thumb-open { cursor: pointer; }
+.queue-row-thumb-open:hover .queue-row-thumb { filter: brightness(1.12); }
+.queue-row-thumb-open:hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--accent) inset;
+  pointer-events: none;
+}
 .queue-row-thumb {
   width: 36px;
   height: 36px;

@@ -1334,10 +1334,14 @@ async function _renderQueueDrawer() {
     // Fall-back label — if we don't know the release, still make the
     // title a YouTube search so the user has SOMETHING actionable.
     const ytSearchHref = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`;
+    // Single-quoted id so the call is safe inside a double-quoted
+    // onclick attribute (JSON.stringify emits double quotes, which
+    // truncate the attribute for string release ids).
+    const _relIdJs = `'${releaseId.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
     const openAlbumJs = canOpenAlbum
       ? (releaseType.toLowerCase() === "master"
-          ? `window.openMasterModal && window.openMasterModal(${JSON.stringify(releaseId)})`
-          : `window.openAlbumModal  && window.openAlbumModal(${JSON.stringify(releaseId)})`)
+          ? `window.openMasterModal && window.openMasterModal(${_relIdJs})`
+          : `window.openAlbumModal  && window.openAlbumModal(${_relIdJs})`)
       : "";
     const titleCell = isUnavail
       ? (canOpenAlbum
@@ -1356,7 +1360,7 @@ async function _renderQueueDrawer() {
     return `
       <div class="queue-row${isPlaying ? " is-playing" : ""}${isUnavail ? " queue-row-unavail" : ""}" data-position="${it.position}">
         <span class="queue-row-handle" title="Drag to reorder">⋮⋮</span>
-        <span class="queue-row-thumb-wrap" title="${sourceTitle}${isUnavail ? " — unavailable" : ""}">
+        <span class="queue-row-thumb-wrap${canOpenAlbum ? " queue-row-thumb-open" : ""}" title="${canOpenAlbum ? "Open album" : sourceTitle}${isUnavail ? " — unavailable" : ""}"${canOpenAlbum ? ` onclick="event.stopPropagation();${openAlbumJs}"` : ""}>
           ${thumbHtml}
           <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
@@ -1719,7 +1723,16 @@ async function queueRemove(position, externalId) {
   }
 }
 
-async function queueClear() {
+// queueClear(opts)
+//   opts.keepPlaying — when true, wipe the queue WITHOUT stopping the
+//     current track and without dropping the driver latch. Used by a
+//     playlist LOAD: the song you're hearing keeps playing while the
+//     queue is swapped underneath, and when it ends _queuePlayNext falls
+//     through to the head of the freshly-loaded list (its "current track
+//     not in queue → start from head" path). A bare Clear still stops
+//     everything.
+async function queueClear(opts = {}) {
+  const keepPlaying = !!opts.keepPlaying;
   // No confirm — clearing the queue is reversible (items are still in
   // the source playlists/favorites) and the prompt fired on every
   // playlist-load too, which made loading feel hostile.
@@ -1734,15 +1747,19 @@ async function queueClear() {
   // Reset shuffle state — a cleared queue means there's no history
   // worth preserving, and the next add+play should start a fresh deck.
   _shuffleResetState();
-  // Queue is gone — the next play starts a fresh driver latch.
-  _queueWasDriving = false;
+  // Queue is gone — the next play starts a fresh driver latch. But on a
+  // keepPlaying clear the current track is still driving, so leave the
+  // latch on or its end would fall through to the legacy album queue.
+  if (!keepPlaying) _queueWasDriving = false;
   // Anon path: clear localStorage, stop playback, drop the drawer.
   if (!window._clerk?.user) {
     _queue = [];
     _queueCurrentPosition = null;
-    _queuePlayingExternalId = null;
+    // Preserve the playing id when keeping playback so the end-of-track
+    // handler still knows a queue track is on air.
+    if (!keepPlaying) _queuePlayingExternalId = null;
     _saveAnonQueue([]);
-    if (typeof playerClose === "function") {
+    if (!keepPlaying && typeof playerClose === "function") {
       try { playerClose(); } catch {}
     }
     // Keep the drawer open — clearing is a "start fresh" gesture, not
@@ -1763,11 +1780,13 @@ async function queueClear() {
     });
     _queue = [];
     _queueCurrentPosition = null;
-    _queuePlayingExternalId = null;
+    if (!keepPlaying) _queuePlayingExternalId = null;
     // Stop whatever's playing — clearing the queue is a "stop everything"
     // gesture. playerClose dispatches to the active engine (LOC or YT)
     // and tears the bar down; safe to call when nothing is playing.
-    if (typeof playerClose === "function") {
+    // Skipped on a keepPlaying clear so a playlist load doesn't cut the
+    // current track off.
+    if (!keepPlaying && typeof playerClose === "function") {
       try { playerClose(); } catch {}
     }
     // Keep the drawer open — clearing is a "start fresh" gesture. The
@@ -3014,7 +3033,11 @@ async function _playlistLoad(id) {
       if (typeof showToast === "function") showToast("Playlist is empty", "error");
       return;
     }
-    await queueClear();
+    // If a track is on air, swap the queue underneath it instead of
+    // stopping it — the current song plays out and the freshly-loaded
+    // list picks up when it ends (see queueClear keepPlaying).
+    const _barOpen = !!document.getElementById("mini-player")?.classList.contains("open");
+    await queueClear({ keepPlaying: _barOpen && !!_queuePlayingExternalId });
     await queueAdd(playlist.items.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     })), { mode: "append" });
@@ -3116,8 +3139,10 @@ async function _playlistHandleDeepLink() {
       return;
     }
     // No confirm — clicking the share URL is the user's explicit
-    // intent. A toast announces what just landed in their queue.
-    await queueClear();
+    // intent. A toast announces what just landed in their queue. Keep any
+    // current track playing while the queue is swapped underneath.
+    const _barOpen = !!document.getElementById("mini-player")?.classList.contains("open");
+    await queueClear({ keepPlaying: _barOpen && !!_queuePlayingExternalId });
     await queueAdd(playlist.items.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     })), { mode: "append" });
