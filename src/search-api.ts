@@ -6356,6 +6356,13 @@ app.use("/api/admin", (req, res, next) => {
   const now = Date.now();
   const entry = adminRateCounts.get(ip);
   if (!entry || now > entry.resetAt) {
+    // Opportunistic GC — this map is keyed by client IP with no other
+    // eviction, so an unauthenticated bot scanning /api/admin/* from many
+    // IPs (the middleware runs before requireAdmin) would grow it forever.
+    // Purge expired entries whenever it gets large.
+    if (adminRateCounts.size > 5000) {
+      for (const [k, v] of adminRateCounts) { if (now > v.resetAt) adminRateCounts.delete(k); }
+    }
     adminRateCounts.set(ip, { count: 1, resetAt: now + 60_000 });
     return next();
   }
@@ -6862,7 +6869,7 @@ const _ytVideoInfoCache = new Map<string, { ts: number; body: any }>();
 const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // Hard cap so the map can't grow unbounded over the process lifetime —
 // every distinct videoId ever fetched used to stick around forever.
-const _YT_VIDEO_INFO_CACHE_MAX = 5000;
+const _YT_VIDEO_INFO_CACHE_MAX = 800;
 app.get("/api/youtube/video-info", async (req, res) => {
   // Open to every signed-in user while the YT auto-search is
   // suspended — the per-video info call is only 1 quota unit
