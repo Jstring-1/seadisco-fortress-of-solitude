@@ -2204,7 +2204,7 @@ function renderSharedFooter(opts) {
 // returns the ones currently open.
 window._sdPopupZBase = 380;
 window._sdPopupZTop  = 380;
-window._SD_STACK_SELECTOR = "#ba-lyric-public-overlay, .lookup-popup";
+window._SD_STACK_SELECTOR = "#ba-lyric-public-overlay, #ba-lyric-overlay, .lookup-popup";
 window._sdBringToFront = function (el) {
   if (!el) return;
   try {

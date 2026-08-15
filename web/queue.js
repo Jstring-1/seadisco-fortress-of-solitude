@@ -1338,10 +1338,13 @@ async function _renderQueueDrawer() {
     // onclick attribute (JSON.stringify emits double quotes, which
     // truncate the attribute for string release ids).
     const _relIdJs = `'${releaseId.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+    // openModal(event, id, type) is the real release/master modal opener
+    // (modal.js). The old window.openAlbumModal/openMasterModal names were
+    // never defined, so the && guard silently no-oped. Pass null for the
+    // event (stopPropagation is handled on the thumb wrapper below).
+    const _relType = releaseType.toLowerCase() === "master" ? "master" : "release";
     const openAlbumJs = canOpenAlbum
-      ? (releaseType.toLowerCase() === "master"
-          ? `window.openMasterModal && window.openMasterModal(${_relIdJs})`
-          : `window.openAlbumModal  && window.openAlbumModal(${_relIdJs})`)
+      ? `window.openModal && window.openModal(null, ${_relIdJs}, '${_relType}')`
       : "";
     const titleCell = isUnavail
       ? (canOpenAlbum

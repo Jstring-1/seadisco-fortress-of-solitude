@@ -508,6 +508,10 @@ async function _baOpenLyric(id) {
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
       document.body.appendChild(overlay);
     }
+    // Stack above any album / version modal already open (fixed z 300 sat
+    // behind the album modal at 350). Runs every open so a lyric popped
+    // from inside a modal always lands on top, in click order.
+    window._sdBringToFront?.(overlay);
     // Merged viewer + editor: every field is an inline input. Save is
     // disabled until any value differs from what the server returned.
     // The previous read-only viewer + separate editor overlay flow is
