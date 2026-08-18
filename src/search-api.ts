@@ -8199,14 +8199,25 @@ app.get("/api/admin/users-unified", async (req, res) => {
       _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
     ]);
 
-    // Best-effort Clerk session lookup for the online dot + accurate
-    // last-active, mirroring /api/admin/sync-status. Skipped when no
-    // Clerk secret is configured.
+    // last-active is driven by REAL in-app activity (play / search /
+    // album-click), computed in getUserBehaviorStats. Build the map up
+    // front so the Clerk session lookup below can be SKIPPED entirely for
+    // any user we already have activity for — we don't rely on sessions
+    // when we have the real data.
+    const behaviorLastActive = new Map<string, number>(); // clerkUserId → ms
+    for (const b of behavior as any[]) {
+      if (b.last_active) behaviorLastActive.set(b.clerk_user_id, new Date(b.last_active).getTime());
+    }
+
+    // Clerk session lookup is now only a FALLBACK for users with no
+    // tracked activity at all (e.g. signed up but never searched/played).
+    // Skipped when no Clerk secret is configured.
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
     const lastActiveMap = new Map<string, number>();
     if (clerkSecret) {
       for (const u of sync) {
         if (!u.clerkUserId) continue;
+        if (behaviorLastActive.has(u.clerkUserId)) continue; // have real activity — skip the Clerk call
         try {
           let latest = 0;
           for (const status of ["active", "ended", "expired"] as const) {
@@ -8240,7 +8251,7 @@ app.get("/api/admin/users-unified", async (req, res) => {
 
     for (const u of sync) {
       const r = get(u.clerkUserId);
-      const lastActiveAt = lastActiveMap.get(u.clerkUserId) ?? null;
+      const lastActiveAt = behaviorLastActive.get(u.clerkUserId) ?? lastActiveMap.get(u.clerkUserId) ?? null;
       r.discogsUsername    = u.username ?? null;
       r.collectionSyncedAt = u.collectionSyncedAt ?? null;
       r.wantlistSyncedAt   = u.wantlistSyncedAt ?? null;

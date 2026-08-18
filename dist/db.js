@@ -7928,7 +7928,14 @@ export async function getUserBehaviorStats() {
            COALESCE(pe.n_30d, 0)   AS player_plays_30d,
            COALESCE(se.n_total, 0) AS searches_total,
            COALESCE(se.n_30d, 0)   AS searches_30d,
-           u.last_active_at        AS last_active,
+           -- last_active = the most recent REAL in-app activity: a play,
+           -- a search, or an album click (recent_views), floored by the
+           -- generic last_active_at ping. GREATEST ignores NULLs, so a
+           -- demo/pre-OAuth user with events but no user_tokens row still
+           -- gets a timestamp instead of blank. We deliberately do NOT
+           -- lean on Clerk sessions here — engagement events are the
+           -- truth; the endpoint only consults Clerk as a last resort.
+           GREATEST(u.last_active_at, pe.last_at, se.last_at, rv.last_at) AS last_active,
            u.created_at            AS signed_up_at
       FROM all_users u
       LEFT JOIN (SELECT clerk_user_id, COUNT(*)::int AS n FROM user_favorites GROUP BY clerk_user_id) f
@@ -7947,25 +7954,28 @@ export async function getUserBehaviorStats() {
       LEFT JOIN (
         SELECT clerk_user_id,
                COUNT(*)::int AS n_total,
-               COUNT(*) FILTER (WHERE opened_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+               COUNT(*) FILTER (WHERE opened_at >= NOW() - INTERVAL '30 days')::int AS n_30d,
+               MAX(opened_at) AS last_at
           FROM user_recent_views
          GROUP BY clerk_user_id
       ) rv ON rv.clerk_user_id = u.clerk_user_id
       LEFT JOIN (
         SELECT clerk_user_id,
                COUNT(*)::int AS n_total,
-               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d,
+               MAX(created_at) AS last_at
           FROM user_play_events
          GROUP BY clerk_user_id
       ) pe ON pe.clerk_user_id = u.clerk_user_id
       LEFT JOIN (
         SELECT clerk_user_id,
                COUNT(*)::int AS n_total,
-               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d,
+               MAX(created_at) AS last_at
           FROM user_search_events
          GROUP BY clerk_user_id
       ) se ON se.clerk_user_id = u.clerk_user_id
-      ORDER BY u.last_active_at DESC NULLS LAST
+      ORDER BY last_active DESC NULLS LAST
   `);
     return r.rows;
 }
