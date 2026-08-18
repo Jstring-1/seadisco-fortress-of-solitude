@@ -4895,6 +4895,7 @@ let _adminUnifiedFilterTimer = null;
 const _ADMIN_UNIFIED_COLS = [
   { key: "clerkUsername",              label: "User",            group: "id",          type: "str",  align: "left" },
   { key: "discogsUsername",            label: "Discogs",         group: "sync",        type: "str",  align: "left" },
+  { key: "lastActiveAt",               label: "Last active",     group: "meta",        type: "date", align: "left" },
   { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
   { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
   { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
@@ -4906,7 +4907,6 @@ const _ADMIN_UNIFIED_COLS = [
   { key: "suggestionsFavorited",       label: "Sugg fav'd",      group: "suggestions", type: "num",  align: "right" },
   { key: "suggestionsLastGeneratedAt", label: "Last gen",        group: "suggestions", type: "date", align: "left" },
   { key: "signedUpAt",                 label: "Signed up",       group: "meta",        type: "date", align: "left" },
-  { key: "lastActiveAt",               label: "Last active",     group: "meta",        type: "date", align: "left" },
 ];
 const _ADMIN_UNIFIED_GROUPS = [
   { key: "all",         label: "All" },
@@ -5052,6 +5052,13 @@ function _adminUnifiedRender() {
   _adminUnifiedRenderGroupBar();
   const el = document.getElementById("users-unified-list");
   if (!el) return;
+  // Preserve the table's scroll position across the re-render so sorting /
+  // filtering / a sync-poll refresh doesn't yank the view back to the
+  // top-left. The inner overflow scroller is rebuilt below, so capture from
+  // the old one and reapply to the new one.
+  const _prevScroller = el.querySelector(".au-scroll");
+  const _prevLeft = _prevScroller ? _prevScroller.scrollLeft : 0;
+  const _prevTop  = _prevScroller ? _prevScroller.scrollTop  : 0;
   let rows = _adminUnifiedData;
   if (_adminUnifiedFilter) {
     const q = _adminUnifiedFilter;
@@ -5076,8 +5083,11 @@ function _adminUnifiedRender() {
     const tds = cols.map(c => `<td style="padding:0.3rem 0.5rem;text-align:${c.align};vertical-align:top;white-space:nowrap">${_adminUnifiedCell(u, c)}</td>`).join("");
     return `<tr style="border-top:1px solid var(--border)">${tds}</tr>`;
   }).join("");
-  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.78rem">${head}<tbody>${body}</tbody></table></div>
+  el.innerHTML = `<div class="au-scroll" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.78rem">${head}<tbody>${body}</tbody></table></div>
     <div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">${rows.length} user${rows.length === 1 ? "" : "s"}${_adminUnifiedFilter ? ` (filtered from ${_adminUnifiedData.length})` : ""}</div>`;
+  // Reapply the pre-render scroll position to the freshly-built scroller.
+  const _newScroller = el.querySelector(".au-scroll");
+  if (_newScroller) { _newScroller.scrollLeft = _prevLeft; _newScroller.scrollTop = _prevTop; }
 }
 
 async function loadAdminBehavior() {
