@@ -970,16 +970,28 @@ export async function reactivateUser(clerkUserId) {
     await getPool().query("UPDATE user_tokens SET hibernated_at = NULL, last_active_at = NOW() WHERE clerk_user_id = $1", [clerkUserId]);
 }
 export async function hibernateInactiveUsers(exemptIds = []) {
+    // Inactivity is measured across ALL real activity signals, not just the
+    // Clerk-driven last_active_at ping: a user who has searched, played a
+    // track, or opened an album within 90 days is NOT idle even if their
+    // last_active_at is stale. We hibernate only when the MOST RECENT of
+    // {last_active_at (floored by created_at), last play, last search, last
+    // album-open} is older than 90 days. Mirrors the admin "Last active"
+    // column (getUserBehaviorStats) so the grid and the hibernation decision
+    // agree. 'epoch' fills the "no such events" case so GREATEST never nulls.
+    //
     // exemptIds are never hibernated regardless of inactivity — admin + demo
-    // accounts (e.g. the YouTube API review demo account) must stay live so
-    // their seat and data persist. With an empty list the ANY(...) clause is
-    // `NOT FALSE` = TRUE, so nothing is exempted (unchanged behavior).
-    const r = await getPool().query(`UPDATE user_tokens
+    // accounts (e.g. the YouTube API review demo account) must stay live.
+    const r = await getPool().query(`UPDATE user_tokens ut
      SET hibernated_at = NOW()
-     WHERE hibernated_at IS NULL
-       AND COALESCE(last_active_at, created_at) < NOW() - INTERVAL '90 days'
-       AND NOT (clerk_user_id = ANY($1::text[]))
-     RETURNING clerk_user_id`, [exemptIds]);
+     WHERE ut.hibernated_at IS NULL
+       AND NOT (ut.clerk_user_id = ANY($1::text[]))
+       AND GREATEST(
+             COALESCE(ut.last_active_at, ut.created_at, 'epoch'::timestamptz),
+             COALESCE((SELECT MAX(created_at) FROM user_play_events   pe WHERE pe.clerk_user_id = ut.clerk_user_id), 'epoch'::timestamptz),
+             COALESCE((SELECT MAX(created_at) FROM user_search_events se WHERE se.clerk_user_id = ut.clerk_user_id), 'epoch'::timestamptz),
+             COALESCE((SELECT MAX(opened_at)  FROM user_recent_views  rv WHERE rv.clerk_user_id = ut.clerk_user_id), 'epoch'::timestamptz)
+           ) < NOW() - INTERVAL '90 days'
+     RETURNING ut.clerk_user_id`, [exemptIds]);
     return r.rowCount ?? 0;
 }
 export async function getUserToken(clerkUserId) {
