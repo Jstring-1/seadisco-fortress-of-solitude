@@ -5035,7 +5035,13 @@ function _adminUnifiedCell(u, col) {
     const btn = u.discogsUsername
       ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(&quot;${escHtml(u.discogsUsername)}&quot;, this)" title="Run a full Discogs library sync for this user">Sync</button>`
       : "";
-    if (u.syncError) return `<span style="color:#e88" title="${escHtml(String(u.syncError))}">error</span>${btn}`;
+    if (u.syncError) {
+      // Show the actual reason inline (truncated) instead of a bare "error",
+      // so the cause is visible at a glance; full text on hover.
+      const e = String(u.syncError);
+      const short = e.length > 44 ? e.slice(0, 44) + "…" : e;
+      return `<span style="color:#e88;cursor:help" title="${escHtml(e)}">error: ${escHtml(short)}</span>${btn}`;
+    }
     return `${escHtml(s)}${btn}`;
   }
   if (col.pair != null) {

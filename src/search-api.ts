@@ -1958,7 +1958,12 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       const pace = makePacer(1100);
       let consecFail = 0;
       for (let page = 1; ; page++) {
-        if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
+        // By the time we reach the wantlist phase the collection has already
+        // synced. A wantlist-phase abort/stall (manual "Reset stuck syncs",
+        // or the stall watchdog) must NOT hard-error the whole run — that's
+        // exactly the "collection synced but SYNC shows error" symptom.
+        // Stop the wantlist and let the run finalize as complete-with-gaps.
+        if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: wantlist aborted — finalizing as gapped, keeping the synced collection`); wantlistHadGaps = true; break; }
         await pace();
         let data: any;
         try {
