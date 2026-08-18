@@ -2024,62 +2024,72 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
             catch { /* folder sync optional */ }
         }
         if (syncWantlist) {
-            const allWantlistIds = [];
-            const pace = makePacer(1100);
-            let consecFail = 0;
-            for (let page = 1;; page++) {
-                if (_syncAbort || _thisSyncAbort) {
-                    console.log(`Sync ${username}: aborted`);
-                    await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted");
-                    _syncDone = true;
-                    return;
-                }
-                await pace();
-                let data;
-                try {
-                    const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`);
-                    data = await r.json();
-                    consecFail = 0;
-                }
-                catch (err) {
-                    console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
-                    wantlistHadGaps = true;
-                    lastProgressAt = Date.now();
-                    if (++consecFail >= 3) {
-                        console.error(`Sync ${username}: ${consecFail} consecutive wantlist page failures — ending wantlist phase`);
-                        break;
+            // Whole-phase guard: a wantlist failure (malformed item, DB upsert
+            // error, statement timeout on a big batch, etc.) must NOT sink a run
+            // whose collection already synced. Degrade to a gap → the run still
+            // finishes "complete (with gaps)" and the user keeps their data.
+            try {
+                const allWantlistIds = [];
+                const pace = makePacer(1100);
+                let consecFail = 0;
+                for (let page = 1;; page++) {
+                    if (_syncAbort || _thisSyncAbort) {
+                        console.log(`Sync ${username}: aborted`);
+                        await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted");
+                        _syncDone = true;
+                        return;
                     }
-                    continue;
+                    await pace();
+                    let data;
+                    try {
+                        const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`);
+                        data = await r.json();
+                        consecFail = 0;
+                    }
+                    catch (err) {
+                        console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
+                        wantlistHadGaps = true;
+                        lastProgressAt = Date.now();
+                        if (++consecFail >= 3) {
+                            console.error(`Sync ${username}: ${consecFail} consecutive wantlist page failures — ending wantlist phase`);
+                            break;
+                        }
+                        continue;
+                    }
+                    const wants = data.wants ?? [];
+                    if (!wants.length)
+                        break;
+                    const items = wants.map((item) => ({
+                        id: item.id,
+                        data: item.basic_information,
+                        addedAt: item.date_added ? new Date(item.date_added) : undefined,
+                        rating: item.rating ?? 0,
+                        notes: item.notes ?? undefined,
+                    })).filter(i => i.id);
+                    await upsertWantlistItems(userId, items);
+                    allWantlistIds.push(...items.map(i => i.id));
+                    totalSynced += items.length;
+                    lastProgressAt = Date.now();
+                    await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+                    if (wants.length < 500)
+                        break;
                 }
-                const wants = data.wants ?? [];
-                if (!wants.length)
-                    break;
-                const items = wants.map((item) => ({
-                    id: item.id,
-                    data: item.basic_information,
-                    addedAt: item.date_added ? new Date(item.date_added) : undefined,
-                    rating: item.rating ?? 0,
-                    notes: item.notes ?? undefined,
-                })).filter(i => i.id);
-                await upsertWantlistItems(userId, items);
-                allWantlistIds.push(...items.map(i => i.id));
-                totalSynced += items.length;
-                lastProgressAt = Date.now();
-                await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-                if (wants.length < 500)
-                    break;
-            }
-            // Only prune / stamp synced-at on a complete fetch (see collection note).
-            if (!wantlistHadGaps) {
-                if (allWantlistIds.length > 0) {
-                    const pruned = await pruneWantlistItems(userId, allWantlistIds);
-                    if (pruned > 0)
-                        console.log(`Sync ${username}: pruned ${pruned} stale wantlist items`);
+                // Only prune / stamp synced-at on a complete fetch (see collection note).
+                if (!wantlistHadGaps) {
+                    if (allWantlistIds.length > 0) {
+                        const pruned = await pruneWantlistItems(userId, allWantlistIds);
+                        if (pruned > 0)
+                            console.log(`Sync ${username}: pruned ${pruned} stale wantlist items`);
+                    }
+                    await updateWantlistSyncedAt(userId);
                 }
-                await updateWantlistSyncedAt(userId);
+                else {
+                    console.warn(`Sync ${username}: wantlist synced with gaps — skipping prune + synced-at stamp`);
+                }
             }
-            else {
-                console.warn(`Sync ${username}: wantlist synced with gaps — skipping prune + synced-at stamp`);
+            catch (wlErr) {
+                console.error(`Sync ${username}: wantlist phase failed, continuing as gapped: ${wlErr instanceof Error ? wlErr.stack || wlErr.message : wlErr}`);
+                wantlistHadGaps = true;
             }
         }
         // Gapped fetches still land here (not the catch) so the 30k+ items we

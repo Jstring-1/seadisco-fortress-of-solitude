@@ -1949,6 +1949,11 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
     }
 
     if (syncWantlist) {
+     // Whole-phase guard: a wantlist failure (malformed item, DB upsert
+     // error, statement timeout on a big batch, etc.) must NOT sink a run
+     // whose collection already synced. Degrade to a gap → the run still
+     // finishes "complete (with gaps)" and the user keeps their data.
+     try {
       const allWantlistIds: number[] = [];
       const pace = makePacer(1100);
       let consecFail = 0;
@@ -1996,6 +2001,10 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       } else {
         console.warn(`Sync ${username}: wantlist synced with gaps — skipping prune + synced-at stamp`);
       }
+     } catch (wlErr) {
+       console.error(`Sync ${username}: wantlist phase failed, continuing as gapped: ${wlErr instanceof Error ? wlErr.stack || wlErr.message : wlErr}`);
+       wantlistHadGaps = true;
+     }
     }
 
     // Gapped fetches still land here (not the catch) so the 30k+ items we

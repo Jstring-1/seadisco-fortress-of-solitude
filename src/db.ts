@@ -1509,7 +1509,7 @@ export async function upsertCollectionItems(
   const notesArr:   (string|null)[]= [];
   for (const [key, item] of deduped) {
     ids.push(item.id);
-    dataArr.push(JSON.stringify(item.data));
+    dataArr.push(JSON.stringify(item.data ?? {})); // guard: undefined → invalid jsonb bind (see upsertWantlistItems)
     addedArr.push(item.addedAt ?? null);
     folderArr.push(item.folderId ?? 0);
     ratingArr.push(item.rating ?? 0);
@@ -1636,7 +1636,12 @@ export async function upsertWantlistItems(
   const notesArr: (string|null)[] = [];
   for (const item of unique) {
     ids.push(item.id);
-    dataArr.push(JSON.stringify(item.data));
+    // `?? {}` guards against a wantlist item with missing basic_information:
+    // JSON.stringify(undefined) returns undefined (not a string), which
+    // binds into the $3::jsonb[] array as undefined and makes Postgres
+    // reject the whole statement — throwing out of the sync loop and
+    // failing the entire run with "error" even after collection synced.
+    dataArr.push(JSON.stringify(item.data ?? {}));
     addedArr.push(item.addedAt ?? null);
     ratingArr.push(item.rating ?? 0);
     notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
