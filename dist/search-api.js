@@ -9439,6 +9439,53 @@ app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) =>
         res.status(500).json({ error: String(err?.message ?? err) });
     }
 });
+// DELETE /api/admin/user/:clerkUserId — fully remove one user, admin only.
+// Purges their SeaDisco DB rows AND deletes their Clerk account so they
+// can't sign back in. Refuses to delete the admin account itself. This is
+// irreversible — the client confirms before calling.
+app.delete("/api/admin/user/:clerkUserId", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const clerkUserId = String(req.params.clerkUserId || "").trim();
+    if (!/^user_[A-Za-z0-9]+$/.test(clerkUserId)) {
+        res.status(400).json({ error: "bad_id", message: "Invalid Clerk user id." });
+        return;
+    }
+    if (clerkUserId === ADMIN_CLERK_ID) {
+        res.status(400).json({ error: "cannot_delete_admin", message: "Refusing to delete the admin account." });
+        return;
+    }
+    try {
+        // 1) DB footprint (collection, wantlist, favorites, events, tokens, …).
+        await deleteUserData(clerkUserId);
+        // 2) Clerk account, so the login is gone too. Best-effort: if Clerk
+        //    isn't configured or the account was already removed there, the DB
+        //    purge still stands.
+        let clerkDeleted = false;
+        const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+        if (clerkSecret) {
+            try {
+                const cr = await fetch(`https://api.clerk.com/v1/users/${clerkUserId}`, {
+                    method: "DELETE",
+                    headers: { Authorization: `Bearer ${clerkSecret}` },
+                });
+                clerkDeleted = cr.ok || cr.status === 404; // 404 = already gone
+                if (!cr.ok && cr.status !== 404) {
+                    console.warn(`[admin] Clerk delete for ${clerkUserId} returned ${cr.status}`);
+                }
+            }
+            catch (e) {
+                console.warn(`[admin] Clerk delete for ${clerkUserId} failed:`, e);
+            }
+        }
+        console.log(`[admin] deleted user ${clerkUserId} (db purged, clerkDeleted=${clerkDeleted})`);
+        res.json({ ok: true, clerkDeleted });
+    }
+    catch (err) {
+        console.error(`[admin] delete user ${clerkUserId} error:`, err);
+        res.status(500).json({ error: String(err?.message ?? err) });
+    }
+});
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
     if (!await requireAdmin(req, res))

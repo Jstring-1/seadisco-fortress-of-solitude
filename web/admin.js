@@ -4990,6 +4990,60 @@ window._adminSyncErrDetail = function (el) {
   } catch {}
 };
 
+// Confirmation window for deleting a user. Destructive + irreversible, so
+// it names the account, shows the id, and requires an explicit click.
+function adminDeleteUser(clerkUserId) {
+  const u = (_adminUnifiedData || []).find(x => x.clerkUserId === clerkUserId);
+  const name = u ? (u.clerkUsername || u.discogsUsername || "(no name)") : clerkUserId;
+  document.getElementById("admin-delete-user-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "admin-delete-user-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed", inset: "0", background: "rgba(0,0,0,0.7)", zIndex: "600",
+    display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
+  });
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;max-width:440px;width:100%;padding:1.4rem">
+      <h3 style="margin:0 0 0.7rem;color:#e88;font-size:1rem">Delete this user?</h3>
+      <p style="color:var(--text);font-size:0.85rem;margin:0 0 0.35rem">Permanently delete <strong>${escHtml(name)}</strong>${u && u.discogsUsername ? ` (discogs: ${escHtml(u.discogsUsername)})` : ""}.</p>
+      <p style="color:var(--muted);font-size:0.72rem;margin:0 0 0.6rem;font-family:monospace">${escHtml(clerkUserId)}</p>
+      <p style="color:var(--muted);font-size:0.8rem;margin:0 0 1rem;line-height:1.5">This removes <strong>all</strong> of their SeaDisco data <strong>and</strong> their Clerk login, so they can't sign back in. It cannot be undone.</p>
+      <div id="admin-delete-user-status" style="color:#e88;font-size:0.8rem;margin-bottom:0.6rem"></div>
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+        <button class="admin-btn" onclick="document.getElementById('admin-delete-user-overlay')?.remove()">Cancel</button>
+        <button class="admin-btn" id="admin-delete-user-confirm" style="background:#7a2b2b;color:#fff;border-color:#7a2b2b" onclick="_adminDeleteUserConfirm('${escHtml(clerkUserId)}', this)">Delete permanently</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.adminDeleteUser = adminDeleteUser;
+
+async function _adminDeleteUserConfirm(clerkUserId, btn) {
+  const statusEl = document.getElementById("admin-delete-user-status");
+  btn.disabled = true; btn.textContent = "Deleting…";
+  try {
+    const r = await apiFetch(`/api/admin/user/${encodeURIComponent(clerkUserId)}`, { method: "DELETE" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (statusEl) statusEl.textContent = j.message || j.error || `Failed (HTTP ${r.status})`;
+      btn.disabled = false; btn.textContent = "Delete permanently";
+      return;
+    }
+    document.getElementById("admin-delete-user-overlay")?.remove();
+    if (typeof showToast === "function") {
+      showToast(`User deleted${j.clerkDeleted === false ? " (SeaDisco data only — Clerk login not removed)" : ""}`);
+    }
+    // Drop from local data and re-render so the row disappears immediately.
+    _adminUnifiedData = (_adminUnifiedData || []).filter(x => x.clerkUserId !== clerkUserId);
+    _adminUnifiedRender();
+  } catch {
+    if (statusEl) statusEl.textContent = "Request failed — please try again.";
+    btn.disabled = false; btn.textContent = "Delete permanently";
+  }
+}
+window._adminDeleteUserConfirm = _adminDeleteUserConfirm;
+
 function _adminUnifiedFilterInput(v) {
   if (_adminUnifiedFilterTimer) clearTimeout(_adminUnifiedFilterTimer);
   _adminUnifiedFilterTimer = setTimeout(() => {
@@ -5028,7 +5082,14 @@ function _adminUnifiedUserCell(u) {
     : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--border);margin-right:0.35rem"></span>`;
   const disc = u.discogsUsername ? `<div style="font-size:0.7rem;color:var(--muted)">discogs: ${escHtml(u.discogsUsername)}</div>` : "";
   const id = `<div style="font-size:0.66rem;color:#555;font-family:monospace">${escHtml(u.clerkUserId || "")}</div>`;
-  return `<div style="min-width:11rem">${dot}<span style="font-weight:600;color:var(--text)">${escHtml(primary)}</span>${disc}${id}</div>`;
+  // Delete affordance — hidden for the current admin's own row (the server
+  // also refuses to delete the admin account). clerkUserId is [A-Za-z0-9_]
+  // only, safe inside the single-quoted onclick.
+  const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
+  const delBtn = (u.clerkUserId && !isSelf)
+    ? `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser('${escHtml(u.clerkUserId)}')" style="float:right;font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`
+    : "";
+  return `<div style="min-width:11rem">${delBtn}${dot}<span style="font-weight:600;color:var(--text)">${escHtml(primary)}</span>${disc}${id}</div>`;
 }
 
 function _adminUnifiedCell(u, col) {
