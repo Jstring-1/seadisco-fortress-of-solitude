@@ -4885,7 +4885,7 @@ window._adminBehaviorSortBy = _adminBehaviorSortBy;
 // keeps its row across groups — no more matching names across grids.
 let _adminUnifiedData = [];
 let _adminUnifiedGroup = "all";           // all | sync | behavior | suggestions
-let _adminUnifiedSort = { col: "signedUpAt", dir: "desc" };
+let _adminUnifiedSort = { col: "lastActiveAt", dir: "desc" };
 let _adminUnifiedFilter = "";
 let _adminUnifiedFilterTimer = null;
 
@@ -4961,7 +4961,7 @@ function _adminUnifiedSetGroup(g) {
   _adminUnifiedGroup = g;
   // If the active sort column just left the view, fall back to signup.
   if (!_adminUnifiedVisibleCols().some(c => c.key === _adminUnifiedSort.col)) {
-    _adminUnifiedSort = { col: "signedUpAt", dir: "desc" };
+    _adminUnifiedSort = { col: "lastActiveAt", dir: "desc" };
   }
   _adminUnifiedRender();
 }
