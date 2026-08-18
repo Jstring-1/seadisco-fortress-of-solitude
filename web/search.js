@@ -803,12 +803,18 @@ async function doSearch(page = 1, skipPushState = false) {
       });
     }
 
-    // Only auto-open modals/videos from URL params on first page load,
-    // not when appending via "load more" (which would restart the player)
+    // Only auto-open modals from URL params on first page load, not when
+    // appending via "load more".
+    //
+    // NOTE: the ?vd= video bootstrap is intentionally NOT handled here.
+    // app.js's page-load IIFE is the single owner of ?vd= and fires
+    // openVideo() once on every load. This block used to re-open the
+    // video a second time (up to 1.2s later), which restarted the
+    // already-playing stream and overwrote the bar metadata. Leave vd
+    // to app.js.
     if (!_append) {
       const urlP = new URLSearchParams(location.search);
       const openParam  = urlP.get("op");
-      const videoParam = urlP.get("vd");
       if (openParam) {
         const colon = openParam.indexOf(":");
         const pType = openParam.slice(0, colon);
@@ -819,13 +825,8 @@ async function doSearch(page = 1, skipPushState = false) {
         if (versionParam) {
           setTimeout(() => openVersionPopup(null, versionParam), 1200);
         }
-        if (videoParam) {
-          setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
-        }
       } else if (urlP.get("bi") === "1") {
         openBioFull(null);
-      } else if (videoParam) {
-        openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
       }
     }
   } catch (e) {

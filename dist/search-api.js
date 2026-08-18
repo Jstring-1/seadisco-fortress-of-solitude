@@ -1854,6 +1854,14 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
     async function fetchWithRetry(url, retries = 5) {
         const backoffs = [15000, 30000, 60000, 90000, 120000];
         for (let attempt = 1; attempt <= retries; attempt++) {
+            // Retrying IS activity. Without this, a single page that 500s all
+            // the way through its backoff ladder (15+30+60+90s of sleeping,
+            // plus fetch timeouts — over 5 min total) looks "stalled" to the
+            // guard below, which then aborts the whole sync with an "error"
+            // BEFORE the caller's skip-the-page gap logic ever runs. Bumping
+            // the marker each attempt keeps the guard scoped to its real job:
+            // catching a coroutine wedged with no network AND no DB progress.
+            lastProgressAt = Date.now();
             try {
                 const r = await loggedFetch("discogs", url, { headers: getHeaders(url), signal: AbortSignal.timeout(30000), context: `sync ${username}` });
                 if (r.ok) {

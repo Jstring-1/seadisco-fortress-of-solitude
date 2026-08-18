@@ -4295,18 +4295,31 @@ function openVideo(event, url) {
     window._videoQueue     = [url];
     window._videoQueueMeta = [queueMeta];
   } else {
-    container = clickedEl?.closest?.("#album-info, #version-info")
+    // Scope to the popup the clicked track belongs to. Deliberately do
+    // NOT fall back to `document`: an eventless bootstrap call (page
+    // loaded with ?vd=) has no open popup yet, and scraping the whole
+    // document grabbed whatever stale .track-link rows were lying around
+    // from a prior view — which then showed the WRONG song/artist in the
+    // bar. When there's no scoped popup, use single-track scope with no
+    // meta and let updateVideoNavButtons fall back to YouTube's own
+    // getVideoData (the correct title) once the video is playing.
+    const scoped = clickedEl?.closest?.("#album-info, #version-info")
       || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
-      || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
-      || document;
-    trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
-    window._videoQueue      = trackLinks.map(a => a.dataset.video);
-    window._videoQueueMeta  = trackLinks.map(a => ({
-      track:    a.dataset.track    || "",
-      album:    a.dataset.album    || "",
-      artist:   a.dataset.artist   || "",
-      artistId: a.dataset.artistId || "",   // Discogs artist id, for the 📜 badge match
-    }));
+      || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null);
+    if (scoped) {
+      container = scoped;
+      trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
+      window._videoQueue      = trackLinks.map(a => a.dataset.video);
+      window._videoQueueMeta  = trackLinks.map(a => ({
+        track:    a.dataset.track    || "",
+        album:    a.dataset.album    || "",
+        artist:   a.dataset.artist   || "",
+        artistId: a.dataset.artistId || "",   // Discogs artist id, for the 📜 badge match
+      }));
+    } else {
+      window._videoQueue     = [url];
+      window._videoQueueMeta = [];
+    }
   }
   // Use the clicked element's position in the list (not indexOf, which fails with duplicate URLs)
   const clickedTrack = event?.target?.closest?.(".track-link");
