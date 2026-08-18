@@ -371,28 +371,45 @@ const clerkIssuer = (() => {
 const JWKS = clerkIssuer
     ? createRemoteJWKSet(new URL(`${clerkIssuer}/.well-known/jwks.json`))
     : null;
+if (!JWKS) {
+    // No JWKS means AUTH_PK is unset/malformed. Every auth gate derives
+    // identity from getClerkUserId, so without verification the whole app
+    // is forgeable — warn loudly at boot. Requests fail closed below unless
+    // the explicit dev opt-in is set.
+    console.warn("[auth] AUTH_PK unset/malformed — JWKS unavailable. Token verification is DISABLED; requests will fail closed (401) unless ALLOW_UNVERIFIED_JWT=1.");
+}
 async function getClerkUserId(req) {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer "))
         return null;
     if (JWKS) {
         try {
-            const { payload } = await jwtVerify(auth.slice(7), JWKS);
+            // Pin the issuer so a token minted for a different Clerk frontend
+            // on the same instance can't be replayed here.
+            const { payload } = await jwtVerify(auth.slice(7), JWKS, clerkIssuer ? { issuer: clerkIssuer } : undefined);
             return payload.sub ?? null;
         }
         catch {
             return null;
         }
     }
-    // Fallback: decode without verification (only when CLERK_ISSUER_URL not set)
-    try {
-        const b64 = auth.slice(7).split(".")[1];
-        const { sub } = JSON.parse(Buffer.from(b64, "base64").toString());
-        return sub ?? null;
+    // JWKS unavailable. FAIL CLOSED — the previous code decoded the JWT
+    // payload WITHOUT signature verification here and trusted its `sub`,
+    // which meant a config slip (AUTH_PK missing) silently turned the whole
+    // app forgeable: any caller could set sub=ADMIN_CLERK_ID. The insecure
+    // decode is now available ONLY behind an explicit dev opt-in so it can
+    // never activate by accident in production.
+    if (process.env.ALLOW_UNVERIFIED_JWT === "1") {
+        try {
+            const b64 = auth.slice(7).split(".")[1];
+            const { sub } = JSON.parse(Buffer.from(b64, "base64").toString());
+            return sub ?? null;
+        }
+        catch {
+            return null;
+        }
     }
-    catch {
-        return null;
-    }
+    return null;
 }
 // Map of clerk_user_id → clerk username, populated lazily by
 // _refreshClerkUsernameCache. Cleared every CLERK_USERNAME_TTL_MS so
@@ -2182,8 +2199,16 @@ app.get("/api/user/collection", async (req, res) => {
         filters.sort = sort;
     if (req.query.synonyms === "false")
         filters.synonyms = false;
-    const { items, total, synonymsApplied } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-    res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    try {
+        const { items, total, synonymsApplied } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+        res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    }
+    catch (e) {
+        // Without this, a DB error rejects the async handler and Express 4
+        // never sends a response — the request hangs to socket timeout.
+        console.error("[/api/user/collection]", e?.message ?? e);
+        res.status(500).json({ error: "Failed to load collection" });
+    }
 });
 // GET /api/user/wantlist — paginated cached wantlist (with optional filters)
 app.get("/api/user/wantlist", async (req, res) => {
@@ -2216,8 +2241,14 @@ app.get("/api/user/wantlist", async (req, res) => {
         filters.sort = sort;
     if (req.query.synonyms === "false")
         filters.synonyms = false;
-    const { items, total, synonymsApplied } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-    res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    try {
+        const { items, total, synonymsApplied } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+        res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    }
+    catch (e) {
+        console.error("[/api/user/wantlist]", e?.message ?? e);
+        res.status(500).json({ error: "Failed to load wantlist" });
+    }
 });
 // GET /api/user/inventory — paginated inventory listings
 app.get("/api/user/inventory", async (req, res) => {
@@ -2237,8 +2268,14 @@ app.get("/api/user/inventory", async (req, res) => {
         filters.status = status;
     if (req.query.synonyms === "false")
         filters.synonyms = false;
-    const { items, total, synonymsApplied } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-    res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    try {
+        const { items, total, synonymsApplied } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+        res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
+    }
+    catch (e) {
+        console.error("[/api/user/inventory]", e?.message ?? e);
+        res.status(500).json({ error: "Failed to load inventory" });
+    }
 });
 // ── Inventory (marketplace) management: create / edit / delete ────────────
 // Helper: fetch a single listing from Discogs and mirror into user_inventory.

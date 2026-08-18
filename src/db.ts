@@ -2491,15 +2491,29 @@ export async function reorderPlayQueue(clerkUserId: string, orderedPositions: nu
     const byPos = new Map<number, any>();
     r.rows.forEach(row => byPos.set(row.position, row));
     await client.query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+    const insertRow = async (row: any, pos: number) =>
+      client.query(
+        `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ($1, $2, $3, $4, $5)`,
+        [clerkUserId, pos, row.source, row.external_id, JSON.stringify(row.data ?? {})]
+      );
+    const seen = new Set<number>();
     let newPos = 1;
     for (const oldPos of orderedPositions) {
       const row = byPos.get(oldPos);
-      if (!row) continue;
-      await client.query(
-        `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ($1, $2, $3, $4, $5)`,
-        [clerkUserId, newPos, row.source, row.external_id, JSON.stringify(row.data ?? {})]
-      );
-      newPos++;
+      if (!row || seen.has(oldPos)) continue; // unknown or duplicate position
+      seen.add(oldPos);
+      await insertRow(row, newPos++);
+    }
+    // Preserve any rows the client's ordering didn't mention. The DELETE
+    // above wiped the whole queue, so an unlisted row (e.g. a track added
+    // on another device after this client loaded the queue, or a stale/
+    // partial position list) would be permanently lost. Re-append the
+    // survivors at the tail in original-position order.
+    const leftover = r.rows
+      .filter(row => !seen.has(row.position))
+      .sort((a, b) => a.position - b.position);
+    for (const row of leftover) {
+      await insertRow(row, newPos++);
     }
     await client.query("COMMIT");
   } catch (err) {

@@ -1940,6 +1940,14 @@ function loadYTVideo(id) {
   _ytIntendedId = id;         // the id we're asking for — foreign-autoplay guard compares against this
   _ytVideoToken++;
   _ytPlayCount++;
+  // Cancel any pending API-readiness poll from a PRIOR loadYTVideo before
+  // we decide how to load this one. Without this, an earlier call's poll
+  // (started while the API was still loading) stays armed even if this
+  // call takes the "API ready" or loadVideoById-reuse branch, then later
+  // fires and creates a player for the OLD id — clobbering this track.
+  // (_ytSession only changes on player rotation, so the poll's session
+  // guard doesn't catch two rapid back-to-back loads.)
+  if (_ytPollId) { clearInterval(_ytPollId); _ytPollId = null; }
   // Periodic player rotation (memory hygiene). On the rotation tick,
   // destroy the existing player so the next branch below takes the
   // _createYTPlayer path with a fresh iframe instead of reusing the
@@ -2069,11 +2077,14 @@ function loadYTVideo(id) {
   } else {
     // Poll briefly for API readiness, then create player
     const pollSession = _ytSession;
+    const pollToken   = _ytVideoToken; // this specific load
     let attempts = 0;
     if (_ytPollId) clearInterval(_ytPollId);
     _ytPollId = setInterval(() => {
       attempts++;
-      if (pollSession !== _ytSession) { clearInterval(_ytPollId); _ytPollId = null; return; }
+      // Bail if the session rotated OR a newer loadYTVideo superseded this
+      // one (token bumped) — either way this poll's `id` is stale.
+      if (pollSession !== _ytSession || pollToken !== _ytVideoToken) { clearInterval(_ytPollId); _ytPollId = null; return; }
       if (window._ytAPIReady && typeof YT !== "undefined") {
         clearInterval(_ytPollId); _ytPollId = null;
         _createYTPlayer(id);
@@ -5394,7 +5405,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   el.innerHTML = `
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
-        <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" decoding="async"
+        <img class="album-cover" src="${escHtml(img)}" alt="${escHtml(title)}" loading="lazy" decoding="async"
              onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
              title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />
         ${allImages.length > 1 ? `<div class="album-thumb-strip">${allImages.slice(1).map((u, i) =>
@@ -6993,7 +7004,7 @@ function renderSeriesReleases() {
       `</span>`;
 
     const thumbHtml = r.thumb
-      ? `<img src="${r.thumb}" alt="" loading="lazy" decoding="async" />`
+      ? `<img src="${escHtml(r.thumb)}" alt="" loading="lazy" decoding="async" />`
       : `<span style="display:inline-block;width:40px;height:40px;background:#1a1a1a;border-radius:3px"></span>`;
 
     const yearStr = r.year && r.year !== 0 ? String(r.year) : "?";

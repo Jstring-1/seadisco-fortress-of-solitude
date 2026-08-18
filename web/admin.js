@@ -1689,7 +1689,14 @@ function _labelDirSweepCell(r) {
 }
 
 function _jsEsc(s) {
-  return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  // Used inside a single-quoted JS string that itself sits in a double-
+  // quoted onclick="" attribute. Two escaping layers are required:
+  //   1. JS-string layer: backslash + single-quote
+  //   2. HTML-attribute layer: &, ", < — without these a " in a scraped
+  //      label name closes the onclick attribute and injects markup.
+  return String(s ?? "")
+    .replace(/\\/g, "\\\\").replace(/'/g, "\\'")
+    .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 function _labelDirOnSearch(ev) {
@@ -4496,7 +4503,7 @@ async function loadAdminItems() {
           : type === "label" ? `https://www.discogs.com/label/${id}`
           : `https://www.discogs.com/release/${id}`;
         return `<a href="${href}" target="_blank" rel="noopener" class="admin-item-row">
-          ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
+          ${thumb ? `<img src="${escHtml(thumb)}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
           <div style="flex:1;min-width:0;overflow:hidden">
             <div class="admin-item-title">${escHtml(title)}${addedTag}</div>
             <div class="admin-item-sub">${meta}</div>
@@ -4523,7 +4530,7 @@ async function loadAdminItems() {
       const stars = rating > 0 ? " " + "\u2605".repeat(rating) + "\u2606".repeat(5 - rating) : "";
       const meta = [artist, year, labels, formats].filter(Boolean).map(s => escHtml(String(s))).join(' <span style="color:#444">\u00b7</span> ');
       return `<a href="https://www.discogs.com/release/${id}" target="_blank" rel="noopener" class="admin-item-row">
-        ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
+        ${thumb ? `<img src="${escHtml(thumb)}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
         <div style="flex:1;min-width:0;overflow:hidden">
           <div class="admin-item-title">${escHtml(title)}</div>
           <div class="admin-item-sub">${meta}${stars ? `<span class="admin-item-rating">${stars}</span>` : ""}</div>

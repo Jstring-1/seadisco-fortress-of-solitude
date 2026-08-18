@@ -226,7 +226,7 @@ function _invRenderReleaseResults(results) {
     const meta = [year, format, label].filter(Boolean).join(" · ");
     const payload = encodeURIComponent(JSON.stringify({ id, title }));
     return `<div class="inv-release-result" onclick="_invPickRelease(JSON.parse(decodeURIComponent('${payload}')))">
-      ${thumb ? `<img src="${thumb}" alt=""/>` : `<div class="inv-release-thumb-ph"></div>`}
+      ${thumb ? `<img src="${escHtml(thumb)}" alt=""/>` : `<div class="inv-release-thumb-ph"></div>`}
       <div class="inv-release-info">
         <div class="inv-release-title">${escHtml(title)}</div>
         <div class="inv-release-meta">${escHtml(meta)} · #${id}</div>

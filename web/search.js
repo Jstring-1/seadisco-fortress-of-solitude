@@ -1444,7 +1444,7 @@ function renderCard(item, index, opts) {
   // when a grid of cards loads. The 300×300 ratio matches the .card
   // CSS aspect-ratio; actual display size still comes from CSS.
   const thumb = item.cover_image
-    ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" width="300" height="300" decoding="async" />`
+    ? `<img src="${escHtml(item.cover_image)}" alt="${escHtml(title)}" loading="lazy" width="300" height="300" decoding="async" />`
     : `<div class="thumb-placeholder">♪</div>`;
 
   const isRelease = type === "release" || type === "master";
@@ -1477,11 +1477,16 @@ function renderCard(item, index, opts) {
   // _sdCardOuterClick filters by event.target — in wide mode only
   // clicks on the main cover image open the modal, so internal
   // entity links, play/queue buttons etc. don't trigger it.
+  // url for a single-quoted JS string inside a double-quoted onclick:
+  // escape the attribute-breakers, THEN backslash the JS quote. escHtml
+  // can't be used here — it turns ' into &#39;, which the browser
+  // HTML-decodes back to ' and breaks out of the JS string.
+  const urlAttrJs = String(url).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/'/g, "\\'");
   const cardAttrs = isRelease
-    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,'${escHtml(String(item.id))}','${escHtml(type)}','${urlAttrJs}')" `
     : (isArtist || isLabel)
-      ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
-      : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
+      ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${escHtml(String(item.id))}" onclick="searchByEntity(event,this)"`
+      : `class="${typeClass}" href="${escHtml(url)}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order matching the navbar — collection,
   // wantlist, lists, inventory, favorite. Each badge uses the same
