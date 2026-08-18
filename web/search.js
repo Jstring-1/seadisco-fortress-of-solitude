@@ -4,6 +4,14 @@
 // an extra rate-gated round trip to see them.
 const _SD_PAGE_SIZE = 100;
 
+// Monotonic token for the in-flight search. Every doSearch() call bumps
+// it and captures its own value; after each await it re-checks that it's
+// still the newest call before writing to the DOM. Without this, a slower
+// search (or "load more") that resolves AFTER a newer search has started
+// would clobber #results / window._lastResults with stale data while the
+// form + URL show the new query. Mirrors loadRandomRecords' _randomLoadSeq.
+let _searchSeq = 0;
+
 // ── Masters+ merged sort ──────────────────────────────────────────────────
 function _catnoNum(item) {
   // Extract trailing number from catno for secondary sort (e.g. "TOM-2-1305" → 1305)
@@ -266,6 +274,11 @@ async function doSearch(page = 1, skipPushState = false) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
   }
+
+  // Claim the newest-search slot. Any older doSearch still awaiting will
+  // see _seq !== _searchSeq after its fetch resolves and bail before it
+  // touches the DOM.
+  const _seq = ++_searchSeq;
 
   if (page === 1) saveSearchHistory("main");
 
@@ -773,6 +786,11 @@ async function doSearch(page = 1, skipPushState = false) {
       _resortAll = window._lastResults.concat(items); // items already deduped above
       _sortMerged(_resortAll, sort);
     }
+    // A newer search started while this one was fetching — drop this
+    // result rather than clobber the fresh grid / _lastResults (or, for
+    // a stale "load more", appending old cards onto a new search).
+    if (_seq !== _searchSeq) return;
+
     const shown = _resortAll
       ? _resortAll.length
       : (_appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length);
@@ -831,6 +849,9 @@ async function doSearch(page = 1, skipPushState = false) {
     }
   } catch (e) {
     console.error("Search failed:", e);
+    // Don't let a stale search's failure overwrite the newer search's
+    // status/results.
+    if (_seq !== _searchSeq) return;
     setStatus("");
     if (_append) {
       // Load-more failure: keep existing results, reset the button, hide "load more"
@@ -846,7 +867,9 @@ async function doSearch(page = 1, skipPushState = false) {
       showToast("Search failed — please try again", "error");
     }
   } finally {
-    document.getElementById("search-btn").disabled = false;
+    // Only the newest search re-enables the button; a superseded call
+    // returning early must not un-disable it under the live search.
+    if (_seq === _searchSeq) document.getElementById("search-btn").disabled = false;
   }
 }
 

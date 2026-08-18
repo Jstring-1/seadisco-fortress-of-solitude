@@ -4924,7 +4924,11 @@ function extractYouTubeId(url) {
 
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
-    closeVideo();
+    // Escape closes the browsing overlays (album modal, full bio) but must
+    // NOT tear down the player — music keeps playing while you browse, which
+    // is the whole design. Previously this also called closeVideo(), so
+    // pressing Escape to dismiss a modal (or the image lightbox stacked over
+    // it) killed playback. The mini-player × (playerStop) is the way to stop.
     closeModal();
     closeBioFull();
   }

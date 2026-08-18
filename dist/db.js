@@ -3625,13 +3625,24 @@ export async function appendPlayQueue(clerkUserId, items, opts) {
         });
         await client.query(`INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}
        ON CONFLICT (clerk_user_id, position) DO UPDATE SET source = EXCLUDED.source, external_id = EXCLUDED.external_id, data = EXCLUDED.data, added_at = NOW()`, [clerkUserId, ...values]);
-        // Trim the cap (drops oldest tail entries beyond PLAY_QUEUE_MAX).
+        // Trim to the cap. Keep the PLAY_QUEUE_MAX entries on the SAME end as
+        // the just-added items, so an add never silently deletes what it just
+        // inserted:
+        //   - "next"   inserts at the head (positions 1..N)     → keep LOWEST N
+        //   - "append" inserts at the tail (highest positions)  → keep HIGHEST N
+        // Previously this always kept the lowest positions, so appending to an
+        // already-full queue deleted the newly-appended tail and still returned
+        // { added: N } — a silent data loss. When append overflows the cap we
+        // now drop the oldest head entries instead (an explicit add wins over
+        // stale queue tail). keepOrder is a literal chosen by mode, not user
+        // input — safe to interpolate.
+        const keepOrder = mode === "append" ? "DESC" : "ASC";
         await client.query(`DELETE FROM user_play_queue
        WHERE clerk_user_id = $1
          AND position NOT IN (
            SELECT position FROM user_play_queue
            WHERE clerk_user_id = $1
-           ORDER BY position ASC
+           ORDER BY position ${keepOrder}
            LIMIT ${PLAY_QUEUE_MAX}
          )`, [clerkUserId]);
         await client.query("COMMIT");
