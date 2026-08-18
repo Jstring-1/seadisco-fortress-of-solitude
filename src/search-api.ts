@@ -1745,6 +1745,12 @@ setInterval(_pruneScratchCaches, 24 * 60 * 60 * 1000);
 // Abort flag for stopping all syncs
 let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
+// Hard cap on TOTAL failed pages per phase (not just consecutive). Discogs
+// can 500 intermittently on deep pages of a huge library (500 / ok / 500 …),
+// which never trips the 3-consecutive bail and lets a sync grind for hours
+// stuck near the end. After this many total gaps we stop the phase and
+// finalize as complete-with-gaps — a re-run backfills the rest.
+const MAX_SYNC_GAP_PAGES = 8;
 
 // Per-user concurrency guards. Three independent code paths can
 // trigger a sync for the same user (the user-initiated /sync endpoint,
@@ -1880,26 +1886,33 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       const allInstanceIds: number[] = [];
       const pace = makePacer(1100);
       let consecFail = 0;
+      let gapPages = 0;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         await pace(); // adaptive — only sleeps if last request started <1.1s ago
         let data: any;
         try {
+          // NO sort. A full sync upserts every item regardless of order, and
+          // Discogs's sorted (sort=added) deep-pagination is far more likely
+          // to 500 on a huge collection than the default order — sorting only
+          // added flakiness with zero benefit here.
           const r = await fetchWithRetry(
-            `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
+            `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}`
           );
           data = await r.json() as any;
           consecFail = 0;
         } catch (err) {
           // A single page failing (usually a transient Discogs HTTP 500 on
           // a large collection) shouldn't sink the whole sync. Skip it,
-          // flag the gap, and move on; bail only if several pages in a row
-          // fail. Keep lastProgressAt fresh so the stall guard doesn't also
-          // trip while we push through.
+          // flag the gap, and move on. Bail if several pages fail in a row OR
+          // the total gap count gets high (intermittent failures that never
+          // hit "3 in a row" but would otherwise grind for hours). Keep
+          // lastProgressAt fresh so the stall guard doesn't also trip.
           console.error(`Sync ${username}: collection page ${page} failed, skipping: ${err}`);
           collectionHadGaps = true;
           lastProgressAt = Date.now();
-          if (++consecFail >= 3) { console.error(`Sync ${username}: ${consecFail} consecutive collection page failures — ending collection phase`); break; }
+          consecFail++; gapPages++;
+          if (consecFail >= 3 || gapPages >= MAX_SYNC_GAP_PAGES) { console.error(`Sync ${username}: ending collection phase — ${consecFail} consecutive / ${gapPages} total page failures`); break; }
           continue;
         }
         const releases: any[] = data.releases ?? [];
@@ -1957,6 +1970,7 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       const allWantlistIds: number[] = [];
       const pace = makePacer(1100);
       let consecFail = 0;
+      let gapPages = 0;
       for (let page = 1; ; page++) {
         // By the time we reach the wantlist phase the collection has already
         // synced. A wantlist-phase abort/stall (manual "Reset stuck syncs",
@@ -1967,8 +1981,10 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
         await pace();
         let data: any;
         try {
+          // NO sort — same rationale as the collection loop above (sorted
+          // deep pages are Discogs's flaky path; order is irrelevant here).
           const r = await fetchWithRetry(
-            `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`
+            `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}`
           );
           data = await r.json() as any;
           consecFail = 0;
@@ -1976,7 +1992,8 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
           console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
           wantlistHadGaps = true;
           lastProgressAt = Date.now();
-          if (++consecFail >= 3) { console.error(`Sync ${username}: ${consecFail} consecutive wantlist page failures — ending wantlist phase`); break; }
+          consecFail++; gapPages++;
+          if (consecFail >= 3 || gapPages >= MAX_SYNC_GAP_PAGES) { console.error(`Sync ${username}: ending wantlist phase — ${consecFail} consecutive / ${gapPages} total page failures`); break; }
           continue;
         }
         const wants: any[] = data.wants ?? [];

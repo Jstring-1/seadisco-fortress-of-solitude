@@ -977,7 +977,7 @@ export async function hibernateInactiveUsers(exemptIds = []) {
     const r = await getPool().query(`UPDATE user_tokens
      SET hibernated_at = NOW()
      WHERE hibernated_at IS NULL
-       AND last_active_at < NOW() - INTERVAL '90 days'
+       AND COALESCE(last_active_at, created_at) < NOW() - INTERVAL '90 days'
        AND NOT (clerk_user_id = ANY($1::text[]))
      RETURNING clerk_user_id`, [exemptIds]);
     return r.rowCount ?? 0;
