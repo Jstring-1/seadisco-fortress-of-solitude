@@ -2284,7 +2284,6 @@ function _createYTPlayer(id) {
   // so onStateChange / onError can compare against the live token
   // without their captured value getting out from under them.
   const vtoken = _ytVideoToken;
-  console.debug("[_createYTPlayer]", { id, session, vtoken });
   document.getElementById("video-player").innerHTML = "";
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
@@ -2582,11 +2581,6 @@ function updateVideoNavButtons() {
                      || (!!window._playerReleaseId);
     mp.classList.toggle("has-release", hasOpenable);
   }
-  console.debug("[updateVideoNavButtons]", {
-    playerReleaseId: window._playerReleaseId,
-    engine:          window._currentEngine,
-    discIconVisible: !!window._playerReleaseId || (window._currentEngine === "loc" && !!window._locNowPlaying),
-  });
   highlightPlayingTrack();
 }
 
@@ -2827,12 +2821,6 @@ function _setPlayerEngine(name) {
   const hasOpenable = (name === "loc" && !!window._locNowPlaying)
                    || (!!window._playerReleaseId);
   mp.classList.toggle("has-release", hasOpenable);
-  console.debug("[setPlayerEngine]", {
-    engine: name,
-    locNowPlaying: !!window._locNowPlaying,
-    playerReleaseId: window._playerReleaseId,
-    discIconVisible: hasOpenable,
-  });
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
