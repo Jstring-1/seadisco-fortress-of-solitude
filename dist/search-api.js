@@ -1854,6 +1854,13 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
     // "missing" items may just live in a page we skipped.
     let collectionHadGaps = false;
     let wantlistHadGaps = false;
+    // Detailed gap accounting so the "completed with gaps" note (shown in the
+    // admin grid on click, and to the user on their Account page) says exactly
+    // which phase failed, how many pages, and the actual error — instead of a
+    // vague "some pages returned errors".
+    const collectionGapPageNums = [];
+    const wantlistGapPageNums = [];
+    let lastGapError = "";
     // Timeout guard — checks every 60s if sync has stalled
     let _syncDone = false;
     let _thisSyncAbort = false; // per-sync abort flag (set by stall guard)
@@ -1978,6 +1985,8 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     // lastProgressAt fresh so the stall guard doesn't also trip.
                     console.error(`Sync ${username}: collection page ${page} failed, skipping: ${err}`);
                     collectionHadGaps = true;
+                    collectionGapPageNums.push(page);
+                    lastGapError = String(err instanceof Error ? err.message : err);
                     lastProgressAt = Date.now();
                     consecFail++;
                     gapPages++;
@@ -2070,6 +2079,8 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     catch (err) {
                         console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
                         wantlistHadGaps = true;
+                        wantlistGapPageNums.push(page);
+                        lastGapError = String(err instanceof Error ? err.message : err);
                         lastProgressAt = Date.now();
                         consecFail++;
                         gapPages++;
@@ -2119,8 +2130,21 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
         // DID pull are usable; the note records that some pages were skipped
         // and the un-stamped synced-at makes the next run retry the gaps.
         const hadGaps = collectionHadGaps || wantlistHadGaps;
-        await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal, hadGaps ? "Completed with gaps — some Discogs pages returned errors; re-run to fill." : undefined);
-        console.log(`Full sync ${hadGaps ? "complete WITH GAPS" : "complete"} for ${username}: ${totalSynced} items`);
+        let gapNote;
+        if (hadGaps) {
+            const fmt = (nums) => nums.length <= 6 ? nums.join(", ") : `${nums.slice(0, 6).join(", ")}, +${nums.length - 6} more`;
+            const parts = [];
+            if (collectionGapPageNums.length)
+                parts.push(`collection page(s) ${fmt(collectionGapPageNums)}`);
+            if (wantlistGapPageNums.length)
+                parts.push(`wantlist page(s) ${fmt(wantlistGapPageNums)}`);
+            // wantlistHadGaps can also be set by the phase-level catch (a throw,
+            // not a page fetch) — note that case even with no page numbers.
+            const detail = parts.length ? parts.join("; ") : "the wantlist phase";
+            gapNote = `Completed with gaps — Discogs failed ${detail}${lastGapError ? ` (last error: ${lastGapError})` : ""}. Re-run Sync to fill.`;
+        }
+        await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal, gapNote);
+        console.log(`Full sync ${hadGaps ? `complete WITH GAPS (${gapNote})` : "complete"} for ${username}: ${totalSynced} items`);
     }
     catch (err) {
         console.error(`Background sync error for ${username}:`, err);
