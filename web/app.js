@@ -40,7 +40,16 @@ async function _ensureAdminFlag() {
     const r = await apiFetch("/api/me");
     if (!r.ok) { window._isAdmin = false; return false; }
     const j = await r.json();
-    window._isAdmin = !!j?.isAdmin;
+    // Honor the "view as user" override exactly like shared.js's /api/me
+    // probe (they race; whichever resolves last must agree). Without this,
+    // an admin who chose "view as user" briefly saw admin-only affordances
+    // when this probe won and set _isAdmin=true from the raw server flag.
+    const serverIsAdmin = !!j?.isAdmin;
+    let viewAsUser = false;
+    try { viewAsUser = localStorage.getItem("sd-admin-as-user") === "1"; } catch {}
+    window._serverIsAdmin   = serverIsAdmin;
+    window._adminViewAsUser = viewAsUser && serverIsAdmin;
+    window._isAdmin = serverIsAdmin && !viewAsUser;
     // Populate the per-account demo flag + broad YT-open toggle here
     // too, so URL-direct nav to /?v=youtube sees the right access
     // state without waiting for shared.js's separate /api/me probe.
