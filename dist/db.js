@@ -2101,6 +2101,15 @@ function buildCwWhere(filters, startIdx) {
             }
         }
     }
+    // Strict genre: the wanted genre must be the LEAD (first) genre, not
+    // merely present somewhere in the array. Enforced server-side so the
+    // page's total/pages reflect the strict set. (The client used to filter
+    // strict AFTER pagination, which emptied pages and desynced counts.)
+    if (filters.genreStrict) {
+        clauses.push(`lower(coalesce(data->'genres'->>0,'')) = lower($${idx})`);
+        allParams.push(filters.genreStrict);
+        idx++;
+    }
     // Folder filter (exact match on integer column)
     if (filters.folderId !== undefined && filters.folderId > 0) {
         clauses.push(`folder_id = $${idx}`);

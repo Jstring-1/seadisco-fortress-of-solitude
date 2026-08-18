@@ -2240,6 +2240,11 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.label)   url += `&label=${encodeURIComponent(f.label)}`;
     if (f.year)    url += `&year=${encodeURIComponent(f.year)}`;
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
+    // Strict-genre toggle enforced SERVER-side so pagination totals are
+    // correct — no client-side post-filter (which emptied pages and left
+    // data.total/data.pages reflecting the unfiltered set).
+    const _cwStrictOn = !!f.genre && typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw");
+    if (_cwStrictOn) url += `&genreStrict=1`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
@@ -2253,19 +2258,9 @@ async function loadCollectionTab(page = 1, filters) {
     const data = await r.json();
     let items = data.items ?? [];
     showSynonymInfo(data.synonymsApplied);
-    // Strict-genre filter: drop items whose first listed genre isn't
-    // the selected one. Server returns the broader "any genre matches"
-    // set; this client-side step tightens to genre-first matches when
-    // the ! toggle is on. Filter description below reflects strict.
-    const strictGenre = (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw"))
-      ? (f.genre || "").toLowerCase()
-      : "";
-    if (strictGenre) {
-      items = items.filter(it => {
-        const first = (it.genre?.[0] ?? it.genres?.[0] ?? "").toString().toLowerCase();
-        return first === strictGenre;
-      });
-    }
+    // Strict genre is enforced server-side now (&genreStrict=1); no
+    // client-side post-filter. strictGenre is kept only for the label.
+    const strictGenre = _cwStrictOn ? (f.genre || "").toLowerCase() : "";
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ") + (strictGenre ? " (strict)" : "");
     if (!items.length) {
@@ -2304,6 +2299,9 @@ async function loadWantlistTab(page = 1, filters) {
     if (f.label)   url += `&label=${encodeURIComponent(f.label)}`;
     if (f.year)    url += `&year=${encodeURIComponent(f.year)}`;
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
+    // Strict-genre enforced server-side (see loadCollectionTab).
+    const _cwStrictOn = !!f.genre && typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw");
+    if (_cwStrictOn) url += `&genreStrict=1`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
@@ -2317,16 +2315,8 @@ async function loadWantlistTab(page = 1, filters) {
     const data = await r.json();
     let items = data.items ?? [];
     showSynonymInfo(data.synonymsApplied);
-    // Strict-genre filter — symmetric with loadCollectionTab.
-    const strictGenre = (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw"))
-      ? (f.genre || "").toLowerCase()
-      : "";
-    if (strictGenre) {
-      items = items.filter(it => {
-        const first = (it.genre?.[0] ?? it.genres?.[0] ?? "").toString().toLowerCase();
-        return first === strictGenre;
-      });
-    }
+    // Strict genre enforced server-side; strictGenre kept only for label.
+    const strictGenre = _cwStrictOn ? (f.genre || "").toLowerCase() : "";
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ") + (strictGenre ? " (strict)" : "");
     if (!items.length) {

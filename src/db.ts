@@ -2763,6 +2763,7 @@ export interface CwSearchFilters {
   label?: string;
   year?: string;
   genre?: string;
+  genreStrict?: string; // require this genre to be the LEAD (first) genre
   style?: string;
   format?: string;
   type?: string;       // "master" = has master_id, "release" = no master_id
@@ -2912,6 +2913,16 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
         idx = nextIdx;
       }
     }
+  }
+
+  // Strict genre: the wanted genre must be the LEAD (first) genre, not
+  // merely present somewhere in the array. Enforced server-side so the
+  // page's total/pages reflect the strict set. (The client used to filter
+  // strict AFTER pagination, which emptied pages and desynced counts.)
+  if (filters.genreStrict) {
+    clauses.push(`lower(coalesce(data->'genres'->>0,'')) = lower($${idx})`);
+    allParams.push(filters.genreStrict);
+    idx++;
   }
 
   // Folder filter (exact match on integer column)

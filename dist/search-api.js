@@ -2199,6 +2199,12 @@ app.get("/api/user/collection", async (req, res) => {
         filters.sort = sort;
     if (req.query.synonyms === "false")
         filters.synonyms = false;
+    // Strict-genre toggle: promote the loose `genre` (present-anywhere) to a
+    // lead-genre match so pagination totals reflect the strict set.
+    if (req.query.genreStrict === "1" && filters.genre) {
+        filters.genreStrict = filters.genre;
+        delete filters.genre;
+    }
     try {
         const { items, total, synonymsApplied } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
         res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
@@ -2241,6 +2247,10 @@ app.get("/api/user/wantlist", async (req, res) => {
         filters.sort = sort;
     if (req.query.synonyms === "false")
         filters.synonyms = false;
+    if (req.query.genreStrict === "1" && filters.genre) {
+        filters.genreStrict = filters.genre;
+        delete filters.genre;
+    }
     try {
         const { items, total, synonymsApplied } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
         res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
@@ -4871,6 +4881,12 @@ function _gutenbergSanitizeHtml(html) {
     // Drop scripts + stylesheets entirely.
     out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "");
     out = out.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "");
+    // Drop embedding tags — a book body never contains these, and they're
+    // the obvious remaining script/navigation vectors a regex-stripped
+    // <script> pass doesn't cover (iframe/object/embed can load active
+    // content; link can pull a remote stylesheet).
+    out = out.replace(/<(iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+    out = out.replace(/<(iframe|object|embed|link)\b[^>]*\/?>/gi, "");
     // Drop inline event handlers (onclick=, onload=, etc.).
     out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
     // Neutralize javascript: URLs (replace with #).
