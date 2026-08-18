@@ -16,6 +16,10 @@
 
 let _queue = null;          // last fetched [{ position, source, externalId, data }, ...]
 let _queueLoading = false;
+// Handle to the in-flight server load so concurrent callers (including
+// force=true ones) can await the real result instead of getting a stale
+// or empty cache back mid-load.
+let _queueLoadingPromise = null;
 // Promise of an in-flight reorder PATCH. _queueLoad awaits this before
 // issuing GET so a refetch triggered mid-drag (typically by external
 // play → POST → reload) can't read stale pre-reorder positions and
@@ -219,7 +223,16 @@ function _saveAnonQueue(items) {
 // ── Fetch / cache ───────────────────────────────────────────────────
 async function _queueLoad(force = false) {
   if (_queue && !force) return _queue;
-  if (_queueLoading) return _queue ?? [];
+  if (_queueLoading) {
+    // A load is already running. Await it and return its authoritative
+    // result rather than a stale/empty cache. Previously this returned
+    // `_queue ?? []` immediately even for force=true callers, so a click
+    // that raced an in-flight load (e.g. queueJumpTo right after the
+    // drawer opens) got [] back, couldn't find the row, and silently did
+    // nothing.
+    try { if (_queueLoadingPromise) await _queueLoadingPromise; } catch {}
+    return _queue ?? [];
+  }
   // Anon visitors: hydrate from localStorage instead of the server.
   // Same shape the server endpoint returns so the rest of queue.js
   // doesn't have to branch on auth state. Persistence is per-browser.
@@ -228,36 +241,40 @@ async function _queueLoad(force = false) {
     return _queue;
   }
   _queueLoading = true;
-  try {
-    // Wait for any in-flight reorder PATCH to land before reading so
-    // the GET sees the new positions and we don't snap _queue back to
-    // pre-drag order.
-    if (_reorderInFlightPromise) {
-      try { await _reorderInFlightPromise; } catch {}
+  _queueLoadingPromise = (async () => {
+    try {
+      // Wait for any in-flight reorder PATCH to land before reading so
+      // the GET sees the new positions and we don't snap _queue back to
+      // pre-drag order.
+      if (_reorderInFlightPromise) {
+        try { await _reorderInFlightPromise; } catch {}
+      }
+      const r = await apiFetch("/api/user/play-queue");
+      if (!r.ok) { _queue = []; return _queue; }
+      const j = await r.json();
+      let items = Array.isArray(j?.items) ? j.items : [];
+      // Hide any rows the user just removed locally whose DELETEs
+      // haven't landed server-side yet (they'd otherwise reappear
+      // briefly between the click and the DELETE response).
+      items = _queueFilterPendingDeletes(items);
+      // Keep ALL server rows here (no dedup). Earlier we deduped at load
+      // time to avoid duplicate rows in the drawer, but that hid the
+      // dupes from queueRemove — the user would click × and only one
+      // dupe got deleted, so the row reappeared on next reload until
+      // every dupe was clicked individually. Now dedup happens only at
+      // render (see _renderQueueDrawer) and queueRemove deletes every
+      // matching position.
+      _queue = items;
+      return _queue;
+    } catch {
+      _queue = _queue ?? [];
+      return _queue;
+    } finally {
+      _queueLoading = false;
+      _queueLoadingPromise = null;
     }
-    const r = await apiFetch("/api/user/play-queue");
-    if (!r.ok) { _queue = []; return _queue; }
-    const j = await r.json();
-    let items = Array.isArray(j?.items) ? j.items : [];
-    // Hide any rows the user just removed locally whose DELETEs
-    // haven't landed server-side yet (they'd otherwise reappear
-    // briefly between the click and the DELETE response).
-    items = _queueFilterPendingDeletes(items);
-    // Keep ALL server rows here (no dedup). Earlier we deduped at load
-    // time to avoid duplicate rows in the drawer, but that hid the
-    // dupes from queueRemove — the user would click × and only one
-    // dupe got deleted, so the row reappeared on next reload until
-    // every dupe was clicked individually. Now dedup happens only at
-    // render (see _renderQueueDrawer) and queueRemove deletes every
-    // matching position.
-    _queue = items;
-    return _queue;
-  } catch {
-    _queue = _queue ?? [];
-    return _queue;
-  } finally {
-    _queueLoading = false;
-  }
+  })();
+  return _queueLoadingPromise;
 }
 
 // ── Add to queue ────────────────────────────────────────────────────

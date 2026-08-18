@@ -1239,7 +1239,16 @@ async function apiFetch(url, options = {}) {
       const t2 = await getSessionToken();
       if (t2) {
         headers["Authorization"] = `Bearer ${t2}`;
-        return fetch(url, { ...options, headers, signal: combinedSignal });
+        // Give the retry a FRESH timeout window. The original attempt may
+        // have already consumed most/all of `combinedSignal`'s 45 s (that's
+        // partly what took us down the refresh path), so reusing it could
+        // abort the retry instantly. Honor a caller-supplied signal as-is;
+        // only replace the timeout we created ourselves.
+        const retrySignal = options.signal
+          || ((typeof AbortSignal !== "undefined" && AbortSignal.timeout)
+                ? AbortSignal.timeout(Number(options.timeoutMs) || 45000)
+                : undefined);
+        return fetch(url, { ...options, headers, signal: retrySignal });
       }
     } catch { /* give up */ }
   }

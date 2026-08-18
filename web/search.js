@@ -791,16 +791,6 @@ async function doSearch(page = 1, skipPushState = false) {
     // a stale "load more", appending old cards onto a new search).
     if (_seq !== _searchSeq) return;
 
-    const shown = _resortAll
-      ? _resortAll.length
-      : (_appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length);
-    const returnedMsg = barcode
-      ? `Barcode ${barcode} :: ${totalItems_new.toLocaleString()} results — showing ${shown}`
-      : `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
-    const retEl = document.getElementById("search-returned");
-    retEl.textContent = returnedMsg;
-    retEl.title = returnedMsg;
-    document.getElementById("search-info-block").style.display = "";
     if (_resortAll) {
       // Full replace: renderResults(append=false) resets _lastResults to
       // the freshly-sorted union and re-indexes the cards from zero.
@@ -809,6 +799,18 @@ async function doSearch(page = 1, skipPushState = false) {
       renderResults(items, _appendMode);
     }
     renderPagination();
+    // Count the cards ACTUALLY rendered. renderResults drops hide-owned /
+    // exclude-CD / strict-genre / already-shown items, so the pre-render
+    // items.length overcounted "showing N" whenever a filter trimmed the
+    // page. Reading the DOM after render reflects exactly what's visible.
+    const shown = document.getElementById("results").querySelectorAll(".card").length;
+    const returnedMsg = barcode
+      ? `Barcode ${barcode} :: ${totalItems_new.toLocaleString()} results — showing ${shown}`
+      : `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
+    const retEl = document.getElementById("search-returned");
+    retEl.textContent = returnedMsg;
+    retEl.title = returnedMsg;
+    document.getElementById("search-info-block").style.display = "";
 
     if (typeof gtag === "function") {
       gtag("event", "page_view", {

@@ -223,6 +223,10 @@ window.addEventListener("popstate", () => {
   // Flattened record tabs
   if (rawView.startsWith("records:")) {
     _cwTab = rawView.split(":")[1];
+    // The URL explicitly names the tab — flag it so switchView honors
+    // _cwTab instead of restoring the persisted last-tab (otherwise
+    // Back/Forward to ?v=collection could land on "favorites").
+    window._sdCwTabFromUrl = true;
     const sort = p.get("s") || p.get("sort");
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
@@ -230,6 +234,7 @@ window.addEventListener("popstate", () => {
   if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg" || rawView === "chronam" || rawView === "blues-archive" || rawView === "admin") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
+      window._sdCwTabFromUrl = true; // URL names the tab — honor it, don't restore persisted
       const sort = p.get("s") || p.get("sort");
       if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     }
