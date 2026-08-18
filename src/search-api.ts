@@ -1867,6 +1867,7 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
   try {
     // First, get total counts from Discogs to estimate total
     let estimatedTotal = 0;
+    let wantlistEstimate = 0; // wantlist-only count, for the >20k unreachable-middle check
     if (syncCollection) {
       try {
         const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`);
@@ -1880,7 +1881,8 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       try {
         const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`);
         const d = await r.json() as any;
-        estimatedTotal += d.pagination?.items ?? 0;
+        wantlistEstimate = d.pagination?.items ?? 0;
+        estimatedTotal += wantlistEstimate;
         lastProgressAt = Date.now();
         await delay(500);
       } catch {}
@@ -1977,52 +1979,75 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
      // finishes "complete (with gaps)" and the user keeps their data.
      try {
       const allWantlistIds: number[] = [];
+      const seenWantIds = new Set<number>();
       const pace = makePacer(1100);
-      let consecFail = 0;
+      // Discogs's /wants endpoint hard-caps offset pagination at 10,000
+      // items: requesting page 21+ (per_page=500 → offset ≥ 10,000) returns
+      // HTTP 500 no matter what. To cover wantlists larger than 10,000 we
+      // page from BOTH ends — sort_order=desc for the newest 10k, asc for
+      // the oldest 10k — staying at page ≤ 20 so we never hit the cap. The
+      // two halves are unioned (dedup by id), fully covering any wantlist up
+      // to ~20,000. Beyond that the middle is genuinely unreachable (see the
+      // completeness check after the loop). (The collection endpoint has no
+      // such cap, so its loop stays single-pass.)
+      const MAX_WANT_PAGE = 20; // offset stays < 10,000
       let gapPages = 0;
-      for (let page = 1; ; page++) {
-        // By the time we reach the wantlist phase the collection has already
-        // synced. A wantlist-phase abort/stall (manual "Reset stuck syncs",
-        // or the stall watchdog) must NOT hard-error the whole run — that's
-        // exactly the "collection synced but SYNC shows error" symptom.
-        // Stop the wantlist and let the run finalize as complete-with-gaps.
-        if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: wantlist aborted — finalizing as gapped, keeping the synced collection`); wantlistHadGaps = true; break; }
-        await pace();
-        let data: any;
-        try {
-          // NO sort — same rationale as the collection loop above (sorted
-          // deep pages are Discogs's flaky path; order is irrelevant here).
-          const r = await fetchWithRetry(
-            `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}`
-          );
-          data = await r.json() as any;
-          consecFail = 0;
-        } catch (err) {
-          console.error(`Sync ${username}: wantlist page ${page} failed, skipping: ${err}`);
-          wantlistHadGaps = true;
-          wantlistGapPageNums.push(page);
-          lastGapError = String(err instanceof Error ? err.message : err);
+      let aborted = false;
+      for (const order of ["desc", "asc"] as const) {
+        let consecFail = 0;
+        for (let page = 1; page <= MAX_WANT_PAGE; page++) {
+          if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: wantlist aborted — finalizing as gapped, keeping the synced collection`); wantlistHadGaps = true; aborted = true; break; }
+          await pace();
+          let data: any;
+          try {
+            const r = await fetchWithRetry(
+              `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=${order}`
+            );
+            data = await r.json() as any;
+            consecFail = 0;
+          } catch (err) {
+            // Within page ≤ 20 we're under the offset cap, so a failure here
+            // is a genuine transient 500 — skip and continue.
+            console.error(`Sync ${username}: wantlist ${order} page ${page} failed, skipping: ${err}`);
+            wantlistHadGaps = true;
+            wantlistGapPageNums.push(page);
+            lastGapError = String(err instanceof Error ? err.message : err);
+            lastProgressAt = Date.now();
+            consecFail++; gapPages++;
+            if (consecFail >= 3 || gapPages >= MAX_SYNC_GAP_PAGES) { console.error(`Sync ${username}: ending wantlist phase — ${consecFail} consecutive / ${gapPages} total page failures`); aborted = true; break; }
+            continue;
+          }
+          const wants: any[] = data.wants ?? [];
+          if (!wants.length) break;
+          // Union across the two directions — skip ids already stored.
+          const items = wants.map((item: any) => ({
+            id:      item.id as number,
+            data:    item.basic_information as object,
+            addedAt: item.date_added ? new Date(item.date_added) : undefined,
+            rating:  item.rating ?? 0,
+            notes:   item.notes ?? undefined,
+          })).filter(i => i.id && !seenWantIds.has(i.id));
+          for (const it of items) seenWantIds.add(it.id);
+          if (items.length) {
+            await upsertWantlistItems(userId, items);
+            allWantlistIds.push(...items.map(i => i.id));
+            totalSynced += items.length;
+            await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+          }
           lastProgressAt = Date.now();
-          consecFail++; gapPages++;
-          if (consecFail >= 3 || gapPages >= MAX_SYNC_GAP_PAGES) { console.error(`Sync ${username}: ending wantlist phase — ${consecFail} consecutive / ${gapPages} total page failures`); break; }
-          continue;
+          if (wants.length < 500) break; // end of this direction
         }
-        const wants: any[] = data.wants ?? [];
-        if (!wants.length) break;
-        const items = wants.map((item: any) => ({
-          id:      item.id as number,
-          data:    item.basic_information as object,
-          addedAt: item.date_added ? new Date(item.date_added) : undefined,
-          rating:  item.rating ?? 0,
-          notes:   item.notes ?? undefined,
-        })).filter(i => i.id);
-
-        await upsertWantlistItems(userId, items);
-        allWantlistIds.push(...items.map(i => i.id));
-        totalSynced += items.length;
-        lastProgressAt = Date.now();
-        await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-        if (wants.length < 500) break;
+        if (aborted) break;
+        // If this direction already covered the whole wantlist, the other
+        // direction is redundant — skip it.
+        if (!wantlistHadGaps && seenWantIds.size >= wantlistEstimate && wantlistEstimate > 0) break;
+      }
+      // Wantlists bigger than ~20,000 have an unreachable middle band that
+      // neither direction can page to — flag it honestly (re-running won't help).
+      if (!wantlistHadGaps && wantlistEstimate > 0 && seenWantIds.size < wantlistEstimate) {
+        wantlistHadGaps = true;
+        lastGapError = `Discogs caps wantlist retrieval at 10,000 items per direction; ${wantlistEstimate - seenWantIds.size} item(s) beyond ~20,000 are unreachable`;
+        console.warn(`Sync ${username}: wantlist ${seenWantIds.size}/${wantlistEstimate} — ${lastGapError}`);
       }
       // Only prune / stamp synced-at on a complete fetch (see collection note).
       if (!wantlistHadGaps) {
@@ -2050,10 +2075,14 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
       const parts: string[] = [];
       if (collectionGapPageNums.length) parts.push(`collection page(s) ${fmt(collectionGapPageNums)}`);
       if (wantlistGapPageNums.length)   parts.push(`wantlist page(s) ${fmt(wantlistGapPageNums)}`);
-      // wantlistHadGaps can also be set by the phase-level catch (a throw,
-      // not a page fetch) — note that case even with no page numbers.
-      const detail = parts.length ? parts.join("; ") : "the wantlist phase";
-      gapNote = `Completed with gaps — Discogs failed ${detail}${lastGapError ? ` (last error: ${lastGapError})` : ""}. Re-run Sync to fill.`;
+      if (parts.length) {
+        // Real page-fetch failures — usually transient, so re-running helps.
+        gapNote = `Completed with gaps — Discogs failed ${parts.join("; ")}${lastGapError ? ` (last error: ${lastGapError})` : ""}. Re-run Sync to fill.`;
+      } else {
+        // No page-level failures: either a phase-level throw or the hard
+        // >20k unreachable-middle case (re-running won't help there).
+        gapNote = `Completed with gaps${lastGapError ? ` — ${lastGapError}` : " — the wantlist phase did not fully complete"}.`;
+      }
     }
     await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal, gapNote);
     console.log(`Full sync ${hadGaps ? `complete WITH GAPS (${gapNote})` : "complete"} for ${username}: ${totalSynced} items`);
