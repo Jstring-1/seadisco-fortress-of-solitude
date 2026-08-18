@@ -4900,6 +4900,7 @@ const _ADMIN_UNIFIED_COLS = [
   { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
   { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
   { key: "syncStatus",                 label: "Sync",            group: "sync",        type: "str",  align: "left" },
+  { key: "hibernatedAt",               label: "Hib",             group: "sync",        type: "date", align: "left" },
   { key: "albumClicksTotal",           label: "Clicks 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "albumClicks30d" },
   { key: "playsTotal",                 label: "Plays 30d/tot",   group: "behavior",    type: "num",  align: "right", pair: "plays30d" },
   { key: "searchesTotal",              label: "Search 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "searches30d" },
@@ -4979,6 +4980,16 @@ function _adminUnifiedSortBy(col) {
 }
 window._adminUnifiedSortBy = _adminUnifiedSortBy;
 
+// Reveal the full sync_error for a row when its (truncated / ⚠) status is
+// clicked. A title= tooltip alone was too easy to miss — this guarantees
+// the detail is one click away. data-err carries the message.
+window._adminSyncErrDetail = function (el) {
+  try {
+    const msg = (el && el.getAttribute && el.getAttribute("data-err")) || "";
+    if (msg) window.alert(msg);
+  } catch {}
+};
+
 function _adminUnifiedFilterInput(v) {
   if (_adminUnifiedFilterTimer) clearTimeout(_adminUnifiedFilterTimer);
   _adminUnifiedFilterTimer = setTimeout(() => {
@@ -5022,6 +5033,11 @@ function _adminUnifiedUserCell(u) {
 
 function _adminUnifiedCell(u, col) {
   if (col.key === "clerkUsername") return _adminUnifiedUserCell(u);
+  if (col.key === "hibernatedAt") {
+    return u.hibernated
+      ? `<span style="color:#8fa4d8;cursor:help" title="Hibernated ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))} — synced data cleared for the seat; reactivates automatically on next sign-in">💤 ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))}</span>`
+      : `<span style="color:var(--muted)">—</span>`;
+  }
   if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
   if (col.key === "syncStatus") {
     const s = u.syncStatus || "—";
@@ -5039,21 +5055,29 @@ function _adminUnifiedCell(u, col) {
     // restart-interrupted "stopped" run BOTH carry a sync_error note but are
     // not failures — keying off sync_error alone made them all show red
     // "error". Only sync_status === "error" is a real failure.
-    const errTip = u.syncError ? ` title="${escHtml(String(u.syncError))}"` : "";
-    const shortErr = u.syncError ? (String(u.syncError).length > 44 ? String(u.syncError).slice(0, 44) + "…" : String(u.syncError)) : "";
+    // Clickable detail: a bare title= tooltip is easy to miss (slow hover,
+    // can't click). When a sync_error note exists, make the status CLICKABLE
+    // to show the full text, plus keep the hover title. data-err carries the
+    // message to the delegated handler.
+    const hasErr = !!u.syncError;
+    const errAttr = hasErr
+      ? ` title="${escHtml(String(u.syncError))} (click for full detail)" data-err="${escHtml(String(u.syncError))}" onclick="event.stopPropagation();_adminSyncErrDetail(this)"`
+      : "";
+    const clickCur = hasErr ? "cursor:pointer;text-decoration:underline dotted" : "";
+    const shortErr = hasErr ? (String(u.syncError).length > 44 ? String(u.syncError).slice(0, 44) + "…" : String(u.syncError)) : "";
     if (s === "error") {
-      return `<span style="color:#e88;cursor:help"${errTip}>error${shortErr ? ": " + escHtml(shortErr) : ""}</span>${btn}`;
+      return `<span style="color:#e88;${clickCur}"${errAttr}>error${shortErr ? ": " + escHtml(shortErr) : ""}</span>${btn}`;
     }
     if (s === "stopped") {
       // Interrupted by a restart, or manually stopped — not a failure. Amber,
-      // with the reason on hover and a Sync button to resume.
-      return `<span style="color:#c9a24a;cursor:help"${errTip}>stopped</span>${btn}`;
+      // click for the reason, Sync button to resume.
+      return `<span style="color:#c9a24a;${clickCur}"${errAttr}>stopped</span>${btn}`;
     }
     if (s === "complete") {
       // A "complete with gaps" run keeps its gaps note in sync_error; show it
-      // as complete (⚠ + tooltip), never as an error.
-      return u.syncError
-        ? `<span style="color:#7fae7f;cursor:help"${errTip}>complete ⚠</span>${btn}`
+      // as complete (⚠, click for detail), never as an error.
+      return hasErr
+        ? `<span style="color:#7fae7f;${clickCur}"${errAttr}>complete ⚠</span>${btn}`
         : `<span style="color:#7fae7f">complete</span>${btn}`;
     }
     return `${escHtml(s)}${btn}`;

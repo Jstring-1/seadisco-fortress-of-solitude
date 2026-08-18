@@ -265,6 +265,15 @@ async function loadSyncStatus() {
     if (d.syncStatus === "complete" && d.syncProgress > 0) {
       statusText += ` \u00b7 Last sync: ${d.syncProgress.toLocaleString()} items`;
     }
+    // A "complete" run that still carries a sync_error note finished WITH
+    // gaps \u2014 some Discogs pages returned errors and were skipped. Tell the
+    // user plainly (it's not a failure, but it's why counts may be short).
+    if (d.syncStatus === "complete" && d.syncError) {
+      statusText += ` \u00b7 Some items couldn't be fetched from Discogs this time \u2014 tap Sync again to fill the gaps.`;
+    }
+    if (d.syncStatus === "stopped") {
+      statusText += ` \u00b7 Last sync was interrupted \u2014 tap Sync to finish.`;
+    }
     if (d.syncStatus === "error" && d.syncError) {
       statusText += ` \u00b7 Sync error: ${d.syncError}`;
     }

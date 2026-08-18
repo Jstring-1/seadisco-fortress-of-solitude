@@ -8885,6 +8885,8 @@ app.get("/api/admin/users-unified", async (req, res) => {
             r.syncError = u.syncError ?? null;
             r.authMethod = u.authMethod ?? null;
             r.hasOAuth = !!u.hasOAuth;
+            r.hibernated = !!u.hibernated;
+            r.hibernatedAt = u.hibernatedAt ?? null;
             r.favoriteCount = favCounts.get(u.clerkUserId) ?? 0;
             r.online = lastActiveAt ? lastActiveAt > oneDayAgoMs : false;
             r.lastActiveAt = lastActiveAt;
@@ -16865,7 +16867,10 @@ function startDailySyncSchedule() {
             const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
             if (staleTotal > 0)
                 console.log(`[sync-schedule] Pruned stale data: ${JSON.stringify(stale)}`);
-            const hibernated = await hibernateInactiveUsers().catch(() => 0);
+            // Never hibernate admin or demo accounts (e.g. the YouTube API review
+            // demo account) — their seat + data must persist regardless of idle time.
+            const _hibernationExempt = [ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean);
+            const hibernated = await hibernateInactiveUsers(_hibernationExempt).catch(() => 0);
             if (hibernated)
                 console.log(`[sync-schedule] ${hibernated} users hibernated`);
         }

@@ -1158,13 +1158,16 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   authMethod: string;
   hasPat: boolean;
   hasOAuth: boolean;
+  hibernated: boolean;
+  hibernatedAt: Date | null;
 }>> {
   const r = await getPool().query(
     `SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
             COALESCE(ut.auth_method, 'none') AS auth_method,
             (ut.discogs_token IS NOT NULL AND ut.discogs_token != '' AND ut.discogs_token != '__oauth__') AS has_pat,
-            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth
+            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth,
+            ut.hibernated_at
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`
@@ -1181,6 +1184,8 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
     authMethod:         row.auth_method          ?? "none",
     hasPat:             row.has_pat              ?? false,
     hasOAuth:           row.has_oauth            ?? false,
+    hibernated:         row.hibernated_at != null,
+    hibernatedAt:       row.hibernated_at        ?? null,
   }));
 }
 
@@ -1232,13 +1237,19 @@ export async function reactivateUser(clerkUserId: string): Promise<void> {
   );
 }
 
-export async function hibernateInactiveUsers(): Promise<number> {
+export async function hibernateInactiveUsers(exemptIds: string[] = []): Promise<number> {
+  // exemptIds are never hibernated regardless of inactivity — admin + demo
+  // accounts (e.g. the YouTube API review demo account) must stay live so
+  // their seat and data persist. With an empty list the ANY(...) clause is
+  // `NOT FALSE` = TRUE, so nothing is exempted (unchanged behavior).
   const r = await getPool().query(
     `UPDATE user_tokens
      SET hibernated_at = NOW()
      WHERE hibernated_at IS NULL
        AND last_active_at < NOW() - INTERVAL '90 days'
-     RETURNING clerk_user_id`
+       AND NOT (clerk_user_id = ANY($1::text[]))
+     RETURNING clerk_user_id`,
+    [exemptIds]
   );
   return r.rowCount ?? 0;
 }

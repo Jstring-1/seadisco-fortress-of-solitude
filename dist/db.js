@@ -918,7 +918,8 @@ export async function getAllUsersSyncStatus() {
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
             COALESCE(ut.auth_method, 'none') AS auth_method,
             (ut.discogs_token IS NOT NULL AND ut.discogs_token != '' AND ut.discogs_token != '__oauth__') AS has_pat,
-            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth
+            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth,
+            ut.hibernated_at
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`);
@@ -934,6 +935,8 @@ export async function getAllUsersSyncStatus() {
         authMethod: row.auth_method ?? "none",
         hasPat: row.has_pat ?? false,
         hasOAuth: row.has_oauth ?? false,
+        hibernated: row.hibernated_at != null,
+        hibernatedAt: row.hibernated_at ?? null,
     }));
 }
 export async function getAllUsersForSync() {
@@ -966,12 +969,17 @@ export async function isUserHibernated(clerkUserId) {
 export async function reactivateUser(clerkUserId) {
     await getPool().query("UPDATE user_tokens SET hibernated_at = NULL, last_active_at = NOW() WHERE clerk_user_id = $1", [clerkUserId]);
 }
-export async function hibernateInactiveUsers() {
+export async function hibernateInactiveUsers(exemptIds = []) {
+    // exemptIds are never hibernated regardless of inactivity — admin + demo
+    // accounts (e.g. the YouTube API review demo account) must stay live so
+    // their seat and data persist. With an empty list the ANY(...) clause is
+    // `NOT FALSE` = TRUE, so nothing is exempted (unchanged behavior).
     const r = await getPool().query(`UPDATE user_tokens
      SET hibernated_at = NOW()
      WHERE hibernated_at IS NULL
        AND last_active_at < NOW() - INTERVAL '90 days'
-     RETURNING clerk_user_id`);
+       AND NOT (clerk_user_id = ANY($1::text[]))
+     RETURNING clerk_user_id`, [exemptIds]);
     return r.rowCount ?? 0;
 }
 export async function getUserToken(clerkUserId) {

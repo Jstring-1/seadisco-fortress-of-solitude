@@ -2970,7 +2970,6 @@ function _updateMiniProgress() {
       && p.duration > 0 && (p.duration - p.current) <= 0.5
       && _ytEndFiredToken !== _ytVideoToken) {
     _ytEndFiredToken = _ytVideoToken;
-    console.debug("[yt-tail] firing manual onVideoEnded", { current: p.current, duration: p.duration });
     try { onVideoEnded(); } catch {}
   }
 }
@@ -4500,11 +4499,6 @@ function onVideoEnded() {
   // longer a separate _ytRepeat module variable that could fall
   // out of sync and silently loop tracks the user thought were "off".
   const repeat = typeof window._queueGetRepeat === "function" ? window._queueGetRepeat() : "off";
-  console.debug("[onVideoEnded]", {
-    repeat,
-    videoQueueIdx: window._videoQueueIndex,
-    videoQueueLen: (window._videoQueue ?? []).length,
-  });
   if (repeat === "one" && ytPlayer) {
     // Reset the manual-tail-watch token. After seeking to 0 we'll
     // play the same video through again, but _ytVideoToken doesn't
