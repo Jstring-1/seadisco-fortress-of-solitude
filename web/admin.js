@@ -5035,12 +5035,26 @@ function _adminUnifiedCell(u, col) {
     const btn = u.discogsUsername
       ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(&quot;${escHtml(u.discogsUsername)}&quot;, this)" title="Run a full Discogs library sync for this user">Sync</button>`
       : "";
-    if (u.syncError) {
-      // Show the actual reason inline (truncated) instead of a bare "error",
-      // so the cause is visible at a glance; full text on hover.
-      const e = String(u.syncError);
-      const short = e.length > 44 ? e.slice(0, 44) + "…" : e;
-      return `<span style="color:#e88;cursor:help" title="${escHtml(e)}">error: ${escHtml(short)}</span>${btn}`;
+    // Render by STATUS, not by "has a sync_error". A gapped completion and a
+    // restart-interrupted "stopped" run BOTH carry a sync_error note but are
+    // not failures — keying off sync_error alone made them all show red
+    // "error". Only sync_status === "error" is a real failure.
+    const errTip = u.syncError ? ` title="${escHtml(String(u.syncError))}"` : "";
+    const shortErr = u.syncError ? (String(u.syncError).length > 44 ? String(u.syncError).slice(0, 44) + "…" : String(u.syncError)) : "";
+    if (s === "error") {
+      return `<span style="color:#e88;cursor:help"${errTip}>error${shortErr ? ": " + escHtml(shortErr) : ""}</span>${btn}`;
+    }
+    if (s === "stopped") {
+      // Interrupted by a restart, or manually stopped — not a failure. Amber,
+      // with the reason on hover and a Sync button to resume.
+      return `<span style="color:#c9a24a;cursor:help"${errTip}>stopped</span>${btn}`;
+    }
+    if (s === "complete") {
+      // A "complete with gaps" run keeps its gaps note in sync_error; show it
+      // as complete (⚠ + tooltip), never as an error.
+      return u.syncError
+        ? `<span style="color:#7fae7f;cursor:help"${errTip}>complete ⚠</span>${btn}`
+        : `<span style="color:#7fae7f">complete</span>${btn}`;
     }
     return `${escHtml(s)}${btn}`;
   }

@@ -17098,9 +17098,13 @@ process.on("uncaughtException", (err) => {
 app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Discogs search API listening on port ${PORT}`);
     if (process.env.APP_DB_URL) {
-        // Reset any syncs orphaned by a server restart
+        // Reset any syncs orphaned by a server restart. This is NOT an admin
+        // stop and NOT a failure — the container recycled (redeploy / Railway
+        // restart) mid-sync. Large libraries (e.g. a 30k+ collection) take long
+        // enough that a redeploy is likely to catch them in-flight; the message
+        // says so and the row renders as a neutral "stopped", not "error".
         try {
-            const stuck = await resetAllSyncingStatuses();
+            const stuck = await resetAllSyncingStatuses("Interrupted by a server restart — click Sync to finish");
             if (stuck > 0)
                 console.log(`Startup: reset ${stuck} orphaned syncing status(es)`);
         }

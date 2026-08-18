@@ -1100,8 +1100,13 @@ export async function getDiscogsProfile(clerkUserId) {
 export async function updateSyncProgress(clerkUserId, status, progress, total, error) {
     await getPool().query(`UPDATE user_tokens SET sync_status = $2, sync_progress = $3, sync_total = $4, sync_error = $5 WHERE clerk_user_id = $1`, [clerkUserId, status, progress, total, error ?? null]);
 }
-export async function resetAllSyncingStatuses() {
-    const r = await getPool().query(`UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing' RETURNING clerk_user_id`);
+export async function resetAllSyncingStatuses(reason = "Stopped by admin") {
+    // `reason` distinguishes the two callers: the manual admin stop endpoint
+    // ("Stopped by admin") vs the boot reset ("Interrupted by a server
+    // restart…"). The boot case is NOT an admin action and NOT a failure —
+    // the sync just got cut off when the container recycled (a redeploy or
+    // Railway restart), so the message must not read like an error.
+    const r = await getPool().query(`UPDATE user_tokens SET sync_status = 'stopped', sync_error = $1 WHERE sync_status = 'syncing' RETURNING clerk_user_id`, [reason]);
     return r.rowCount ?? 0;
 }
 // Reset any row still marked 'syncing' whose user is NOT in `activeIds`

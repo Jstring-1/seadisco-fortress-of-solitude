@@ -1444,9 +1444,15 @@ export async function updateSyncProgress(clerkUserId: string, status: string, pr
   );
 }
 
-export async function resetAllSyncingStatuses(): Promise<number> {
+export async function resetAllSyncingStatuses(reason = "Stopped by admin"): Promise<number> {
+  // `reason` distinguishes the two callers: the manual admin stop endpoint
+  // ("Stopped by admin") vs the boot reset ("Interrupted by a server
+  // restart…"). The boot case is NOT an admin action and NOT a failure —
+  // the sync just got cut off when the container recycled (a redeploy or
+  // Railway restart), so the message must not read like an error.
   const r = await getPool().query(
-    `UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing' RETURNING clerk_user_id`
+    `UPDATE user_tokens SET sync_status = 'stopped', sync_error = $1 WHERE sync_status = 'syncing' RETURNING clerk_user_id`,
+    [reason]
   );
   return r.rowCount ?? 0;
 }
