@@ -3477,8 +3477,15 @@ function ytrTile(label, n, color, status) {
   const onclick = status ? ` style="cursor:pointer;text-decoration:underline" onclick="ytrSetStatus('${status}')"` : "";
   return `<div${onclick ? ' ' + onclick : ''} style="border:1px solid var(--border);border-radius:5px;padding:0.4rem 0.55rem">
     <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">${label}</div>
-    <div style="font-size:0.95rem;font-weight:600;color:${color};font-variant-numeric:tabular-nums">${Number(n||0).toLocaleString()}</div>
+    <div data-ytr-count="${status || ''}" style="font-size:0.95rem;font-weight:600;color:${color};font-variant-numeric:tabular-nums">${Number(n||0).toLocaleString()}</div>
   </div>`;
+}
+// Nudge a count tile without a full reload (optimistic decide UI).
+function _ytrAdjustCount(status, delta) {
+  const el = document.querySelector(`#ytr-status [data-ytr-count="${status}"]`);
+  if (!el) return;
+  const cur = parseInt(String(el.textContent || "0").replace(/[^\d-]/g, ""), 10) || 0;
+  el.textContent = Math.max(0, cur + delta).toLocaleString();
 }
 function ytrSetStatus(s) { _ytrStatus = s; _ytrPage = 0; loadYtReviewQueue(); }
 window.ytrSetStatus = ytrSetStatus;
@@ -3798,9 +3805,9 @@ function ytrRowHtml(r) {
     ${showActions
       ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
           <div style="display:flex;gap:0.3rem;align-items:center">
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'approve')" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'reject')" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'skip')" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'approve',this)" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'reject',this)" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
+            <button class="admin-btn" onclick="ytrDecide(${r.id},'skip',this)" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
             ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" onclick="ytrBanChannel('${esc(r.candidate_channel_id)}', ${JSON.stringify(String(r.candidate_channel_title || "")).replace(/"/g,'&quot;')})" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
           </div>
           <div style="display:flex;gap:0.3rem;align-items:center">
@@ -3871,7 +3878,28 @@ function ytrRenderPager(total) {
 }
 function ytrPage(p) { _ytrPage = Math.max(0, p); loadYtReviewQueue(); }
 window.ytrPage = ytrPage;
-async function ytrDecide(id, action) {
+async function ytrDecide(id, action, btn) {
+  // OPTIMISTIC: advance the UI the instant you click, resolve the decision in
+  // the background. The old flow awaited the decide POST and then a full panel
+  // reload (status fetch + queue fetch = 3 sequential round-trips), ~3s per
+  // click. Now the card disappears immediately and we only reload when the
+  // visible batch is emptied (or on error, to reconcile).
+  const card = btn ? btn.closest(".ytr-card") : null;
+  const group = card ? card.closest(".ytr-group") : null;
+  if (card) {
+    if (action === "approve" && group) {
+      // Approving pins a video → every competing candidate for that song is
+      // superseded server-side, so drop the whole group.
+      group.remove();
+    } else {
+      card.remove();
+      if (group && !group.querySelector(".ytr-card")) group.remove();
+    }
+    // Optimistic count nudge so the tiles feel live between batch reloads.
+    _ytrAdjustCount("pending", -1);
+    const done = { approve: "approved", reject: "rejected", skip: "skipped" }[action];
+    if (done) _ytrAdjustCount(done, +1);
+  }
   try {
     const r = await apiFetch("/api/admin/yt-review/decide", {
       method: "POST",
@@ -3880,11 +3908,17 @@ async function ytrDecide(id, action) {
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      alert(`${action} failed: ${body?.error || `HTTP ${r.status}`}`);
+      alert(`${action} failed: ${body?.error || `HTTP ${r.status}`} — reloading.`);
+      loadYtReview();
       return;
     }
+    // Pull the next batch (and refresh counts) only once the current page is
+    // cleared — not on every click.
+    if (!document.querySelector("#ytr-queue .ytr-card")) loadYtReview();
+  } catch (e) {
+    alert(`${action} failed: ${e?.message || e} — reloading.`);
     loadYtReview();
-  } catch (e) { alert(`${action} failed: ${e?.message || e}`); }
+  }
 }
 window.ytrDecide = ytrDecide;
 async function ytrCustomApprove(id) {
