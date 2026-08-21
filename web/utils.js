@@ -646,11 +646,10 @@ function renderSavedList(view, searches, extraSearches, crossView) {
     list.innerHTML = '<div class="ss-empty">No saved searches</div>';
     return;
   }
-  const ownLabel = view === "search" ? "Search" : view === "records" ? "Collection" : view;
-  const crossLabel = crossView === "search" ? "Search" : crossView === "records" ? "Collection" : crossView;
+  // No section headers — every page renders a flat list so the bookmarks
+  // window looks identical across views (matches the main search page).
   let html = "";
   if (hasOwn) {
-    if (hasCross) html += `<div class="ss-section-label">${ownLabel}</div>`;
     html += searches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
         <button type="button" class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>
@@ -659,7 +658,6 @@ function renderSavedList(view, searches, extraSearches, crossView) {
     ).join("");
   }
   if (hasCross) {
-    html += `<div class="ss-section-label">${crossLabel}</div>`;
     html += extraSearches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
         <button type="button" class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id},'${escHtml(crossView)}')" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>

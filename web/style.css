@@ -5571,6 +5571,10 @@ body.card-mode-covers .card .card-badge {
   text-align: left;
   font-family: inherit;
   display: block;
+  /* Override the global `button { height: var(--input-h) }` — this button
+     holds two lines (headline + pills) and must grow to fit them, or the
+     meta row overflows the fixed height and overlaps the next item. */
+  height: auto;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); }
 /* Line 1 — the headline (what the search IS): bold value in white, with a
