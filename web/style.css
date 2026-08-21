@@ -5559,34 +5559,44 @@ body.card-mode-covers .card .card-badge {
 .ss-item:last-child { border-bottom: none; }
 .ss-item-btn {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
-  color: #ccc;
-  font-size: 0.72rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0.55rem;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  min-width: 0;
-  /* Wrap the term + filter chips onto multiple lines so nothing is
-     truncated — you can see the whole saved search at a glance. */
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  /* Override the global `button { justify-content: center }` rule —
-     it was centering the flex content even though text-align said
-     left, so saved-search rows looked centered in the dropdown. */
-  justify-content: flex-start !important;
+  /* Two stacked lines: bold headline over a muted meta line. */
+  display: block;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); }
-/* Clean inline summary: bold term, accent type, muted "field value" pairs,
-   separated by thin dots. No boxes — just readable text that wraps. */
-.ss-term { font-weight: 700; color: #fff; overflow-wrap: anywhere; }
-.ss-type { color: #8fc5d4; font-weight: 600; }
-.ss-f { color: #cfcfcf; overflow-wrap: anywhere; }
-.ss-k { color: #777; }
-.ss-sep { color: #4a4a4a; }
+/* Line 1 — the headline (what the search IS): bold value, with an optional
+   muted field tag when it's a filter (artist / label / …) rather than a term. */
+.ss-title {
+  font-size: 0.75rem;
+  color: #fff;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-title b { font-weight: 600; color: #fff; }
+.ss-title .ss-k { font-weight: 400; color: #7c7c7c; font-size: 0.66rem; margin-right: 0.3rem; }
+/* Line 2 — the filter context: muted "field value" pairs, an accent type
+   badge, and sort, separated by thin dots. */
+.ss-meta {
+  font-size: 0.66rem;
+  color: #8a8a8a;
+  line-height: 1.35;
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ss-meta .ss-type { color: #8fc5d4; font-weight: 600; }
+.ss-meta .ss-f { color: #9a9a9a; }
+.ss-meta .ss-k { color: #6b6b6b; }
+.ss-meta .ss-sep { color: #464646; margin: 0 0.28rem; }
 .ss-item-del {
   background: none;
   border: none;
