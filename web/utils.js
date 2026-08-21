@@ -596,7 +596,7 @@ const _SS_FIELD_NAMES = {
   "start_date": "from", "end_date": "to",
 };
 const _SS_TYPE_LABELS = { "master+": "Masters+", master: "Masters", release: "Releases", artist: "Artists", label: "Labels" };
-const _SS_KEY_ORDER = ["q","query","artist","release","release_title","label","year","genre","style","country","format","notes","type","sort","sort_order","min_price"];
+const _SS_KEY_ORDER = ["q","query","artist","release","release_title","label","format","year","genre","style","country","notes","type","sort","sort_order","min_price"];
 
 // Render a saved search from its stored `params` object into readable HTML:
 // the free-text term in bold, every filter as a small labeled chip (so
@@ -611,18 +611,19 @@ function _ssRenderLabel(params) {
     const ia = _SS_KEY_ORDER.indexOf(a), ib = _SS_KEY_ORDER.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
-  return keys.map(k => {
+  const bits = keys.map(k => {
     let v = String(params[k]).trim();
     if (k === "q" || k === "query") return `<span class="ss-term">${escHtml(v)}</span>`;
-    if (k === "type") return `<span class="ss-chip ss-chip-type">${escHtml(_SS_TYPE_LABELS[v] || v)}</span>`;
+    if (k === "type") return `<span class="ss-type">${escHtml(_SS_TYPE_LABELS[v] || v)}</span>`;
     if (k === "sort") {
       const [field, order] = v.split(":");
       const arrow = order === "asc" ? " ↑" : order === "desc" ? " ↓" : "";
-      return `<span class="ss-chip"><span class="ss-chip-k">sort</span>${escHtml((field || v) + arrow)}</span>`;
+      return `<span class="ss-f"><span class="ss-k">sort</span> ${escHtml((field || v) + arrow)}</span>`;
     }
     const name = (k in _SS_FIELD_NAMES) ? _SS_FIELD_NAMES[k] : k.replace(/[-_]/g, " ");
-    return `<span class="ss-chip">${name ? `<span class="ss-chip-k">${escHtml(name)}</span>` : ""}${escHtml(v)}</span>`;
-  }).join("");
+    return `<span class="ss-f">${name ? `<span class="ss-k">${escHtml(name)}</span> ` : ""}${escHtml(v)}</span>`;
+  });
+  return bits.join(`<span class="ss-sep">·</span>`);
 }
 
 function renderSavedList(view, searches, extraSearches, crossView) {

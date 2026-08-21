@@ -5580,38 +5580,13 @@ body.card-mode-covers .card .card-badge {
   justify-content: flex-start !important;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); }
-/* The primary free-text term — bold + bright so the actual search stands
-   out from its filters. */
-.ss-term {
-  font-weight: 700;
-  color: #fff;
-  overflow-wrap: anywhere;
-}
-/* Each filter as a small labeled pill: field name (muted, caps) + value. */
-.ss-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border, #333);
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.68rem;
-  color: #d2d2d2;
-  overflow-wrap: anywhere;
-}
-.ss-chip-k {
-  color: #7f7f7f;
-  font-size: 0.58rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-.ss-chip-type {
-  background: rgba(90,154,170,0.15);
-  border-color: rgba(90,154,170,0.4);
-  color: #8fc5d4;
-  font-weight: 600;
-}
+/* Clean inline summary: bold term, accent type, muted "field value" pairs,
+   separated by thin dots. No boxes — just readable text that wraps. */
+.ss-term { font-weight: 700; color: #fff; overflow-wrap: anywhere; }
+.ss-type { color: #8fc5d4; font-weight: 600; }
+.ss-f { color: #cfcfcf; overflow-wrap: anywhere; }
+.ss-k { color: #777; }
+.ss-sep { color: #4a4a4a; }
 .ss-item-del {
   background: none;
   border: none;
