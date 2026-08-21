@@ -5553,8 +5553,8 @@ body.card-mode-covers .card .card-badge {
 }
 .ss-item {
   display: flex;
-  align-items: center;
-  border-bottom: 1px solid #222;
+  align-items: stretch;
+  border-bottom: 1px solid #2b2b2b;
 }
 .ss-item:last-child { border-bottom: none; }
 .ss-item-btn {
@@ -5562,33 +5562,36 @@ body.card-mode-covers .card .card-badge {
   min-width: 0;
   background: none;
   border: none;
-  padding: 0.4rem 0.55rem;
+  /* Generous vertical padding so each two-line item reads as one distinct
+     block, clearly separated from its neighbours. */
+  padding: 0.55rem 0.6rem;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  /* Two stacked lines: bold headline over a muted meta line. */
   display: block;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); }
 /* Line 1 — the headline (what the search IS): bold value, with an optional
    muted field tag when it's a filter (artist / label / …) rather than a term. */
 .ss-title {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #fff;
-  line-height: 1.35;
+  font-weight: 600;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .ss-title b { font-weight: 600; color: #fff; }
-.ss-title .ss-k { font-weight: 400; color: #7c7c7c; font-size: 0.66rem; margin-right: 0.3rem; }
+.ss-title .ss-k { font-weight: 400; color: #7c7c7c; font-size: 0.68rem; margin-right: 0.3rem; }
 /* Line 2 — the filter context: muted "field value" pairs, an accent type
-   badge, and sort, separated by thin dots. */
+   badge, and sort. Hanging-indented so it visibly nests under its headline. */
 .ss-meta {
-  font-size: 0.66rem;
-  color: #8a8a8a;
-  line-height: 1.35;
-  margin-top: 0.1rem;
+  font-size: 0.67rem;
+  color: #808080;
+  line-height: 1.3;
+  margin-top: 0.15rem;
+  padding-left: 0.85rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5596,7 +5599,7 @@ body.card-mode-covers .card .card-badge {
 .ss-meta .ss-type { color: #8fc5d4; font-weight: 600; }
 .ss-meta .ss-f { color: #9a9a9a; }
 .ss-meta .ss-k { color: #6b6b6b; }
-.ss-meta .ss-sep { color: #464646; margin: 0 0.28rem; }
+.ss-meta .ss-sep { color: #4a4a4a; margin: 0 0.3rem; }
 .ss-item-del {
   background: none;
   border: none;
