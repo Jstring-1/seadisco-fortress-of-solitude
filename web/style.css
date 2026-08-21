@@ -5562,44 +5562,76 @@ body.card-mode-covers .card .card-badge {
   min-width: 0;
   background: none;
   border: none;
-  /* Generous vertical padding so each two-line item reads as one distinct
-     block, clearly separated from its neighbours. */
-  padding: 0.55rem 0.6rem;
+  /* Roomy padding so each item reads as one distinct block. Title and its
+     meta are tightly bound (small margin-top on .ss-meta) while this padding
+     keeps a clear gap to the NEXT item — so qualifiers never look like they
+     belong to the item below them. */
+  padding: 0.6rem 0.7rem;
   cursor: pointer;
   text-align: left;
   font-family: inherit;
   display: block;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); }
-/* Line 1 — the headline (what the search IS): bold value, with an optional
-   muted field tag when it's a filter (artist / label / …) rather than a term. */
+/* Line 1 — the headline (what the search IS): bold value in white, with a
+   small muted field label in front when it's a filter (artist / label / …). */
 .ss-title {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: #fff;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ss-title b { font-weight: 600; color: #fff; }
-.ss-title .ss-k { font-weight: 400; color: #7c7c7c; font-size: 0.68rem; margin-right: 0.3rem; }
-/* Line 2 — the filter context: muted "field value" pairs, an accent type
-   badge, and sort. Hanging-indented so it visibly nests under its headline. */
+.ss-title b { font-weight: 700; color: #fff; }
+.ss-title .ss-k {
+  font-weight: 400;
+  color: #8a8a8a;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 0.4rem;
+}
+/* Line 2 — the qualifiers as small bordered pills, left-aligned directly
+   under the headline (no indent). Pills give each qualifier a hard boundary
+   so nothing blurs together; the row sits tight under its own title. */
 .ss-meta {
-  font-size: 0.67rem;
-  color: #808080;
-  line-height: 1.3;
-  margin-top: 0.15rem;
-  padding-left: 0.85rem;
-  white-space: nowrap;
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
-.ss-meta .ss-type { color: #8fc5d4; font-weight: 600; }
-.ss-meta .ss-f { color: #9a9a9a; }
-.ss-meta .ss-k { color: #6b6b6b; }
-.ss-meta .ss-sep { color: #4a4a4a; margin: 0 0.3rem; }
+.ss-meta .ss-f,
+.ss-meta .ss-type {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.ss-meta .ss-f {
+  background: #232323;
+  border: 1px solid #363636;
+  color: #c2c2c2;
+}
+.ss-meta .ss-f .ss-k {
+  color: #7c7c7c;
+  margin-right: 0.35rem;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+}
+.ss-meta .ss-type {
+  background: rgba(143,197,212,0.13);
+  border: 1px solid rgba(143,197,212,0.35);
+  color: #8fc5d4;
+  font-weight: 600;
+}
 .ss-item-del {
   background: none;
   border: none;

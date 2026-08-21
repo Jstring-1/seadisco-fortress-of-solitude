@@ -633,7 +633,7 @@ function _ssRenderLabel(params) {
     const name = (k in _SS_FIELD_NAMES) ? _SS_FIELD_NAMES[k] : k.replace(/[-_]/g, " ");
     return `<span class="ss-f">${name ? `<span class="ss-k">${escHtml(name)}</span> ` : ""}${escHtml(v)}</span>`;
   });
-  const meta = metaBits.length ? `<div class="ss-meta">${metaBits.join(`<span class="ss-sep">·</span>`)}</div>` : "";
+  const meta = metaBits.length ? `<div class="ss-meta">${metaBits.join("")}</div>` : "";
   return `<div class="ss-title">${title}</div>${meta}`;
 }
 
