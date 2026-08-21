@@ -5496,8 +5496,8 @@ body.card-mode-covers .card .card-badge {
   top: calc(100% + 4px);
   right: 0;
   z-index: 230;
-  min-width: 200px;
-  max-width: 300px;
+  min-width: 240px;
+  max-width: 360px;
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 6px;
@@ -5566,16 +5566,52 @@ body.card-mode-covers .card .card-badge {
   padding: 0.4rem 0.5rem;
   cursor: pointer;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-family: inherit;
+  min-width: 0;
+  /* Wrap the term + filter chips onto multiple lines so nothing is
+     truncated — you can see the whole saved search at a glance. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
   /* Override the global `button { justify-content: center }` rule —
      it was centering the flex content even though text-align said
      left, so saved-search rows looked centered in the dropdown. */
   justify-content: flex-start !important;
 }
-.ss-item-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+.ss-item-btn:hover { background: rgba(255,255,255,0.05); }
+/* The primary free-text term — bold + bright so the actual search stands
+   out from its filters. */
+.ss-term {
+  font-weight: 700;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+/* Each filter as a small labeled pill: field name (muted, caps) + value. */
+.ss-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border, #333);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.68rem;
+  color: #d2d2d2;
+  overflow-wrap: anywhere;
+}
+.ss-chip-k {
+  color: #7f7f7f;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.ss-chip-type {
+  background: rgba(90,154,170,0.15);
+  border-color: rgba(90,154,170,0.4);
+  color: #8fc5d4;
+  font-weight: 600;
+}
 .ss-item-del {
   background: none;
   border: none;
