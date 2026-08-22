@@ -57,16 +57,6 @@
         <div id="admin-overview-kpis">Loading…</div>
       </div>
 
-      <!-- Collection Stats (Overview group) -->
-      <div class="admin-tab-panel admin-grp-overview" id="panel-collection-stats" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-          <h2 style="margin:0">Collection Stats</h2>
-          <button class="admin-refresh-btn" id="collection-stats-refresh-btn" onclick="_adminClickRefresh(this, loadCollectionStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="collection-stats-refresh-status" class="admin-refresh-status"></span>
-        </div>
-        <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-      </div>
-
       <!-- ── Media player & usage (Media tab) ──────────────────────── -->
       <div class="admin-tab-panel admin-grp-media" id="panel-media-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
@@ -96,6 +86,16 @@
           <input type="search" id="users-unified-filter" class="sd-filter-input" placeholder="filter by name…" oninput="_adminUnifiedFilterInput(this.value)" style="margin-left:auto;width:14rem" title="Filter by Clerk username, Discogs handle, or Clerk user id.">
         </div>
         <div id="users-unified-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
+      </div>
+
+      <!-- Collection Stats (Overview group — below the Users table) -->
+      <div class="admin-tab-panel admin-grp-overview" id="panel-collection-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Collection Stats</h2>
+          <button class="admin-refresh-btn" id="collection-stats-refresh-btn" onclick="_adminClickRefresh(this, loadCollectionStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="collection-stats-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
       <!-- System bar — top of the System tab. Hosts the Active APIs

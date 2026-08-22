@@ -104,8 +104,8 @@ const _adminGroups = {
     // covers the People metrics that used to live in a separate Users box,
     // so only the dashboard, collection stats, and the per-user table
     // remain. Media moved to its own tab.
-    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-users-unified'],
-    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminUsersUnified(); },
+    panels: ['panel-overview-kpis', 'panel-users-unified', 'panel-collection-stats'],
+    load: () => { loadAdminOverview(); loadAdminUsersUnified(); loadCollectionStats(); },
   },
   'media': {
     panels: ['panel-media-stats'],
@@ -4293,8 +4293,6 @@ async function loadAdminOverview() {
     const d = await r.json();
     const nf = n => (typeof n === "number" ? n.toLocaleString() : (n ?? "–"));
     const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) + "%" : "–");
-    const max = d.maxUsers || 100;
-    const seatPct = d.maxUsers ? Math.round((d.totalUsers / d.maxUsers) * 100) : null;
 
     // ── People — who's signed up and connected ──────────────────────
     const people = _kpiGroup("People", "👥", "kpi-people", [
@@ -4303,8 +4301,7 @@ async function loadAdminOverview() {
       _kpiCard("Connect rate", pct(d.totalUsers, d.clerkUsers), "of signups linked Discogs", "Share of signed-up Clerk accounts that went on to connect a Discogs account (connected ÷ Clerk users). A funnel/health metric.", "📈"),
       _kpiCard("New (7d)", nf(d.newUsers7d), d.sinceLabel7d || "", "Discogs connections created in the last 7 days.", "🌱"),
       _kpiCard("New (30d)", nf(d.newUsers30d), "last 30 days", "Discogs connections created in the last 30 days.", "🌿"),
-      _kpiCard("Seats used", `${nf(d.totalUsers)} / ${nf(max)}`, seatPct != null ? `${seatPct}% full` : "", `Connected accounts against the ${max}-seat cap. When it fills, inactive accounts hibernate to free seats for returning or new users.`, "🎟️"),
-      _kpiCard("Hibernated", nf(d.hibernated), "freed a seat", "Connected accounts put to sleep after 90 days of no activity. They stop syncing and free their seat until the person returns, which wakes them automatically.", "💤"),
+      _kpiCard("Unconnected", nf(Math.max(0, (d.clerkUsers ?? 0) - d.totalUsers)), "no Discogs link", "Signed-up accounts that haven't connected Discogs. These are deleted automatically after 30 days of inactivity.", "🚫"),
     ]);
 
     // ── Engagement — who's actually using it ────────────────────────
@@ -4959,6 +4956,7 @@ let _adminUnifiedFilterTimer = null;
 // type drives both sort comparison and default sort direction.
 const _ADMIN_UNIFIED_COLS = [
   { key: "clerkUsername",              label: "User",            group: "id",          type: "str",  align: "left" },
+  { key: "hasOAuth",                   label: "Linked",          group: "id",          type: "conn", align: "center" },
   { key: "discogsUsername",            label: "Discogs",         group: "sync",        type: "str",  align: "left" },
   { key: "lastActiveAt",               label: "Last active",     group: "meta",        type: "date", align: "left" },
   { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
@@ -5126,6 +5124,7 @@ function _adminUnifiedSortRows(rows) {
   const val = (row) => {
     let v = row[key];
     if (type === "num") return (v == null || v === "") ? null : Number(v);
+    if (type === "conn") return v ? 1 : 0;
     if (type === "date") { if (v == null || v === "") return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; }
     return (v == null || v === "") ? null : String(v).toLowerCase();
   };
@@ -5159,6 +5158,11 @@ function _adminUnifiedUserCell(u) {
 
 function _adminUnifiedCell(u, col) {
   if (col.key === "clerkUsername") return _adminUnifiedUserCell(u);
+  if (col.type === "conn") {
+    return u.hasOAuth
+      ? `<span style="color:#6fcf87;cursor:help" title="Discogs account connected">✓</span>`
+      : `<span style="color:#d0743f;cursor:help" title="Signed up but has NOT connected Discogs — deleted after 30 days of inactivity">✗</span>`;
+  }
   if (col.key === "hibernatedAt") {
     return u.hibernated
       ? `<span style="color:#8fa4d8;cursor:help" title="Hibernated ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))} — synced data cleared for the seat; reactivates automatically on next sign-in">💤 ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))}</span>`

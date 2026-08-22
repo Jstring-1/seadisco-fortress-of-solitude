@@ -1070,20 +1070,10 @@ app.get("/api/user/token", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  // Check if this user is hibernated. Admin + demo users always
-  // reactivate immediately, bypassing the cap check — they should
-  // never be locked out by an unrelated user-count threshold.
-  const hibernated = await isUserHibernated(userId);
-  if (hibernated) {
-    const isPrivileged = (ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID) || isDemoUser(userId);
-    if (!isPrivileged) {
-      const activeCount = await getActiveUserCount();
-      if (activeCount >= MAX_USERS) {
-        res.status(403).json({ error: "hibernated", message: `Welcome back — your account was hibernated after ${HIBERNATION_DAYS} days of inactivity (synced collection data was cleared). Reactivation is automatic, but all ${MAX_USERS} active spots are currently taken. Try signing in again later; once a seat opens, you'll be reactivated automatically and your collection will re-sync from Discogs on demand.` });
-        return;
-      }
-    }
-    // There's room (or user is privileged) — reactivate automatically
+  // Discogs-connected accounts are unlimited, so any hibernated account
+  // (a legacy state — new hibernations no longer happen) reactivates
+  // automatically on return. No cap check.
+  if (await isUserHibernated(userId)) {
     await reactivateUser(userId);
   }
 
@@ -1608,17 +1598,8 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
     // Access Token UI exists anymore.
     const existingToken = await getUserToken(stored.clerkUserId);
     if (!existingToken) {
-      // Check user cap for new users — admin + demo users bypass so a
-      // late-stage demo signup doesn't get bounced when the cap's full.
-      const isPrivileged = (ADMIN_CLERK_ID && stored.clerkUserId === ADMIN_CLERK_ID) || isDemoUser(stored.clerkUserId);
-      if (!isPrivileged) {
-        const userCount = await getActiveUserCount();
-        if (userCount >= MAX_USERS) {
-          res.status(403).send(`SeaDisco's active-user cap (${MAX_USERS}) is full right now, so new registrations are temporarily closed. Seats open up as inactive accounts (no activity for ${HIBERNATION_DAYS} days) are auto-hibernated. Please try again in a few days. <a href="/">Home</a>`);
-          return;
-        }
-      }
-      // Create a placeholder row so OAuth columns have somewhere to live
+      // Discogs-connected accounts are unlimited — no cap check. Create a
+      // placeholder row so the OAuth columns have somewhere to live.
       await setUserToken(stored.clerkUserId, "__oauth__");
     }
 
@@ -15808,12 +15789,60 @@ function startDailySyncSchedule() {
       const stale = await pruneAllStaleData();
       const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
       if (staleTotal > 0) console.log(`[sync-schedule] Pruned stale data: ${JSON.stringify(stale)}`);
-      // Never hibernate admin or demo accounts (e.g. the YouTube API review
-      // demo account) — their seat + data must persist regardless of idle time.
-      const _hibernationExempt = [ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean);
-      const hibernated = await hibernateInactiveUsers(_hibernationExempt).catch(() => 0);
-      if (hibernated) console.log(`[sync-schedule] ${hibernated} users hibernated`);
-    } catch (e) { console.error("[sync-schedule] prune/hibernate error:", e); }
+      // Discogs-connected accounts are unlimited and kept; instead we delete
+      // accounts that signed up but NEVER connected Discogs once they've been
+      // idle 30 days — they have no synced data (just an unused login) and we
+      // don't want dead signups accumulating.
+      const deleted = await deleteIdleUnconnectedUsers().catch((e) => {
+        console.error("[sync-schedule] delete-unconnected error:", e); return 0;
+      });
+      if (deleted) console.log(`[sync-schedule] Deleted ${deleted} idle non-connected accounts`);
+    } catch (e) { console.error("[sync-schedule] maintenance error:", e); }
+  }
+
+  // Delete Clerk accounts that never connected Discogs and have been idle
+  // 30+ days. Non-connected accounts have no user_tokens row and no synced
+  // data, so this only removes the login. Admin + demo are always exempt.
+  async function deleteIdleUnconnectedUsers(): Promise<number> {
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    if (!clerkSecret) return 0;
+    const conn = await getPool().query("SELECT clerk_user_id FROM user_tokens");
+    const connected = new Set<string>(conn.rows.map((r: any) => r.clerk_user_id));
+    const exempt = new Set<string>([ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean) as string[]);
+    const cutoff = Date.now() - 30 * 86400000;
+    const toMs = (v: any) => (v == null ? 0 : (Number(v) > 1e12 ? Number(v) : Number(v) * 1000));
+    // Collect candidates across all Clerk pages FIRST (offset paging is only
+    // stable while we're not mutating), then delete.
+    const toDelete: string[] = [];
+    let offset = 0;
+    while (true) {
+      const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
+        headers: { Authorization: `Bearer ${clerkSecret}` },
+      });
+      if (!resp.ok) break;
+      const users = await resp.json() as Array<{ id: string; last_active_at: number | null; created_at: number | null }>;
+      if (!users.length) break;
+      for (const u of users) {
+        if (connected.has(u.id) || exempt.has(u.id)) continue;
+        // Most-recent of last-active / created; skip if we somehow have no
+        // timestamp (never delete on missing data).
+        const lastMs = Math.max(toMs(u.last_active_at), toMs(u.created_at));
+        if (lastMs > 0 && lastMs < cutoff) toDelete.push(u.id);
+      }
+      if (users.length < 100) break;
+      offset += 100;
+    }
+    let deleted = 0;
+    for (const id of toDelete) {
+      try {
+        const del = await fetch(`https://api.clerk.com/v1/users/${id}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (del.ok) { deleted++; await deleteUserData(id).catch(() => {}); }
+      } catch { /* skip, try next */ }
+    }
+    return deleted;
   }
 
   async function runScheduledSync() {

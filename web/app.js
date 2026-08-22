@@ -757,10 +757,49 @@ async function applyAuthState(clerk) {
     addNavTab("wantlist");
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
     await loadDiscogsIds();                   // calls loadRandomRecords inside
+    // Nudge signed-in users who haven't connected Discogs — once per session.
+    _sdMaybePromptConnectDiscogs();
   } else {
     // Signed-out: resolve the IDs promise immediately so URL modals don't wait
     if (window._resolveDiscogsIds) window._resolveDiscogsIds();
   }
+}
+
+// Once-per-session prompt for signed-in users who haven't connected Discogs.
+// Searching + all personal features need a connection, and unconnected
+// accounts are deleted after 30 days idle, so the nudge is worth showing.
+async function _sdMaybePromptConnectDiscogs() {
+  try {
+    if (window._sdOfflineMode) return;
+    if (sessionStorage.getItem("sd-connect-nudge") === "1") return;
+    const res = await apiFetch("/api/user/token").catch(() => null);
+    if (!res || !res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (!data || !data.oauthEnabled || data.hasToken) return; // connected / n/a
+    sessionStorage.setItem("sd-connect-nudge", "1");
+    _sdShowConnectDiscogsPopup();
+  } catch { /* best-effort nudge */ }
+}
+function _sdShowConnectDiscogsPopup() {
+  if (document.getElementById("sd-connect-nudge-overlay")) return;
+  const ov = document.createElement("div");
+  ov.id = "sd-connect-nudge-overlay";
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:1200;display:flex;align-items:center;justify-content:center;padding:1rem";
+  const close = () => ov.remove();
+  ov.addEventListener("click", (e) => { if (e.target === ov) close(); });
+  ov.innerHTML = `
+    <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#333);border-radius:10px;max-width:400px;width:100%;padding:1.4rem 1.5rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+      <div style="font-size:2rem;margin-bottom:0.4rem">💿</div>
+      <h2 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--fg,#eee)">Connect your Discogs account</h2>
+      <p style="margin:0 0 1.2rem;font-size:0.86rem;color:var(--muted,#9a9a9a);line-height:1.5">Searching the catalog and syncing your collection, wantlist, and marketplace all need a Discogs connection — it takes one click and you can disconnect anytime.<br><br><span style="color:#c98">Accounts that never connect are removed after 30 days of inactivity.</span></p>
+      <div style="display:flex;gap:0.6rem;justify-content:center">
+        <button id="sd-connect-nudge-later" style="background:none;border:1px solid var(--border,#444);color:var(--muted,#aaa);font-size:0.85rem;padding:0.5rem 1rem;border-radius:6px;cursor:pointer">Maybe later</button>
+        <button id="sd-connect-nudge-go" style="background:var(--accent,#5a9aaa);border:1px solid var(--accent,#5a9aaa);color:#08222a;font-weight:600;font-size:0.85rem;padding:0.5rem 1.1rem;border-radius:6px;cursor:pointer">Connect Discogs</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#sd-connect-nudge-later").addEventListener("click", close);
+  ov.querySelector("#sd-connect-nudge-go").addEventListener("click", () => { close(); try { switchView("account"); } catch {} });
 }
 
 // Offline-mode boot path — set by the inline script in index.html's
