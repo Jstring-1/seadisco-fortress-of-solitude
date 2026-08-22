@@ -15798,10 +15798,30 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 let _syncRunCount = 0;
 
 function startDailySyncSchedule() {
+  // Prune stale data + hibernate idle users. Kept separate and run FIRST
+  // (and shortly after boot) so it always executes even if the sync loop is
+  // long or the process is redeployed mid-run. Previously this lived at the
+  // tail of runScheduledSync and was routinely skipped on restart, leaving
+  // 90-day-idle users un-hibernated.
+  async function runMaintenance() {
+    try {
+      const stale = await pruneAllStaleData();
+      const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
+      if (staleTotal > 0) console.log(`[sync-schedule] Pruned stale data: ${JSON.stringify(stale)}`);
+      // Never hibernate admin or demo accounts (e.g. the YouTube API review
+      // demo account) — their seat + data must persist regardless of idle time.
+      const _hibernationExempt = [ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean);
+      const hibernated = await hibernateInactiveUsers(_hibernationExempt).catch(() => 0);
+      if (hibernated) console.log(`[sync-schedule] ${hibernated} users hibernated`);
+    } catch (e) { console.error("[sync-schedule] prune/hibernate error:", e); }
+  }
+
   async function runScheduledSync() {
     _syncRunCount++;
     console.log(`[sync-schedule] Starting sync run #${_syncRunCount}`);
     _syncAbort = false;
+    // Maintenance first — never lose it to a long or interrupted sync loop.
+    await runMaintenance();
     const users = await getAllUsersForSync();
 
     // Fetch Clerk user activity data to determine sync tiers
@@ -15881,18 +15901,6 @@ function startDailySyncSchedule() {
       }
     }
     console.log(`[sync-schedule] Run #${_syncRunCount} complete: ${synced} synced, ${skipped} skipped`);
-
-    // Prune stale data and hibernate inactive users (previously in feed schedule)
-    try {
-      const stale = await pruneAllStaleData();
-      const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
-      if (staleTotal > 0) console.log(`[sync-schedule] Pruned stale data: ${JSON.stringify(stale)}`);
-      // Never hibernate admin or demo accounts (e.g. the YouTube API review
-      // demo account) — their seat + data must persist regardless of idle time.
-      const _hibernationExempt = [ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean);
-      const hibernated = await hibernateInactiveUsers(_hibernationExempt).catch(() => 0);
-      if (hibernated) console.log(`[sync-schedule] ${hibernated} users hibernated`);
-    } catch (e) { console.error("[sync-schedule] prune/hibernate error:", e); }
   }
 
   function schedule() {
@@ -15906,6 +15914,11 @@ function startDailySyncSchedule() {
   }
 
   schedule();
+
+  // Catch idle users promptly after a (re)deploy instead of waiting for the
+  // next 6-hourly boundary. Delayed a couple minutes so it doesn't compete
+  // with boot-time work.
+  setTimeout(() => { runMaintenance().catch(() => {}); }, 120000);
 }
 
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
