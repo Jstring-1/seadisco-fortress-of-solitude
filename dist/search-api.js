@@ -16749,6 +16749,8 @@ app.get("/api/admin/overview", async (req, res) => {
         const o = await getAdminOverview();
         const since = new Date(Date.now() - 7 * 86400000);
         o.sinceLabel7d = `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        // Seat cap so the UI can show "connected / max" without hardcoding it.
+        o.maxUsers = MAX_USERS;
         // Clerk account count (signed-up users, incl. those who never
         // connected Discogs). user_tokens only has a row once a user
         // connects Discogs, so totalUsers = Discogs-connected; this is the

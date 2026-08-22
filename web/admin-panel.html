@@ -73,16 +73,6 @@
         <div id="admin-media-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- ── User stats box (Overview group) ───────────────────────── -->
-      <div class="admin-tab-panel admin-grp-overview" id="panel-user-stats" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-          <h2 style="margin:0">Users</h2>
-          <button class="admin-refresh-btn" id="user-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUserStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="user-stats-refresh-status" class="admin-refresh-status"></span>
-        </div>
-        <div id="admin-user-stats" class="admin-kpi-grid">Loading…</div>
-      </div>
-
       <!-- Unified per-user table (Users group). One row per user; a
            column-group toggle swaps Sync / Behavior / Suggestions
            without reordering rows, so a user stays on the same line

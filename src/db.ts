@@ -4704,7 +4704,12 @@ export async function getAdminOverview(): Promise<any> {
       (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '1 day')  AS searches_24h,
       (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '7 days') AS searches_7d,
       (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '1 day')  AS album_opens_24h,
-      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '7 days') AS album_opens_7d
+      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '7 days') AS album_opens_7d,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE hibernated_at IS NOT NULL) AS hibernated,
+      (SELECT COUNT(*)::bigint FROM user_collection) AS collection_items,
+      (SELECT COUNT(*)::bigint FROM user_wantlist)   AS wantlist_items,
+      (SELECT COUNT(*)::bigint FROM user_play_events)   AS plays_all,
+      (SELECT COUNT(*)::bigint FROM user_search_events) AS searches_all
   `);
   const x = r.rows[0] || {};
   return {
@@ -4715,6 +4720,12 @@ export async function getAdminOverview(): Promise<any> {
     plays24h: x.plays_24h ?? 0, plays7d: x.plays_7d ?? 0,
     searches24h: x.searches_24h ?? 0, searches7d: x.searches_7d ?? 0,
     albumOpens24h: x.album_opens_24h ?? 0, albumOpens7d: x.album_opens_7d ?? 0,
+    hibernated: x.hibernated ?? 0,
+    // bigint comes back as a string from pg — coerce to Number for the UI.
+    collectionItems: Number(x.collection_items ?? 0),
+    wantlistItems: Number(x.wantlist_items ?? 0),
+    playsAllTime: Number(x.plays_all ?? 0),
+    searchesAllTime: Number(x.searches_all ?? 0),
   };
 }
 

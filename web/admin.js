@@ -100,11 +100,12 @@ async function _adminWithRefresh(btn, statusEl, work) {
 // only the grouping/orchestration changed.
 const _adminGroups = {
   'overview': {
-    // Overview + Users merged into one tab: site KPIs, collection stats,
-    // the user-KPI header, and the unified per-user table. Media moved to
-    // its own tab.
-    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-user-stats', 'panel-users-unified'],
-    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminUserStats(); loadAdminUsersUnified(); },
+    // Overview + Users merged into one tab. The grouped KPI dashboard now
+    // covers the People metrics that used to live in a separate Users box,
+    // so only the dashboard, collection stats, and the per-user table
+    // remain. Media moved to its own tab.
+    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-users-unified'],
+    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminUsersUnified(); },
   },
   'media': {
     panels: ['panel-media-stats'],
@@ -4268,11 +4269,20 @@ async function loadApiHealth() {
 }
 
 // ── Overview KPIs + per-user stats box ────────────────────────────────
-function _kpiCard(label, value, sub, title) {
+function _kpiCard(label, value, sub, title, icon) {
   const t = title ? ` title="${String(title).replace(/"/g, "&quot;")}"` : "";
-  return `<div class="admin-kpi"${t}><div class="admin-kpi-val">${value}</div>
-    <div class="admin-kpi-label">${label}</div>
+  const ic = icon ? `<span class="admin-kpi-icon">${icon}</span>` : "";
+  return `<div class="admin-kpi"${t}>
+    <div class="admin-kpi-head">${ic}<span class="admin-kpi-label">${label}</span></div>
+    <div class="admin-kpi-val">${value}</div>
     ${sub ? `<div class="admin-kpi-sub">${sub}</div>` : ""}</div>`;
+}
+// One labelled, colour-accented group of KPI cards.
+function _kpiGroup(title, icon, accent, cards) {
+  return `<div class="admin-kpi-group ${accent}">
+    <div class="admin-kpi-grouphdr"><span class="admin-kpi-groupicon">${icon}</span>${title}</div>
+    <div class="admin-kpi-grid">${cards.join("")}</div>
+  </div>`;
 }
 async function loadAdminOverview() {
   const el = document.getElementById("admin-overview-kpis");
@@ -4281,18 +4291,43 @@ async function loadAdminOverview() {
     const r = await apiFetch("/api/admin/overview");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    el.innerHTML = [
-      _kpiCard("Clerk users", d.clerkUsers ?? "–", "total signed-up accounts", "All Clerk accounts, including users who never connected Discogs"),
-      _kpiCard("Discogs-connected", d.totalUsers ?? "–", "have linked Discogs", "Users with a Discogs OAuth connection (a row in user_tokens)"),
-      _kpiCard("New (7d)", d.newUsers7d ?? "–", d.sinceLabel7d || "", "Discogs-connected users created in the last 7 days"),
-      _kpiCard("New (30d)", d.newUsers30d ?? "–", "", "Users created in the last 30 days"),
-      _kpiCard("DAU", d.dau ?? "–", "active 24h"),
-      _kpiCard("WAU", d.wau ?? "–", "active 7d"),
-      _kpiCard("MAU", d.mau ?? "–", "active 30d"),
-      _kpiCard("Plays 24h", d.plays24h ?? "–", `${d.plays7d ?? "–"} in 7d`),
-      _kpiCard("Searches 24h", d.searches24h ?? "–", `${d.searches7d ?? "–"} in 7d`),
-      _kpiCard("Album opens 24h", d.albumOpens24h ?? "–", `${d.albumOpens7d ?? "–"} in 7d`),
-    ].join("");
+    const nf = n => (typeof n === "number" ? n.toLocaleString() : (n ?? "–"));
+    const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) + "%" : "–");
+    const max = d.maxUsers || 100;
+    const seatPct = d.maxUsers ? Math.round((d.totalUsers / d.maxUsers) * 100) : null;
+
+    // ── People — who's signed up and connected ──────────────────────
+    const people = _kpiGroup("People", "👥", "kpi-people", [
+      _kpiCard("Clerk users", nf(d.clerkUsers ?? "–"), "signed-up accounts", "Every Clerk account, including people who signed up but never connected Discogs.", "🪪"),
+      _kpiCard("Discogs-connected", nf(d.totalUsers), "linked Discogs", "Accounts that completed the Discogs OAuth link (one row in user_tokens). These are the only accounts that count against the seat cap.", "🔗"),
+      _kpiCard("Connect rate", pct(d.totalUsers, d.clerkUsers), "of signups linked Discogs", "Share of signed-up Clerk accounts that went on to connect a Discogs account (connected ÷ Clerk users). A funnel/health metric.", "📈"),
+      _kpiCard("New (7d)", nf(d.newUsers7d), d.sinceLabel7d || "", "Discogs connections created in the last 7 days.", "🌱"),
+      _kpiCard("New (30d)", nf(d.newUsers30d), "last 30 days", "Discogs connections created in the last 30 days.", "🌿"),
+      _kpiCard("Seats used", `${nf(d.totalUsers)} / ${nf(max)}`, seatPct != null ? `${seatPct}% full` : "", `Connected accounts against the ${max}-seat cap. When it fills, inactive accounts hibernate to free seats for returning or new users.`, "🎟️"),
+      _kpiCard("Hibernated", nf(d.hibernated), "freed a seat", "Connected accounts put to sleep after 90 days of no activity. They stop syncing and free their seat until the person returns, which wakes them automatically.", "💤"),
+    ]);
+
+    // ── Engagement — who's actually using it ────────────────────────
+    const engagement = _kpiGroup("Engagement", "⚡", "kpi-engage", [
+      _kpiCard("DAU", nf(d.dau), "active today", "Distinct connected users with any activity in the last 24 hours.", "🟢"),
+      _kpiCard("WAU", nf(d.wau), "active this week", "Distinct connected users active in the last 7 days.", "📆"),
+      _kpiCard("MAU", nf(d.mau), "active this month", "Distinct connected users active in the last 30 days.", "🗓️"),
+      _kpiCard("Stickiness", pct(d.dau, d.mau), "DAU ÷ MAU", "Of everyone active this month, the share active on a given day. 20%+ is considered strong for a hobby app.", "🧲"),
+      _kpiCard("30d active rate", pct(d.mau, d.totalUsers), "of connected users", "Share of all connected accounts that were active in the last 30 days — how much of the base is live vs dormant.", "❤️‍🔥"),
+      _kpiCard("Searches", nf(d.searches24h), `${nf(d.searches7d)} · 7d`, "Searches run in the last 24 hours (7-day total in the sub-line).", "🔎"),
+      _kpiCard("Album opens", nf(d.albumOpens24h), `${nf(d.albumOpens7d)} · 7d`, "Album / master detail views opened in the last 24 hours (7-day total in the sub-line).", "💿"),
+      _kpiCard("Plays", nf(d.plays24h), `${nf(d.plays7d)} · 7d`, "Track plays started in the last 24 hours (7-day total in the sub-line). Full media breakdown lives in the Media tab.", "🎧"),
+    ]);
+
+    // ── Library — the scale of what's indexed and logged ────────────
+    const library = _kpiGroup("Library & totals", "📚", "kpi-library", [
+      _kpiCard("Collection items", nf(d.collectionItems), "rows cached", "Total collection rows cached across every user's synced Discogs collection.", "📀"),
+      _kpiCard("Wantlist items", nf(d.wantlistItems), "rows cached", "Total wantlist rows cached across every user's synced Discogs wantlist.", "⭐"),
+      _kpiCard("Plays all-time", nf(d.playsAllTime), "since launch", "Every track play ever logged, across all users and sources.", "▶️"),
+      _kpiCard("Searches all-time", nf(d.searchesAllTime), "since launch", "Every search ever logged, across all users.", "🔍"),
+    ]);
+
+    el.innerHTML = `<div class="admin-kpi-groups">${people}${engagement}${library}</div>`;
   } catch (e) {
     el.innerHTML = `<p style="color:#e88">Failed: ${String(e?.message || e)}</p>`;
   }
