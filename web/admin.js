@@ -100,15 +100,15 @@ async function _adminWithRefresh(btn, statusEl, work) {
 // only the grouping/orchestration changed.
 const _adminGroups = {
   'overview': {
-    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-media-stats'],
-    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminMediaStats(); },
+    // Overview + Users merged into one tab: site KPIs, collection stats,
+    // the user-KPI header, and the unified per-user table. Media moved to
+    // its own tab.
+    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-user-stats', 'panel-users-unified'],
+    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminUserStats(); loadAdminUsersUnified(); },
   },
-  'users': {
-    // panel-user-stats = site-wide KPI header (not per-user). The three
-    // former per-user panels (sync/behavior/suggestions) are merged into
-    // panel-users-unified so a user stays on one aligned row.
-    panels: ['panel-user-stats', 'panel-users-unified'],
-    load: () => { loadAdminUserStats(); loadAdminUsersUnified(); },
+  'media': {
+    panels: ['panel-media-stats'],
+    load: () => { loadAdminMediaStats(); },
   },
   'content': {
     panels: ['panel-submissions', 'panel-unavailable'],
@@ -121,10 +121,6 @@ const _adminGroups = {
   'cache': {
     panels: ['panel-cache-warm'],
     load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); },
-  },
-  'labels': {
-    panels: ['panel-labels'],
-    load: () => { loadLabelDirectory(); loadCoverageSweeps(); },
   },
   'yt-review': {
     panels: ['panel-yt-review'],

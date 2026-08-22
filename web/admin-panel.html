@@ -26,14 +26,13 @@
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
-      <!-- Section nav tabs (consolidated 11 → 5) -->
+      <!-- Section nav tabs -->
       <div class="admin-tab-bar">
         <button class="admin-tab active" onclick="switchAdminTab('overview')">Overview</button>
-        <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
+        <button class="admin-tab" onclick="switchAdminTab('media')">Media</button>
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
-        <button class="admin-tab" onclick="switchAdminTab('labels')">Labels</button>
         <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
         <button class="admin-tab" onclick="switchAdminTab('query')">Query</button>
       </div>
@@ -64,8 +63,8 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- ── Media player & usage (Overview group) ─────────────────── -->
-      <div class="admin-tab-panel admin-grp-overview" id="panel-media-stats" style="display:none">
+      <!-- ── Media player & usage (Media tab) ──────────────────────── -->
+      <div class="admin-tab-panel admin-grp-media" id="panel-media-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Media &amp; usage</h2>
           <button class="admin-refresh-btn" id="media-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminMediaStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -74,8 +73,8 @@
         <div id="admin-media-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- ── User stats box (Users group) ──────────────────────────── -->
-      <div class="admin-tab-panel admin-grp-users" id="panel-user-stats" style="display:none">
+      <!-- ── User stats box (Overview group) ───────────────────────── -->
+      <div class="admin-tab-panel admin-grp-overview" id="panel-user-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Users</h2>
           <button class="admin-refresh-btn" id="user-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUserStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -88,7 +87,7 @@
            column-group toggle swaps Sync / Behavior / Suggestions
            without reordering rows, so a user stays on the same line
            across every metric. Merges what used to be three panels. -->
-      <div class="admin-tab-panel admin-grp-users" id="panel-users-unified" style="display:none">
+      <div class="admin-tab-panel admin-grp-overview" id="panel-users-unified" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0" title="Every per-user metric on one aligned row. Toggle the column group below; rows keep their position so you can compare a user across groups without re-matching names.">Users</h2>
           <button class="admin-refresh-btn" id="users-unified-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUsersUnified)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -304,30 +303,6 @@
               </div>
             </div>
           </div>
-        </details>
-      </div>
-
-      <!-- ── Labels tab ─────────────────────────────────────────────
-           Everything that operates per-label: the catalog-number
-           crawler, the external-discography scraper (wirz.de +
-           78discography.com), and the unified label directory grid
-           with Discogs ID lookup. -->
-      <div class="admin-tab-panel admin-grp-labels admin-sections-inside" id="panel-labels" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;flex-wrap:wrap">
-          <h2 style="margin:0">Labels</h2>
-          <button class="admin-refresh-btn" id="lbl-refresh-btn" onclick="_adminClickRefresh(this, loadLabelDirectory)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-        </div>
-
-        <!-- ── Label directory grid ─────────────────────────────── -->
-        <details>
-          <summary title="Every label across release_cache + external_discography with row counts on both sides. Use the magnifier to search Discogs for a label and one-click assign the ID; that propagates to every external row so the carousel can dedupe accurately later." style="cursor:pointer;font-weight:600;font-size:0.95rem">📚 Label directory</summary>
-          <div id="labeldir-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
-        </details>
-
-        <!-- ── Coverage-boosting sweeps beyond label + genre ───────── -->
-        <details>
-          <summary title="Angles beyond year × genre and per-label sweeps for pushing pre-1970 coverage closer to comprehensive. Each of these is a singleflight worker with a persisted cursor — safe to stop / resume / redeploy through." style="cursor:pointer;font-weight:600;font-size:0.95rem">🕸 Coverage sweeps</summary>
-          <div id="coverage-sweeps-content" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">Loading…</div>
         </details>
       </div>
 
