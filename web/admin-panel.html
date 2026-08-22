@@ -50,7 +50,11 @@
           <button class="admin-refresh-btn" id="overview-kpis-refresh-btn" onclick="_adminClickRefresh(this, loadAdminOverview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="overview-kpis-refresh-status" class="admin-refresh-status"></span>
         </div>
-        <div id="admin-overview-kpis" class="admin-kpi-grid">Loading…</div>
+        <!-- Container is a plain block: loadAdminOverview() fills it with
+             grouped .admin-kpi-groups (each group has its own grid). It must
+             NOT itself be .admin-kpi-grid, or the groups collapse into one
+             narrow grid track. -->
+        <div id="admin-overview-kpis">Loading…</div>
       </div>
 
       <!-- Collection Stats (Overview group) -->
