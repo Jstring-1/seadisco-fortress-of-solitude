@@ -4942,6 +4942,25 @@ function _adminUnifiedFmtDate(v) {
   return `${M}/${D}/${YY} ${h}:${m}${ap}`;
 }
 
+// Relative "time ago" — used for the Last active column so recency reads at a
+// glance. Granularity climbs min → hr → day → mo → yr as it ages.
+function _adminUnifiedRelTime(v) {
+  if (v == null || v === "") return "—";
+  const t = (typeof v === "number") ? v : new Date(v).getTime();
+  if (isNaN(t)) return "—";
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hr ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo} mo ago`;
+  return `${Math.floor(d / 365)} yr ago`;
+}
+
 async function loadAdminUsersUnified(silent) {
   const el = document.getElementById("users-unified-list");
   if (!el) return;
@@ -5124,6 +5143,10 @@ function _adminUnifiedCell(u, col) {
   }
   if (col.type === "lists") {
     return `${Number(u.listCount || 0)} <span style="color:#555;font-size:0.68rem">(${Number(u.listItemCount || 0)})</span>`;
+  }
+  if (col.key === "lastActiveAt") {
+    // Relative "X min ago"; exact timestamp on hover.
+    return `<span title="${escHtml(_adminUnifiedFmtDate(u.lastActiveAt))}">${escHtml(_adminUnifiedRelTime(u.lastActiveAt))}</span>`;
   }
   if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
   if (col.key === "syncStatus") {
