@@ -1022,10 +1022,26 @@ export async function deleteUserData(clerkUserId) {
         "user_archive_saves",
         "user_youtube_saves",
         "user_wiki_saves",
+        "user_chronam_saves",
         "user_play_queue",
+        "user_playlists",
         "user_preferences",
         "saved_searches",
         "feedback",
+        // Activity + personalization tables — these feed the admin users grid
+        // (getUserBehaviorStats / getPersonalSuggestionsStats), so leaving them
+        // behind resurrects a deleted account as a nameless "(no name)" ghost row.
+        "user_search_events",
+        "user_play_events",
+        "user_personal_suggestions",
+        "user_suggestion_dismissals",
+        "user_taste_profile",
+        // Gutenberg + blues archive per-user data.
+        "gutenberg_saved",
+        "gutenberg_bookmarks",
+        "gutenberg_annotations",
+        "blues_lyric_favorites",
+        "blues_setlists",
         "user_order_messages",
         "user_orders",
         "user_list_items",

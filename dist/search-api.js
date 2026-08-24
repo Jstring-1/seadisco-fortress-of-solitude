@@ -16935,19 +16935,27 @@ function startDailySyncSchedule() {
         const cutoff = Date.now() - 30 * 86400000;
         const toMs = (v) => (v == null ? 0 : (Number(v) > 1e12 ? Number(v) : Number(v) * 1000));
         // Collect candidates across all Clerk pages FIRST (offset paging is only
-        // stable while we're not mutating), then delete.
+        // stable while we're not mutating), then delete. Also build the FULL set
+        // of live Clerk ids so we can find orphaned per-user data below. `complete`
+        // tracks whether we saw the whole roster — if any page failed we must NOT
+        // treat missing ids as deleted (that would wipe a live user's data).
         const toDelete = [];
+        const clerkIds = new Set();
+        let complete = true;
         let offset = 0;
         while (true) {
             const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
                 headers: { Authorization: `Bearer ${clerkSecret}` },
             });
-            if (!resp.ok)
+            if (!resp.ok) {
+                complete = false;
                 break;
+            }
             const users = await resp.json();
             if (!users.length)
                 break;
             for (const u of users) {
+                clerkIds.add(u.id);
                 if (connected.has(u.id) || exempt.has(u.id))
                     continue;
                 // Most-recent of last-active / created; skip if we somehow have no
@@ -16973,6 +16981,33 @@ function startDailySyncSchedule() {
                 }
             }
             catch { /* skip, try next */ }
+        }
+        // Orphan sweep: purge leftover per-user data whose owner is neither a live
+        // Clerk account nor a connected user. This cleans "(no name)" ghost rows
+        // in the admin grid left by accounts deleted before deleteUserData covered
+        // the activity tables. Guarded by `complete` so a partial Clerk roster
+        // never causes us to delete a live user's data.
+        if (complete) {
+            try {
+                const ghostQ = await getPool().query(`
+          SELECT DISTINCT clerk_user_id FROM (
+            SELECT clerk_user_id FROM user_search_events
+            UNION SELECT clerk_user_id FROM user_play_events
+            UNION SELECT clerk_user_id FROM user_recent_views
+            UNION SELECT clerk_user_id FROM user_favorites
+            UNION SELECT clerk_user_id FROM user_personal_suggestions
+          ) x WHERE clerk_user_id IS NOT NULL`);
+                for (const row of ghostQ.rows) {
+                    const id = row.clerk_user_id;
+                    if (!id || connected.has(id) || exempt.has(id) || clerkIds.has(id))
+                        continue;
+                    await deleteUserData(id).catch(() => { });
+                    deleted++;
+                }
+            }
+            catch (e) {
+                console.error("[sync-schedule] orphan sweep error:", e);
+            }
         }
         return deleted;
     }
