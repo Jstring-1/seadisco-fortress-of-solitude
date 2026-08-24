@@ -4959,18 +4959,18 @@ const _ADMIN_UNIFIED_COLS = [
   { key: "hasOAuth",                   label: "Linked",          group: "id",          type: "conn", align: "center" },
   { key: "discogsUsername",            label: "Discogs",         group: "sync",        type: "str",  align: "left" },
   { key: "lastActiveAt",               label: "Last active",     group: "meta",        type: "date", align: "left" },
-  { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
-  { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
-  { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
-  { key: "syncStatus",                 label: "Sync",            group: "sync",        type: "str",  align: "left" },
-  { key: "hibernatedAt",               label: "Hib",             group: "sync",        type: "date", align: "left" },
+  { key: "signedUpAt",                 label: "Signed up",       group: "meta",        type: "date", align: "left" },
   { key: "albumClicksTotal",           label: "Clicks 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "albumClicks30d" },
   { key: "playsTotal",                 label: "Plays 30d/tot",   group: "behavior",    type: "num",  align: "right", pair: "plays30d" },
   { key: "searchesTotal",              label: "Search 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "searches30d" },
   { key: "suggestionsCount",           label: "Sugg saved",      group: "suggestions", type: "num",  align: "right" },
   { key: "suggestionsFavorited",       label: "Sugg fav'd",      group: "suggestions", type: "num",  align: "right" },
   { key: "suggestionsLastGeneratedAt", label: "Last gen",        group: "suggestions", type: "date", align: "left" },
-  { key: "signedUpAt",                 label: "Signed up",       group: "meta",        type: "date", align: "left" },
+  { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
+  { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
+  { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
+  { key: "syncStatus",                 label: "Sync",            group: "sync",        type: "str",  align: "left" },
+  { key: "delete",                     label: "",                group: "meta",        type: "delete", align: "center" },
 ];
 const _ADMIN_UNIFIED_GROUPS = [
   { key: "all",         label: "All" },
@@ -5146,14 +5146,8 @@ function _adminUnifiedUserCell(u) {
     : `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--border);margin-right:0.35rem"></span>`;
   const disc = u.discogsUsername ? `<div style="font-size:0.7rem;color:var(--muted)">discogs: ${escHtml(u.discogsUsername)}</div>` : "";
   const id = `<div style="font-size:0.66rem;color:#555;font-family:monospace">${escHtml(u.clerkUserId || "")}</div>`;
-  // Delete affordance — hidden for the current admin's own row (the server
-  // also refuses to delete the admin account). clerkUserId is [A-Za-z0-9_]
-  // only, safe inside the single-quoted onclick.
-  const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
-  const delBtn = (u.clerkUserId && !isSelf)
-    ? `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser('${escHtml(u.clerkUserId)}')" style="float:right;font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`
-    : "";
-  return `<div style="min-width:11rem">${delBtn}${dot}<span style="font-weight:600;color:var(--text)">${escHtml(primary)}</span>${disc}${id}</div>`;
+  // Delete affordance now lives in its own trailing column (type: "delete").
+  return `<div style="min-width:11rem">${dot}<span style="font-weight:600;color:var(--text)">${escHtml(primary)}</span>${disc}${id}</div>`;
 }
 
 function _adminUnifiedCell(u, col) {
@@ -5163,10 +5157,11 @@ function _adminUnifiedCell(u, col) {
       ? `<span style="color:#6fcf87;cursor:help" title="Discogs account connected">✓</span>`
       : `<span style="color:#d0743f;cursor:help" title="Signed up but has NOT connected Discogs — deleted after 30 days of inactivity">✗</span>`;
   }
-  if (col.key === "hibernatedAt") {
-    return u.hibernated
-      ? `<span style="color:#8fa4d8;cursor:help" title="Hibernated ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))} — synced data cleared for the seat; reactivates automatically on next sign-in">💤 ${escHtml(_adminUnifiedFmtDate(u.hibernatedAt))}</span>`
-      : `<span style="color:var(--muted)">—</span>`;
+  if (col.type === "delete") {
+    // Own row can't be deleted (the server also refuses the admin account).
+    const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
+    if (!u.clerkUserId || isSelf) return "";
+    return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser('${escHtml(u.clerkUserId)}')" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
   }
   if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
   if (col.key === "syncStatus") {
@@ -5248,6 +5243,8 @@ function _adminUnifiedRender() {
   rows = _adminUnifiedSortRows(rows);
   const cols = _adminUnifiedVisibleCols();
   const th = (c) => {
+    // Action columns (e.g. the Delete button) aren't sortable — plain header.
+    if (c.type === "delete") return `<th style="padding:0.3rem 0.5rem"></th>`;
     const active = _adminUnifiedSort.col === c.key;
     const arrow = active ? (_adminUnifiedSort.dir === "asc" ? " ↑" : " ↓") : "";
     return `<th style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy('${c.key}')" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
