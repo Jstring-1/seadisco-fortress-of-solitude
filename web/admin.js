@@ -5204,23 +5204,46 @@ function _adminUnifiedRender() {
   }
   rows = _adminUnifiedSortRows(rows);
   const cols = _adminUnifiedVisibleCols();
-  const th = (c) => {
+  // First column (User) is frozen: mark its header + cells .au-sticky-col.
+  const th = (c, i) => {
+    const sticky = i === 0 ? " au-sticky-col" : "";
     // Action columns (e.g. the Delete button) aren't sortable — plain header.
-    if (c.type === "delete") return `<th style="padding:0.3rem 0.5rem"></th>`;
+    if (c.type === "delete") return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem"></th>`;
     const active = _adminUnifiedSort.col === c.key;
     const arrow = active ? (_adminUnifiedSort.dir === "asc" ? " ↑" : " ↓") : "";
-    return `<th style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy('${c.key}')" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
+    return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy('${c.key}')" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
   };
-  const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)"><tr>${cols.map(th).join("")}</tr></thead>`;
+  const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)"><tr>${cols.map((c, i) => th(c, i)).join("")}</tr></thead>`;
   const body = rows.map(u => {
-    const tds = cols.map(c => `<td style="padding:0.3rem 0.5rem;text-align:${c.align};vertical-align:top;white-space:nowrap">${_adminUnifiedCell(u, c)}</td>`).join("");
+    const tds = cols.map((c, i) => `<td class="${i === 0 ? "au-sticky-col" : ""}" style="padding:0.3rem 0.5rem;text-align:${c.align};vertical-align:top;white-space:nowrap">${_adminUnifiedCell(u, c)}</td>`).join("");
     return `<tr style="border-top:1px solid var(--border)">${tds}</tr>`;
   }).join("");
-  el.innerHTML = `<div class="au-scroll" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.78rem">${head}<tbody>${body}</tbody></table></div>
+  // Two horizontal scrollbars kept in sync: a slim one on TOP (so you don't
+  // have to scroll to the bottom of a long table to pan sideways) and the
+  // real one under the table. Both styled wide/visible via .au-scroll CSS.
+  el.innerHTML = `<div class="au-scroll-top"><div class="au-scroll-top-spacer"></div></div>
+    <div class="au-scroll" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.78rem">${head}<tbody>${body}</tbody></table></div>
     <div style="font-size:0.72rem;color:var(--muted);margin-top:0.4rem">${rows.length} user${rows.length === 1 ? "" : "s"}${_adminUnifiedFilter ? ` (filtered from ${_adminUnifiedData.length})` : ""}</div>`;
-  // Reapply the pre-render scroll position to the freshly-built scroller.
+  // Reapply the pre-render scroll position to the freshly-built scroller and
+  // wire the top scrollbar to mirror the table's width + scroll position.
   const _newScroller = el.querySelector(".au-scroll");
-  if (_newScroller) { _newScroller.scrollLeft = _prevLeft; _newScroller.scrollTop = _prevTop; }
+  const _topScroller = el.querySelector(".au-scroll-top");
+  const _spacer = el.querySelector(".au-scroll-top-spacer");
+  if (_newScroller) {
+    if (_spacer) _spacer.style.width = _newScroller.scrollWidth + "px";
+    _newScroller.scrollLeft = _prevLeft;
+    _newScroller.scrollTop = _prevTop;
+    if (_topScroller) {
+      _topScroller.scrollLeft = _prevLeft;
+      let _syncing = false;
+      _newScroller.addEventListener("scroll", () => {
+        if (_syncing) return; _syncing = true; _topScroller.scrollLeft = _newScroller.scrollLeft; _syncing = false;
+      });
+      _topScroller.addEventListener("scroll", () => {
+        if (_syncing) return; _syncing = true; _newScroller.scrollLeft = _topScroller.scrollLeft; _syncing = false;
+      });
+    }
+  }
 }
 
 async function loadAdminBehavior() {

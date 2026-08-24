@@ -6498,6 +6498,49 @@ body.card-mode-covers .card .card-badge {
 .admin-kpi-val   { font-size: 1.4rem; font-weight: 700; color: var(--fg); line-height: 1.05; }
 .admin-kpi-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .admin-kpi-sub   { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; opacity: 0.85; }
+
+/* ── Unified users grid: frozen first column + fat, grabbable scrollbars ── */
+/* A slim mirror scrollbar above the table (spacer width is set in JS to the
+   table's scroll width) so you can pan sideways without scrolling to the
+   table's bottom edge. */
+.au-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-bottom: 0.15rem;
+}
+.au-scroll-top-spacer { height: 1px; }
+/* Both horizontal scrollbars: wide and clearly visible so they're easy to
+   grab (default thin auto-hiding bars are hard to see on a wide table). */
+.au-scroll, .au-scroll-top {
+  scrollbar-width: auto;                 /* Firefox: full-width bar */
+  scrollbar-color: #6b6b6b #202225;      /* thumb / track (Firefox) */
+}
+.au-scroll::-webkit-scrollbar,
+.au-scroll-top::-webkit-scrollbar { height: 14px; }
+.au-scroll::-webkit-scrollbar-track,
+.au-scroll-top::-webkit-scrollbar-track {
+  background: #202225;
+  border-radius: 7px;
+}
+.au-scroll::-webkit-scrollbar-thumb,
+.au-scroll-top::-webkit-scrollbar-thumb {
+  background: #5f636a;
+  border-radius: 7px;
+  border: 3px solid #202225;             /* inset so the thumb reads as a pill */
+}
+.au-scroll::-webkit-scrollbar-thumb:hover,
+.au-scroll-top::-webkit-scrollbar-thumb:hover { background: #808690; }
+/* Freeze the first (User) column so the name stays visible while panning. */
+.au-scroll table td.au-sticky-col,
+.au-scroll table th.au-sticky-col {
+  position: sticky;
+  left: 0;
+  background: #17181b;                    /* opaque so scrolled cells pass behind */
+  box-shadow: 1px 0 0 var(--border);      /* divider against the scrolling body */
+  z-index: 2;
+}
+.au-scroll table thead th.au-sticky-col { z-index: 3; }
+
 /* Active-APIs popup table. */
 .admin-api-tbl { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .admin-api-tbl th, .admin-api-tbl td {
