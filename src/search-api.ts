@@ -8297,11 +8297,12 @@ app.get("/api/admin/behavior-stats", async (req, res) => {
 app.get("/api/admin/users-unified", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const [sync, favCounts, behavior, sugg, clerkUsernames] = await Promise.all([
+    const [sync, favCounts, behavior, sugg, collStats, clerkUsernames] = await Promise.all([
       getAllUsersSyncStatus(),
       getAllFavoriteCounts(),
       getUserBehaviorStats(),
       getPersonalSuggestionsStats(),
+      getUserCollectionStats(),
       _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
     ]);
 
@@ -8396,6 +8397,22 @@ app.get("/api/admin/users-unified", async (req, res) => {
       r.suggestionsLastGeneratedAt = s.lastGeneratedAt ?? null;
     }
 
+    // Per-user collection stats (counts + taste), merged in from what used to
+    // be the standalone Collection Stats panel. Keyed by clerk_user_id.
+    for (const cs of (collStats?.users ?? []) as any[]) {
+      const r = get(cs.clerk_user_id);
+      r.collectionCount = cs.collection_count ?? 0;
+      r.wantlistCount   = cs.wantlist_count ?? 0;
+      r.inventoryCount  = cs.inventory_count ?? 0;
+      r.ordersCount     = cs.orders_count ?? 0;
+      r.listCount       = cs.list_count ?? 0;
+      r.listItemCount   = cs.list_item_count ?? 0;
+      r.collOldest      = cs.coll_oldest ?? null;
+      r.collNewest      = cs.coll_newest ?? null;
+      r.topGenres       = cs.top_genres ?? null;
+      r.topStyles       = cs.top_styles ?? null;
+    }
+
     // Stamp the display name last so every row (whatever it came from)
     // gets the canonical Clerk username.
     for (const [id, r] of rows) {
@@ -8408,7 +8425,8 @@ app.get("/api/admin/users-unified", async (req, res) => {
       // Fill zeros for metric fields a partial row never set, so the
       // client can sort numerically without null-guarding every cell.
       for (const k of ["favoriteCount","albumClicksTotal","albumClicks30d","playsTotal","plays30d",
-                        "searchesTotal","searches30d","suggestionsFavorited","suggestionsCount"]) {
+                        "searchesTotal","searches30d","suggestionsFavorited","suggestionsCount",
+                        "collectionCount","wantlistCount","inventoryCount","ordersCount","listCount","listItemCount"]) {
         if (r[k] == null) r[k] = 0;
       }
     }

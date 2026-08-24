@@ -3501,6 +3501,9 @@ export async function getAdminOverview() {
       (SELECT COUNT(*)::int FROM user_tokens WHERE hibernated_at IS NOT NULL) AS hibernated,
       (SELECT COUNT(*)::bigint FROM user_collection) AS collection_items,
       (SELECT COUNT(*)::bigint FROM user_wantlist)   AS wantlist_items,
+      (SELECT COUNT(*)::bigint FROM user_inventory)  AS inventory_items,
+      (SELECT COUNT(*)::bigint FROM user_orders)     AS orders_total,
+      (SELECT COUNT(*)::bigint FROM user_list_items) AS list_items,
       (SELECT COUNT(*)::bigint FROM user_play_events)   AS plays_all,
       (SELECT COUNT(*)::bigint FROM user_search_events) AS searches_all
   `);
@@ -3517,6 +3520,9 @@ export async function getAdminOverview() {
         // bigint comes back as a string from pg — coerce to Number for the UI.
         collectionItems: Number(x.collection_items ?? 0),
         wantlistItems: Number(x.wantlist_items ?? 0),
+        inventoryItems: Number(x.inventory_items ?? 0),
+        ordersTotal: Number(x.orders_total ?? 0),
+        listItems: Number(x.list_items ?? 0),
         playsAllTime: Number(x.plays_all ?? 0),
         searchesAllTime: Number(x.searches_all ?? 0),
     };

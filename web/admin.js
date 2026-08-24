@@ -100,12 +100,12 @@ async function _adminWithRefresh(btn, statusEl, work) {
 // only the grouping/orchestration changed.
 const _adminGroups = {
   'overview': {
-    // Overview + Users merged into one tab. The grouped KPI dashboard now
-    // covers the People metrics that used to live in a separate Users box,
-    // so only the dashboard, collection stats, and the per-user table
-    // remain. Media moved to its own tab.
-    panels: ['panel-overview-kpis', 'panel-users-unified', 'panel-collection-stats'],
-    load: () => { loadAdminOverview(); loadAdminUsersUnified(); loadCollectionStats(); },
+    // Overview + Users merged into one tab: the grouped KPI dashboard (site
+    // totals) plus the unified per-user table (which now also carries the
+    // per-user collection counts + taste that used to be a Collection Stats
+    // panel). Media moved to its own tab.
+    panels: ['panel-overview-kpis', 'panel-users-unified'],
+    load: () => { loadAdminOverview(); loadAdminUsersUnified(); },
   },
   'media': {
     panels: ['panel-media-stats'],
@@ -4320,6 +4320,9 @@ async function loadAdminOverview() {
     const library = _kpiGroup("Library & totals", "📚", "kpi-library", [
       _kpiCard("Collection items", nf(d.collectionItems), "rows cached", "Total collection rows cached across every user's synced Discogs collection.", "📀"),
       _kpiCard("Wantlist items", nf(d.wantlistItems), "rows cached", "Total wantlist rows cached across every user's synced Discogs wantlist.", "⭐"),
+      _kpiCard("Inventory items", nf(d.inventoryItems), "rows cached", "Total marketplace inventory (listings) cached across all users.", "🏷️"),
+      _kpiCard("Seller orders", nf(d.ordersTotal), "rows cached", "Total seller orders cached across all users.", "📦"),
+      _kpiCard("List items", nf(d.listItems), "rows cached", "Total items across every user's synced Discogs lists.", "🗂️"),
       _kpiCard("Plays all-time", nf(d.playsAllTime), "since launch", "Every track play ever logged, across all users and sources.", "▶️"),
       _kpiCard("Searches all-time", nf(d.searchesAllTime), "since launch", "Every search ever logged, across all users.", "🔍"),
     ]);
@@ -4403,74 +4406,8 @@ async function loadAdminMediaStats() {
   }
 }
 
-// ── Collection Stats ──────────────────────────────────────────────────
-async function loadCollectionStats() {
-  const el = document.getElementById("collection-stats");
-  try {
-    const data = await apiFetch("/api/admin/collection-stats").then(r => r.json());
-    if (data.error) { el.textContent = "Could not load."; return; }
-
-    const g = data.global;
-    const globalHtml = `<div style="display:flex;flex-wrap:wrap;gap:0.8rem 2rem;margin-bottom:1rem;font-size:0.82rem">
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_collection ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total collection items</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_wantlist ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total wantlist items</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_inventory ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">inventory items</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_orders ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">seller orders</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_list_items ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">list items</span></div>
-      <div><span style="color:var(--text);font-weight:600">${(g.unique_releases ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique releases</span></div>
-      <div><span style="color:var(--text);font-weight:600">${(g.unique_wants ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique wants</span></div>
-    </div>`;
-
-    const fmtDate = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
-    const users = data.users ?? [];
-
-    // Table 1: per-user counts (collection / wantlist / inventory / orders / lists)
-    const countRows = users.map(u => `<tr>
-      <td style="color:var(--text);font-weight:600;white-space:nowrap">@${u.username}</td>
-      <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
-      <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
-      <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
-      <td style="text-align:right">${(u.orders_count ?? 0).toLocaleString()}</td>
-      <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()} <span style="color:#555;font-size:0.68rem">(${(u.list_item_count ?? 0).toLocaleString()})</span></td>
-    </tr>`).join("");
-
-    // Table 2: per-user taste (date range / top genres / top styles). More horizontal room.
-    const tasteRows = users.map(u => {
-      const genres = (u.top_genres ?? []).slice(0, 6).join(", ");
-      const styles = (u.top_styles ?? []).slice(0, 6).join(", ");
-      return `<tr>
-        <td style="color:var(--text);font-weight:600;white-space:nowrap">@${u.username}</td>
-        <td style="white-space:nowrap">${fmtDate(u.coll_oldest)} \u2013 ${fmtDate(u.coll_newest)}</td>
-        <td style="font-size:0.74rem;color:#9a8a70" title="${genres}">${genres || "\u2014"}</td>
-        <td style="font-size:0.74rem;color:#9a8a70" title="${styles}">${styles || "\u2014"}</td>
-      </tr>`;
-    }).join("");
-
-    el.innerHTML = globalHtml + `
-      <div style="font-size:0.7rem;color:#8a7d6b;text-transform:uppercase;letter-spacing:0.05em;margin:0.4rem 0 0.3rem">Per-user counts</div>
-      <table class="api-log-table admin-stats-counts" style="font-size:0.78rem">
-        <thead><tr>
-          <th>User</th>
-          <th style="text-align:right">Collection</th>
-          <th style="text-align:right">Wantlist</th>
-          <th style="text-align:right">Inventory</th>
-          <th style="text-align:right">Orders</th>
-          <th style="text-align:right">Lists</th>
-        </tr></thead>
-        <tbody>${countRows}</tbody>
-      </table>
-      <div style="font-size:0.7rem;color:#8a7d6b;text-transform:uppercase;letter-spacing:0.05em;margin:1rem 0 0.3rem">Per-user taste</div>
-      <table class="api-log-table admin-stats-taste" style="font-size:0.78rem">
-        <thead><tr>
-          <th>User</th>
-          <th>Date Range</th>
-          <th>Top Genres</th>
-          <th>Top Styles</th>
-        </tr></thead>
-        <tbody>${tasteRows}</tbody>
-      </table>`;
-  } catch { el.textContent = "Could not load collection stats."; }
-}
+// Collection Stats panel removed — per-user counts + taste now live as columns
+// in the unified users grid; the global totals are Overview "Library" cards.
 
 // Standalone /admin only. shared.js is deferred there, so wait for
 // DOMContentLoaded before calling initAuth (which lives in shared.js).
@@ -4965,7 +4902,15 @@ const _ADMIN_UNIFIED_COLS = [
   { key: "searchesTotal",              label: "Search 30d/tot",  group: "behavior",    type: "num",  align: "right", pair: "searches30d" },
   { key: "suggestionsCount",           label: "Sugg saved",      group: "suggestions", type: "num",  align: "right" },
   { key: "suggestionsFavorited",       label: "Sugg fav'd",      group: "suggestions", type: "num",  align: "right" },
+  { key: "collDateRange",              label: "Coll range",      group: "taste",       type: "range", align: "left" },
+  { key: "topGenres",                  label: "Top genres",      group: "taste",       type: "list", align: "left" },
+  { key: "topStyles",                  label: "Top styles",      group: "taste",       type: "list", align: "left" },
   { key: "suggestionsLastGeneratedAt", label: "Last gen",        group: "suggestions", type: "date", align: "left" },
+  { key: "collectionCount",            label: "Collection",      group: "sync",        type: "num",  align: "right" },
+  { key: "wantlistCount",              label: "Wantlist",        group: "sync",        type: "num",  align: "right" },
+  { key: "inventoryCount",             label: "Inventory",       group: "sync",        type: "num",  align: "right" },
+  { key: "ordersCount",                label: "Orders",          group: "sync",        type: "num",  align: "right" },
+  { key: "listCount",                  label: "Lists",           group: "sync",        type: "lists", align: "right" },
   { key: "favoriteCount",              label: "Favs",            group: "sync",        type: "num",  align: "right" },
   { key: "collectionSyncedAt",         label: "Coll synced",     group: "sync",        type: "date", align: "left" },
   { key: "wantlistSyncedAt",           label: "Want synced",     group: "sync",        type: "date", align: "left" },
@@ -4977,6 +4922,7 @@ const _ADMIN_UNIFIED_GROUPS = [
   { key: "sync",        label: "Sync" },
   { key: "behavior",    label: "Behavior" },
   { key: "suggestions", label: "Suggestions" },
+  { key: "taste",       label: "Taste" },
 ];
 
 function _adminUnifiedVisibleCols() {
@@ -5125,6 +5071,9 @@ function _adminUnifiedSortRows(rows) {
     let v = row[key];
     if (type === "num") return (v == null || v === "") ? null : Number(v);
     if (type === "conn") return v ? 1 : 0;
+    if (type === "lists") return Number(row.listCount || 0);
+    if (type === "range") { const t = new Date(row.collNewest).getTime(); return isNaN(t) ? null : t; }
+    if (type === "list") { const a = row[key]; return (Array.isArray(a) && a.length) ? a.join(", ").toLowerCase() : null; }
     if (type === "date") { if (v == null || v === "") return null; const t = new Date(v).getTime(); return isNaN(t) ? null : t; }
     return (v == null || v === "") ? null : String(v).toLowerCase();
   };
@@ -5134,7 +5083,7 @@ function _adminUnifiedSortRows(rows) {
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
-    if (type === "str") return av.localeCompare(bv) * mul;
+    if (type === "str" || type === "list") return av.localeCompare(bv) * mul;
     return (av - bv) * mul;
   });
 }
@@ -5162,6 +5111,19 @@ function _adminUnifiedCell(u, col) {
     const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
     if (!u.clerkUserId || isSelf) return "";
     return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser('${escHtml(u.clerkUserId)}')" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
+  }
+  if (col.type === "range") {
+    const f = v => { if (!v) return null; const dt = new Date(v); return isNaN(dt.getTime()) ? null : dt.toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+    const o = f(u.collOldest), n = f(u.collNewest);
+    return (o || n) ? `<span style="white-space:nowrap">${escHtml(o || "—")} – ${escHtml(n || "—")}</span>` : `<span style="color:var(--muted)">—</span>`;
+  }
+  if (col.type === "list") {
+    const arr = Array.isArray(u[col.key]) ? u[col.key] : [];
+    if (!arr.length) return `<span style="color:var(--muted)">—</span>`;
+    return `<span style="font-size:0.74rem;color:#9a8a70" title="${escHtml(arr.join(", "))}">${escHtml(arr.slice(0, 6).join(", "))}</span>`;
+  }
+  if (col.type === "lists") {
+    return `${Number(u.listCount || 0)} <span style="color:#555;font-size:0.68rem">(${Number(u.listItemCount || 0)})</span>`;
   }
   if (col.type === "date") return _adminUnifiedFmtDate(u[col.key]);
   if (col.key === "syncStatus") {
