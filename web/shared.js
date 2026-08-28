@@ -2213,16 +2213,62 @@ function renderSharedFooter(opts) {
 // returns the ones currently open.
 window._sdPopupZBase = 380;
 window._sdPopupZTop  = 380;
-window._SD_STACK_SELECTOR = "#ba-lyric-public-overlay, #ba-lyric-overlay, .lookup-popup";
+// Every stacking-managed popup. The static overlays (album, version, series,
+// bio, wiki, chronam, LOC, archive, Gutenberg reader) live in index.html and
+// toggle a .open class; the lyric viewer + entity-lookup menu are created on
+// the fly. All get the next z-index in the 380–398 band (above the album/
+// version/series modals at 350–370, below the docked mini-player at 400) so a
+// newly opened popup ALWAYS lands on top of whatever's already up.
+// Deliberately excluded: #youtube-popup-overlay (z 1100) and #lightbox-overlay
+// (z 9000) are meant to sit above everything and never land behind anything.
+window._SD_STACK_SELECTOR = [
+  "#modal-overlay", "#version-overlay", "#series-overlay", "#bio-full-overlay",
+  "#wiki-overlay", "#chronam-popup-overlay", "#loc-popup-overlay",
+  "#archive-popup-overlay", "#gutenberg-reader-overlay",
+  "#ba-lyric-public-overlay", "#ba-lyric-overlay", ".lookup-popup",
+].join(", ");
 window._sdBringToFront = function (el) {
   if (!el) return;
   try {
+    // Count only popups that are actually showing. The static overlays are
+    // always in the DOM (hidden until .open → display:flex), so a bare
+    // querySelectorAll would never see "none open" and the band would never
+    // reset. getComputedStyle catches both the .open overlays and the
+    // dynamically-inserted popups.
+    const showing = n => { try { return getComputedStyle(n).display !== "none"; } catch { return false; } };
     const openOthers = Array.from(document.querySelectorAll(window._SD_STACK_SELECTOR))
-      .filter(n => n !== el);
+      .filter(n => n !== el && showing(n));
     if (!openOthers.length || window._sdPopupZTop > 398) window._sdPopupZTop = window._sdPopupZBase;
     el.style.zIndex = String(window._sdPopupZTop++);
   } catch {}
 };
+
+// Auto-raise: watch each static overlay and bring it to the front the instant
+// it OPENS (the .open class transitions from absent to present), no matter
+// which code path opened it. This is the safety net that guarantees a new
+// content/source popup never renders behind an already-open modal. Guarding on
+// the transition (not every class change) avoids spurious re-raises when an
+// overlay toggles unrelated classes (loading states, etc.) while already open.
+(function _sdWireStackObserver() {
+  const ids = ["modal-overlay", "version-overlay", "series-overlay", "bio-full-overlay",
+    "wiki-overlay", "chronam-popup-overlay", "loc-popup-overlay", "archive-popup-overlay",
+    "gutenberg-reader-overlay"];
+  const wire = () => {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el || el._sdStackWired) return;
+      el._sdStackWired = true;
+      let wasOpen = el.classList.contains("open");
+      new MutationObserver(() => {
+        const isOpen = el.classList.contains("open");
+        if (isOpen && !wasOpen) window._sdBringToFront(el);
+        wasOpen = isOpen;
+      }).observe(el, { attributes: true, attributeFilter: ["class"] });
+    });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
+  else wire();
+})();
 
 // ── Unified entity-lookup popup ──────────────────────────────────────────
 // One small floating menu replaces the cluster of W / 🏛 / 📺 icons that
