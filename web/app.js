@@ -759,6 +759,10 @@ async function applyAuthState(clerk) {
     await loadDiscogsIds();                   // calls loadRandomRecords inside
     // Nudge signed-in users who haven't connected Discogs — once per session.
     _sdMaybePromptConnectDiscogs();
+    // Pull the server-side Recent history now that a user is confirmed —
+    // covers sign-in mid-session and slow Clerk loads that the page-load
+    // timer in search.js would otherwise miss for the whole session.
+    if (typeof _hydrateHistoryFromServer === "function") _hydrateHistoryFromServer();
   } else {
     // Signed-out: resolve the IDs promise immediately so URL modals don't wait
     if (window._resolveDiscogsIds) window._resolveDiscogsIds();

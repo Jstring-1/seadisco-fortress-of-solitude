@@ -96,7 +96,7 @@ window._sdToggleHideNoYear = _sdToggleHideNoYear;
 window._sdApplyHideNoYear = _sdApplyHideNoYear;
 
 // ── URL state helpers ────────────────────────────────────────────────────
-function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
+function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page, extra) {
   const p = new URLSearchParams();
   if (q)          p.set("q", q);
   if (artistRaw)  p.set("a", artistRaw);
@@ -104,11 +104,16 @@ function pushSearchState(q, artistRaw, release, year, label, genre, sort, result
   if (year)       p.set("y", year);
   if (label)      p.set("l", label);
   if (genre)      p.set("g", genre);
-  const style  = document.getElementById("f-style")?.value ?? "";
-  const format = document.getElementById("f-format")?.value ?? "";
-  if (style)      p.set("t", style);
-  if (format) p.set("f", format);
-  const country = document.getElementById("f-country")?.value ?? "";
+  // Style / format / country come from the caller — the values the search
+  // actually USED, which are "" when the Advanced panel is collapsed — not
+  // from the live DOM. Previously the URL carried t=/f=/c= filters that
+  // never shaped the visible results, so reload / Back replayed a narrower
+  // search. DOM fallback kept for any legacy caller without `extra`.
+  const style   = extra ? (extra.style   ?? "") : (document.getElementById("f-style")?.value   ?? "");
+  const format  = extra ? (extra.format  ?? "") : (document.getElementById("f-format")?.value  ?? "");
+  const country = extra ? (extra.country ?? "") : (document.getElementById("f-country")?.value ?? "");
+  if (style)   p.set("t", style);
+  if (format)  p.set("f", format);
   if (country) p.set("c", country);
   if (sort)       p.set("s", sort);
   if (resultType) p.set("r", resultType);
@@ -119,6 +124,15 @@ function pushSearchState(q, artistRaw, release, year, label, genre, sort, result
   if (typeof window.currentBarcode === "string" && window.currentBarcode) {
     p.set("bc", window.currentBarcode);
   }
+  // Pinned Discogs artist / label IDs (set by the lookup popup or an alt-
+  // artist click) decide whether doSearch routes through the exact
+  // /artist-releases or /label-releases endpoints. Persist them so reload
+  // and back/forward replay the SAME search instead of a broader substring
+  // match. restoreFromParams restores them (and clears them when absent).
+  const ai = extra ? extra.artistId : window.currentArtistId;
+  const li = extra ? extra.labelId  : window.currentLabelId;
+  if (ai) p.set("ai", String(ai));
+  if (li) p.set("li", String(li));
   history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
 }
 
@@ -145,6 +159,14 @@ function restoreFromParams(p) {
   // window.currentBarcode and threads it through to /search?barcode=.
   const bcParam = (p.get("bc") || "").replace(/[^0-9]/g, "");
   try { window.currentBarcode = bcParam || null; } catch {}
+  // Restore (or explicitly CLEAR) the pinned artist / label IDs so every
+  // restore has a deterministic pin state. Without this, Back after an
+  // alt-artist click kept a stale window.currentArtistId and replayed the
+  // exact by-id search for the wrong artist (or vice-versa).
+  const aiParam = (p.get("ai") || "").replace(/[^0-9]/g, "");
+  const liParam = (p.get("li") || "").replace(/[^0-9]/g, "");
+  try { window.currentArtistId = aiParam || null; } catch {}
+  try { window.currentLabelId  = liParam || null; } catch {}
   // Reveal the panel whenever any advanced field ended up populated.
   _sdSyncAdvancedPanel();
 }
@@ -236,40 +258,73 @@ function _sdRunBarcodeSearch(barcode) {
 }
 window._sdRunBarcodeSearch = _sdRunBarcodeSearch;
 
-async function doSearch(page = 1, skipPushState = false) {
+// Main-search paging state, owned by search.js. `currentPage` / `totalPages`
+// in utils.js are ALSO written by the collection / wantlist / inventory
+// loaders, so visiting My Records used to clobber the search's counters
+// (Load more then skipped Discogs pages or vanished). `ctx` is the snapshot
+// of the inputs that produced the current grid — Load more replays it.
+window._sdSearch = { page: 1, totalPages: 1, ctx: null };
+
+// Read every search input off the live form, applying the Hard-to-Find
+// defaults. Returned as one object so a page-1 search can snapshot it and
+// Load more can replay the exact same query later.
+function _sdReadSearchInputs() {
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
-  const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
   // Pass the artist filter through verbatim — the Discogs disambiguator
   // "(N)" is meaningful and dropping it merges results with other artists
-  // who share the base name. Both `artist` and `artistRaw` now refer to
-  // the same value; the second name is preserved for downstream readers.
-  const artist    = artistRaw;
+  // who share the base name.
+  const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
   const release   = advOpen ? document.getElementById("f-release").value.trim() : "";
   const year      = advOpen ? document.getElementById("f-year").value.trim() : "";
   const label     = advOpen ? document.getElementById("f-label").value.trim() : "";
   const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
   const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
-  let format      = advOpen ? document.getElementById("f-format").value : "";
+  const formatRaw = advOpen ? document.getElementById("f-format").value : "";
   const country   = advOpen ? (document.getElementById("f-country")?.value.trim() ?? "") : "";
-  let sort        = document.getElementById("f-sort").value;
+  const sortRaw   = document.getElementById("f-sort").value;
   // "Hard to Find" mode — biases the query toward physical-format,
   // pre-streaming-era masters that are likely to need YT contributions.
   // Only fills in defaults the user hasn't explicitly set; an explicit
   // Format / Year / Sort always wins.
   const hard2find = (typeof _sdHard2FindActive === "function") ? _sdHard2FindActive()
     : (document.getElementById("f-hard2find")?.getAttribute("aria-pressed") === "true");
-  let yearForSearch = year;
+  let format = formatRaw, sort = sortRaw, yearForSearch = year;
   if (hard2find) {
     if (!format) format = "Vinyl";
     if (!yearForSearch) yearForSearch = "1900-1985";
     if (!sort) sort = "have:asc";
   }
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
-
   // Barcode counts as "search term" for the empty-form guard so a
   // pure barcode lookup doesn't bounce off the missing-fields check.
   const barcode = (typeof window.currentBarcode === "string" && window.currentBarcode) ? window.currentBarcode : "";
+  // Pinned Discogs IDs (lookup popup / alt-artist click) route the search
+  // through the exact by-id endpoints. Snapshotted so Load more keeps
+  // using the same pin even if the user has since cleared it.
+  const artistId = window.currentArtistId || null;
+  const labelId  = window.currentLabelId  || null;
+  return { q, artistRaw, artist: artistRaw, release, year, label, genre, style, formatRaw, format,
+           country, sortRaw, sort, hard2find, yearForSearch, resultType, barcode, artistId, labelId };
+}
+
+async function doSearch(page = 1, skipPushState = false) {
+  // Load more (page > 1) replays the snapshot of the search that produced
+  // the grid instead of re-reading the live form, so editing a field or
+  // flipping Sort / result type / Hard-to-Find between pages can't append
+  // a DIFFERENT query's results under the old cards. Page 1 always reads
+  // the form. A cold `?p=N` restore has no snapshot and falls back to the
+  // form, same as before.
+  const _fromCtx = page > 1 && !!window._sdSearch.ctx;
+  const inp = _fromCtx ? window._sdSearch.ctx : _sdReadSearchInputs();
+  const { q, artistRaw, artist, release, year, label, genre, style, formatRaw, country,
+          hard2find, yearForSearch, resultType, barcode } = inp;
+  const format = inp.format, sort = inp.sort;
+  const pinArtistId = inp.artistId, pinLabelId = inp.labelId;
+  // The artist detected from page 1's bio lookup, used to constrain later
+  // pages. From the snapshot when replaying, so a superseded search's
+  // global can't leak into this query's paging.
+  const detArtistForPaging = _fromCtx ? (inp.detectedArtist ?? null) : detectedArtist;
   if (!q && !artist && !release && !year && !label && !genre && !country && !barcode) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
@@ -280,7 +335,9 @@ async function doSearch(page = 1, skipPushState = false) {
   // touches the DOM.
   const _seq = ++_searchSeq;
 
-  if (page === 1) saveSearchHistory("main");
+  // Field-history save is best-effort: a storage failure (Safari private
+  // mode, quota exceeded) must never abort the search itself.
+  if (page === 1) { try { saveSearchHistory("main"); } catch { /* ignore */ } }
 
   // Only switch view on first page — pagination should not reset the view/form
   if (page === 1) {
@@ -290,12 +347,18 @@ async function doSearch(page = 1, skipPushState = false) {
     const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   }
 
-  if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
+  // Hand pushSearchState the values the search actually USED (style/format/
+  // country are "" when the Advanced panel is collapsed) plus the pinned
+  // IDs, instead of letting it re-read the live DOM.
+  if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page,
+    { style, format: formatRaw, country, artistId: pinArtistId, labelId: pinLabelId });
 
   if (page === 1) { detectedArtist = null; }
 
   const _append = page > 1;
-  currentPage = page;
+  // NOTE: the page counter is committed to window._sdSearch only after this
+  // result is confirmed live (past the _seq guard), so a failed or
+  // superseded Load more can't advance it — see the commit below.
   document.getElementById("search-btn").disabled = true;
   document.getElementById("search-load-more").style.display = "none";
   if (!_append) {
@@ -326,9 +389,9 @@ async function doSearch(page = 1, skipPushState = false) {
   }
 
   const buildParams = (perPage) => {
-    const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
+    const effectiveArtist = artist || (page > 1 ? detArtistForPaging : null) || "";
     const p = new URLSearchParams({ page, per_page: perPage });
-    let effectiveQ = q || (page > 1 && detectedArtist && !artist ? detectedArtist : "");
+    let effectiveQ = q || (page > 1 && detArtistForPaging && !artist ? detArtistForPaging : "");
     // When searching for label/artist entities, Discogs needs the name in `q`, not the field filter
     // (the `artist`/`label` params filter releases BY that artist/label, not search for entities)
     let useArtist = effectiveArtist;
@@ -359,7 +422,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (page === 1) {
       if (artistRaw) {
         const bioUrl = `${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`
-                     + (window.currentArtistId ? `&id=${window.currentArtistId}` : "");
+                     + (pinArtistId ? `&id=${pinArtistId}` : "");
         bioFetch = apiFetch(bioUrl).catch(() => null);
       } else if (label) {
         bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`).catch(() => null);
@@ -376,10 +439,10 @@ async function doSearch(page = 1, skipPushState = false) {
     // from "John Lee Hooker", but /artists/:id/releases is exact by
     // construction. This guarantees the user only sees releases by
     // the specific artist they clicked.
-    const useArtistById = !!(window.currentArtistId && artist && !q && !release && !year && !label && !genre && !style && !format && !country);
+    const useArtistById = !!(pinArtistId && artist && !q && !release && !year && !label && !genre && !style && !format && !country);
     const buildArtistByIdParams = (perPage, type) => {
       const p = new URLSearchParams({
-        id: String(window.currentArtistId),
+        id: String(pinArtistId),
         page: String(page),
         per_page: String(perPage),
       });
@@ -403,10 +466,10 @@ async function doSearch(page = 1, skipPushState = false) {
     // International" etc. /labels/:id/releases only returns
     // releases (no masters), so master+ collapses to release-only
     // when this route is taken.
-    const useLabelById = !!(window.currentLabelId && label && !q && !artist && !release && !year && !genre && !style && !format && !country);
+    const useLabelById = !!(pinLabelId && label && !q && !artist && !release && !year && !genre && !style && !format && !country);
     const buildLabelByIdParams = (perPage) => {
       const p = new URLSearchParams({
-        id: String(window.currentLabelId),
+        id: String(pinLabelId),
         page: String(page),
         per_page: String(perPage),
       });
@@ -578,7 +641,8 @@ async function doSearch(page = 1, skipPushState = false) {
     // never reads lower than what's on screen.
     const rawReported = data.pagination?.items ?? items.length;
     totalItems_new = Math.max(rawReported, items.length);
-    totalPages = totalPages_new;
+    // totalPages_new stays local until the _seq guard confirms this result
+    // is live — a superseded search must not overwrite the newer one's count.
 
     const blurbEl = document.getElementById("blurb");
     if (page === 1) {
@@ -599,6 +663,13 @@ async function doSearch(page = 1, skipPushState = false) {
         const popupEl = document.getElementById("alts-popup");
         popupEl.innerHTML = `<h4>Other artists</h4>` +
           alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} onclick="selectAltArtist(event,this);closeAltsPopup()">${escHtml(a.name)}</a>`).join("");
+        // Surface the disambiguation UI. The popup used to be filled but
+        // nothing on the page ever opened it, so same-named artists were
+        // unreachable and a search for the wrong "John Lee" was a dead end.
+        const n = alts.length;
+        document.getElementById("artist-alts").innerHTML =
+          `<div class="artist-alts-hint" style="font-size:0.8rem;color:var(--muted);margin:0.2rem 0 0.4rem">Not the right artist? ` +
+          `<a href="#" onclick="openAltsPopup(event)" style="color:var(--accent)">${n} other artist${n === 1 ? "" : "s"} with this name</a></div>`;
       } else {
         document.getElementById("alts-popup").innerHTML = "<h4>Other artists</h4>";
       }
@@ -645,7 +716,7 @@ async function doSearch(page = 1, skipPushState = false) {
               if (sort) _sortMerged(merged, sort);
               if (merged.length > 0) {
                 items = merged;
-                totalPages = Math.max(mD.pagination?.pages ?? 1, rD.pagination?.pages ?? 1);
+                totalPages_new = Math.max(mD.pagination?.pages ?? 1, rD.pagination?.pages ?? 1);
                 totalItems_new = (mD.pagination?.items ?? 0) + uniqueOrphans.length;
               }
             }
@@ -661,7 +732,7 @@ async function doSearch(page = 1, skipPushState = false) {
               const cd = await cr.json();
               if ((cd.results ?? []).length > 0) {
                 items = cd.results;
-                totalPages = cd.pagination?.pages ?? totalPages;
+                totalPages_new = cd.pagination?.pages ?? totalPages_new;
                 totalItems_new = cd.pagination?.items ?? totalItems_new;
               }
             }
@@ -791,6 +862,16 @@ async function doSearch(page = 1, skipPushState = false) {
     // a stale "load more", appending old cards onto a new search).
     if (_seq !== _searchSeq) return;
 
+    // Commit paging state + the input snapshot only now that this result
+    // is confirmed live: a superseded or failed request never advances the
+    // page or overwrites the newer search's page count. Snapshot on EVERY
+    // success (not just page 1) so a cold `?p=N` restore also gets a ctx
+    // for its next Load more. detectedArtist rides along from the
+    // snapshot when replaying, from the fresh lookup otherwise.
+    window._sdSearch.page = page;
+    window._sdSearch.totalPages = totalPages_new;
+    window._sdSearch.ctx = { ...inp, detectedArtist: _fromCtx ? (inp.detectedArtist ?? null) : detectedArtist };
+
     if (_resortAll) {
       // Full replace: renderResults(append=false) resets _lastResults to
       // the freshly-sorted union and re-indexes the cards from zero.
@@ -856,11 +937,15 @@ async function doSearch(page = 1, skipPushState = false) {
     if (_seq !== _searchSeq) return;
     setStatus("");
     if (_append) {
-      // Load-more failure: keep existing results, reset the button, hide "load more"
+      // Load-more failure: keep the existing results and KEEP the button so
+      // a transient error (timeout, 502, network blip) is retryable. The page
+      // counter wasn't advanced (it commits only on success), so the retry
+      // re-requests the same page. Only the genuine empty-page path above
+      // hides the button for good.
       const lmBtn = document.getElementById("search-load-more-btn");
-      if (lmBtn) { lmBtn.classList.remove("loading"); lmBtn.textContent = "Load more results"; }
-      document.getElementById("search-load-more").style.display = "none";
-      showToast("Couldn't load more results — you may have reached the end", "info", 4000);
+      if (lmBtn) { lmBtn.classList.remove("loading"); lmBtn.textContent = "Retry loading more"; }
+      document.getElementById("search-load-more").style.display = "";
+      showToast("Couldn't load more results — tap to retry", "info", 4000);
     } else {
       document.getElementById("results").innerHTML =
         `<div class="empty-state"><div class="empty-state-icon">⚠️</div>` +
@@ -1672,12 +1757,14 @@ function showCardNotes(event, releaseId) {
 
 // ── Load More ─────────────────────────────────────────────────────────
 function loadMoreResults() {
-  doSearch(currentPage + 1, true);
+  // Search-owned counter (not the shared currentPage the records views
+  // also write). doSearch replays window._sdSearch.ctx for page > 1.
+  doSearch(window._sdSearch.page + 1, true);
 }
 
 function renderPagination() {
   const el = document.getElementById("search-load-more");
-  if (currentPage >= totalPages) { el.style.display = "none"; return; }
+  if (window._sdSearch.page >= window._sdSearch.totalPages) { el.style.display = "none"; return; }
   el.style.display = "";
   const btn = document.getElementById("search-load-more-btn");
   btn.classList.remove("loading");
@@ -1990,8 +2077,16 @@ function _writeHistory(arr) {
 // hit localStorage directly. Safe to call when signed out — just no-ops.
 async function _hydrateHistoryFromServer() {
   if (_historyHydrated) return;
-  _historyHydrated = true;
+  // Wait for Clerk to actually resolve before deciding whether there's a
+  // user. Previously the once-flag was set BEFORE the user check, so on any
+  // load where Clerk took longer than the 600 ms load-timeout (third-party
+  // script, mobile, cold cache) this bailed out and could never run again
+  // for the whole session — signed-in users got only this browser's local
+  // history. Only mark hydrated once a user is confirmed.
+  try { if (window.authReadyPromise) await window.authReadyPromise; } catch { /* proceed */ }
   if (!window._clerk?.user || typeof apiFetch !== "function") return;
+  if (_historyHydrated) return; // a concurrent caller got here first
+  _historyHydrated = true;
   try {
     const r = await apiFetch("/api/user/recent?limit=576");
     if (!r.ok) return;
@@ -2698,9 +2793,14 @@ const _SH_KEY = "sd_search_history";
 const _SH_MAX = 50; // max entries per field
 let _shData = {};
 _shData = getStorageJSON(_SH_KEY, {});
+// Corrupted / foreign storage must not be able to throw later in the input
+// handlers — coerce anything that isn't a plain object back to empty.
+if (!_shData || typeof _shData !== "object" || Array.isArray(_shData)) _shData = {};
 let _shActiveField = null;
 
-function _shSave() { localStorage.setItem(_SH_KEY, JSON.stringify(_shData)); }
+// setStorageJSON swallows QuotaExceeded / disabled-storage errors (Safari
+// private mode) — a failed history save must never propagate into doSearch.
+function _shSave() { setStorageJSON(_SH_KEY, _shData); }
 
 function _shAdd(fieldId, value) {
   const v = (value ?? "").trim();

@@ -15768,6 +15768,12 @@ app.get("/search", async (req, res) => {
                     return false;
                 return title.startsWith(fullDisambig + " - ") || title === fullDisambig;
             });
+            // Re-clamp the pagination items to the POST-filter count, exactly as
+            // the barcode branch below does. Without it the client trusted
+            // Discogs's pre-filter total and rendered e.g. "Returned :: 3,412
+            // results — showing 4".
+            if (r.pagination)
+                r.pagination.items = r.results.length;
         }
         // Barcode post-filter: Discogs's `barcode=` is approximate enough
         // that adjacent releases by the same artist can leak in. If the

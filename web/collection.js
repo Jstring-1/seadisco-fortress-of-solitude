@@ -690,15 +690,21 @@ function switchView(view, skipPushState = false) {
     // If we have previous search results, restore them instead of clearing
     if (window._lastResults && window._lastResults.length > 0) {
       // Re-render saved search results and keep search info visible
-      const grid = document.getElementById("results");
-      grid.innerHTML = window._lastResults.map((item, i) => renderCard(item, i)).join("");
-      if (typeof applyVisitedCards === "function") applyVisitedCards();
+      // Re-render through renderResults so the client-side filters that
+      // shaped the grid (hide-owned / exclude-CD / strict-genre), the
+      // hard2find no-video badges and the archive stamps are re-applied. A
+      // raw renderCard map silently dropped all of them and resurfaced
+      // owned / CD items. renderResults also hides the Recent strip and
+      // applies visited-card state itself.
+      renderResults(window._lastResults, false);
       document.getElementById("pagination").style.display = "none";
-      const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
-      // Show load-more if there are more pages
-      const lmWrap = document.getElementById("search-load-more");
-      if (lmWrap) lmWrap.style.display = currentPage < totalPages ? "" : "none";
+      // Bring back the "Returned :: N — showing M" header, and size the
+      // Load-more button from the SEARCH's own paging state (renderPagination
+      // reads window._sdSearch) — not the shared currentPage / totalPages
+      // that the collection / wantlist / inventory loaders overwrite.
+      const infoBlock = document.getElementById("search-info-block"); if (infoBlock) infoBlock.style.display = "";
+      if (typeof renderPagination === "function") renderPagination();
     } else {
       // No previous search — restore clean default state
       document.getElementById("results").innerHTML = "";
