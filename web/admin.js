@@ -3829,11 +3829,18 @@ function ytrGroupedHtml(rows) {
     const first = group[0];
     const n = group.length;
     const yr = first.master_year || "?";
+    // "Reject all" only makes sense while reviewing the pending queue.
+    const rejectAll = _ytrStatus === "pending"
+      ? `<button class="admin-btn" onclick="ytrRejectGroup(this)" title="Reject all ${n} candidate${n === 1 ? "" : "s"} for this track — none of them are right." style="margin-left:auto;flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">✗ Reject all</button>`
+      : "";
     const head = `<div class="ytr-group-head">
       <span class="ytr-group-count" title="${n} candidate${n === 1 ? "" : "s"} for this track">${n}</span>
       <span class="ytr-group-song"><span style="color:var(--muted);font-weight:normal">${esc(String(yr))} · ${esc(first.track_position || "")}</span> ${esc(first.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(first.track_artist || "")}</span></span>
+      ${rejectAll}
     </div>`;
-    html += `<div class="ytr-group">${head}${group.map(ytrRowHtml).join("")}</div>`;
+    // Track identity rides on data-* attributes so ytrRejectGroup can read it
+    // off the DOM instead of interpolating a position string into inline JS.
+    html += `<div class="ytr-group" data-ytr-master="${esc(String(first.master_id ?? ""))}" data-ytr-track="${esc(String(first.track_position ?? ""))}">${head}${group.map(ytrRowHtml).join("")}</div>`;
   }
   return html;
 }
@@ -4020,6 +4027,59 @@ async function ytrDecide(id, action, btn) {
   }
 }
 window.ytrDecide = ytrDecide;
+// Reject every candidate for one track in a single call. Same optimistic
+// pattern as ytrDecide — the group disappears immediately — but it resolves
+// server-side in ONE atomic statement rather than N racing per-row decides.
+async function ytrRejectGroup(btn) {
+  const group = btn ? btn.closest(".ytr-group") : null;
+  if (!group) return;
+  const masterId = Number(group.getAttribute("data-ytr-master"));
+  const trackPosition = group.getAttribute("data-ytr-track") ?? "";
+  if (!Number.isFinite(masterId)) return;
+  const ids = Array.from(group.querySelectorAll(".ytr-card[data-ytr-id]"))
+    .map(el => Number(el.getAttribute("data-ytr-id")))
+    .filter(Number.isFinite);
+  // Don't fire twice for the same group, and don't fight a per-row decide
+  // that's already resolving one of these candidates.
+  if (group.dataset.ytrRejecting === "1") return;
+  group.dataset.ytrRejecting = "1";
+  const fresh = ids.filter(id => !_ytrInFlight.has(id) && !_ytrDecided.has(id));
+
+  group.remove();
+  fresh.forEach(_ytrRememberDecided);
+  if (fresh.length) {
+    _ytrAdjustCount("pending", -fresh.length);
+    _ytrAdjustCount("rejected", +fresh.length);
+  }
+  try {
+    const r = await apiFetch("/api/admin/yt-review/reject-track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ masterId, trackPosition }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      // Un-remember so the reconcile reload can bring the track back.
+      fresh.forEach(id => _ytrDecided.delete(id));
+      if (typeof showToast === "function") {
+        showToast(`Reject all failed: ${body?.error || `HTTP ${r.status}`}`, "error", 5000);
+      }
+    } else if (typeof body.rejected === "number" && body.rejected !== fresh.length) {
+      // The server also rejected candidates that weren't on this page (a
+      // track's candidates can straddle a pagination boundary). Correct the
+      // optimistic tile nudge with the real number.
+      const delta = body.rejected - fresh.length;
+      _ytrAdjustCount("pending", -delta);
+      _ytrAdjustCount("rejected", +delta);
+    }
+  } catch (e) {
+    fresh.forEach(id => _ytrDecided.delete(id));
+    if (typeof showToast === "function") showToast(`Reject all failed: ${e?.message || e}`, "error", 5000);
+  } finally {
+    if (!document.querySelector("#ytr-queue .ytr-card")) _ytrScheduleReload();
+  }
+}
+window.ytrRejectGroup = ytrRejectGroup;
 async function ytrCustomApprove(id) {
   const input = document.getElementById(`ytr-custom-${id}`);
   const url = (input?.value || "").trim();

@@ -5498,6 +5498,21 @@ export async function reviewQueueDecide(id: number, action: "approve" | "reject"
   };
 }
 
+// Reject EVERY still-pending candidate for one (master, track) in a single
+// statement. Backs the "Reject all" button on each track group: when none of
+// the proposals are right, one atomic UPDATE beats firing N concurrent
+// per-row decides at the same queue. Uses COALESCE on track_position so it
+// matches the same grouping key the UI builds (positions can be NULL).
+export async function reviewQueueRejectTrack(masterId: number, trackPosition: string, reviewer: string | null): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE track_yt_review_queue
+        SET status = 'rejected', reviewed_at = NOW(), reviewed_by = $3
+      WHERE master_id = $1 AND COALESCE(track_position, '') = $2 AND status = 'pending'`,
+    [masterId, trackPosition, reviewer],
+  );
+  return r.rowCount ?? 0;
+}
+
 export async function reviewQueueDeleteApproval(id: number, reviewer: string | null): Promise<{ ok: boolean; masterId?: number; trackPosition?: string }> {
   const row = (await getPool().query(
     `SELECT master_id, track_position, status FROM track_yt_review_queue WHERE id = $1`,
