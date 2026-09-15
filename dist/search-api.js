@@ -13870,15 +13870,37 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
             return;
         }
         if (action === "approve" && out.videoId && out.masterId && out.trackPosition) {
-            await suggestTrackYtOverride({
-                releaseId: out.masterId,
-                releaseType: "master",
-                trackPosition: out.trackPosition,
-                trackTitle: out.trackTitle ?? null,
-                videoId: out.videoId,
-                videoTitle: null,
-                submittedBy: adminUserId,
-            });
+            try {
+                // An admin approval is authoritative, so clear any existing pin
+                // first. suggestTrackYtOverride is the USER-submission path: its
+                // ON CONFLICT only overwrites a row whose mode is 'block', so on a
+                // track that already carries an override it quietly no-ops and
+                // returns false. Without this delete the queue row flipped to
+                // 'approved' while the track kept pointing at the OLD video. The
+                // custom-approve handler already does exactly this, for exactly
+                // this reason; the plain Approve button was the odd one out.
+                await deleteTrackYtOverride(out.masterId, "master", out.trackPosition);
+                await suggestTrackYtOverride({
+                    releaseId: out.masterId,
+                    releaseType: "master",
+                    trackPosition: out.trackPosition,
+                    trackTitle: out.trackTitle ?? null,
+                    videoId: out.videoId,
+                    videoTitle: null,
+                    submittedBy: adminUserId,
+                });
+            }
+            catch (pinErr) {
+                // The queue row is already marked approved but the pin did not
+                // land. Put it back to pending so the decision stays retryable
+                // instead of leaving the track silently unpinned. Superseded
+                // siblings stay superseded — that is the desired end state once
+                // the retry succeeds anyway.
+                await getPool().query(`UPDATE track_yt_review_queue
+              SET status = 'pending', reviewed_at = NULL, reviewed_by = NULL
+            WHERE id = $1 AND status = 'approved'`, [id]).catch(() => { });
+                throw pinErr;
+            }
         }
         res.json({ ok: true });
     }

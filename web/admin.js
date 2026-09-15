@@ -3370,6 +3370,43 @@ const _YTR_LIMIT = 50;
 let _ytrPollTimer = null;
 let _ytrQuery = "";
 let _ytrFilterTimer = null;
+// ── Decide bookkeeping ───────────────────────────────────────────────
+// Rapid Approve/Reject clicking used to error out. The flow is optimistic
+// (card disappears instantly, POST resolves in the background), so a burst
+// of clicks leaves several decides in flight at once. Two things went wrong:
+//   * every settled POST that found the grid empty fired its own full panel
+//     reload, so one burst triggered N concurrent reloads;
+//   * those reloads could read the queue BEFORE the in-flight decides had
+//     committed, re-rendering rows that were already spoken for. Clicking
+//     one of those zombie cards hit the server's atomic
+//     "WHERE status = 'pending'" guard, came back 404
+//     not_found_or_already_decided, and popped a blocking alert().
+// _ytrInFlight/_ytrDecided let us drop zombie rows before they ever render,
+// and reloads are coalesced into one pass after the burst settles.
+const _ytrInFlight = new Set();   // ids with a decide POST in flight
+const _ytrDecided  = new Set();   // ids resolved this session (incl. superseded siblings)
+let _ytrReloadTimer = null;
+let _ytrQueueSeq = 0;             // discards stale queue renders
+let _ytrSyncRetries = 0;          // bounds the "syncing decisions" retry
+function _ytrRememberDecided(id) {
+  _ytrDecided.add(Number(id));
+  // Bound the set over a long review session.
+  if (_ytrDecided.size > 5000) {
+    const it = _ytrDecided.values();
+    for (let i = 0; i < 1000; i++) { const x = it.next(); if (x.done) break; _ytrDecided.delete(x.value); }
+  }
+}
+// Coalesce reloads: one refresh once the click burst settles, not one per
+// click. Waits for every in-flight decide so the queue we fetch reflects
+// all of them.
+function _ytrScheduleReload(delay = 300) {
+  if (_ytrReloadTimer) clearTimeout(_ytrReloadTimer);
+  _ytrReloadTimer = setTimeout(() => {
+    _ytrReloadTimer = null;
+    if (_ytrInFlight.size) { _ytrScheduleReload(delay); return; }
+    loadYtReview();
+  }, delay);
+}
 // On-demand YouTube coverage stat: how many cached-master songs have no
 // YouTube source (no Discogs video on the master + no pin), overall and
 // for strict-Blues masters. Heavy server query — button-triggered.
@@ -3730,15 +3767,48 @@ async function loadYtReviewQueue() {
   try {
     const params = new URLSearchParams({ status: _ytrStatus, limit: String(_YTR_LIMIT), offset: String(_ytrPage * _YTR_LIMIT) });
     if (_ytrQuery) params.set("q", _ytrQuery);
+    // Stamp this load; a slower earlier response must not paint over a
+    // newer one (the 5s running-poll and a decide reconcile can overlap).
+    const _seq = ++_ytrQueueSeq;
     const r = await apiFetch(`/api/admin/yt-review/queue?${params}`);
+    if (_seq !== _ytrQueueSeq) return;
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Queue load failed: HTTP ${r.status}</span>`; return; }
     const { rows = [], total = 0 } = await r.json();
-    if (!rows.length) {
-      el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No ${_ytrStatus} rows.</div>`;
+    if (_seq !== _ytrQueueSeq) return;
+    // Drop rows we've already decided (or are deciding) this session. A
+    // reload can race an uncommitted decide and hand back rows that are
+    // already spoken for; rendering them invites a click that 404s.
+    // Only meaningful for the pending view — in the approved/rejected views
+    // these ids are legitimately what you want to see.
+    let visible = rows;
+    if (_ytrStatus === "pending") {
+      visible = rows.filter(row => {
+        const rid = Number(row.id);
+        return !_ytrDecided.has(rid) && !_ytrInFlight.has(rid);
+      });
+    }
+    if (!visible.length) {
+      // Everything on this page was filtered out: the decides haven't
+      // committed yet. Say so and try again shortly instead of flashing a
+      // misleading "No pending rows".
+      if (rows.length && _ytrSyncRetries < 5) {
+        _ytrSyncRetries++;
+        el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">Syncing decisions…</div>`;
+        _ytrScheduleReload(700);
+      } else if (rows.length) {
+        // Gave up waiting — show the page as-is rather than an empty panel.
+        _ytrSyncRetries = 0;
+        el.innerHTML = ytrGroupedHtml(rows);
+        ytrRenderPager(total);
+        return;
+      } else {
+        el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No ${_ytrStatus} rows.</div>`;
+      }
       ytrRenderPager(total);
       return;
     }
-    el.innerHTML = ytrGroupedHtml(rows);
+    _ytrSyncRetries = 0;
+    el.innerHTML = ytrGroupedHtml(visible);
     ytrRenderPager(total);
   } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
 }
@@ -3787,7 +3857,7 @@ function ytrRowHtml(r) {
   const showActions = _ytrStatus === "pending";
   const showDelete = _ytrStatus === "approved";
   const yr = r.master_year || "?";
-  return `<div class="ytr-card" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
+  return `<div class="ytr-card" data-ytr-id="${r.id}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
     ${r.master_cover_url
       ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy">`
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
@@ -3876,17 +3946,36 @@ function ytrRenderPager(total) {
 function ytrPage(p) { _ytrPage = Math.max(0, p); loadYtReviewQueue(); }
 window.ytrPage = ytrPage;
 async function ytrDecide(id, action, btn) {
+  id = Number(id);
+  // Never send two decisions for the same row. The server's decide is
+  // atomic ("WHERE id = $1 AND status = 'pending'"), so a second POST comes
+  // back 404 not_found_or_already_decided — which is exactly the error a
+  // fast clicker used to see when a mid-burst reload re-rendered a card that
+  // was already spoken for. Swallow it at the source instead.
+  if (_ytrInFlight.has(id) || _ytrDecided.has(id)) {
+    const dupe = btn ? btn.closest(".ytr-card") : null;
+    if (dupe) dupe.remove();
+    return;
+  }
+  _ytrInFlight.add(id);
+
   // OPTIMISTIC: advance the UI the instant you click, resolve the decision in
   // the background. The old flow awaited the decide POST and then a full panel
   // reload (status fetch + queue fetch = 3 sequential round-trips), ~3s per
-  // click. Now the card disappears immediately and we only reload when the
-  // visible batch is emptied (or on error, to reconcile).
+  // click. Now the card disappears immediately and we only reload once the
+  // click burst has settled (or on error, to reconcile).
   const card = btn ? btn.closest(".ytr-card") : null;
   const group = card ? card.closest(".ytr-group") : null;
   if (card) {
     if (action === "approve" && group) {
       // Approving pins a video → every competing candidate for that song is
-      // superseded server-side, so drop the whole group.
+      // superseded server-side, so drop the whole group. Remember the sibling
+      // ids as decided too: otherwise a reload that raced the supersede could
+      // resurrect them as clickable cards that now 404.
+      group.querySelectorAll(".ytr-card[data-ytr-id]").forEach(el => {
+        const sib = Number(el.getAttribute("data-ytr-id"));
+        if (Number.isFinite(sib) && sib !== id) _ytrRememberDecided(sib);
+      });
       group.remove();
     } else {
       card.remove();
@@ -3903,18 +3992,31 @@ async function ytrDecide(id, action, btn) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, action }),
     });
-    if (!r.ok) {
+    if (r.ok) {
+      _ytrRememberDecided(id);
+    } else {
       const body = await r.json().catch(() => ({}));
-      alert(`${action} failed: ${body?.error || `HTTP ${r.status}`} — reloading.`);
-      loadYtReview();
-      return;
+      const already = r.status === 404 || body?.error === "not_found_or_already_decided";
+      // "Already decided" is benign in a fast-click flow (a duplicate or a
+      // sibling the approve already superseded) — reconcile silently rather
+      // than interrupting the review with a modal alert. Any OTHER failure
+      // (5xx) may have left the row pending, so forget it and let the
+      // reconcile reload bring it back rather than hiding it forever.
+      if (already) _ytrRememberDecided(id); else _ytrDecided.delete(id);
+      if (!already && typeof showToast === "function") {
+        showToast(`${action} failed: ${body?.error || `HTTP ${r.status}`}`, "error", 5000);
+      }
     }
-    // Pull the next batch (and refresh counts) only once the current page is
-    // cleared — not on every click.
-    if (!document.querySelector("#ytr-queue .ytr-card")) loadYtReview();
   } catch (e) {
-    alert(`${action} failed: ${e?.message || e} — reloading.`);
-    loadYtReview();
+    // Genuine network/transport failure: the row is probably still pending,
+    // so forget it and let the reconcile reload bring it back.
+    _ytrDecided.delete(id);
+    if (typeof showToast === "function") showToast(`${action} failed: ${e?.message || e}`, "error", 5000);
+  } finally {
+    _ytrInFlight.delete(id);
+    // Refresh when the visible batch is exhausted, or to reconcile after a
+    // failure. Coalesced, so a 20-click burst still costs one reload.
+    if (!document.querySelector("#ytr-queue .ytr-card")) _ytrScheduleReload();
   }
 }
 window.ytrDecide = ytrDecide;
@@ -3930,6 +4032,9 @@ async function ytrCustomApprove(id) {
     });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) { alert(`Custom approve failed: ${body?.error || `HTTP ${r.status}`}${body?.detail ? "\n" + body.detail : ""}`); return; }
+    // This row is decided now — remember it so a racing reload can not
+    // re-render it as a clickable pending card.
+    _ytrRememberDecided(Number(id));
     loadYtReview();
   } catch (e) { alert(`Custom approve failed: ${e?.message || e}`); }
 }
