@@ -221,8 +221,9 @@ const anonLocLimiter = new PerIpRateLimiter(5, 60_000, "loc-anon");
 const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000, "wiki-anon");
 // YouTube Data API: per-IP throttle for anonymous callers only.
 // Signed-in users bypass this entirely (the global YouTube Data API
-// quota — 10k units/day, 100 units per search.list — is the only
-// limit they hit). Bumped from 30/hr to 120/hr after the prior
+// quota — 1,020,000 units/day and 10,100 search.list calls/day, 100
+// units per search — plus the per-user daily cap are the only limits
+// they hit). Bumped from 30/hr to 120/hr after the prior
 // ceiling proved too low even for normal track-suggest browsing
 // sessions when the request was incorrectly anonymous (raw fetch
 // without the Clerk Bearer attached). The DB-backed search cache
@@ -6993,8 +6994,9 @@ app.use("/api/admin", (req, res, next) => {
 // Server-side proxy for the YouTube Data API v3. We never expose the
 // API key to the browser. Results are cached 24h per query so repeat
 // searches don't burn quota. Each search.list call costs 100 quota
-// units; the default project quota is 10,000/day = 100 searches/day,
-// so caching is essential for any meaningful traffic.
+// units. The project's granted quota is 1,020,000 units/day with a
+// separate 10,100/day cap on search.list itself, so search count — not
+// units — is the ceiling; caching still keeps repeat queries free.
 const _youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 const _ytSearchCache = new Map();
 // In-flight coalescing: when two callers fire the SAME cache key while
@@ -7063,8 +7065,10 @@ function _bumpYtQuotaPersisted(workerSearches, projectUnits) {
 // Soft cap: refuse new search.list calls once we've spent this many
 // units in the current UTC day. Tracks total project consumption
 // (manual user search + the yt-review background worker, both register
-// here). The 950k cap sits 5% under the granted 1M/day so a burst of
-// concurrent admin activity doesn't graze Google's hard 403.
+// here). 950k units ~= 9,500 searches, which keeps total search.list
+// volume ~6% under Google's 10,100/day search cap (and well under the
+// 1,020,000 unit ceiling) so a burst of concurrent activity doesn't graze
+// Google's hard 403.
 const _YT_DAILY_SOFT_CAP_UNITS = 950_000;
 // Per-user daily quota: signed-in users bypass the per-IP throttle,
 // which is correct (the IP belongs to many users behind NAT). But
@@ -12867,17 +12871,26 @@ app.get("/api/admin/lyrics/scrape/since-last", async (req, res) => {
 // gracefully and doesn't compete with regular user search activity.
 let _ytReviewRunning = false;
 let _ytReviewStopRequested = false;
-const _YT_REVIEW_THROTTLE_MS = 8_000;
+// 4s between real (quota-spending) searches = 15/min, 2.5% of Google's
+// 600 "Search Queries per minute" limit. At the daily budget below that
+// spends a full day's allowance in ~9h, so a run started just after the
+// quota reset finishes well inside the same quota day. Cache hits cost no
+// quota and skip this wait entirely (see the end of the master loop).
+const _YT_REVIEW_THROTTLE_MS = 4_000;
 const _YT_REVIEW_RATE_LIMIT_BACKOFF_MS = 60_000;
-// Worker-only cap, distinct from the project-wide unit soft cap. Google
-// limits search.list to 100 calls/day (the "Search Queries per day"
-// quota), so this sits just under that to leave a handful for manual
-// admin / user searches. Override via YT_REVIEW_DAILY_BUDGET once you've
-// raised that Google quota. Resets on the LA calendar day, in step with
+// Worker-only cap, distinct from the project-wide unit soft cap. Google's
+// granted limits (Sept 2026, 6-month grant): "Search Queries per day"
+// 10,100 and "Queries per day" 1,020,000 units. search.list is the binding
+// one — 10,100 x 100 units = 1,010,000, under the unit ceiling.
+// 8,000 worker searches ~= 808k units (plus one batched 1-unit videos.list
+// per search), leaving ~1,400 searches under the 950k project soft cap for
+// interactive album-popup searches, and ~700 of margin to Google's hard
+// 10,100. Override via YT_REVIEW_DAILY_BUDGET (an env var set in Railway
+// WINS over this default). Resets on the LA calendar day, in step with
 // Google's window (see _ytQuotaMaybeReset).
 const _YT_REVIEW_DAILY_BUDGET = (() => {
     const n = parseInt(String(process.env.YT_REVIEW_DAILY_BUDGET ?? ""), 10);
-    return Number.isFinite(n) && n > 0 ? n : 95;
+    return Number.isFinite(n) && n > 0 ? n : 8000;
 })();
 function _ytReviewMaybeReset() {
     // Worker + project counters share the LA-day reset — delegate so the
@@ -13468,7 +13481,11 @@ async function _runYtReviewWorker() {
             if (autoThisMaster > 0) {
                 await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — auto-pinned ${autoThisMaster} exact match${autoThisMaster === 1 ? "" : "es"}.` });
             }
-            await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
+            // Only pace REAL searches. A cache hit spent no quota, so waiting out
+            // the throttle on it is pure dead time — re-walking already-searched
+            // masters after a restart used to crawl at the same rate as new ones.
+            if (!result.cached)
+                await new Promise(r => setTimeout(r, _YT_REVIEW_THROTTLE_MS));
             // Advance cursor past this master regardless of how many tracks
             // were searched — resumability matters more than completeness.
             await updateReviewState({
@@ -13488,12 +13505,22 @@ async function _runYtReviewWorker() {
     }
 }
 // ── Once-a-day auto-run ───────────────────────────────────────────
-// Kicks the worker once per day, just after the UTC-midnight budget
-// reset, so candidates accumulate for review on the admin's own
-// schedule — no need to remember to hit Start. Toggle via the
-// yt_review_daily_enabled app setting (default on). Manual Start/Stop
-// still work; a run already in progress is left alone.
-const _YT_REVIEW_DAILY_RUN_HOUR_UTC = 1; // 01:00 UTC, just after the reset
+// Kicks the worker once per day, just after Google's quota reset, so
+// candidates accumulate for review on the admin's own schedule — no need
+// to remember to hit Start. Toggle via the yt_review_daily_enabled app
+// setting (default on). Manual Start/Stop still work; a run already in
+// progress is left alone.
+//
+// The run is keyed to midnight America/Los_Angeles, NOT a fixed UTC hour.
+// It used to fire at 01:00 UTC ("just after the reset") from when the
+// counters were UTC-keyed, but they now reset at LA midnight (07:00 or
+// 08:00 UTC). With a real budget that mismatch wastes quota: a 01:00 UTC
+// run has only ~6h left in the current quota day, the counter resets
+// mid-run, the worker caps out in the NEW day, and the next 01:00 tick
+// finds that day already capped and stops immediately — so alternate days
+// got a partial budget or nothing. Starting right after the reset gives
+// every quota day its full allowance.
+const _YT_REVIEW_DAILY_RUN_OFFSET_MS = 5 * 60 * 1000; // 5 min after LA midnight
 async function _ytReviewDailyEnabled() {
     try {
         return (await getAppSetting("yt_review_daily_enabled")) !== "0";
@@ -13503,12 +13530,13 @@ async function _ytReviewDailyEnabled() {
     }
 }
 function _ytReviewMsUntilDailyRun() {
-    const now = new Date();
-    const next = new Date(now);
-    next.setUTCHours(_YT_REVIEW_DAILY_RUN_HOUR_UTC, 0, 0, 0);
-    if (next.getTime() <= now.getTime())
-        next.setUTCDate(next.getUTCDate() + 1);
-    return next.getTime() - now.getTime();
+    const now = Date.now();
+    const nextMidnight = _ytQuotaResetAtMs(new Date(now));
+    // If we booted in the first few minutes after midnight, today's run
+    // hasn't happened yet — take it rather than waiting a whole day.
+    const todaysRun = nextMidnight - 24 * 60 * 60 * 1000 + _YT_REVIEW_DAILY_RUN_OFFSET_MS;
+    const target = todaysRun > now ? todaysRun : nextMidnight + _YT_REVIEW_DAILY_RUN_OFFSET_MS;
+    return target - now;
 }
 function _ytReviewDailyTick() {
     (async () => {
@@ -13525,12 +13553,15 @@ function _ytReviewDailyTick() {
     })().catch((e) => console.error("[yt-review] daily tick failed:", e));
 }
 function initYtReviewDailySchedule() {
-    const wait = _ytReviewMsUntilDailyRun();
-    setTimeout(() => {
-        _ytReviewDailyTick();
-        setInterval(_ytReviewDailyTick, 24 * 60 * 60 * 1000);
-    }, wait);
-    console.log(`[yt-review] daily auto-run scheduled in ~${Math.round(wait / 60000)}min, then every 24h (${_YT_REVIEW_DAILY_RUN_HOUR_UTC}:00 UTC)`);
+    // Re-arm from the clock each day instead of a fixed 24h setInterval, so
+    // the run tracks LA midnight across the twice-yearly DST shift rather
+    // than drifting an hour off the quota reset.
+    const arm = () => {
+        const wait = _ytReviewMsUntilDailyRun();
+        setTimeout(() => { _ytReviewDailyTick(); arm(); }, wait);
+        console.log(`[yt-review] daily auto-run scheduled in ~${Math.round(wait / 60000)}min (just after the midnight-Pacific quota reset)`);
+    };
+    arm();
 }
 // Enable/disable the once-a-day auto-run.
 app.post("/api/admin/yt-review/daily", express.json({ limit: "1kb" }), async (req, res) => {
