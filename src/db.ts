@@ -5517,6 +5517,32 @@ export async function reviewQueueRejectTrack(masterId: number, trackPosition: st
   return r.rowCount ?? 0;
 }
 
+// Drop EVERY pending candidate and forget that those tracks were searched,
+// so the next walk re-searches them (e.g. after the search query changes).
+// Pending rows are deleted rather than marked skipped so the same videos
+// can be re-proposed — the queue's UNIQUE (master, track, video) would
+// otherwise block them. Decided rows (approved/rejected/skipped) stay, so
+// rejected videos still never come back. One statement, atomic.
+export async function reviewQueueDismissPendingForResearch(): Promise<{ dismissed: number; tracks: number }> {
+  const r = await getPool().query(
+    `WITH d AS (
+       DELETE FROM track_yt_review_queue WHERE status = 'pending'
+       RETURNING master_id, track_position
+     ), t AS (
+       SELECT DISTINCT master_id, track_position FROM d
+     ), s AS (
+       DELETE FROM track_yt_review_searched x USING t
+        WHERE x.master_id = t.master_id AND x.track_position = t.track_position
+       RETURNING 1
+     )
+     SELECT (SELECT COUNT(*) FROM d)::int AS dismissed,
+            (SELECT COUNT(*) FROM t)::int AS tracks,
+            (SELECT COUNT(*) FROM s)::int AS unlogged`,
+  );
+  const row = r.rows[0] || {};
+  return { dismissed: Number(row.dismissed || 0), tracks: Number(row.tracks || 0) };
+}
+
 export async function reviewQueueDeleteApproval(id: number, reviewer: string | null): Promise<{ ok: boolean; masterId?: number; trackPosition?: string }> {
   const row = (await getPool().query(
     `SELECT master_id, track_position, status FROM track_yt_review_queue WHERE id = $1`,
