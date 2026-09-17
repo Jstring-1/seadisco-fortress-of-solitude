@@ -3460,7 +3460,7 @@ async function loadYtReview() {
         ${runPill}
         ${running
           ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
-          : `<button class="admin-btn" onclick="ytrStart()" title="Walk earliest-year Blues masters and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
+          : `<button class="admin-btn" onclick="ytrStart()" title="Walk pre-1960 Blues masters (earliest year first) and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
              <button class="admin-btn" onclick="ytrRestartFromTop()" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>
              <button class="admin-btn" onclick="ytrResetQuota()" title="Zero the app's daily search counter. Use ONLY when Google Cloud Console shows the 'Search Queries per day' quota has headroom — the app's count can drift high after a Pacific-midnight reset and block the worker while Google still has budget.">↺ Resync quota</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>

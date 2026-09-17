@@ -5845,6 +5845,8 @@ export async function bumpReviewQuota(workerSearches: number, projectUnits: numb
 //   'loose'  — Blues is present ALONGSIDE other genres (length > 1)
 // The two tiers are disjoint, so the worker can walk strict to the end,
 // flip to loose, and never re-consider a strict master in the loose pass.
+// Only masters dated before YT_REVIEW_YEAR_CUTOFF are walked.
+export const YT_REVIEW_YEAR_CUTOFF = 1960;
 export async function getNextBluesMasterAfter(cursorYear: number | null, cursorMasterId: number | null, tier: "strict" | "loose" = "strict"): Promise<{ master_id: number; year: number | null; data: any } | null> {
   const genreCountClause = tier === "loose"
     ? "jsonb_array_length(rc.data->'genres') > 1"
@@ -5860,6 +5862,7 @@ export async function getNextBluesMasterAfter(cursorYear: number | null, cursorM
         AND rc.data->'genres' ? 'Blues'
         AND rc.data->>'year' ~ '^[0-9]+$'
         AND (rc.data->>'year')::int > 0
+        AND (rc.data->>'year')::int < ${YT_REVIEW_YEAR_CUTOFF}
         AND (rc.data->>'year')::int >= COALESCE($1, 0)
         AND ((rc.data->>'year')::int > COALESCE($1, 0)
              OR rc.discogs_id > COALESCE($2, 0))
