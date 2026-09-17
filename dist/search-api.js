@@ -7134,12 +7134,9 @@ async function _ytGetQueryConfig() {
 // an artist at all. A stray double quote would break the phrase match.
 function _ytCleanArtist(name) {
     let s = String(name ?? "").trim();
-    // Loop so the suffixes come off in either order ("Name (2)*").
-    let prev;
-    do {
-        prev = s;
-        s = s.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\*+\s*$/, "");
-    } while (s !== prev);
+    // Anywhere, not just at the end: a joined credit carries the decoration
+    // mid-string too ("Lonnie Johnson (2) & Eddie Lang").
+    s = s.replace(/\*+(?=\s|$|[,&])/g, "").replace(/\s*\(\d{1,4}\)/g, " ");
     s = s.replace(/"/g, "").replace(/\s+/g, " ").trim();
     return /^various(\s+artists)?$/i.test(s) ? "" : s;
 }
