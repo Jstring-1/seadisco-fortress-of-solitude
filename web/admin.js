@@ -3652,11 +3652,11 @@ async function _ytrPostBan(payload) {
   const bits = [];
   if (j.supersededPending) bits.push(`${j.supersededPending} pending dropped`);
   if (j.removedAutoApproved) bits.push(`${j.removedAutoApproved} auto-approval${j.removedAutoApproved === 1 ? "" : "s"} removed`);
-  if (bits.length) showToast(`Banned · ${bits.join(", ")}`, "info", 5000);
+  const who = payload.channelTitle || payload.channelId || "channel";
+  showToast(`Banned ${who}${bits.length ? ` · ${bits.join(", ")}` : ""}`, "info", 5000);
   return true;
 }
 async function ytrBanChannel(channelId, channelTitle) {
-  if (!confirm(`Ban this channel from ALL YouTube results?\n\n${channelTitle || channelId}\n\nIts pending review candidates and auto-approved videos will be removed. Your hand-picked overrides are kept.`)) return;
   if (await _ytrPostBan({ channelId, channelTitle })) {
     loadYtBans(); loadYtChannels(); loadYtReview();
   }
