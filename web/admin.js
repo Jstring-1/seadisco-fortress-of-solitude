@@ -3829,9 +3829,11 @@ function ytrGroupedHtml(rows) {
     const first = group[0];
     const n = group.length;
     const yr = first.master_year || "?";
-    // "Reject all" only makes sense while reviewing the pending queue.
+    // "Reject all" / "Ban all" only make sense while reviewing the pending queue.
+    const nCh = new Set(group.map(r => r.candidate_channel_id).filter(Boolean)).size;
     const rejectAll = _ytrStatus === "pending"
       ? `<button class="admin-btn" onclick="ytrRejectGroup(this)" title="Reject all ${n} candidate${n === 1 ? "" : "s"} for this track — none of them are right." style="margin-left:auto;flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">✗ Reject all</button>`
+        + (nCh ? `<button class="admin-btn" onclick="ytrBanGroup(this)" title="Ban all ${nCh} channel${nCh === 1 ? "" : "s"} behind this track's candidates from ALL YouTube results, and reject the rest." style="flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">⛔ Ban all</button>` : "")
       : "";
     const head = `<div class="ytr-group-head">
       <span class="ytr-group-count" title="${n} candidate${n === 1 ? "" : "s"} for this track">${n}</span>
@@ -3864,7 +3866,7 @@ function ytrRowHtml(r) {
   const showActions = _ytrStatus === "pending";
   const showDelete = _ytrStatus === "approved";
   const yr = r.master_year || "?";
-  return `<div class="ytr-card" data-ytr-id="${r.id}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
+  return `<div class="ytr-card" data-ytr-id="${r.id}" data-ytr-ch="${esc(r.candidate_channel_id || "")}" data-ytr-ch-title="${esc(r.candidate_channel_title || "")}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
     ${r.master_cover_url
       ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy">`
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
@@ -4081,6 +4083,41 @@ async function ytrRejectGroup(btn) {
   }
 }
 window.ytrRejectGroup = ytrRejectGroup;
+// Ban every distinct channel behind one track's candidates, then reject
+// whatever is left for the track (candidates with no channel id). Banning
+// already supersedes each channel's pending rows server-side.
+async function ytrBanGroup(btn) {
+  const group = btn ? btn.closest(".ytr-group") : null;
+  if (!group || group.dataset.ytrRejecting === "1") return;
+  const channels = new Map();
+  group.querySelectorAll(".ytr-card[data-ytr-ch]").forEach(el => {
+    const id = el.getAttribute("data-ytr-ch");
+    if (id && !channels.has(id)) channels.set(id, el.getAttribute("data-ytr-ch-title") || "");
+  });
+  if (!channels.size) return;
+  btn.disabled = true;
+  const failed = [];
+  for (const [channelId, channelTitle] of channels) {
+    try {
+      const r = await apiFetch("/api/admin/yt-review/bans", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ channelId, channelTitle }),
+      });
+      if (!r.ok) failed.push(channelTitle || channelId);
+    } catch { failed.push(channelTitle || channelId); }
+  }
+  const banned = channels.size - failed.length;
+  if (typeof showToast === "function") {
+    showToast(failed.length
+      ? `Banned ${banned} of ${channels.size} channels · failed: ${failed.join(", ")}`
+      : `Banned ${banned} channel${banned === 1 ? "" : "s"}`, failed.length ? "error" : "info", 5000);
+  }
+  if (failed.length) { btn.disabled = false; return; }
+  // Clears any channel-less leftovers and removes the group from view.
+  await ytrRejectGroup(btn);
+  loadYtBans(); loadYtChannels(); loadYtReview();
+}
+window.ytrBanGroup = ytrBanGroup;
 
 // ── Search query editor (YT Review -> Search query) ──────────────────
 // Edits the server-side templates the review worker and the album/track
