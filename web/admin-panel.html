@@ -335,6 +335,12 @@
             <label class="ytr-q-check" title="Ask YouTube for embeddable videos only. The site can only play embeddable videos, so this keeps all 50 result slots usable.">
               <input type="checkbox" id="ytr-q-emb" onchange="ytrQueryPreview()"> Embeddable videos only
             </label>
+            <label for="ytr-q-pref" class="ytr-q-label-top" title="Not added to the search — any word in a YouTube query is required. Matched afterwards against each result's channel, title and description.">Preferred sources</label>
+            <textarea id="ytr-q-pref" class="sd-filter-input" rows="2" spellcheck="false" placeholder="orchard | &quot;document records&quot; | yazoo" title="Separate with | , or new lines. Matching results sort to the top of each track's candidates with a PREFERRED badge."></textarea>
+            <span></span>
+            <label class="ytr-q-check" title="Treat preferred-source results like a trusted channel: auto-pin when the artist is in the video title, the title matches exactly, it's embeddable, and the duration agrees (if both are known). Also applies to ✓ Apply trust to pending.">
+              <input type="checkbox" id="ytr-q-pref-auto"> Auto-approve exact matches from preferred sources
+            </label>
           </div>
           <div class="ytr-q-sample">
             <span class="ytr-q-sample-label">Preview with</span>

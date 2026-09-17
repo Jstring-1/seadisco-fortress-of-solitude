@@ -3889,7 +3889,7 @@ function ytrRowHtml(r) {
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
     <div style="min-width:0">
       <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
-      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${candTitleHtml}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
+      <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${candTitleHtml}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""}${r.preferred_match ? ` <span style="color:#f0c674;font-weight:600" title="Matches preferred source &quot;${esc(r.preferred_match)}&quot; (channel, title or description).">PREFERRED</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
       <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${reasonHtml}</div>
       ${r.search_query ? `<div class="ytr-card-q" title="YouTube search that surfaced this candidate: ${esc(r.search_query)}">q: ${esc(r.search_query)}</div>` : ""}
     </div>
@@ -4148,6 +4148,8 @@ function _ytrQueryForm() {
     trackTemplate: document.getElementById("ytr-q-track")?.value ?? "",
     noise: document.getElementById("ytr-q-noise")?.value ?? "",
     embeddableOnly: !!document.getElementById("ytr-q-emb")?.checked,
+    preferred: document.getElementById("ytr-q-pref")?.value ?? "",
+    autoApprovePreferred: !!document.getElementById("ytr-q-pref-auto")?.checked,
   };
 }
 function _ytrQuerySample() {
@@ -4171,6 +4173,9 @@ function _ytrQueryFill(cfg) {
   set("ytr-q-noise", cfg.noise);
   const emb = document.getElementById("ytr-q-emb");
   if (emb) emb.checked = !!cfg.embeddableOnly;
+  set("ytr-q-pref", cfg.preferred);
+  const prefAuto = document.getElementById("ytr-q-pref-auto");
+  if (prefAuto) prefAuto.checked = !!cfg.autoApprovePreferred;
   ytrQueryPreview();
 }
 async function ytrLoadQueryConfig() {

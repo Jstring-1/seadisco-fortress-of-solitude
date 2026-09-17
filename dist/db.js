@@ -3943,9 +3943,9 @@ export async function insertReviewCandidate(args) {
         candidate_video_id, candidate_title, candidate_channel_title, candidate_channel_id,
         candidate_duration_seconds, candidate_thumbnail_url, candidate_published_at,
         title_score, duration_ok, track_duration_seconds, is_topic_channel, auto_reason,
-        status, reviewed_at, reviewed_by, search_query)
+        status, reviewed_at, reviewed_by, search_query, candidate_description)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-             $19, CASE WHEN $19 = 'pending' THEN NULL ELSE NOW() END, $20, $21)
+             $19, CASE WHEN $19 = 'pending' THEN NULL ELSE NOW() END, $20, $21, $22)
      ON CONFLICT (master_id, track_position, candidate_video_id) DO NOTHING
      RETURNING id`, [
         Number(args.masterId), args.trackPosition, args.trackTitle, args.trackArtist ?? null,
@@ -3958,6 +3958,7 @@ export async function insertReviewCandidate(args) {
         args.trackDurationSeconds ?? null, args.isTopicChannel ?? null, args.autoReason ?? null,
         status, status === "pending" ? null : (args.reviewedBy ?? "auto"),
         args.searchQuery ?? null,
+        args.candidateDescription ?? null,
     ]);
     return (r.rowCount ?? 0) > 0;
 }

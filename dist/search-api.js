@@ -7012,7 +7012,54 @@ const _YT_QUERY_DEFAULTS = {
     trackTemplate: `"{artist}" "{track}" {album} {noise}`,
     noise: `-"ai cover" -"ai voice" -"ai generated" -suno -udio -"made with ai" -"how to" -lesson -tutorial -"backing track" -karaoke -reaction -slowed -nightcore`,
     embeddableOnly: true,
+    preferred: `orchard | "document records" | yazoo | jsp | arhoolie | folkways | naxos | "official audio" | "provided to youtube" | vocalion | okeh | paramount | bluebird | "sony music" | umg | rhino`,
+    autoApprovePreferred: false,
 };
+const _YT_PREFERRED_MAX_LEN = 1000;
+// "a | "b c", d" -> ["a", "b c", "d"]: separators are | , or newline; quotes
+// are optional; lowercased and de-duplicated.
+function _ytParsePreferred(raw) {
+    const out = [];
+    for (const part of String(raw ?? "").split(/[|,\n]+/)) {
+        const t = part.replace(/"/g, "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 60);
+        if (t && !out.includes(t))
+            out.push(t);
+        if (out.length >= 60)
+            break;
+    }
+    return out;
+}
+// First preferred term found as whole word(s) in any of the texts, or null.
+// Punctuation is flattened to spaces so "Document Records," still matches.
+function _ytPreferredMatch(terms, ...texts) {
+    if (!terms.length)
+        return null;
+    const flat = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const hay = ` ${flat(texts.map(t => String(t ?? "")).join(" "))} `;
+    for (const t of terms) {
+        const needle = flat(t);
+        if (needle && hay.includes(` ${needle} `))
+            return t;
+    }
+    return null;
+}
+// Tag each queue row with preferred_match and, within each track's
+// contiguous run of candidates, move preferred ones first (stable, so the
+// existing title_score order holds inside each half).
+function _ytPreferredFirst(rows, terms) {
+    for (const r of rows)
+        r.preferred_match = _ytPreferredMatch(terms, r.candidate_channel_title, r.candidate_title, r.candidate_description);
+    const out = [];
+    for (let i = 0; i < rows.length;) {
+        const key = `${rows[i].master_id}||${rows[i].track_position ?? ""}`;
+        const group = [];
+        while (i < rows.length && `${rows[i].master_id}||${rows[i].track_position ?? ""}` === key)
+            group.push(rows[i++]);
+        group.sort((a, b) => (b.preferred_match ? 1 : 0) - (a.preferred_match ? 1 : 0));
+        out.push(...group);
+    }
+    return out;
+}
 // Longest query the search endpoints accept. The default noise filter alone
 // is 150 chars, so the old 200-char cap silently chopped it mid-term.
 const _YT_MAX_Q_LEN = 500;
@@ -7031,6 +7078,10 @@ function _ytSanitizeQueryConfig(raw) {
         trackTemplate: tpl(raw?.trackTemplate, d.trackTemplate),
         noise: typeof raw?.noise === "string" ? raw.noise.replace(/\s+/g, " ").trim().slice(0, 400) : d.noise,
         embeddableOnly: typeof raw?.embeddableOnly === "boolean" ? raw.embeddableOnly : d.embeddableOnly,
+        preferred: typeof raw?.preferred === "string"
+            ? _ytParsePreferred(raw.preferred.slice(0, _YT_PREFERRED_MAX_LEN)).map(t => t.includes(" ") ? `"${t}"` : t).join(" | ")
+            : d.preferred,
+        autoApprovePreferred: typeof raw?.autoApprovePreferred === "boolean" ? raw.autoApprovePreferred : d.autoApprovePreferred,
     };
 }
 // Human-readable problems with an admin-submitted config ([] = valid).
@@ -7056,6 +7107,12 @@ function _ytValidateQueryConfig(raw) {
         errs.push("noise is longer than 400 characters");
     if (raw?.embeddableOnly != null && typeof raw.embeddableOnly !== "boolean")
         errs.push("embeddableOnly must be true or false");
+    if (raw?.preferred != null && typeof raw.preferred !== "string")
+        errs.push("preferred sources must be text");
+    if (typeof raw?.preferred === "string" && raw.preferred.length > _YT_PREFERRED_MAX_LEN)
+        errs.push(`preferred sources is longer than ${_YT_PREFERRED_MAX_LEN} characters`);
+    if (raw?.autoApprovePreferred != null && typeof raw.autoApprovePreferred !== "boolean")
+        errs.push("autoApprovePreferred must be true or false");
     return errs;
 }
 async function _ytGetQueryConfig() {
@@ -13181,7 +13238,7 @@ function _ytSplitTitleDecorations(videoTitle, artist) {
 function _ytAutoApproveVerdict(args) {
     const { candidateTitle, channelTitle, trackArtist, trackTitle } = args;
     const isTopic = _ytIsTopicChannel(channelTitle);
-    const isTrusted = !!args.trustedChannel;
+    const isTrusted = !!args.trustedChannel || !!args.preferredSource;
     if (!isTopic && !isTrusted)
         return { auto: false, reason: "not_topic_or_trusted_channel" };
     const wantArtist = _ytNormTitleTS(trackArtist);
@@ -13201,7 +13258,7 @@ function _ytAutoApproveVerdict(args) {
     else {
         if (!artistInTitle)
             return { auto: false, reason: `trusted_channel_but_artist_not_in_title: "${wantArtist}"` };
-        path = "trusted";
+        path = args.trustedChannel ? "trusted" : "preferred";
     }
     if (_ytNormTitleTS(core) !== _ytNormTitleTS(trackTitle))
         return { auto: false, reason: "title_not_exact" };
@@ -13528,6 +13585,7 @@ async function _runYtReviewWorker() {
             // one review-queue row; the UNIQUE index already de-dupes
             // re-runs of the same query.
             const bannedChannels = await _getBannedChannelIds();
+            const prefTerms = _ytParsePreferred(_qcfg.preferred);
             const matchesByTrack = new Map();
             for (const it of items) {
                 // Accept both cached shapes: Google's raw body (older worker cache
@@ -13544,7 +13602,7 @@ async function _runYtReviewWorker() {
                 if (!m)
                     continue;
                 const arr = matchesByTrack.get(m.position) || [];
-                arr.push({ videoId: vid, sn });
+                arr.push({ videoId: vid, sn, pref: _ytPreferredMatch(prefTerms, sn.channelTitle, sn.title, sn.description) });
                 matchesByTrack.set(m.position, arr);
             }
             // Pull durations + embeddability for every matched candidate in
@@ -13558,7 +13616,8 @@ async function _runYtReviewWorker() {
                     if (!autoEnabled)
                         continue;
                     const eligible = _ytIsTopicChannel(String(h.sn.channelTitle || ""))
-                        || trustedChannels.has(String(h.sn.channelId || ""));
+                        || trustedChannels.has(String(h.sn.channelId || ""))
+                        || (_qcfg.autoApprovePreferred && !!h.pref);
                     if (eligible)
                         detailIds.push(h.videoId);
                 }
@@ -13590,6 +13649,7 @@ async function _runYtReviewWorker() {
                             embeddable: det?.embeddable ?? null,
                             regionBlocked: det?.regionBlocked ?? false,
                             trustedChannel: trustedChannels.has(String(h.sn.channelId || "")),
+                            preferredSource: _qcfg.autoApprovePreferred && !!h.pref,
                         });
                     const takeAuto = autoEnabled && verdict.auto;
                     const durationOk = (tr.durationSeconds != null && det?.durationSeconds != null)
@@ -13608,6 +13668,7 @@ async function _runYtReviewWorker() {
                         candidateTitle: candTitle,
                         candidateChannelTitle: chanTitle,
                         candidateChannelId: String(h.sn.channelId || ""),
+                        candidateDescription: String(h.sn.description || "").slice(0, 1000) || null,
                         candidateDurationSeconds: det?.durationSeconds ?? null,
                         candidateThumbnailUrl: String(h.sn.thumbnails?.high?.url || h.sn.thumbnails?.default?.url || ""),
                         candidatePublishedAt: h.sn.publishedAt || null,
@@ -14140,6 +14201,8 @@ app.get("/api/admin/yt-review/queue", async (req, res) => {
     const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
     const q = String(req.query.q ?? "").trim();
     const out = await listReviewQueue({ status, limit, offset, q });
+    const terms = _ytParsePreferred((await _ytGetQueryConfig()).preferred);
+    out.rows = _ytPreferredFirst(out.rows, terms);
     res.json(out);
 });
 // YouTube coverage of the cached catalogue — how many cached-master songs
@@ -14287,10 +14350,15 @@ app.post("/api/admin/yt-review/apply-trust", express.json({ limit: "1kb" }), asy
                 rejectedBanned++;
             handled.add(Number(r.id));
         }
-        // 2) Topic/trusted candidates — re-verify and auto-approve exact hits.
-        const eligible = pending.filter(r => !handled.has(Number(r.id)) &&
+        // 2) Topic/trusted (and, if enabled, preferred-source) candidates —
+        // re-verify and auto-approve exact hits. Preferred-first ordering means
+        // a preferred candidate gets the first shot at its track.
+        const qcfg = await _ytGetQueryConfig();
+        const ordered = _ytPreferredFirst(pending, _ytParsePreferred(qcfg.preferred));
+        const eligible = ordered.filter(r => !handled.has(Number(r.id)) &&
             (_ytIsTopicChannel(String(r.candidate_channel_title || "")) ||
-                trusted.has(String(r.candidate_channel_id || ""))));
+                trusted.has(String(r.candidate_channel_id || "")) ||
+                (qcfg.autoApprovePreferred && !!r.preferred_match)));
         const details = eligible.length
             ? await _ytReviewFetchVideoDetails(eligible.map(r => String(r.candidate_video_id)))
             : new Map();
@@ -14313,6 +14381,7 @@ app.post("/api/admin/yt-review/apply-trust", express.json({ limit: "1kb" }), asy
                 embeddable: det?.embeddable ?? null,
                 regionBlocked: det?.regionBlocked ?? false,
                 trustedChannel: trusted.has(String(r.candidate_channel_id || "")),
+                preferredSource: qcfg.autoApprovePreferred && !!r.preferred_match,
             });
             if (!verdict.auto)
                 continue;

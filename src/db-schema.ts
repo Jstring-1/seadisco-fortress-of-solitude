@@ -453,6 +453,9 @@ export async function initDb() {
   // The YouTube query that surfaced the candidate (query templates are
   // admin-editable, so this is how runs get compared).
   await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS search_query TEXT`);
+  // Result snippet description, so preferred-source terms (e.g. "Provided
+  // to YouTube by The Orchard") can be matched after the fact.
+  await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS candidate_description TEXT`);
   // One-time cleanup (idempotent): an early auto-approve bug left
   // 'pending' straggler candidates for tracks that were already
   // auto-pinned — they showed up in the review queue tagged
