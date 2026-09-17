@@ -12712,6 +12712,73 @@ body.gutenberg-reader-open { overflow: hidden; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* ── YT Review: search query editor ─────────────────────────────── */
+.ytr-q-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.45rem 0.7rem;
+  align-items: center;
+  font-size: 0.78rem;
+}
+/* .sd-filter-input is pinned to width 7.5rem and height 1.7rem !important
+   for the home-strip filters. The editor needs full-width template fields
+   and a real multi-line textarea, so override both inside this section. */
+#ytr-query-wrap .ytr-q-grid .sd-filter-input { width: 100%; }
+#ytr-query-wrap textarea.sd-filter-input {
+  height: auto !important;
+  min-height: 4.4rem;
+  resize: vertical;
+  line-height: 1.4 !important;
+  padding: 0.3rem 0.45rem !important;
+  font-family: inherit;
+}
+/* The sitewide "field has content" glow flags active SEARCH filters. Every
+   field in this editor is always filled, so there it carries no signal and
+   leaves the textarea (which the rule doesn't match) looking mismatched. */
+#ytr-query-wrap input[type="text"]:not(:placeholder-shown) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #333;
+  box-shadow: none;
+}
+#ytr-query-wrap .sd-filter-input:focus { border-color: var(--accent); }
+.ytr-q-label-top { align-self: start; padding-top: 0.3rem; }
+.ytr-q-check { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--muted); cursor: pointer; }
+.ytr-q-sample { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.65rem; font-size: 0.76rem; }
+.ytr-q-sample-label { color: var(--muted); }
+#ytr-query-wrap .ytr-q-sample .sd-filter-input { width: 11rem; }
+#ytr-query-wrap .ytr-q-sample #ytr-qt-track { width: 14rem; }
+.ytr-q-preview { margin-top: 0.45rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.74rem; }
+.ytr-q-prow { display: flex; gap: 0.5rem; align-items: baseline; }
+.ytr-q-plabel { flex-shrink: 0; width: 3.4rem; color: var(--muted); }
+.ytr-q-pcode {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+}
+.ytr-q-plen { flex-shrink: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ytr-q-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.6rem; }
+.ytr-q-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 0.2rem; }
+#ytr-query-wrap #ytr-qt-mode { width: auto; }
+.ytr-q-status { font-size: 0.74rem; color: var(--muted); }
+.ytr-qt-out { margin-top: 0.5rem; font-size: 0.76rem; }
+.ytr-qt-out:empty { display: none; }
+.ytr-qt-head { color: var(--muted); margin-bottom: 0.25rem; }
+.ytr-qt-q { margin-bottom: 0.35rem; }
+.ytr-qt-q code { white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+.ytr-qt-row { display: flex; gap: 0.45rem; align-items: baseline; padding: 0.2rem 0; border-top: 1px solid var(--border); min-width: 0; }
+.ytr-qt-row.is-banned { opacity: 0.45; }
+.ytr-qt-topic { flex-shrink: 0; color: #7ed196; font-weight: 600; font-size: 0.68rem; }
+.ytr-qt-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); text-decoration: none; }
+.ytr-qt-chan { flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+/* The search that surfaced a queue candidate. */
+.ytr-card-q { font-size: 0.7rem; color: #6f6f6f; margin-top: 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .ytr-card {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.015);

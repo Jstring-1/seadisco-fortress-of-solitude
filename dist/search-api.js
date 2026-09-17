@@ -7007,6 +7007,168 @@ const _ytSearchCache = new Map();
 // popup, or the album- and per-track suggest popups happen to compose
 // the exact same q.
 const _ytInflight = new Map();
+const _YT_QUERY_DEFAULTS = {
+    albumTemplate: `"{artist}" {album} {noise}`,
+    trackTemplate: `"{artist}" "{track}" {album} {noise}`,
+    noise: `-"ai cover" -"ai voice" -"ai generated" -suno -udio -"made with ai" -"how to" -lesson -tutorial -"backing track" -karaoke -reaction -slowed -nightcore`,
+    embeddableOnly: true,
+};
+// Longest query the search endpoints accept. The default noise filter alone
+// is 150 chars, so the old 200-char cap silently chopped it mid-term.
+const _YT_MAX_Q_LEN = 500;
+let _ytQueryCfgMemo = null;
+// Coerce a stored/unknown config into a safe one, falling back per field.
+function _ytSanitizeQueryConfig(raw) {
+    const d = _YT_QUERY_DEFAULTS;
+    const tpl = (v, def) => {
+        if (typeof v !== "string")
+            return def;
+        const s = v.replace(/\s+/g, " ").trim().slice(0, 300);
+        return /\{(artist|album|track)\}/.test(s) ? s : def;
+    };
+    return {
+        albumTemplate: tpl(raw?.albumTemplate, d.albumTemplate),
+        trackTemplate: tpl(raw?.trackTemplate, d.trackTemplate),
+        noise: typeof raw?.noise === "string" ? raw.noise.replace(/\s+/g, " ").trim().slice(0, 400) : d.noise,
+        embeddableOnly: typeof raw?.embeddableOnly === "boolean" ? raw.embeddableOnly : d.embeddableOnly,
+    };
+}
+// Human-readable problems with an admin-submitted config ([] = valid).
+function _ytValidateQueryConfig(raw) {
+    const errs = [];
+    for (const k of ["albumTemplate", "trackTemplate"]) {
+        const v = raw?.[k];
+        if (typeof v !== "string" || !v.trim()) {
+            errs.push(`${k} is required`);
+            continue;
+        }
+        if (v.length > 300)
+            errs.push(`${k} is longer than 300 characters`);
+        if (!/\{(artist|album|track)\}/.test(v))
+            errs.push(`${k} must include {artist}, {album} or {track}`);
+        const unknown = (v.match(/\{[^}]*\}/g) || []).filter((t) => !/^\{(artist|album|track|noise)\}$/.test(t));
+        if (unknown.length)
+            errs.push(`${k} has unknown placeholder(s): ${unknown.join(", ")}`);
+    }
+    if (raw?.noise != null && typeof raw.noise !== "string")
+        errs.push("noise must be text");
+    if (typeof raw?.noise === "string" && raw.noise.length > 400)
+        errs.push("noise is longer than 400 characters");
+    if (raw?.embeddableOnly != null && typeof raw.embeddableOnly !== "boolean")
+        errs.push("embeddableOnly must be true or false");
+    return errs;
+}
+async function _ytGetQueryConfig() {
+    if (_ytQueryCfgMemo && Date.now() - _ytQueryCfgMemo.at < 30_000)
+        return _ytQueryCfgMemo.cfg;
+    let parsed = null;
+    try {
+        const s = await getAppSetting("yt_query_config");
+        if (s)
+            parsed = JSON.parse(s);
+    }
+    catch { /* fall back to defaults */ }
+    const cfg = _ytSanitizeQueryConfig(parsed);
+    _ytQueryCfgMemo = { cfg, at: Date.now() };
+    return cfg;
+}
+// Discogs artist names carry catalog decorations no uploader uses: a "(N)"
+// disambiguator and a trailing "*" name-variation marker. "Various" isn't
+// an artist at all. A stray double quote would break the phrase match.
+function _ytCleanArtist(name) {
+    let s = String(name ?? "").trim();
+    // Loop so the suffixes come off in either order ("Name (2)*").
+    let prev;
+    do {
+        prev = s;
+        s = s.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\*+\s*$/, "");
+    } while (s !== prev);
+    s = s.replace(/"/g, "").replace(/\s+/g, " ").trim();
+    return /^various(\s+artists)?$/i.test(s) ? "" : s;
+}
+// Trim an over-long query without leaving half a word, half a quoted
+// phrase, or a dangling exclusion dash.
+function _ytClampQuery(q) {
+    if (q.length <= _YT_MAX_Q_LEN)
+        return q;
+    let s = q.slice(0, _YT_MAX_Q_LEN);
+    const sp = s.lastIndexOf(" ");
+    if (sp > 0)
+        s = s.slice(0, sp);
+    if ((s.match(/"/g) || []).length % 2)
+        s = s.slice(0, s.lastIndexOf('"'));
+    return s.replace(/(\s|^)-+$/, "").trim();
+}
+function _ytBuildQuery(cfg, mode, parts) {
+    const tpl = mode === "track" ? cfg.trackTemplate : cfg.albumTemplate;
+    const clean = (v) => String(v ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+    const vals = {
+        artist: _ytCleanArtist(parts.artist),
+        album: clean(parts.album),
+        track: clean(parts.track),
+        noise: String(cfg.noise ?? "").replace(/\s+/g, " ").trim(),
+    };
+    const q = String(tpl)
+        .replace(/\{(artist|album|track|noise)\}/g, (_m, k) => vals[k] ?? "")
+        .replace(/""/g, " ") // quotes around a value that came out empty
+        .replace(/\s+/g, " ")
+        .trim();
+    return _ytClampQuery(q);
+}
+// ONE cache-key format for every YouTube search path (the search endpoint,
+// its search-meta lookup, and the review worker), so a query either side
+// already paid for is free to the other. The worker used `q:<query>` and
+// never shared a single hit. Embeddable-only results are a different result
+// set, so they key separately.
+function _ytSearchCacheKey(q, pageToken = "", embeddableOnly = true) {
+    const normQ = String(q).toLowerCase().replace(/\s+/g, " ").trim();
+    return `${normQ}|${pageToken}${embeddableOnly ? "|emb" : ""}`;
+}
+// Google's raw search.list items -> the simplified shape every cached body
+// uses. Shared by the search endpoint and the worker so cached entries are
+// readable by both.
+function _ytSimplifySearchItems(raw) {
+    return (Array.isArray(raw?.items) ? raw.items : [])
+        .filter((it) => it?.id?.videoId)
+        .map((it) => {
+        const sn = it.snippet ?? {};
+        const thumbs = sn.thumbnails ?? {};
+        const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
+        return {
+            videoId: String(it.id.videoId),
+            title: String(sn.title ?? ""),
+            channel: String(sn.channelTitle ?? ""),
+            channelId: String(sn.channelId ?? ""),
+            publishedAt: String(sn.publishedAt ?? ""),
+            description: String(sn.description ?? ""),
+            thumbnail: thumb,
+            // durationSec / durationFormatted populated by the search endpoint
+            // (or lazily backfilled on first read of a cached body).
+            durationSec: null,
+            durationFormatted: "",
+        };
+    });
+}
+// Worker-side view of one search item in EITHER cached shape: Google's raw
+// body (older worker cache rows) or the simplified shape above.
+function _ytWorkerItem(it) {
+    if (it?.id?.videoId)
+        return { videoId: String(it.id.videoId), sn: it.snippet || {} };
+    if (it?.videoId) {
+        return {
+            videoId: String(it.videoId),
+            sn: {
+                title: it.title ?? "",
+                channelTitle: it.channel ?? "",
+                channelId: it.channelId ?? "",
+                publishedAt: it.publishedAt || null,
+                description: it.description ?? "",
+                thumbnails: it.thumbnail ? { high: { url: it.thumbnail }, default: { url: it.thumbnail } } : {},
+            },
+        };
+    }
+    return null;
+}
 // Approximate per-day quota tracker. We don't have read access to
 // Google's actual counter, so this is a best-effort local count of
 // the search.list calls WE made since UTC midnight. When it crosses
@@ -7260,7 +7422,7 @@ app.get("/api/youtube/search", async (req, res) => {
     // (Google API quota demo). Toggle back via Railway env-var.
     if (!await requireYtAccess(req, res))
         return;
-    const q = String(req.query?.q ?? "").trim().slice(0, 200);
+    const q = String(req.query?.q ?? "").trim().slice(0, _YT_MAX_Q_LEN);
     if (!q) {
         res.status(400).json({ error: "q required" });
         return;
@@ -7278,8 +7440,8 @@ app.get("/api/youtube/search", async (req, res) => {
     // trailing whitespace, repeated spaces) hit the same cache row.
     // The actual call to YouTube uses the original `q` so result quality
     // isn't affected — only the cache lookup is normalized.
-    const normQ = q.toLowerCase().replace(/\s+/g, " ").trim();
-    const cacheKey = `${normQ}|${pageToken}`;
+    const _qcfg = await _ytGetQueryConfig();
+    const cacheKey = _ytSearchCacheKey(q, pageToken, _qcfg.embeddableOnly);
     // Two-tier cache: in-memory (fast, but wiped on every Railway
     // restart) backed by the DB row (survives deploys). Hot queries
     // stay in RAM; cold queries that are still within 24h hit the DB
@@ -7381,6 +7543,10 @@ app.get("/api/youtube/search", async (req, res) => {
         ];
         if (pageToken)
             params.push(`pageToken=${encodeURIComponent(pageToken)}`);
+        // Only embeddable videos can play on the site. Filtering at search time
+        // means all 50 slots are usable instead of discarding some afterwards.
+        if (_qcfg.embeddableOnly)
+            params.push("videoEmbeddable=true");
         const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
         const r = await loggedFetch("youtube", url, { context: "youtube-search" });
         // Count units regardless of status — the failed call still spends
@@ -7401,26 +7567,7 @@ app.get("/api/youtube/search", async (req, res) => {
             throw err;
         }
         const j = await r.json();
-        const items = (Array.isArray(j?.items) ? j.items : [])
-            .filter((it) => it?.id?.videoId)
-            .map((it) => {
-            const sn = it.snippet ?? {};
-            const thumbs = sn.thumbnails ?? {};
-            const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
-            return {
-                videoId: String(it.id.videoId),
-                title: String(sn.title ?? ""),
-                channel: String(sn.channelTitle ?? ""),
-                channelId: String(sn.channelId ?? ""),
-                publishedAt: String(sn.publishedAt ?? ""),
-                description: String(sn.description ?? ""),
-                thumbnail: thumb,
-                // durationSec / durationFormatted populated below via
-                // a single videos.list call (1 unit, batched up to 50 IDs).
-                durationSec: null,
-                durationFormatted: "",
-            };
-        });
+        const items = _ytSimplifySearchItems(j);
         // Durations: a single videos.list?part=contentDetails call costs
         // 1 quota unit and returns the contentDetails for up to 50 IDs at
         // once. Cheap relative to search.list (100 units) so worth doing
@@ -8829,15 +8976,15 @@ app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, re
 app.get("/api/youtube/search-meta", async (req, res) => {
     if (!await requireYtAccess(req, res))
         return;
-    const q = String(req.query?.q ?? "").trim().slice(0, 200);
+    const q = String(req.query?.q ?? "").trim().slice(0, _YT_MAX_Q_LEN);
     if (!q) {
         res.status(400).json({ error: "q required" });
         return;
     }
-    // Same normalization as /api/youtube/search so the lookup matches
-    // the actual cache key the search endpoint writes under.
-    const normQ = q.toLowerCase().replace(/\s+/g, " ").trim();
-    const cacheKey = `${normQ}|`; // empty pageToken — first-page key
+    // Same key the search endpoint and the review worker write under
+    // (first page, empty pageToken).
+    const _qcfg = await _ytGetQueryConfig();
+    const cacheKey = _ytSearchCacheKey(q, "", _qcfg.embeddableOnly);
     const ts = await getYoutubeSearchCacheTimestamp(cacheKey).catch(() => null);
     res.json({ lastSearchedAt: ts ? ts.toISOString() : null });
 });
@@ -13136,8 +13283,14 @@ async function _ytReviewAutoApproveEnabled() {
         return true;
     }
 }
-async function _ytReviewSearch(q) {
-    const cacheKey = `q:${q}`;
+// opts.worker (default true): count toward the worker's daily budget. The
+// admin "test search" passes worker:false so dialing in a query only spends
+// project quota. opts.embeddableOnly overrides the saved config (the test
+// runs against unsaved settings).
+async function _ytReviewSearch(q, opts = {}) {
+    const worker = opts.worker !== false;
+    const embeddableOnly = typeof opts.embeddableOnly === "boolean" ? opts.embeddableOnly : (await _ytGetQueryConfig()).embeddableOnly;
+    const cacheKey = _ytSearchCacheKey(q, "", embeddableOnly);
     try {
         const cached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000);
         if (cached)
@@ -13150,7 +13303,7 @@ async function _ytReviewSearch(q) {
     _ytReviewMaybeReset();
     if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS)
         return { ok: false, reason: "project_cap" };
-    if (_ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET)
+    if (worker && _ytReviewSearchesToday >= _YT_REVIEW_DAILY_BUDGET)
         return { ok: false, reason: "worker_cap" };
     const params = [
         "part=snippet",
@@ -13159,6 +13312,8 @@ async function _ytReviewSearch(q) {
         `q=${encodeURIComponent(q)}`,
         `key=${encodeURIComponent(_youtubeApiKey)}`,
     ];
+    if (embeddableOnly)
+        params.push("videoEmbeddable=true");
     const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
     try {
         const resp = await fetch(url);
@@ -13173,12 +13328,23 @@ async function _ytReviewSearch(q) {
             console.warn(`[yt-review] search failed: HTTP ${resp.status} for q=${q}${errSummary ? ` — ${errSummary}` : ""}`);
             return { ok: false, reason: `http_${resp.status}${errSummary ? `: ${errSummary}` : ""}` };
         }
-        const body = await resp.json();
-        _bumpYtQuotaPersisted(1, 100);
-        try {
-            await setYoutubeSearchCache(cacheKey, body);
+        const raw = await resp.json();
+        _bumpYtQuotaPersisted(worker ? 1 : 0, 100);
+        // Cache in the simplified shape /api/youtube/search reads, under the
+        // shared key. Skip empty result sets so a transient zero-result response
+        // can't poison the popup's cache for a week (the worker never re-runs a
+        // searched track anyway).
+        const body = {
+            items: _ytSimplifySearchItems(raw),
+            nextPageToken: raw?.nextPageToken ?? null,
+            totalResults: raw?.pageInfo?.totalResults ?? null,
+        };
+        if (body.items.length) {
+            try {
+                await setYoutubeSearchCache(cacheKey, body);
+            }
+            catch { }
         }
-        catch { }
         return { ok: true, body, cached: false };
     }
     catch (e) {
@@ -13302,10 +13468,15 @@ async function _runYtReviewWorker() {
                 await updateReviewState({ cursor_year: year, cursor_master_id: masterId, cursor_track_pos: null });
                 continue;
             }
-            // ONE search per master: "<artist> <title>" lifts the popup's
-            // album-mode query shape. Fallback to just artist when the
-            // master has no title in the cache.
-            const q = (masterTitle ? `${masterArtist} ${masterTitle}` : masterArtist).trim() || eligibleTracks[0].title;
+            // ONE search per master, phrased by the shared admin-editable album
+            // template (YT Review -> Search query) — the same string the album
+            // popup builds, so a search either side ran is a cache hit for the
+            // other. With no usable artist or title, fall back to the track
+            // template on the first eligible track.
+            const _qcfg = await _ytGetQueryConfig();
+            const q = (_ytCleanArtist(masterArtist) || masterTitle)
+                ? _ytBuildQuery(_qcfg, "album", { artist: masterArtist, album: masterTitle })
+                : _ytBuildQuery(_qcfg, "track", { track: eligibleTracks[0].title });
             await updateReviewState({ message: `${year ?? "?"} · ${masterArtist} — ${masterTitle || "(no title)"}` });
             const result = await _ytReviewSearch(q);
             if (!result.ok) {
@@ -13359,10 +13530,13 @@ async function _runYtReviewWorker() {
             const bannedChannels = await _getBannedChannelIds();
             const matchesByTrack = new Map();
             for (const it of items) {
-                const vid = String(it?.id?.videoId || "");
-                if (!vid)
+                // Accept both cached shapes: Google's raw body (older worker cache
+                // rows) and the simplified items the shared search path writes.
+                const norm = _ytWorkerItem(it);
+                if (!norm)
                     continue;
-                const sn = it.snippet || {};
+                const vid = norm.videoId;
+                const sn = norm.sn;
                 // Banned channels never enter the review queue.
                 if (bannedChannels.has(String(sn.channelId || "")))
                     continue;
@@ -13442,6 +13616,7 @@ async function _runYtReviewWorker() {
                         trackDurationSeconds: tr.durationSeconds,
                         isTopicChannel: _ytIsTopicChannel(chanTitle),
                         autoReason: verdict.reason,
+                        searchQuery: q,
                         status: insStatus,
                         reviewedBy: insStatus === "pending" ? null : "auto",
                     });
@@ -13579,6 +13754,88 @@ app.post("/api/admin/yt-review/daily", express.json({ limit: "1kb" }), async (re
 // Toggle auto-approve of exact matches (Topic channel + artist +
 // title + duration). Off means every candidate lands in the human
 // queue, exactly as before this feature existed.
+// GET /api/youtube/query-config — the active search templates + defaults.
+// Unauthenticated on purpose: it's only phrasing, and the album popups need
+// it to build the exact query the worker does (so cache hits carry over).
+app.get("/api/youtube/query-config", async (_req, res) => {
+    try {
+        const cfg = await _ytGetQueryConfig();
+        res.setHeader("Cache-Control", "no-store");
+        res.json({ config: cfg, defaults: _YT_QUERY_DEFAULTS, maxLength: _YT_MAX_Q_LEN });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/admin/yt-review/query-config — save the search templates, or
+// { reset: true } to go back to the built-in defaults.
+app.post("/api/admin/yt-review/query-config", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        if (req.body?.reset) {
+            await setAppSetting("yt_query_config", null);
+            _ytQueryCfgMemo = null;
+            res.json({ ok: true, config: await _ytGetQueryConfig() });
+            return;
+        }
+        const errors = _ytValidateQueryConfig(req.body);
+        if (errors.length) {
+            res.status(400).json({ error: "invalid_config", details: errors });
+            return;
+        }
+        const cfg = _ytSanitizeQueryConfig(req.body);
+        await setAppSetting("yt_query_config", JSON.stringify(cfg));
+        _ytQueryCfgMemo = null;
+        res.json({ ok: true, config: cfg });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/admin/yt-review/query-test — run ONE search built from an
+// (unsaved) config against a sample artist/album/track, so the templates
+// can be dialed in before a worker run. Cache-first; a miss costs 100 units
+// against the project cap, NOT the worker's daily budget.
+app.post("/api/admin/yt-review/query-test", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const b = req.body || {};
+        const errors = b.config ? _ytValidateQueryConfig(b.config) : [];
+        if (errors.length) {
+            res.status(400).json({ error: "invalid_config", details: errors });
+            return;
+        }
+        const cfg = b.config ? _ytSanitizeQueryConfig(b.config) : await _ytGetQueryConfig();
+        const mode = b.mode === "track" ? "track" : "album";
+        const q = _ytBuildQuery(cfg, mode, { artist: b.artist, album: b.album, track: b.track });
+        if (!q) {
+            res.status(400).json({ error: "empty_query" });
+            return;
+        }
+        const result = await _ytReviewSearch(q, { worker: false, embeddableOnly: cfg.embeddableOnly });
+        if (!result.ok) {
+            res.status(result.reason === "project_cap" ? 429 : 502).json({ error: result.reason, q });
+            return;
+        }
+        const banned = await _getBannedChannelIds();
+        const items = (Array.isArray(result.body?.items) ? result.body.items : [])
+            .map(_ytWorkerItem)
+            .filter(Boolean)
+            .map((n) => ({
+            videoId: n.videoId,
+            title: String(n.sn.title || ""),
+            channel: String(n.sn.channelTitle || ""),
+            isTopic: _ytIsTopicChannel(String(n.sn.channelTitle || "")),
+            banned: banned.has(String(n.sn.channelId || "")),
+        }));
+        res.json({ ok: true, q, cached: result.cached, count: items.length, items: items.slice(0, 25) });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 app.post("/api/admin/yt-review/auto", express.json({ limit: "1kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;

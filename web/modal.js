@@ -3698,12 +3698,75 @@ function _trackYtRefreshHeadingPlayableCount(root) {
 }
 window._trackYtRefreshHeadingPlayableCount = _trackYtRefreshHeadingPlayableCount;
 
-// Noise terms appended to every auto-built YT search query. Keeps AI
-// covers, AI voices, Suno/Udio output, and "how to" tutorials out of
-// the top results.
-function _ytNoiseFilter() {
-  return `-"ai cover" -"ai voice" -"ai generated" -suno -udio -"made with ai" -"how to"`;
+// ── YouTube query builder ────────────────────────────────────────────
+// Mirrors _ytCleanArtist / _ytClampQuery / _ytBuildQuery in
+// src/search-api.ts — KEEP THEM IN LOCKSTEP. The server owns the templates
+// (admin-editable under YT Review -> Search query) and the review worker
+// builds with them; the popups build the SAME string here so a search either
+// side already paid for is a cache hit for the other. The defaults below are
+// only a fallback until /api/youtube/query-config loads.
+const _YT_QUERY_DEFAULTS_CLIENT = {
+  albumTemplate: `"{artist}" {album} {noise}`,
+  trackTemplate: `"{artist}" "{track}" {album} {noise}`,
+  noise: `-"ai cover" -"ai voice" -"ai generated" -suno -udio -"made with ai" -"how to" -lesson -tutorial -"backing track" -karaoke -reaction -slowed -nightcore`,
+  embeddableOnly: true,
+};
+const _YT_MAX_Q_LEN_CLIENT = 500;
+function _ytLoadQueryConfig(force) {
+  if (window._sdYtQueryConfigPromise && !force) return window._sdYtQueryConfigPromise;
+  window._sdYtQueryConfigPromise = fetch("/api/youtube/query-config", { cache: "no-store" })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => { if (j && j.config) window._sdYtQueryConfig = j.config; return window._sdYtQueryConfig || null; })
+    .catch(() => null);
+  return window._sdYtQueryConfigPromise;
 }
+_ytLoadQueryConfig();
+function _ytCleanArtistClient(name) {
+  let s = String(name ?? "").trim();
+  // Loop so the suffixes come off in either order ("Name (2)*").
+  let prev;
+  do { prev = s; s = s.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\*+\s*$/, ""); } while (s !== prev);
+  s = s.replace(/"/g, "").replace(/\s+/g, " ").trim();
+  return /^various(\s+artists)?$/i.test(s) ? "" : s;
+}
+function _ytClampQueryClient(q) {
+  if (q.length <= _YT_MAX_Q_LEN_CLIENT) return q;
+  let s = q.slice(0, _YT_MAX_Q_LEN_CLIENT);
+  const sp = s.lastIndexOf(" ");
+  if (sp > 0) s = s.slice(0, sp);
+  if ((s.match(/"/g) || []).length % 2) s = s.slice(0, s.lastIndexOf('"'));
+  return s.replace(/(\s|^)-+$/, "").trim();
+}
+// Build with an explicit config (the admin editor previews unsaved values).
+function _ytBuildQueryWith(cfg, mode, parts) {
+  const c = cfg || _YT_QUERY_DEFAULTS_CLIENT;
+  const p = parts || {};
+  const tpl = mode === "track" ? c.trackTemplate : c.albumTemplate;
+  const clean = v => String(v ?? "").replace(/"/g, "").replace(/\s+/g, " ").trim();
+  const vals = {
+    artist: _ytCleanArtistClient(p.artist),
+    album: clean(p.album),
+    track: clean(p.track),
+    noise: String(c.noise ?? "").replace(/\s+/g, " ").trim(),
+  };
+  const q = String(tpl)
+    .replace(/\{(artist|album|track|noise)\}/g, (_m, k) => vals[k] ?? "")
+    .replace(/""/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return _ytClampQueryClient(q);
+}
+// Build with the active (server-provided) config.
+function _ytBuildQuery(mode, parts) {
+  return _ytBuildQueryWith(window._sdYtQueryConfig || _YT_QUERY_DEFAULTS_CLIENT, mode, parts);
+}
+// Kept for any caller that only wants the exclusion terms.
+function _ytNoiseFilter() {
+  return (window._sdYtQueryConfig || _YT_QUERY_DEFAULTS_CLIENT).noise;
+}
+window._ytLoadQueryConfig = _ytLoadQueryConfig;
+window._ytBuildQueryWith = _ytBuildQueryWith;
+window._ytBuildQuery = _ytBuildQuery;
 window._ytNoiseFilter = _ytNoiseFilter;
 
 // Click handler for the per-row 🎵 suggest affordance. Stashes the
@@ -3783,13 +3846,8 @@ function _trackYtOpenSuggest(el) {
     // the popup target id (#album-info or #version-info).
     targetId: popupRoot?.id || "album-info",
   };
-  const _ytArtistOk = trackArtist && !/^\s*various(\s+artists)?\s*$/i.test(trackArtist);
-  const q = [
-    _ytArtistOk ? `"${trackArtist}"` : "",
-    trackTitle ? `"${trackTitle}"` : "",
-    trackAlbum,
-    _ytNoiseFilter(),
-  ].filter(Boolean).join(" ");
+  // Shared, admin-editable track template (see _ytBuildQuery).
+  const q = _ytBuildQuery("track", { artist: trackArtist, track: trackTitle, album: trackAlbum });
   // autoSearch:false — open the popup with the query prefilled but
   // don't burn 100 quota units. The admin can press Search to fire
   // the real lookup or jump straight to the paste-URL form for
@@ -3931,18 +3989,10 @@ async function _trackYtOpenAlbumSuggest(el) {
   };
   // Clear the per-track context so the popup knows it's in album mode.
   window._sdSuggestForTrack = null;
-  // Strip Discogs's " (N)" disambiguator from the artist name — it's
-  // a catalog convention, not how a YouTuber would title an upload.
-  // Quotes still wrap the artist so multi-word names stay phrasal.
-  // The release title goes in unquoted (per request) since strict-
-  // phrase matching on long album titles drops too many candidates.
-  const ytArtist = String(albumArtist || "").replace(/\s*\(\d+\)\s*$/, "").trim();
-  const _ytArtistOk = ytArtist && !/^\s*various(\s+artists)?\s*$/i.test(ytArtist);
-  const q = [
-    _ytArtistOk ? `"${ytArtist}"` : "",
-    albumTitle ? albumTitle : "",
-    _ytNoiseFilter(),
-  ].filter(Boolean).join(" ");
+  // Shared, admin-editable album template — the same string the review
+  // worker searches with, so an album it already searched is a cache hit.
+  // The builder strips Discogs' "(N)" / "*" artist decorations.
+  const q = _ytBuildQuery("album", { artist: albumArtist, album: albumTitle });
   // autoSearch:false — same rationale as _trackYtOpenSuggest. Admin
   // can press Search to fire the album-wide lookup or stage tracks
   // directly via paste-URL without spending quota first.
@@ -5186,13 +5236,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // knows what to look up; the click handler ignores it (still pulls
   // artist/title fresh from the popup DOM at click time).
   const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
-  // Keep this in sync with _trackYtOpenAlbumSuggest's query.
-  const _albumArtistOk = _albumFirstArtist && !/^\s*various(\s+artists)?\s*$/i.test(_albumFirstArtist);
-  const _ytAlbumQ = [
-    _albumArtistOk ? `"${_albumFirstArtist}"` : "",
-    title ? `"${title}"` : "",
-    _ytNoiseFilter(),
-  ].filter(Boolean).join(" ");
+  // Same builder the click handler (_trackYtOpenAlbumSuggest) uses. This used
+  // to quote the title and keep the "(N)" suffix while the click didn't, so
+  // the hover's "last searched" lookup checked a different cache entry than
+  // the click wrote and always read "not searched yet".
+  const _ytAlbumQ = _ytBuildQuery("album", { artist: _albumFirstArtist, album: title });
   // Surface the missing-tracks link for every signed-in user while
   // the YT auto-search is suspended — the popup itself opens the
   // paste-URL form so users can stage videos they found externally.

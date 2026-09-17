@@ -449,6 +449,9 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS is_topic_channel BOOLEAN`);
     await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS auto_reason TEXT`);
     await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS track_duration_seconds INTEGER`);
+    // The YouTube query that surfaced the candidate (query templates are
+    // admin-editable, so this is how runs get compared).
+    await getPool().query(`ALTER TABLE track_yt_review_queue ADD COLUMN IF NOT EXISTS search_query TEXT`);
     // One-time cleanup (idempotent): an early auto-approve bug left
     // 'pending' straggler candidates for tracks that were already
     // auto-pinned — they showed up in the review queue tagged

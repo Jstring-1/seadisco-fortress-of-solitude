@@ -3875,6 +3875,7 @@ function ytrRowHtml(r) {
       <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
       <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${candTitleHtml}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
       <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${reasonHtml}</div>
+      ${r.search_query ? `<div class="ytr-card-q" title="YouTube search that surfaced this candidate: ${esc(r.search_query)}">q: ${esc(r.search_query)}</div>` : ""}
     </div>
     ${showActions
       ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
@@ -4080,6 +4081,153 @@ async function ytrRejectGroup(btn) {
   }
 }
 window.ytrRejectGroup = ytrRejectGroup;
+
+// ── Search query editor (YT Review -> Search query) ──────────────────
+// Edits the server-side templates the review worker and the album/track
+// popups build their YouTube searches from. Preview renders locally with
+// the same builder the popups use (_ytBuildQueryWith in modal.js); "Run test
+// search" fires one real search with the UNSAVED form values.
+function _ytrDecodeEntities(s) {
+  return String(s ?? "").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+function _ytrQueryForm() {
+  return {
+    albumTemplate: document.getElementById("ytr-q-album")?.value ?? "",
+    trackTemplate: document.getElementById("ytr-q-track")?.value ?? "",
+    noise: document.getElementById("ytr-q-noise")?.value ?? "",
+    embeddableOnly: !!document.getElementById("ytr-q-emb")?.checked,
+  };
+}
+function _ytrQuerySample() {
+  return {
+    artist: document.getElementById("ytr-qt-artist")?.value ?? "",
+    album: document.getElementById("ytr-qt-album")?.value ?? "",
+    track: document.getElementById("ytr-qt-track")?.value ?? "",
+  };
+}
+function _ytrQueryStatus(msg, kind) {
+  const st = document.getElementById("ytr-q-status");
+  if (!st) return;
+  st.textContent = msg || "";
+  st.style.color = kind === "error" ? "#e88" : kind === "ok" ? "#7ed196" : "var(--muted)";
+}
+function _ytrQueryFill(cfg) {
+  if (!cfg) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+  set("ytr-q-album", cfg.albumTemplate);
+  set("ytr-q-track", cfg.trackTemplate);
+  set("ytr-q-noise", cfg.noise);
+  const emb = document.getElementById("ytr-q-emb");
+  if (emb) emb.checked = !!cfg.embeddableOnly;
+  ytrQueryPreview();
+}
+async function ytrLoadQueryConfig() {
+  try {
+    const r = await fetch("/api/youtube/query-config", { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    _ytrQueryFill(j.config);
+    _ytrQueryStatus("");
+  } catch (e) { _ytrQueryStatus(`Couldn't load: ${e?.message || e}`, "error"); }
+}
+window.ytrLoadQueryConfig = ytrLoadQueryConfig;
+function ytrQueryPreview() {
+  const out = document.getElementById("ytr-q-preview");
+  if (!out) return;
+  if (typeof window._ytBuildQueryWith !== "function") { out.textContent = ""; return; }
+  const cfg = _ytrQueryForm();
+  const sample = _ytrQuerySample();
+  const row = (label, q) => `<div class="ytr-q-prow"><span class="ytr-q-plabel">${label}</span>`
+    + `<code class="ytr-q-pcode">${q ? escHtml(q) : '<em style="color:#e88">empty</em>'}</code>`
+    + `<span class="ytr-q-plen">${q.length}/500</span></div>`;
+  out.innerHTML = row("Album", window._ytBuildQueryWith(cfg, "album", sample))
+    + row("Track", window._ytBuildQueryWith(cfg, "track", sample));
+}
+window.ytrQueryPreview = ytrQueryPreview;
+async function ytrSaveQueryConfig(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/query-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(_ytrQueryForm()),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      _ytrQueryStatus(Array.isArray(j?.details) && j.details.length ? j.details.join("; ") : (j?.error || `HTTP ${r.status}`), "error");
+      return;
+    }
+    // Popups open on this page pick up the new phrasing immediately.
+    window._sdYtQueryConfig = j.config;
+    _ytrQueryFill(j.config);
+    _ytrQueryStatus("Saved — applies to the next worker run and new popup searches.", "ok");
+  } catch (e) { _ytrQueryStatus(`Save failed: ${e?.message || e}`, "error"); }
+  finally { if (btn) btn.disabled = false; }
+}
+window.ytrSaveQueryConfig = ytrSaveQueryConfig;
+async function ytrResetQueryConfig(btn) {
+  if (!confirm("Reset the YouTube search query to the built-in defaults?")) return;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/query-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset: true }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { _ytrQueryStatus(j?.error || `HTTP ${r.status}`, "error"); return; }
+    window._sdYtQueryConfig = j.config;
+    _ytrQueryFill(j.config);
+    _ytrQueryStatus("Reset to defaults.", "ok");
+  } catch (e) { _ytrQueryStatus(`Reset failed: ${e?.message || e}`, "error"); }
+  finally { if (btn) btn.disabled = false; }
+}
+window.ytrResetQueryConfig = ytrResetQueryConfig;
+async function ytrTestQuery(btn) {
+  const out = document.getElementById("ytr-qt-out");
+  if (!out) return;
+  const mode = document.getElementById("ytr-qt-mode")?.value === "track" ? "track" : "album";
+  const label = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Searching…"; }
+  out.innerHTML = `<div style="color:var(--muted)">Searching…</div>`;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/query-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: _ytrQueryForm(), mode, ..._ytrQuerySample() }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = Array.isArray(j?.details) && j.details.length ? j.details.join("; ")
+        : j?.error === "project_cap" ? "Project quota soft cap reached for today — try again after midnight Pacific."
+        : (j?.error || `HTTP ${r.status}`);
+      out.innerHTML = `<div style="color:#e88">${escHtml(msg)}</div>`;
+      return;
+    }
+    const items = Array.isArray(j.items) ? j.items : [];
+    const topic = items.filter(i => i.isTopic).length;
+    const banned = items.filter(i => i.banned).length;
+    const head = `<div class="ytr-qt-head">${j.cached ? "Cached — no quota spent" : "Fresh search — 100 units"}`
+      + ` · ${j.count} result${j.count === 1 ? "" : "s"}${j.count > items.length ? `, showing first ${items.length}` : ""}`
+      + ` · ${topic} on Topic channels${banned ? ` · ${banned} from banned channels (the worker skips these)` : ""}</div>`
+      + `<div class="ytr-qt-q"><code>${escHtml(j.q || "")}</code></div>`;
+    const rows = items.map(i => {
+      const title = _ytrDecodeEntities(i.title);
+      const chan = _ytrDecodeEntities(i.channel);
+      return `<div class="ytr-qt-row${i.banned ? " is-banned" : ""}">`
+        + (i.isTopic ? `<span class="ytr-qt-topic">TOPIC</span>` : "")
+        + `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(i.videoId)}" target="_blank" rel="noopener" class="ytr-qt-title" title="${escHtml(title)}">${escHtml(title)}</a>`
+        + `<span class="ytr-qt-chan">${escHtml(chan)}</span></div>`;
+    }).join("");
+    out.innerHTML = head + (rows || `<div style="color:var(--muted)">No results.</div>`);
+  } catch (e) {
+    out.innerHTML = `<div style="color:#e88">Test failed: ${escHtml(e?.message || String(e))}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label || "Run test search"; }
+  }
+}
+window.ytrTestQuery = ytrTestQuery;
 async function ytrCustomApprove(id) {
   const input = document.getElementById(`ytr-custom-${id}`);
   const url = (input?.value || "").trim();
