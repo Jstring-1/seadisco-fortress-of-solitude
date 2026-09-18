@@ -1875,7 +1875,8 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 260918.c22c8fad";
+  // Filled in per deploy by the server (see _SD_BUILD in search-api.ts).
+  const SITE_VERSION = window._SD_BUILD_LABEL && window._SD_BUILD_LABEL !== "__SD_BUILD_LABEL__" ? `build ${window._SD_BUILD_LABEL}` : "";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

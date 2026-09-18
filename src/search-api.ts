@@ -819,6 +819,29 @@ function _buildClerkInject(): string {
   } catch { return ""; }
 }
 const _clerkInject = _buildClerkInject();
+// ── Build stamp (replaces the old commit-per-push cache-bust) ─────────
+// id: a content hash of every frontend asset, computed once at boot. It
+// goes into each ?v= asset URL, and static JS/CSS are served immutable
+// for a year, so the hash changing is what makes browsers fetch new code
+// — and a deploy that only touches server code keeps their caches warm.
+// label: shown under the logo — date + deployed commit on Railway, or
+// the hash locally.
+const _SD_BUILD: { id: string; label: string } = (() => {
+  const webDir = path.join(__dirname, "../web");
+  const h = crypto.createHash("sha256");
+  try {
+    for (const f of fs.readdirSync(webDir).filter(f => /\.(js|css|html|svg|webmanifest)$/.test(f)).sort()) {
+      h.update(f);
+      h.update(fs.readFileSync(path.join(webDir, f)));
+    }
+  } catch { h.update(String(Date.now())); }
+  const id = h.digest("hex").slice(0, 10);
+  const sha = (process.env.RAILWAY_GIT_COMMIT_SHA || "").slice(0, 8);
+  const d = new Date();
+  const ymd = `${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+  return { id, label: sha ? `${ymd}.${sha}` : id };
+})();
+
 function _loadHtmlTemplated(relPath: string): string | null {
   // Don't cache an empty-themed HTML — if _siteTheme hasn't loaded
   // yet (DB still warming up, brand-new deploy, etc.) we'd lock in
@@ -838,6 +861,13 @@ function _loadHtmlTemplated(relPath: string): string | null {
     // script in <head> can apply it before the stylesheet parses.
     // The placeholder is read by the inline IIFE that sets data-theme.
     html = html.replace(/<!--SD_THEME_INJECT-->/g, _siteTheme);
+    // Stamp the build into every asset URL (?v=) and the lazy-module
+    // version, and expose the label for the header. Pages without the
+    // lazy-version line (admin.html) get the globals in <head>.
+    html = html.replace(/__SD_BUILD_LABEL__/g, _SD_BUILD.label).replace(/__SD_BUILD__/g, _SD_BUILD.id);
+    if (!html.includes("_SD_BUILD_LABEL")) {
+      html = html.replace("</head>", `<script>window._SD_LAZY_VERSION=${JSON.stringify(_SD_BUILD.id)};window._SD_BUILD_LABEL=${JSON.stringify(_SD_BUILD.label)};</script>\n</head>`);
+    }
     if (useCache) _htmlCache.set(relPath, html);
     return html;
   } catch { return null; }

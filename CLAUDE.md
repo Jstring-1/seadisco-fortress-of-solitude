@@ -15,7 +15,7 @@
 - **DB:** PostgreSQL via `pg` pool (Railway)
 - **Auth:** Clerk (JWT bearer tokens via `getClerkUserId`, modal sign-in via `openSignInModal()`, waitlist via `openSignUpModal()`)
 - **Discogs:** OAuth 1.0a — read + write (collection, wantlist, marketplace inventory, lists, ratings, folders, orders)
-- **Frontend:** Vanilla JS SPA, no build step on the web/ side. Scripts loaded with `defer` and cache-busted via `?v=YYYYMMDD.HHMM`
+- **Frontend:** Vanilla JS SPA, no build step on the web/ side. Scripts loaded with `defer`; `?v=` build hash stamped by the server at boot
 - **Media:** YouTube IFrame Player + LOC `<audio>` element + Archive.org streams. Cross-source unified play queue.
 
 ## Directory layout
@@ -66,16 +66,7 @@ For Claude Code preview, use `preview_start` with name `"SeaDisco Web Server"` (
 
 ## Cache-bust version
 
-Every CSS/JS asset in `index.html` and `admin.html` is loaded with `?v=YYYYMMDD.HHMM`. The build version is also displayed under the logo via `SITE_VERSION` in `web/shared.js`. **Bump in all four files** when changing frontend:
-
-```bash
-cd /c/Users/KJ-NoJesteringStudio/GitHub/discogs-mcp-server && \
-  sed -i 's/20260507\.1225/20260507.1300/g' web/index.html web/sw.js web/admin.html web/shared.js
-```
-
-A PreToolUse hook auto-bumps the cache-bust on tool runs that touch `web/`, scooping the change into a separate `chore: bump cache-bust` commit. Expected behavior — don't fight it.
-
-The current build is the trailing pattern in those files. Use `date "+%Y%m%d.%H%M"` for the new value (always increases monotonically).
+Asset URLs in `index.html` / `admin.html` carry `?v=__SD_BUILD__`. At boot the server hashes every file in `web/` and substitutes that hash (`_SD_BUILD` in `src/search-api.ts`), along with `_SD_LAZY_VERSION` for lazy modules and the build label under the logo (date + Railway commit). Nothing to bump by hand: any frontend change produces a new hash on the next deploy, and a server-only deploy keeps browser caches warm. (The old `bump-cache-bust.sh` + PreToolUse hook are gone.)
 
 ## Auth tiers
 

@@ -11,7 +11,7 @@ An invite-only music-discovery web app built on top of the Discogs API. Search a
 - **Auth:** Clerk (waitlist-gated sign-up)
 - **Discogs:** OAuth 1.0a (full marketplace access) + Personal Access Token (read-only fallback)
 - **LOC:** `loc.gov` JSON API (admin-only view, rate-limited proxy)
-- **Frontend:** Vanilla JS SPA in `web/`, no build step, cache-busted via `?v=YYYYMMDD{letter}` query params
+- **Frontend:** Vanilla JS SPA in `web/`, no build step, cache-busted with a content-hash `?v=` the server stamps at boot
 
 ## Build & run
 
@@ -67,4 +67,4 @@ CLAUDE.md           Session-handoff doc for new Claude Code sessions
 
 ## See also
 
-`CLAUDE.md` has the live project context used when resuming work with Claude Code, including the current cache-bust version, deployment notes, known issues, and coding conventions.
+`CLAUDE.md` has the live project context used when resuming work with Claude Code, deployment notes, known issues, and coding conventions.

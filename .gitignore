@@ -10,3 +10,5 @@ Thumbs.db
 .claude/settings.local.json
 scripts/blueswords-ocr/
 scratch/
+# Blues-dictionary OCR output (copyrighted source text) stays local.
+scripts/blueswords-*.json
