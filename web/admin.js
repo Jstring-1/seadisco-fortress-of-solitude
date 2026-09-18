@@ -3476,7 +3476,7 @@ async function loadYtReview() {
         ${ytrTile("Skipped",  c.skipped,  "var(--muted)", "skipped")}
         ${ytrTile("Searched", st.total_searched || 0, "var(--text)")}
         ${ytrTile("Queued",   st.total_queued   || 0, "var(--text)")}
-        ${ytrTile("Auto-pinned", st.total_auto_approved || 0, (st.total_auto_approved ? "#7ed196" : "var(--muted)"))}
+        ${ytrTile("Auto-pinned", c.auto, (c.auto ? "#f0c674" : "var(--muted)"), "auto")}
         <div style="cursor:pointer" onclick="ytrShowErrors()" title="Click to view recent worker errors.">
           ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
         </div>
@@ -3795,7 +3795,7 @@ async function loadYtReviewQueue() {
     // Only meaningful for the pending view — in the approved/rejected views
     // these ids are legitimately what you want to see.
     let visible = rows;
-    if (_ytrStatus === "pending") {
+    if (_ytrStatus === "pending" || _ytrStatus === "auto") {
       visible = rows.filter(row => {
         const rid = Number(row.id);
         return !_ytrDecided.has(rid) && !_ytrInFlight.has(rid);
@@ -3816,13 +3816,19 @@ async function loadYtReviewQueue() {
         ytrRenderPager(total);
         return;
       } else {
-        el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No ${_ytrStatus} rows.</div>`;
+        el.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No ${_ytrStatus === "auto" ? "auto-pinned" : _ytrStatus} rows.</div>`;
       }
       ytrRenderPager(total);
       return;
     }
     _ytrSyncRetries = 0;
-    el.innerHTML = ytrGroupedHtml(visible);
+    const autoBar = _ytrStatus === "auto"
+      ? `<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;font-size:0.76rem;color:var(--muted)">
+          Pins the auto-approver made. Keep moves one to Approved; Remove deletes the pin and rejects it.
+          <button class="admin-btn" style="margin-left:auto" onclick="ytrKeepAutoPage(this)" title="Keep every auto-pin shown on this page.">✓ Keep all on page</button>
+        </div>`
+      : "";
+    el.innerHTML = autoBar + ytrGroupedHtml(visible);
     ytrRenderPager(total);
   } catch (e) { el.innerHTML = `<span style="color:#e88">Queue load failed: ${esc(e?.message || e)}</span>`; }
 }
@@ -3879,6 +3885,7 @@ function ytrRowHtml(r) {
   })() : "";
   const showActions = _ytrStatus === "pending";
   const showDelete = _ytrStatus === "approved";
+  const showAuto = _ytrStatus === "auto";
   const yr = r.master_year || "?";
   return `<div class="ytr-card" data-ytr-id="${r.id}" data-ytr-ch="${esc(r.candidate_channel_id || "")}" data-ytr-ch-title="${esc(r.candidate_channel_title || "")}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
     ${r.master_cover_url
@@ -3906,6 +3913,11 @@ function ytrRowHtml(r) {
             <button class="admin-btn" onclick="ytrCustomApprove(${r.id})" title="Pin your own URL to this track instead of the worker's candidate. Overwrites any existing override.">↳ Use my URL</button>
           </div>
         </div>`
+      : showAuto
+        ? `<div style="display:flex;gap:0.3rem;align-items:center">
+            <button class="admin-btn" onclick="ytrKeepAuto([${r.id}], this)" title="Keep this pin. Moves it to Approved and counts as your approval for the channel's trust.">✓ Keep</button>
+            <button class="admin-btn" style="color:#e88" onclick="ytrRemoveAuto(${r.id}, this)" title="Delete the pin and mark the candidate rejected. The track becomes unpinned.">✗ Remove</button>
+          </div>`
       : showDelete
         ? `<div style="display:flex;gap:0.3rem;align-items:center">
             <button class="admin-btn" onclick="ytrDeleteApproval(${r.id})" title="Remove the override this approval created and mark the candidate rejected.">🗑 Delete</button>
@@ -3963,7 +3975,7 @@ function ytrRenderPager(total) {
   if (pages <= 1) { el.innerHTML = `<span style="color:var(--muted)">${total} row${total === 1 ? "" : "s"}</span>`; return; }
   el.innerHTML = `
     <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} onclick="ytrPage(${_ytrPage - 1})">‹ Prev</button>
-    <span style="color:var(--muted)">Page ${cur} / ${pages} · ${total.toLocaleString()} ${_ytrStatus}</span>
+    <span style="color:var(--muted)">Page ${cur} / ${pages} · ${total.toLocaleString()} ${_ytrStatus === "auto" ? "auto-pinned" : _ytrStatus}</span>
     <button class="admin-btn" ${cur >= pages ? "disabled" : ""} onclick="ytrPage(${_ytrPage + 1})">Next ›</button>
   `;
 }
@@ -4320,6 +4332,72 @@ async function ytrDeleteApproval(id) {
   } catch (e) { alert(`Delete failed: ${e?.message || e}`); }
 }
 window.ytrDeleteApproval = ytrDeleteApproval;
+// Auto-pinned review. Cards leave immediately (optimistic, like decide);
+// on failure they're un-remembered so the reconcile reload brings them back.
+function _ytrDropAutoCards(ids) {
+  for (const id of ids) {
+    _ytrRememberDecided(id);
+    const card = document.querySelector(`#ytr-queue .ytr-card[data-ytr-id="${id}"]`);
+    const group = card?.closest(".ytr-group");
+    card?.remove();
+    if (group && !group.querySelector(".ytr-card")) group.remove();
+  }
+  if (!document.querySelector("#ytr-queue .ytr-card")) _ytrScheduleReload();
+}
+async function ytrKeepAuto(ids, btn) {
+  ids = (ids || []).map(Number).filter(Number.isFinite);
+  if (!ids.length) return;
+  if (btn) btn.disabled = true;
+  _ytrDropAutoCards(ids);
+  _ytrAdjustCount("auto", -ids.length);
+  _ytrAdjustCount("approved", +ids.length);
+  try {
+    const r = await apiFetch("/api/admin/yt-review/confirm-auto", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      ids.forEach(id => _ytrDecided.delete(id));
+      showToast(`Keep failed: ${body?.error || `HTTP ${r.status}`}`, "error", 5000);
+      loadYtReview();
+    }
+  } catch (e) {
+    ids.forEach(id => _ytrDecided.delete(id));
+    showToast(`Keep failed: ${e?.message || e}`, "error", 5000);
+    loadYtReview();
+  }
+}
+window.ytrKeepAuto = ytrKeepAuto;
+function ytrKeepAutoPage(btn) {
+  const ids = Array.from(document.querySelectorAll("#ytr-queue .ytr-card[data-ytr-id]"))
+    .map(el => Number(el.getAttribute("data-ytr-id")));
+  ytrKeepAuto(ids, btn);
+}
+window.ytrKeepAutoPage = ytrKeepAutoPage;
+async function ytrRemoveAuto(id, btn) {
+  if (btn) btn.disabled = true;
+  _ytrDropAutoCards([id]);
+  _ytrAdjustCount("auto", -1);
+  _ytrAdjustCount("rejected", +1);
+  try {
+    const r = await apiFetch("/api/admin/yt-review/delete-approval", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      _ytrDecided.delete(id);
+      showToast(`Remove failed: ${body?.error || `HTTP ${r.status}`}`, "error", 5000);
+      loadYtReview();
+    }
+  } catch (e) {
+    _ytrDecided.delete(id);
+    showToast(`Remove failed: ${e?.message || e}`, "error", 5000);
+    loadYtReview();
+  }
+}
+window.ytrRemoveAuto = ytrRemoveAuto;
 async function ytrShowErrors() {
   const esc = escHtml;   // canonical escaper (shared.js) — escapes & < > " '
   const existing = document.getElementById("ytr-errors-modal");

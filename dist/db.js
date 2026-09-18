@@ -4009,8 +4009,20 @@ export async function listReviewQueue(opts = {}) {
     const q = (opts.q ?? "").trim();
     // Free-text filter: matches the track's artist OR title so the admin
     // can find "is this specific missing track already suggested?".
-    const where = ["status = $1"];
-    const params = [status];
+    // "auto" is a virtual status: approved rows the auto-approver pinned that
+    // no human has confirmed yet. "approved" excludes them, so the two views
+    // never overlap. Keeping an auto-pin moves it into "approved".
+    const where = [];
+    const params = [];
+    if (status === "auto") {
+        where.push("status = 'approved'", "reviewed_by = 'auto'");
+    }
+    else {
+        params.push(status);
+        where.push(`status = $${params.length}`);
+        if (status === "approved")
+            where.push("COALESCE(reviewed_by, '') <> 'auto'");
+    }
     if (q) {
         params.push(`%${q}%`);
         where.push(`(track_artist ILIKE $${params.length} OR track_title ILIKE $${params.length})`);
@@ -4030,10 +4042,11 @@ export async function listReviewQueue(opts = {}) {
     return { rows: r.rows, total: totalR.rows[0]?.n ?? 0 };
 }
 export async function getReviewQueueCounts() {
-    const r = await getPool().query(`SELECT status, COUNT(DISTINCT (master_id, track_position))::int AS n
+    const r = await getPool().query(`SELECT CASE WHEN status = 'approved' AND reviewed_by = 'auto' THEN 'auto' ELSE status END AS status,
+            COUNT(DISTINCT (master_id, track_position))::int AS n
        FROM track_yt_review_queue
-      GROUP BY status`);
-    const out = { pending: 0, approved: 0, rejected: 0, skipped: 0, total: 0 };
+      GROUP BY 1`);
+    const out = { pending: 0, approved: 0, auto: 0, rejected: 0, skipped: 0, total: 0 };
     for (const row of r.rows) {
         const s = String(row.status);
         if (s in out)
@@ -4165,6 +4178,17 @@ export async function reviewQueueDismissPendingForResearch() {
             (SELECT COUNT(*) FROM s)::int AS unlogged`);
     const row = r.rows[0] || {};
     return { dismissed: Number(row.dismissed || 0), tracks: Number(row.tracks || 0) };
+}
+// Confirm auto-pins: the pin stays, and the row is re-attributed to the
+// admin so it leaves the auto-pinned view. Because it's now a human
+// decision, it also counts as evidence toward the channel's trust.
+export async function reviewQueueConfirmAuto(ids, reviewer) {
+    if (!ids.length)
+        return 0;
+    const r = await getPool().query(`UPDATE track_yt_review_queue
+        SET reviewed_by = $2, reviewed_at = NOW()
+      WHERE id = ANY($1::int[]) AND status = 'approved' AND reviewed_by = 'auto'`, [ids, reviewer]);
+    return r.rowCount ?? 0;
 }
 export async function reviewQueueDeleteApproval(id, reviewer) {
     const row = (await getPool().query(`SELECT master_id, track_position, status FROM track_yt_review_queue WHERE id = $1`, [id])).rows[0];
