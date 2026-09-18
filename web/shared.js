@@ -1346,7 +1346,9 @@ async function loadClerkInstance() {
     const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
     await new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+      // Pinned to the major version (not @latest) so a new major can't ship
+      // unreviewed code into every page.
+      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@4/dist/clerk.browser.js`;
       s.setAttribute("data-clerk-publishable-key", pk);
       s.setAttribute("crossorigin", "anonymous");
       s.onload = resolve; s.onerror = reject;

@@ -48,7 +48,10 @@ function _ensureHlsLoaded() {
   if (_hlsPromise) return _hlsPromise;
   _hlsPromise = new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js";
+    // Exact version + SRI: the CDN can't swap in different code.
+    s.src = "https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js";
+    s.integrity = "sha384-cciJ0zi8d1uMKC2zJd7jvPY4HQt7W4ByUI/FlMkltvBi31aW61rcpVBhpmW8/NwX";
+    s.crossOrigin = "anonymous";
     s.async = true;
     s.onload = () => resolve(window.Hls);
     s.onerror = () => { _hlsPromise = null; reject(new Error("hls.js failed to load")); };

@@ -1435,6 +1435,8 @@ function _ensureSortable() {
   _sortableLoaded = new Promise((resolve, reject) => {
     const s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js";
+    s.integrity = "sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM";
+    s.crossOrigin = "anonymous";
     s.async = true;
     s.onload = () => resolve(window.Sortable);
     s.onerror = () => { _sortableLoaded = null; reject(new Error("Sortable load failed")); };

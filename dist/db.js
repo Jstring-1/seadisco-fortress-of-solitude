@@ -1,7 +1,86 @@
 import pg from "pg";
 const { Pool } = pg;
+import crypto from "crypto";
 import { expandWithSynonyms } from "./classical-synonyms.js";
 let pool = null;
+// ── Secret-at-rest encryption for stored Discogs credentials ──────────────
+// TOKEN_ENC_KEY: 32 bytes as 64 hex chars or base64. When set, OAuth
+// tokens/secrets and personal access tokens are stored AES-256-GCM
+// encrypted ("enc:v1:" + base64(iv|tag|ciphertext)), so a DB dump, backup
+// or admin SQL query yields ciphertext only. Reads accept both forms, so
+// rows written before the key existed keep working until
+// sealPlaintextTokens() rewrites them. Without the key, values are stored
+// as before (plaintext) and a warning is logged at boot.
+const _SECRET_PREFIX = "enc:v1:";
+const _TOKEN_KEY = (() => {
+    const raw = (process.env.TOKEN_ENC_KEY || "").trim();
+    if (!raw)
+        return null;
+    const buf = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
+    if (buf.length !== 32) {
+        console.error("[db] TOKEN_ENC_KEY must decode to 32 bytes (64 hex chars or base64) — token encryption DISABLED");
+        return null;
+    }
+    return buf;
+})();
+export const tokenEncryptionEnabled = !!_TOKEN_KEY;
+// Values that are sentinels / empty stay as-is so SQL checks like
+// discogs_token != '__oauth__' keep working.
+function _sealSecret(v) {
+    if (v == null)
+        return null;
+    if (!_TOKEN_KEY || v === "" || v === "__oauth__" || v.startsWith(_SECRET_PREFIX))
+        return v;
+    const iv = crypto.randomBytes(12);
+    const c = crypto.createCipheriv("aes-256-gcm", _TOKEN_KEY, iv);
+    const ct = Buffer.concat([c.update(v, "utf8"), c.final()]);
+    return _SECRET_PREFIX + Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64");
+}
+let _openSecretWarned = false;
+function _openSecret(v) {
+    if (v == null || !v.startsWith(_SECRET_PREFIX))
+        return v ?? null;
+    if (!_TOKEN_KEY) {
+        if (!_openSecretWarned) {
+            _openSecretWarned = true;
+            console.error("[db] encrypted Discogs credentials found but TOKEN_ENC_KEY is not set — treating them as absent");
+        }
+        return null;
+    }
+    try {
+        const b = Buffer.from(v.slice(_SECRET_PREFIX.length), "base64");
+        const d = crypto.createDecipheriv("aes-256-gcm", _TOKEN_KEY, b.subarray(0, 12));
+        d.setAuthTag(b.subarray(12, 28));
+        return Buffer.concat([d.update(b.subarray(28)), d.final()]).toString("utf8");
+    }
+    catch {
+        if (!_openSecretWarned) {
+            _openSecretWarned = true;
+            console.error("[db] could not decrypt a stored Discogs credential (wrong TOKEN_ENC_KEY?) — treating it as absent");
+        }
+        return null;
+    }
+}
+// One-time-per-row migration: encrypt any credentials still stored in
+// plaintext. Safe to run every boot (only touches unencrypted rows).
+export async function sealPlaintextTokens() {
+    if (!_TOKEN_KEY) {
+        console.warn("[db] TOKEN_ENC_KEY not set — Discogs credentials are stored unencrypted");
+        return 0;
+    }
+    const r = await getPool().query(`SELECT clerk_user_id, discogs_token, oauth_access_token, oauth_access_secret
+       FROM user_tokens
+      WHERE (discogs_token IS NOT NULL AND discogs_token NOT IN ('', '__oauth__') AND discogs_token NOT LIKE 'enc:v1:%')
+         OR (oauth_access_token IS NOT NULL AND oauth_access_token <> '' AND oauth_access_token NOT LIKE 'enc:v1:%')
+         OR (oauth_access_secret IS NOT NULL AND oauth_access_secret <> '' AND oauth_access_secret NOT LIKE 'enc:v1:%')`);
+    for (const row of r.rows) {
+        await getPool().query(`UPDATE user_tokens SET discogs_token = $2, oauth_access_token = $3, oauth_access_secret = $4
+        WHERE clerk_user_id = $1`, [row.clerk_user_id, _sealSecret(row.discogs_token), _sealSecret(row.oauth_access_token), _sealSecret(row.oauth_access_secret)]);
+    }
+    if (r.rows.length)
+        console.log(`[db] encrypted stored Discogs credentials for ${r.rows.length} user(s)`);
+    return r.rows.length;
+}
 // Exported so feature modules (gutenberg endpoints in search-api.ts, etc.)
 // can run ad-hoc queries without forcing every new feature to land a
 // pile of helper functions in this file. Existing helpers stay in place
@@ -945,7 +1024,7 @@ export async function getAllUsersForSync() {
      WHERE discogs_token IS NOT NULL AND discogs_username IS NOT NULL`);
     return r.rows.map(row => ({
         clerkUserId: row.clerk_user_id,
-        token: row.discogs_token,
+        token: _openSecret(row.discogs_token) ?? "",
         username: row.discogs_username,
         collectionSyncedAt: row.collection_synced_at ?? null,
         wantlistSyncedAt: row.wantlist_synced_at ?? null,
@@ -996,13 +1075,13 @@ export async function hibernateInactiveUsers(exemptIds = []) {
 }
 export async function getUserToken(clerkUserId) {
     const r = await getPool().query("SELECT discogs_token FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
-    return r.rows[0]?.discogs_token ?? null;
+    return _openSecret(r.rows[0]?.discogs_token);
 }
 export async function setUserToken(clerkUserId, token) {
     await getPool().query(`INSERT INTO user_tokens (clerk_user_id, discogs_token, updated_at)
      VALUES ($1, $2, NOW())
      ON CONFLICT (clerk_user_id)
-     DO UPDATE SET discogs_token = $2, updated_at = NOW()`, [clerkUserId, token]);
+     DO UPDATE SET discogs_token = $2, updated_at = NOW()`, [clerkUserId, _sealSecret(token)]);
 }
 export async function saveFeedback(clerkUserId, userEmail, message) {
     await getPool().query(`INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`, [clerkUserId, userEmail, message]);
@@ -1074,13 +1153,13 @@ export async function setDiscogsUsername(clerkUserId, username) {
 // ── OAuth request token helpers (temporary during handshake) ──────────────
 export async function storeOAuthRequestToken(token, tokenSecret, clerkUserId, csrfState) {
     await getPool().query(`INSERT INTO oauth_request_tokens (token, token_secret, clerk_user_id, csrf_state) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (token) DO UPDATE SET token_secret = $2, clerk_user_id = $3, csrf_state = $4, created_at = NOW()`, [token, tokenSecret, clerkUserId, csrfState ?? null]);
+     ON CONFLICT (token) DO UPDATE SET token_secret = $2, clerk_user_id = $3, csrf_state = $4, created_at = NOW()`, [token, _sealSecret(tokenSecret), clerkUserId, csrfState ?? null]);
 }
 export async function getOAuthRequestToken(token) {
     const r = await getPool().query(`SELECT token_secret, clerk_user_id, csrf_state FROM oauth_request_tokens WHERE token = $1`, [token]);
     if (!r.rows[0])
         return null;
-    return { tokenSecret: r.rows[0].token_secret, clerkUserId: r.rows[0].clerk_user_id, csrfState: r.rows[0].csrf_state ?? null };
+    return { tokenSecret: _openSecret(r.rows[0].token_secret) ?? "", clerkUserId: r.rows[0].clerk_user_id, csrfState: r.rows[0].csrf_state ?? null };
 }
 export async function deleteOAuthRequestToken(token) {
     await getPool().query(`DELETE FROM oauth_request_tokens WHERE token = $1`, [token]);
@@ -1090,13 +1169,15 @@ export async function pruneOAuthRequestTokens() {
 }
 // ── OAuth credential storage ─────────────────────────────────────────────
 export async function setOAuthCredentials(clerkUserId, accessToken, accessSecret) {
-    await getPool().query(`UPDATE user_tokens SET oauth_access_token = $2, oauth_access_secret = $3, auth_method = 'oauth', oauth_connected_at = NOW() WHERE clerk_user_id = $1`, [clerkUserId, accessToken, accessSecret]);
+    await getPool().query(`UPDATE user_tokens SET oauth_access_token = $2, oauth_access_secret = $3, auth_method = 'oauth', oauth_connected_at = NOW() WHERE clerk_user_id = $1`, [clerkUserId, _sealSecret(accessToken), _sealSecret(accessSecret)]);
 }
 export async function getOAuthCredentials(clerkUserId) {
     const r = await getPool().query(`SELECT oauth_access_token, oauth_access_secret FROM user_tokens WHERE clerk_user_id = $1 AND auth_method = 'oauth'`, [clerkUserId]);
-    if (!r.rows[0]?.oauth_access_token)
+    const accessToken = _openSecret(r.rows[0]?.oauth_access_token);
+    const accessSecret = _openSecret(r.rows[0]?.oauth_access_secret);
+    if (!accessToken || accessSecret == null)
         return null;
-    return { accessToken: r.rows[0].oauth_access_token, accessSecret: r.rows[0].oauth_access_secret };
+    return { accessToken, accessSecret };
 }
 export async function clearOAuthCredentials(clerkUserId) {
     // Clear OAuth columns and also null out the __oauth__ placeholder token
@@ -8317,6 +8398,16 @@ export async function runReadonlyQuery(sql, opts = {}) {
     try {
         await client.query("START TRANSACTION READ ONLY");
         inTxn = true;
+        // Optional least-privilege role for ad-hoc admin SQL (SQL_RUNNER_ROLE):
+        // a role granted SELECT on the app tables but NOT on user_tokens /
+        // oauth_request_tokens, and without superuser file/server functions.
+        // The app's own role must be a member of it for SET ROLE to work.
+        const runnerRole = (process.env.SQL_RUNNER_ROLE || "").trim();
+        if (runnerRole) {
+            if (!/^[a-z_][a-z0-9_]{0,62}$/.test(runnerRole))
+                throw new Error("SQL_RUNNER_ROLE is not a valid role name");
+            await client.query(`SET LOCAL ROLE "${runnerRole}"`);
+        }
         // statement_timeout takes a bare integer as milliseconds. timeoutMs is
         // a clamped integer, so this interpolation is injection-safe.
         await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
