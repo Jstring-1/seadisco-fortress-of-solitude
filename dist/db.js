@@ -4207,12 +4207,15 @@ export async function getReviewQueueCounts() {
     }
     return out;
 }
-export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo = 1960) {
+export async function getBluesPickerAlbums(strict, mastersPlus, yearFrom = 1920, yearTo = 1960) {
     const client = await getPool().connect();
     try {
         await client.query("BEGIN READ ONLY");
         await client.query("SET LOCAL statement_timeout = '120000'");
         const rows = (await client.query(`SELECT rc.discogs_id AS id, rc.type,
+              CASE WHEN rc.type = 'master' THEN rc.discogs_id
+                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]*$' THEN (rc.data->>'master_id')::int
+              END                                              AS master_id,
               (rc.data->>'year')::int                          AS year,
               COALESCE(rc.data->>'title', '')                  AS title,
               COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
@@ -4226,8 +4229,10 @@ export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo
            ON rc.type = 'master' AND mr.type = 'release'
           AND rc.data->>'main_release' ~ '^[0-9]+$'
           AND mr.discogs_id = (rc.data->>'main_release')::int
-        WHERE (rc.type = 'master'
-               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))
+        WHERE ${mastersPlus
+            ? `(rc.type = 'master'
+               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
+            : `rc.type = 'release'`}
           AND rc.data->'genres' ? 'Blues'
           ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
           AND rc.data->>'year' ~ '^[0-9]{4}$'
@@ -4237,9 +4242,13 @@ export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo
             await client.query("COMMIT");
             return [];
         }
+        const releaseIds = rows.filter(r => r.type === "release").map(r => String(r.id));
+        const masterIds = [...new Set(rows.filter(r => r.master_id != null).map(r => String(r.master_id)))];
         const ov = (await client.query(`SELECT release_id, release_type, track_position, video_id, mode
          FROM track_youtube_overrides
-        WHERE release_id = ANY($1::text[]) AND track_position <> 'ALBUM'`, [rows.map(r => String(r.id))])).rows;
+        WHERE track_position <> 'ALBUM'
+          AND ((release_type = 'release' AND release_id = ANY($1::text[]))
+            OR (release_type = 'master'  AND release_id = ANY($2::text[])))`, [releaseIds, masterIds])).rows;
         const unavailable = new Set((await client.query(`SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`)).rows.map(r => String(r.video_id)));
         await client.query("COMMIT");
         const ovMap = new Map();
@@ -4261,10 +4270,14 @@ export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo
             const videos = (Array.isArray(r.videos) ? r.videos : [])
                 .filter((v) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
                 .map((v) => String(v.title).toLowerCase());
-            const ovs = ovMap.get(`${r.type}:${r.id}`);
+            // Master-scope rows first, the release's own rows win on overlap.
+            const ovs = new Map([
+                ...(r.master_id != null ? ovMap.get(`master:${r.master_id}`) ?? [] : []),
+                ...(r.type === "release" ? ovMap.get(`release:${r.id}`) ?? [] : []),
+            ]);
             const playable = (o) => !!o && !!o.video_id && !unavailable.has(o.video_id);
-            const covered = tracks.every(t => {
-                const o = ovs?.get(String(t.position ?? "").trim());
+            const ytTracks = tracks.filter(t => {
+                const o = ovs.get(String(t.position ?? "").trim());
                 if (o?.mode === "block")
                     return false;
                 if (o?.mode === "replace" && playable(o))
@@ -4273,14 +4286,13 @@ export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo
                 if (videos.some((vt) => vt.includes(tl) || tl.includes(vt)))
                     return true;
                 return playable(o);
-            });
-            if (!covered)
-                continue;
+            }).length;
             out.push({
-                id: Number(r.id), type: r.type, year: Number(r.year),
-                title: String(r.title), artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
+                id: Number(r.id), type: r.type, masterId: r.master_id != null ? Number(r.master_id) : null,
+                year: Number(r.year), title: String(r.title),
+                artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
                 label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
-                thumb: String(r.thumb), tracks: tracks.length,
+                thumb: String(r.thumb), tracks: tracks.length, ytTracks,
             });
         }
         return out;

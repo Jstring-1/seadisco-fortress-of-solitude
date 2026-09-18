@@ -5580,26 +5580,34 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
 // "strict blues" = master whose genres array is exactly ['Blues'].
 // Expanding every master's tracklist is heavy, so this runs under a
 // raised statement_timeout and is meant to be called on demand.
-// Blues picker (admin home-strip tab): cached Masters+ albums (masters +
-// releases with no master) from 1920–1960 tagged Blues — strict = Blues
-// is the ONLY genre — where EVERY track has a playable YouTube video.
-// "Playable" mirrors the album popup's findVideo(): an override in 'block'
-// mode hides the track; a 'replace' override wins; otherwise a Discogs
-// videos[] title that contains (or is contained in) the track title; then
-// a 'gap' override. Videos flagged unavailable don't count, and the
-// full-album ("ALBUM") slot is ignored. Masters have no labels of their
-// own, so they borrow label/catno from their cached main release.
+// Blues picker (admin home-strip tab): cached albums from 1920–1960
+// tagged Blues (strict = Blues is the ONLY genre), each with a count of
+// tracks that have a playable YouTube video so the tab can filter to
+// albums where every track does. mastersPlus = masters + releases with no
+// master; otherwise every cached release (the tab lists a master's other
+// pressings in a side panel). "Playable" mirrors the album popup's
+// findVideo(): an override in 'block' mode hides the track; a 'replace'
+// override wins; otherwise a Discogs videos[] title that contains (or is
+// contained in) the track title; then a 'gap' override. A release sees
+// its master's overrides too, with its own winning on the same position.
+// Videos flagged unavailable don't count, and the full-album ("ALBUM")
+// slot is ignored. Masters have no labels of their own, so they borrow
+// label/catno from their cached main release.
 export interface BluesPickerAlbum {
-  id: number; type: "master" | "release"; year: number; title: string;
-  artist: string; label: string; catno: string; thumb: string; tracks: number;
+  id: number; type: "master" | "release"; masterId: number | null;
+  year: number; title: string; artist: string; label: string; catno: string;
+  thumb: string; tracks: number; ytTracks: number;
 }
-export async function getFullyCoveredBluesAlbums(strict: boolean, yearFrom = 1920, yearTo = 1960): Promise<BluesPickerAlbum[]> {
+export async function getBluesPickerAlbums(strict: boolean, mastersPlus: boolean, yearFrom = 1920, yearTo = 1960): Promise<BluesPickerAlbum[]> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN READ ONLY");
     await client.query("SET LOCAL statement_timeout = '120000'");
     const rows = (await client.query(
       `SELECT rc.discogs_id AS id, rc.type,
+              CASE WHEN rc.type = 'master' THEN rc.discogs_id
+                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]*$' THEN (rc.data->>'master_id')::int
+              END                                              AS master_id,
               (rc.data->>'year')::int                          AS year,
               COALESCE(rc.data->>'title', '')                  AS title,
               COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
@@ -5613,8 +5621,10 @@ export async function getFullyCoveredBluesAlbums(strict: boolean, yearFrom = 192
            ON rc.type = 'master' AND mr.type = 'release'
           AND rc.data->>'main_release' ~ '^[0-9]+$'
           AND mr.discogs_id = (rc.data->>'main_release')::int
-        WHERE (rc.type = 'master'
-               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))
+        WHERE ${mastersPlus
+          ? `(rc.type = 'master'
+               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
+          : `rc.type = 'release'`}
           AND rc.data->'genres' ? 'Blues'
           ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
           AND rc.data->>'year' ~ '^[0-9]{4}$'
@@ -5623,18 +5633,23 @@ export async function getFullyCoveredBluesAlbums(strict: boolean, yearFrom = 192
       [yearFrom, yearTo],
     )).rows as any[];
     if (!rows.length) { await client.query("COMMIT"); return []; }
+    const releaseIds = rows.filter(r => r.type === "release").map(r => String(r.id));
+    const masterIds = [...new Set(rows.filter(r => r.master_id != null).map(r => String(r.master_id)))];
     const ov = (await client.query(
       `SELECT release_id, release_type, track_position, video_id, mode
          FROM track_youtube_overrides
-        WHERE release_id = ANY($1::text[]) AND track_position <> 'ALBUM'`,
-      [rows.map(r => String(r.id))],
+        WHERE track_position <> 'ALBUM'
+          AND ((release_type = 'release' AND release_id = ANY($1::text[]))
+            OR (release_type = 'master'  AND release_id = ANY($2::text[])))`,
+      [releaseIds, masterIds],
     )).rows as any[];
     const unavailable = new Set<string>(((await client.query(
       `SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`,
     )).rows as any[]).map(r => String(r.video_id)));
     await client.query("COMMIT");
 
-    const ovMap = new Map<string, Map<string, { video_id: string; mode: string }>>();
+    type Ov = { video_id: string; mode: string };
+    const ovMap = new Map<string, Map<string, Ov>>();
     for (const o of ov) {
       const k = `${o.release_type}:${o.release_id}`;
       if (!ovMap.has(k)) ovMap.set(k, new Map());
@@ -5652,22 +5667,26 @@ export async function getFullyCoveredBluesAlbums(strict: boolean, yearFrom = 192
       const videos = (Array.isArray(r.videos) ? r.videos : [])
         .filter((v: any) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
         .map((v: any) => String(v.title).toLowerCase());
-      const ovs = ovMap.get(`${r.type}:${r.id}`);
-      const playable = (o: { video_id: string } | undefined) => !!o && !!o.video_id && !unavailable.has(o.video_id);
-      const covered = tracks.every(t => {
-        const o = ovs?.get(String(t.position ?? "").trim());
+      // Master-scope rows first, the release's own rows win on overlap.
+      const ovs = new Map<string, Ov>([
+        ...(r.master_id != null ? ovMap.get(`master:${r.master_id}`) ?? [] : []),
+        ...(r.type === "release" ? ovMap.get(`release:${r.id}`) ?? [] : []),
+      ]);
+      const playable = (o: Ov | undefined) => !!o && !!o.video_id && !unavailable.has(o.video_id);
+      const ytTracks = tracks.filter(t => {
+        const o = ovs.get(String(t.position ?? "").trim());
         if (o?.mode === "block") return false;
         if (o?.mode === "replace" && playable(o)) return true;
         const tl = String(t.title).toLowerCase();
         if (videos.some((vt: string) => vt.includes(tl) || tl.includes(vt))) return true;
         return playable(o);
-      });
-      if (!covered) continue;
+      }).length;
       out.push({
-        id: Number(r.id), type: r.type, year: Number(r.year),
-        title: String(r.title), artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
+        id: Number(r.id), type: r.type, masterId: r.master_id != null ? Number(r.master_id) : null,
+        year: Number(r.year), title: String(r.title),
+        artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
         label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
-        thumb: String(r.thumb), tracks: tracks.length,
+        thumb: String(r.thumb), tracks: tracks.length, ytTracks,
       });
     }
     return out;
