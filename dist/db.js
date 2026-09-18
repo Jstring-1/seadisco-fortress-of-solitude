@@ -4128,6 +4128,12 @@ export async function logTrackSearched(masterId, trackPosition, candidateCount, 
      ON CONFLICT (master_id, track_position)
      DO UPDATE SET last_searched_at = NOW(), candidate_count = EXCLUDED.candidate_count, source = EXCLUDED.source`, [Number(masterId), trackPosition, Math.max(0, candidateCount | 0), source]);
 }
+// Every searched track position for a master, in one query (the worker
+// used to ask once per track).
+export async function getSearchedTrackPositions(masterId) {
+    const r = await getPool().query(`SELECT track_position FROM track_yt_review_searched WHERE master_id = $1`, [Number(masterId)]);
+    return new Set(r.rows.map((row) => String(row.track_position)));
+}
 export async function isTrackAlreadySearched(masterId, trackPosition) {
     const r = await getPool().query(`SELECT 1 FROM track_yt_review_searched WHERE master_id = $1 AND track_position = $2 LIMIT 1`, [Number(masterId), trackPosition]);
     return (r.rowCount ?? 0) > 0;
@@ -5791,6 +5797,11 @@ export async function getCacheEnrichmentBatch(pairs, opts = {}) {
         ? _getCacheEnrichmentBatchV2(pairs)
         : _getCacheEnrichmentBatchV1(pairs);
 }
+// The card-enrichment endpoint (its only caller) reads just these four
+// keys; building the smaller object in SQL keeps up to 200 full Discogs
+// documents per request out of Node memory.
+const _ENRICH_FIELDS = `jsonb_build_object('images', data->'images', 'tracklist', data->'tracklist',
+    'videos', data->'videos', 'identifiers', data->'identifiers')`;
 async function _getCacheEnrichmentBatchV1(pairs) {
     // Cap input size to keep the query bounded; at 200 pairs the
     // query fingerprint is still small (~3KB JSON) and the unnest
@@ -5801,7 +5812,7 @@ async function _getCacheEnrichmentBatchV1(pairs) {
     try {
         const ids = capped.map(p => Number(p.id));
         const types = capped.map(p => String(p.type));
-        const r = await getPool().query(`SELECT discogs_id AS id, type, data
+        const r = await getPool().query(`SELECT discogs_id AS id, type, ${_ENRICH_FIELDS} AS data
          FROM release_cache
         WHERE (discogs_id, type) IN (
           SELECT * FROM unnest($1::int[], $2::text[])
@@ -5819,7 +5830,7 @@ async function _getCacheEnrichmentBatchV1(pairs) {
             try {
                 const fb = await getPool().query(`SELECT DISTINCT ON ((data->>'master_id'))
                   (data->>'master_id')::bigint AS master_id,
-                  data
+                  ${_ENRICH_FIELDS} AS data
              FROM release_cache
             WHERE type = 'release'
               AND (data->>'master_id') = ANY($1::text[])
