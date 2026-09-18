@@ -1660,12 +1660,14 @@ function _seaDiscoBuildClerkAppearance() {
       colorTextSecondary:   muted,
       colorPrimary:         accent,
       colorPrimaryForeground: accentText,
+      // Clerk v4's name for the same thing (the loaded SDK is v4).
+      colorTextOnPrimaryBackground: accentText,
       colorDanger:          "#e05050",
       colorNeutral:         muted,
       borderRadius:         "6px",
       fontFamily:           "system-ui, -apple-system, sans-serif",
     },
-    elements: {
+    elements: _sdClerkElements({
       card:             `background:${bg}; border:1px solid ${cardBorder}; box-shadow:0 10px 40px rgba(0,0,0,0.7);`,
       headerTitle:      `color:${text};`,
       headerSubtitle:   `color:${muted};`,
@@ -1680,12 +1682,37 @@ function _seaDiscoBuildClerkAppearance() {
       // disappeared on noir-white (white-on-white).
       formButtonPrimary: `background:${accent}; color:${accentText}; border:none; font-weight:600;`,
       // Clerk's footer "Secured by" is hidden via .cl-footer in style.css.
-    },
+    }),
   };
 }
+// Clerk's appearance.elements takes a class name (string) or a style
+// object. These were written as CSS text, which Clerk applied as CLASS
+// names — so none of the colours took effect (the primary button showed
+// white text on white). Convert "a:b; c-d:e" into { a: "b", cD: "e" }.
+function _sdClerkStyle(css) {
+  if (typeof css !== "string") return css;
+  const out = {};
+  for (const decl of css.split(";")) {
+    const i = decl.indexOf(":");
+    if (i < 0) continue;
+    const prop = decl.slice(0, i).trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    const val = decl.slice(i + 1).trim();
+    if (prop && val) out[prop] = val;
+  }
+  return out;
+}
+function _sdClerkElements(map) {
+  const out = {};
+  for (const k of Object.keys(map || {})) out[k] = _sdClerkStyle(map[k]);
+  return out;
+}
+window._sdClerkElements = _sdClerkElements;
 // Backwards-compat constant — some sites read this directly. Build
 // once at script load using whatever theme is applied at that moment.
-const SEADISCO_CLERK_APPEARANCE = _seaDiscoBuildClerkAppearance();
+const SEADISCO_CLERK_APPEARANCE = (() => {
+  const a = _seaDiscoBuildClerkAppearance();
+  return { ...a, elements: _sdClerkElements(a.elements) };
+})();
 
 // Public mode — registration is open. Localization just tunes the
 // default Clerk copy to SeaDisco wording. Keys match Clerk's default

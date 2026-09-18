@@ -6281,7 +6281,9 @@ body.card-mode-covers .card .card-badge {
 .cl-formButtonPrimary:focus,
 .cl-formButtonPrimary:active {
   background: var(--accent, #ff6b35) !important;
-  color: #fff !important;
+  /* Text in the page background colour: the accent is bright on every
+     theme (white on noir-white), so #fff here was white-on-white. */
+  color: var(--bg, #0a0a0a) !important;
   border: none !important;
   font-weight: 600 !important;
   text-shadow: none !important;

@@ -22,7 +22,7 @@ function showSignInWidget(c) {
     afterSignUpUrl: "/?v=account",
     appearance: {
       ...SEADISCO_CLERK_APPEARANCE,
-      elements: {
+      elements: _sdClerkElements({
         ...SEADISCO_CLERK_APPEARANCE.elements,
         socialButtonsBlockButton:     "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
         socialButtonsBlockButtonText: "color:#e8dcc8;",
@@ -30,7 +30,7 @@ function showSignInWidget(c) {
         dividerText:                  "color:#8a7d6b;",
         identityPreviewText:          "color:#e8dcc8;",
         identityPreviewEditButton:    "color:#ff6b35;",
-      },
+      }),
     },
   };
   if (typeof c.mountSignIn === "function") {
