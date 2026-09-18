@@ -94,7 +94,13 @@
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
           <h2 style="margin:0">System</h2>
           <button class="admin-btn" onclick="adminOpenApis()" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom">Active APIs ↗</button>
+          <button class="admin-refresh-btn" onclick="loadAdminSystem()" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
         </div>
+        <div id="admin-system-info" style="font-size:0.8rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0.3rem 1.1rem;margin-bottom:0.7rem">Loading…</div>
+        <details id="admin-audit-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadAdminAudit()">
+          <summary style="cursor:pointer;font-size:0.82rem;font-weight:600" title="Every admin write (who, what, result) plus automatic account deletions and database downloads.">Recent admin actions</summary>
+          <div id="admin-audit" style="margin-top:0.5rem;font-size:0.76rem;color:var(--muted)"></div>
+        </details>
       </div>
 
       <!-- Database Stats (System group — above the API request log) -->

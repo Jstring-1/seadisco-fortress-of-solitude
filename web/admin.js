@@ -117,7 +117,7 @@ const _adminGroups = {
   },
   'system': {
     panels: ['panel-system-bar', 'panel-db-stats', 'panel-api-log'],
-    load: () => { loadDbStats(); loadApiLog(); },
+    load: () => { loadAdminSystem(); loadDbStats(); loadApiLog(); },
   },
   'cache': {
     panels: ['panel-cache-warm'],
@@ -5438,6 +5438,57 @@ function _adminUnifiedFmtDate(v) {
 
 // Relative "time ago" — used for the Last active column so recency reads at a
 // glance. Granularity climbs min → hr → day → mo → yr as it ages.
+// ── System info + admin action log (System tab) ─────────────────────
+async function loadAdminSystem() {
+  const el = document.getElementById("admin-system-info");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/system");
+    if (!r.ok) { el.textContent = `System info unavailable (HTTP ${r.status})`; return; }
+    const s = await r.json();
+    const mb = n => `${Math.round((n || 0) / 1048576)} MB`;
+    const pct = s.heapLimit ? Math.round((s.heapUsed / s.heapLimit) * 100) : null;
+    const up = s.uptimeSec >= 86400 ? `${Math.floor(s.uptimeSec / 86400)}d ${Math.floor(s.uptimeSec % 86400 / 3600)}h`
+             : s.uptimeSec >= 3600 ? `${Math.floor(s.uptimeSec / 3600)}h ${Math.floor(s.uptimeSec % 3600 / 60)}m`
+             : `${Math.floor(s.uptimeSec / 60)}m`;
+    const item = (label, value, title, warn) => `<span title="${escHtml(title)}">${label} <strong style="color:${warn ? "#e88" : "var(--text)"}">${escHtml(value)}</strong></span>`;
+    el.innerHTML = [
+      item("heap", `${mb(s.heapUsed)} / ${mb(s.heapLimit)}${pct != null ? ` (${pct}%)` : ""}`, "V8 heap in use vs the configured cap. Memory drives the Railway bill.", pct != null && pct >= 80),
+      item("RSS", mb(s.rss), "Total process memory (what Railway meters)."),
+      item("up", up, "Time since this process started (last deploy or restart)."),
+      item("commit", s.commit ? String(s.commit).slice(0, 8) : "—", "Deployed git commit (RAILWAY_GIT_COMMIT_SHA)."),
+      item("node", s.node || "—", "Node.js version."),
+      item("DB pool", `${s.pool?.total ?? "?"} open · ${s.pool?.idle ?? "?"} idle · ${s.pool?.waiting ?? 0} waiting`, "Postgres connection pool.", (s.pool?.waiting || 0) > 0),
+      item("kill switch", s.apiKillSwitch ? "ON" : "off", "Outgoing data-API kill switch.", s.apiKillSwitch),
+      item("token encryption", s.tokenEncryption ? "on" : "OFF", "Discogs credentials encrypted at rest (TOKEN_ENC_KEY).", !s.tokenEncryption),
+    ].join("");
+  } catch (e) { el.textContent = `System info failed: ${e?.message || e}`; }
+}
+window.loadAdminSystem = loadAdminSystem;
+
+async function loadAdminAudit() {
+  const el = document.getElementById("admin-audit");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/audit?limit=150");
+    if (!r.ok) { el.textContent = `Failed: HTTP ${r.status}`; return; }
+    const { rows = [] } = await r.json();
+    if (!rows.length) { el.innerHTML = `<em>No admin actions recorded yet.</em>`; return; }
+    el.innerHTML = `<div style="max-height:360px;overflow-y:auto"><table style="width:100%;border-collapse:collapse">${rows.map(a => {
+      const ok = a.status == null || a.status < 400;
+      const body = a.detail?.body ? `<div style="color:var(--muted);font-family:monospace;font-size:0.7rem;word-break:break-all;margin-top:0.1rem">${escHtml(a.detail.body)}</div>` : "";
+      return `<tr style="border-top:1px solid var(--border);vertical-align:top">
+        <td style="padding:0.25rem 0.4rem;white-space:nowrap" title="${escHtml(new Date(a.at).toLocaleString())}">${escHtml(_adminUnifiedRelTime(a.at))}</td>
+        <td style="padding:0.25rem 0.4rem;color:var(--text)">${escHtml(a.action)}${a.target ? ` <span style="color:var(--muted)">${escHtml(a.target)}</span>` : ""}${body}</td>
+        <td style="padding:0.25rem 0.4rem;white-space:nowrap;color:${ok ? "var(--muted)" : "#e88"}">${a.status ?? ""}</td>
+        <td style="padding:0.25rem 0.4rem;white-space:nowrap">${escHtml(a.actor === "system" ? "system" : "admin")}</td>
+      </tr>`;
+    }).join("")}</table></div>`;
+  } catch (e) { el.textContent = `Failed: ${e?.message || e}`; }
+}
+window.loadAdminAudit = loadAdminAudit;
+
 function _adminUnifiedRelTime(v) {
   if (v == null || v === "") return "—";
   const t = (typeof v === "number") ? v : new Date(v).getTime();

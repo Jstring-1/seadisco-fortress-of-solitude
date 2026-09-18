@@ -588,6 +588,21 @@ export async function initDb() {
     )
   `);
 
+  // Admin action log: every admin write (via middleware) plus automatic
+  // account deletions and database downloads.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS admin_audit (
+      id         BIGSERIAL PRIMARY KEY,
+      at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      actor      TEXT,
+      action     TEXT NOT NULL,
+      target     TEXT,
+      status     INTEGER,
+      detail     JSONB
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS admin_audit_at_idx ON admin_audit (at DESC)`);
+
   // Cached YouTube channel profiles (channels.list snippet+statistics) for
   // the admin trust / ban tables. Refetched when older than a couple weeks.
   await getPool().query(`

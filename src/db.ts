@@ -5684,6 +5684,30 @@ export async function reviewQueueDeleteApproval(id: number, reviewer: string | n
   return { ok: true, masterId, trackPosition };
 }
 
+// ── Admin action log ─────────────────────────────────────────────
+// Never throws: auditing must not break the action it records.
+export async function logAdminAction(entry: { actor?: string | null; action: string; target?: string | null; status?: number | null; detail?: any }): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO admin_audit (actor, action, target, status, detail) VALUES ($1, $2, $3, $4, $5)`,
+      [entry.actor ?? null, entry.action.slice(0, 200), entry.target ? String(entry.target).slice(0, 300) : null,
+       entry.status ?? null, entry.detail == null ? null : JSON.stringify(entry.detail)],
+    );
+  } catch (e: any) {
+    console.warn("[audit] write failed:", e?.message ?? e);
+  }
+}
+
+export async function listAdminActions(limit = 100, before?: number | null): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT id, at, actor, action, target, status, detail FROM admin_audit
+      WHERE ($2::bigint IS NULL OR id < $2)
+      ORDER BY id DESC LIMIT $1`,
+    [Math.max(1, Math.min(500, limit)), before ?? null],
+  );
+  return r.rows;
+}
+
 // ── Index maintenance that must not block boot ───────────────────
 // CONCURRENTLY can't run inside a transaction and can take minutes on
 // release_cache, so this runs after startup (fire-and-forget) instead of
