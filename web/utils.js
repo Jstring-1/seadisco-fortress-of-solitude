@@ -307,7 +307,7 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
   const moreBtn = (overflow, isLinks) => {
     if (!overflow.length) return "";
     const key = _storeRelPopup(overflow, isLinks);
-    return ` <a href="#" class="rel-more-btn" onclick="showRelPopup(event,${jsAttr(key)})">+${overflow.length} more</a>`;
+    return ` <a href="#" class="rel-more-btn" data-sd-click="${_sdOn(((a0) => function (event) { showRelPopup(event,a0) })(String(key ?? "")))}">+${overflow.length} more</a>`;
   };
 
   const row = (label, items) => {
@@ -478,13 +478,13 @@ function buildSavedSearchUI(view, getParamsFn, applyFn, containerEl) {
   wrap.className = "saved-search-wrap";
   wrap.id = `saved-search-${view}`;
   wrap.innerHTML = `
-    <button type="button" class="saved-search-toggle" id="ss-toggle-${view}" onclick="toggleSavedDropdown(${jsAttr(view)})" title="Saved searches">
+    <button type="button" class="saved-search-toggle" id="ss-toggle-${view}" data-sd-click="${_sdOn(((a0) => function (event) { toggleSavedDropdown(a0) })(String(view ?? "")))}" title="Saved searches">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
     </button>
     <div class="saved-search-dropdown" id="ss-dropdown-${view}" style="display:none">
       <div class="ss-header">
         <span style="font-weight:600;font-size:0.72rem;color:#aaa">Saved Searches</span>
-        <button type="button" class="ss-save-btn" id="ss-save-${view}" onclick="saveCurrentSearch(${jsAttr(view)})" title="Save current search">+ Save</button>
+        <button type="button" class="ss-save-btn" id="ss-save-${view}" data-sd-click="${_sdOn(((a0) => function (event) { saveCurrentSearch(a0) })(String(view ?? "")))}" title="Save current search">+ Save</button>
       </div>
       <div class="ss-list" id="ss-list-${view}"></div>
     </div>`;
@@ -644,15 +644,15 @@ function renderSavedList(view, searches, extraSearches, crossView) {
   if (hasOwn) {
     html += searches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
-        <button type="button" class="ss-item-btn" onclick="applySavedSearch(${jsAttr(view)},${s.id})" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>
-        <button type="button" class="ss-item-del" onclick="deleteSavedSearchItem(event,${jsAttr(view)},${s.id})" title="Remove">&times;</button>
+        <button type="button" class="ss-item-btn" data-sd-click="${_sdOn(((a0, a1) => function (event) { applySavedSearch(a0,a1) })(String(view ?? ""), _sdLit(s.id)))}" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>
+        <button type="button" class="ss-item-del" data-sd-click="${_sdOn(((a0, a1) => function (event) { deleteSavedSearchItem(event,a0,a1) })(String(view ?? ""), _sdLit(s.id)))}" title="Remove">&times;</button>
       </div>`
     ).join("");
   }
   if (hasCross) {
     html += extraSearches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
-        <button type="button" class="ss-item-btn" onclick="applySavedSearch(${jsAttr(view)},${s.id},${jsAttr(crossView)})" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>
+        <button type="button" class="ss-item-btn" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { applySavedSearch(a0,a1,a2) })(String(view ?? ""), _sdLit(s.id), String(crossView ?? "")))}" title="${escHtml(JSON.stringify(s.params))}">${_ssRenderLabel(s.params) || escHtml(s.label)}</button>
       </div>`
     ).join("");
   }

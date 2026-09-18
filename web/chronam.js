@@ -234,7 +234,7 @@ function _chronamRenderPagination(j) {
   const page  = Number(j?.page) || _chronamLastPage;
   const more  = total > page * per;
   el.innerHTML = more
-    ? `<button type="button" class="loc-submit" onclick="runChronAmSearch(document.getElementById('chronam-q').value,{append:true})">Load more</button>
+    ? `<button type="button" class="loc-submit" data-sd-click="${_sdOn(function (event) { runChronAmSearch(document.getElementById('chronam-q').value,{append:true}) })}">Load more</button>
        <span class="chronam-page-info" style="color:var(--muted);margin-left:0.8rem;font-size:0.85rem">Page ${page} · ${total.toLocaleString()} hits</span>`
     : (total ? `<span class="chronam-page-info" style="color:var(--muted);font-size:0.85rem">${total.toLocaleString()} hit${total === 1 ? "" : "s"}</span>` : "");
 }
@@ -250,7 +250,7 @@ function _chronamCardHtml(it) {
     .replace(/\s+/g, " ")
     .slice(0, 360);
   const thumb = it.thumb_url
-    ? `<img class="chronam-thumb" src="${escHtml(it.thumb_url)}" alt="" loading="lazy" onerror="this.classList.add('chronam-thumb-broken');this.onerror=null">`
+    ? `<img class="chronam-thumb" src="${escHtml(it.thumb_url)}" alt="" loading="lazy" data-sd-error="${_sdOn(function (event) { this.classList.add('chronam-thumb-broken');this.onerror=null })}">`
     : `<div class="chronam-thumb chronam-thumb-empty">📰</div>`;
   // Display the page URL host below the title so users have a visible
   // indicator that the link goes off-site (and which site).
@@ -263,16 +263,16 @@ function _chronamCardHtml(it) {
   // the "View ↗" pill still routes to LoC.gov for the original.
   return `
     <div class="chronam-card" data-chronam-id="${escHtml(it.id || "")}">
-      <div class="chronam-thumb-wrap" onclick="openChronAmPopup(${idAttr})" style="cursor:pointer" title="Open page">
+      <div class="chronam-thumb-wrap" data-sd-click="${_sdOn(((a0) => function (event) { openChronAmPopup(a0) })(_sdLit(idAttr)))}" style="cursor:pointer" title="Open page">
         ${thumb}
       </div>
       <div class="chronam-card-body">
         <div class="chronam-card-head">
-          <a href="#" onclick="event.preventDefault();openChronAmPopup(${idAttr})" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
+          <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();openChronAmPopup(a0) })(_sdLit(idAttr)))}" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
           <div class="chronam-card-actions">
             ${viewBtn}
             <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
-                    onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
+                    data-sd-click="${_sdOn(((a0) => function (event) { _chronamToggleSave(this, a0) })(_sdLit(idAttr)))}" title="${starTitle}">${star}</button>
           </div>
         </div>
         <div class="chronam-meta">
@@ -317,14 +317,14 @@ function openChronAmPopup(id) {
       <div class="chronam-popup-actions">
         ${imgSrc ? `
         <div class="chronam-zoom-controls" role="group" aria-label="Zoom">
-          <button type="button" class="chronam-zoom-btn" onclick="_chronamZoom(-1)" title="Zoom out">−</button>
-          <button type="button" class="chronam-zoom-level" onclick="_chronamZoom(0)" title="Reset zoom to fit"><span id="chronam-zoom-pct">100%</span></button>
-          <button type="button" class="chronam-zoom-btn" onclick="_chronamZoom(1)"  title="Zoom in">+</button>
+          <button type="button" class="chronam-zoom-btn" data-sd-click="${_sdOn(function (event) { _chronamZoom(-1) })}" title="Zoom out">−</button>
+          <button type="button" class="chronam-zoom-level" data-sd-click="${_sdOn(function (event) { _chronamZoom(0) })}" title="Reset zoom to fit"><span id="chronam-zoom-pct">100%</span></button>
+          <button type="button" class="chronam-zoom-btn" data-sd-click="${_sdOn(function (event) { _chronamZoom(1) })}"  title="Zoom in">+</button>
         </div>` : ""}
         ${it.page_url ? `<a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-open-link">View on LOC ↗</a>` : ""}
         <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
-                onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
-        <button type="button" class="archive-btn" onclick="closeChronAmPopup()" title="Close">✕</button>
+                data-sd-click="${_sdOn(((a0) => function (event) { _chronamToggleSave(this, a0) })(_sdLit(idAttr)))}" title="${starTitle}">${star}</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { closeChronAmPopup() })}" title="Close">✕</button>
       </div>
     </div>
     <div class="chronam-popup-image-wrap" id="chronam-popup-image-wrap">
@@ -334,7 +334,7 @@ function openChronAmPopup(id) {
                 data-orig-src="${escHtml(imgSrc)}"
                 data-hires-src="${escHtml(_chronamUpscaleIiif(imgSrc))}"
                 alt="Newspaper page scan"
-                onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \\'View on LOC\\' to see the page.'}))">`
+                data-sd-error="${_sdOn(function (event) { this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \'View on LOC\' to see the page.'})) })}">`
         : `<div class="chronam-popup-image-fail">No image available. Use "View on LOC" to see the page.</div>`}
     </div>
     ${it.ocr_eng ? `<div class="chronam-popup-snippet"><strong>OCR snippet</strong><br>${escHtml(it.ocr_eng)}</div>` : ""}

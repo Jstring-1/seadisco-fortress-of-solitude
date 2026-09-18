@@ -220,7 +220,7 @@ window._sdGutenbergRenderMentions = async function (container, entityType, entit
       const labelEsc   = m.label   ? escHtml(m.label)   : "";
       const pct = Math.round(Number(m.positionPct) || 0);
       return `
-        <div class="gutenberg-mention-row" onclick="window._sdGutenbergOpenReader(${m.bookId}, ${escHtml(JSON.stringify(m.bookTitle ?? ""))}, {startPositionPct:${pct}})" title="Open ${titleEsc} at ${pct}%">
+        <div class="gutenberg-mention-row" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { window._sdGutenbergOpenReader(a0, a1, {startPositionPct:a2}) })(_sdLit(m.bookId), m.bookTitle ?? "", _sdLit(pct)))}" title="Open ${titleEsc} at ${pct}%">
           <div class="gutenberg-mention-head">
             <span class="gutenberg-mention-title">${titleEsc}</span>
             ${authorStr ? `<span class="gutenberg-mention-author"> · ${authorStr}</span>` : ""}
@@ -1049,7 +1049,7 @@ function _sdInjectEnrichmentIntoCards(row) {
       const wrap = card.querySelector(".card-thumb-wrap");
       if (wrap && !wrap.querySelector(".card-images-strip")) {
         const stripHtml = `<div class="card-images-strip">${images.map((u, i) =>
-          `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,${jsAttr(u)})" />`
+          `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,a0) })(String(u ?? "")))}" />`
         ).join("")}</div>`;
         wrap.insertAdjacentHTML("beforeend", stripHtml);
         // Full-size stack of additional images, rendered below the
@@ -1059,7 +1059,7 @@ function _sdInjectEnrichmentIntoCards(row) {
         // (tracklist) sets the card's height. Hidden in compact mode
         // by CSS (only `.card-mode-wide .card-images-stack` is shown).
         const stackHtml = `<div class="card-images-stack">${images.slice(1).map((u, i) =>
-          `<img class="card-images-stack-img" src="${escAttr(u)}" alt="image ${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,${jsAttr(u)})" />`
+          `<img class="card-images-stack-img" src="${escAttr(u)}" alt="image ${i + 2}" loading="lazy" decoding="async" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,a0) })(String(u ?? "")))}" />`
         ).join("")}</div>`;
         wrap.insertAdjacentHTML("beforeend", stackHtml);
       }
@@ -1086,19 +1086,19 @@ function _sdInjectEnrichmentIntoCards(row) {
           // openVideo / _trackQueueAdd read by class + dataset, no
           // anchor semantics needed.
           const playBtn = url
-            ? `<span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,${jsAttr(url)})" title="Play this track">▶</span>`
+            ? `<span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openVideo(event,a0) })(String(url ?? "")))}" title="Play this track">▶</span>`
             : `<span class="card-track-play card-track-disabled" aria-hidden="true">▶</span>`;
           const queueBtn = url
-            ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
+            ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false })}" title="Add to queue">＋</span>`
             : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
           // ♪ → save this track to an existing playlist. Mirrors the
           // album-popup affordance (same _trackPlaylistAdd handler /
           // data-* contract); disabled placeholder when there's no
           // playable URL so the action column stays aligned.
           const playlistBtn = url
-            ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</span>`
+            ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false })}" title="Save this track to a playlist">♪</span>`
             : (window._isAdmin
-                ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Admin: save this unavailable track to a playlist (queue offers YT search when it comes up)">♪</span>`
+                ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false })}" title="Admin: save this unavailable track to a playlist (queue offers YT search when it comes up)">♪</span>`
                 : `<span class="card-track-playlist card-track-disabled" aria-hidden="true">♪</span>`);
           // Match the album-popup layout: position + title on the LEFT,
           // the media action cluster (▶ ＋ ♪) on the RIGHT. Grid
@@ -1114,9 +1114,9 @@ function _sdInjectEnrichmentIntoCards(row) {
               <span class="card-track-pos">★</span>
               <span class="card-track-title">Full album as one track</span>
               <span class="card-track-actions">
-                <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,${jsAttr(fullAlbumUrl)})" title="Play full album">▶</span>
-                <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
-                <span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save the full album to a playlist">♪</span>
+                <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openVideo(event,a0) })(String(fullAlbumUrl ?? "")))}" title="Play full album">▶</span>
+                <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false })}" title="Queue full album">＋</span>
+                <span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false })}" title="Save the full album to a playlist">♪</span>
               </span>
             </li>`
           : "";
@@ -1131,8 +1131,8 @@ function _sdInjectEnrichmentIntoCards(row) {
         const playableCount = trackUrls.filter(Boolean).length;
         const headActions = playableCount > 0
           ? `<span class="card-tracklist-head-actions">
-              <span role="button" tabindex="0" class="card-tracklist-playall card-track-play-active" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'play');return false" title="Play all tracks (queues every available track)">▶</span>
-              <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false" title="Queue all tracks (append every available track)">＋</span>
+              <span role="button" tabindex="0" class="card-tracklist-playall card-track-play-active" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'play');return false })}" title="Play all tracks (queues every available track)">▶</span>
+              <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false })}" title="Queue all tracks (append every available track)">＋</span>
             </span>`
           : "";
         // Head row: ALL buttons on the left, count label on the right
@@ -1346,6 +1346,85 @@ function escHtml(str) {
 function jsAttr(v) {
   return escHtml(JSON.stringify(String(v ?? "")));
 }
+
+// ── CSP-safe event handlers ──────────────────────────────────────────────
+// Markup never carries inline on*="…" JavaScript (so the site can run
+// under a Content-Security-Policy without 'unsafe-inline'). Instead:
+//   templates:   <button data-sd-click="${_sdOn(function (event) { … })}">
+//   static HTML: <button data-sd-click="@name">  → window._sdStatic.name
+// _sdOn stores the closure and returns a key. The first time an event of
+// that type reaches the element, a document-level CAPTURE listener binds
+// the closure to the element with addEventListener — before the event
+// arrives there — so the handler behaves exactly like the old inline one:
+// `this` is the element, `return false` cancels the default action, and
+// stopPropagation() works as before. Non-bubbling events (error, toggle,
+// focus, blur, scroll, mouseenter) still pass through the capture phase.
+const _sdHandlerRegistry = new Map();   // key -> { fn, at, bound }
+let _sdHandlerSeq = 0;
+const _SD_HANDLER_EVENTS = ["click", "change", "input", "keydown", "keyup", "submit", "mouseover", "mouseout",
+  "mouseenter", "mouseleave", "error", "load", "toggle", "focus", "blur", "scroll", "dblclick", "contextmenu"];
+function _sdOn(fn) {
+  if (typeof fn !== "function") return "";
+  const key = "h" + (++_sdHandlerSeq).toString(36);
+  _sdHandlerRegistry.set(key, { fn, at: Date.now(), bound: 0 });
+  return key;
+}
+// A value that used to be spliced into handler SOURCE text at render time
+// (ids, page numbers, pre-encoded JSON). Decode it the way the JS parser
+// would have read it.
+function _sdLit(v) {
+  if (v == null || typeof v === "number" || typeof v === "boolean") return v;
+  const s = String(v).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").trim();
+  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
+  if (s === "true") return true;
+  if (s === "false") return false;
+  if (s === "null") return null;
+  if (s === "" || s === "undefined") return undefined;
+  if (/^"(?:[^"\\]|\\.)*"$/.test(s) || /^[\[{]/.test(s)) { try { return JSON.parse(s); } catch { /* fall through */ } }
+  return s;
+}
+function _sdResolveHandler(key) {
+  if (key.charAt(0) === "@") {
+    const fn = window._sdStatic && window._sdStatic[key.slice(1)];
+    return typeof fn === "function" ? fn : null;
+  }
+  const entry = _sdHandlerRegistry.get(key);
+  if (!entry) return null;
+  entry.bound = Date.now();
+  return entry.fn;
+}
+function _sdBindOnPath(e) {
+  const type = e.type;
+  const attr = "data-sd-" + type;
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  for (const node of path) {
+    if (!node || node.nodeType !== 1 || !node.hasAttribute(attr)) continue;
+    const key = node.getAttribute(attr);
+    const bound = node._sdBound || (node._sdBound = {});
+    if (bound[type] === key) continue;
+    const fn = _sdResolveHandler(key);
+    if (!fn) continue;
+    if (bound[type] && node._sdListeners && node._sdListeners[type]) node.removeEventListener(type, node._sdListeners[type]);
+    const listener = function (ev) {
+      const r = fn.call(this, ev);
+      if (r === false) ev.preventDefault();
+    };
+    (node._sdListeners || (node._sdListeners = {}))[type] = listener;
+    bound[type] = key;
+    node.addEventListener(type, listener);
+  }
+}
+for (const t of _SD_HANDLER_EVENTS) document.addEventListener(t, _sdBindOnPath, true);
+// Closures for markup that was never inserted, or whose element is long
+// bound (the element holds its own reference), are dropped periodically.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _sdHandlerRegistry) {
+    if ((v.bound && now - v.bound > 30 * 60_000) || (!v.bound && now - v.at > 60 * 60_000)) _sdHandlerRegistry.delete(k);
+  }
+}, 5 * 60_000);
+window._sdOn = _sdOn;
+window._sdLit = _sdLit;
 
 // ── Shared Clerk bootstrap ───────────────────────────────────────────────
 // Loads Clerk JS and returns the Clerk instance. Pages handle post-auth UI.
@@ -1768,7 +1847,7 @@ function renderSharedHeader(opts) {
   const tab = (label, view, iconKey) => {
     if (isSPA) {
       const cls = view === active ? ' active' : '';
-      return `<button class="${navTabClass}${cls}" data-view="${view}" onclick="switchView(${jsAttr(view)})" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass}${cls}" data-view="${view}" data-sd-click="${_sdOn(((a0) => function (event) { switchView(a0) })(String(view ?? "")))}" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
     const href = view === "search" ? "/" : `/?v=${view}`;
     const activeCls = view === active ? ' active' : '';
@@ -1791,7 +1870,7 @@ function renderSharedHeader(opts) {
     const isActive = _DISCOVER_VIEWS.has(active);
     const activeCls = isActive ? ' active' : '';
     if (isSPA) {
-      return `<button class="${navTabClass}${activeCls}" data-view="discover" onclick="_sdGoToDiscover()" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass}${activeCls}" data-view="discover" data-sd-click="${_sdOn(function (event) { _sdGoToDiscover() })}" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
     // Non-SPA pages can't read localStorage at render time the same
     // way; keep the LOC default href so the link works without JS.
@@ -1859,7 +1938,7 @@ function renderSharedHeader(opts) {
   const recTab = (label, rtab, iconKey, startEmpty) => {
     const emptyCls = startEmpty ? " nav-rec-empty" : "";
     if (isSPA) {
-      return `<button class="${navTabClass} nav-rec-disabled${emptyCls}" data-rtab="${rtab}" onclick="showRecordSignIn(${jsAttr(rtab)})" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass} nav-rec-disabled${emptyCls}" data-rtab="${rtab}" data-sd-click="${_sdOn(((a0) => function (event) { showRecordSignIn(a0) })(String(rtab ?? "")))}" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
     return `<a class="${navTabClass}${emptyCls}" href="/?v=${rtab}" data-rtab="${rtab}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
@@ -1879,12 +1958,12 @@ function renderSharedHeader(opts) {
   const SITE_VERSION = window._SD_BUILD_LABEL && window._SD_BUILD_LABEL !== "__SD_BUILD_LABEL__" ? `build ${window._SD_BUILD_LABEL}` : "";
   header.innerHTML = `
     <div class="header-logo-wrap">
-      <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
+      <a href="/" ${isSPA ? `data-sd-click="${_sdOn(function () { if (typeof goHome === "function") { goHome(); return false; } })}"` : ""} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
       <div class="header-version" title="Current build">${SITE_VERSION}</div>
     </div>
     ${isSPA ? '<h1 class="sr-only">SeaDisco — Music Discovery Platform: Search &amp; Collection</h1>' : ''}
     <nav id="main-nav">
-      <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav-tabs">
+      <button id="nav-hamburger" data-sd-click="${_sdOn(function (event) { toggleMobileNav() })}" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav-tabs">
         <span></span><span></span><span></span>
       </button>
       <div id="nav-tabs-wrap">
@@ -2023,7 +2102,7 @@ function renderSharedFooter(opts) {
     const href = _seaDiscoBuildViewHref(view);
     const tip = HINTS[view] || "";
     const id = idAttr ? ` id="${idAttr}"` : "";
-    if (isSPA) return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView(${jsAttr(view)});return false">${label}</a>`;
+    if (isSPA) return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();switchView(a0);return false })(String(view ?? "")))}">${label}</a>`;
     return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}">${label}</a>`;
   };
 
@@ -2039,7 +2118,7 @@ function renderSharedFooter(opts) {
     const tip = HINTS[tab] || "";
     const cls = startEmpty ? ' class="nav-rec-empty"' : "";
     if (isSPA) {
-      return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab=${jsAttr(tab)};switchView('records');return false">${label}</a>`;
+      return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab=a0;switchView('records');return false })(String(tab ?? "")))}">${label}</a>`;
     }
     return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
   };
@@ -2054,7 +2133,7 @@ function renderSharedFooter(opts) {
     const tip = HINTS[mode] || "";
     const href = mode === "recent" ? "/" : `/?strip=${mode}`;
     if (isSPA) {
-      return `<a href="${href}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('search');setTimeout(()=>{if(typeof _sdSwitchHomeStripTab==='function')_sdSwitchHomeStripTab(${jsAttr(mode)});},0);return false">${label}</a>`;
+      return `<a href="${href}" title="${escHtml(tip)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();switchView('search');setTimeout(()=>{if(typeof _sdSwitchHomeStripTab==='function')_sdSwitchHomeStripTab(a0);},0);return false })(String(mode ?? "")))}">${label}</a>`;
     }
     return `<a href="${href}" title="${escHtml(tip)}">${label}</a>`;
   };
@@ -2084,14 +2163,14 @@ function renderSharedFooter(opts) {
         ${link("LOC",       "loc")}
         ${link("Wikipedia", "wiki")}
         ${link("Archive",   "archive")}
-        <a id="footer-youtube-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
-        <a id="footer-gutenberg-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
-        <a id="footer-chronam-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
-        <a id="footer-blues-archive-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('blues-archive');return false"` : ""}>Lyrics</a>
+        <a id="footer-youtube-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` data-sd-click="${_sdOn(function (event) { event.preventDefault();switchView('youtube');return false })}"` : ""}>YouTube</a>
+        <a id="footer-gutenberg-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` data-sd-click="${_sdOn(function (event) { event.preventDefault();switchView('gutenberg');return false })}"` : ""}>Gutenberg</a>
+        <a id="footer-chronam-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` data-sd-click="${_sdOn(function (event) { event.preventDefault();switchView('chronam');return false })}"` : ""}>Newspapers</a>
+        <a id="footer-blues-archive-link" class="footer-restricted" href="${_seaDiscoBuildViewHref("blues-archive")}" data-sd-view="blues-archive" title="${escHtml(HINTS["blues-archive"])}" style="display:none"${isSPA ? ` data-sd-click="${_sdOn(function (event) { event.preventDefault();switchView('blues-archive');return false })}"` : ""}>Lyrics</a>
       </div>
       <div class="footer-col">
         ${isSPA
-          ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" title="${escHtml(HINTS.account)}" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
+          ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" title="${escHtml(HINTS.account)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();openSignInModal();return false; })}">Account</a>`
           : `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" title="${escHtml(HINTS.account)}">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
@@ -2099,7 +2178,7 @@ function renderSharedFooter(opts) {
         <a id="footer-admin-link" class="footer-restricted" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
       </div>
     </div>
-    <div><a href="#" onclick="_seaDiscoOpenJimmy(event);return false;" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
+    <div><a href="#" data-sd-click="${_sdOn(function (event) { _seaDiscoOpenJimmy(event);return false; })}" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
     <div style="margin-top:0.5rem;display:flex;justify-content:center;align-items:center;gap:0.35rem;color:#999;font-size:0.78rem">
       <span>Catalog data from</span>
       <a href="https://www.discogs.com" target="_blank" rel="noopener" style="text-decoration:none;color:#fff;font-weight:600">Discogs</a>
@@ -2478,7 +2557,7 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   // anchor is encountered, which broke wide-card layout (each card
   // split across multiple grid cells). Click semantics are unchanged
   // because the onclick handler does the work.
-  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr}${relIdAttr}${mstIdAttr}${resultTypeAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr}${openIdAttr}${openTypeAttr}${relIdAttr}${mstIdAttr}${resultTypeAttr} role="button" tabindex="0" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false })}"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
@@ -2988,7 +3067,7 @@ async function _baStampCards(items, gridEl) {
     // parser auto-closes the outer anchor when it hits a nested one.
     host.insertAdjacentHTML(
       "beforeend",
-      `<span class="card-ba-archive-badge" role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId})" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎸</span>`,
+      `<span class="card-ba-archive-badge" role="button" tabindex="0" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(a0) })(_sdLit(archiveId)))}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎸</span>`,
     );
   });
 }

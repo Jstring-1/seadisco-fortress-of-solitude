@@ -115,7 +115,7 @@ async function _renderOrdersPage() {
       const hasNew = !!it.has_new;
       const oid = escHtml(it.order_id);
       return `<div class="ord-row${hasNew ? " ord-row-unread" : ""}" data-oid="${oid}">
-        <div class="ord-row-clickarea" onclick="openOrderDetail(${jsAttr(oid)})">
+        <div class="ord-row-clickarea" data-sd-click="${_sdOn(((a0) => function (event) { openOrderDetail(a0) })(String(oid ?? "")))}">
           <div class="ord-row-main">
             ${hasNew ? `<span class="ord-unread-dot" title="New activity"></span>` : ""}
             <span class="${_statusChipClass(it.status)}">${escHtml(it.status || "—")}</span>
@@ -129,12 +129,12 @@ async function _renderOrdersPage() {
           </div>
         </div>
         <div class="ord-row-quick">
-          <button type="button" class="ord-quick-toggle" onclick="_ordToggleQuickReply(${jsAttr(oid)}, event)" title="Quick reply">💬</button>
-          <div class="ord-quick-panel" id="ord-quick-${oid}" style="display:none" onclick="event.stopPropagation()">
+          <button type="button" class="ord-quick-toggle" data-sd-click="${_sdOn(((a0) => function (event) { _ordToggleQuickReply(a0, event) })(String(oid ?? "")))}" title="Quick reply">💬</button>
+          <div class="ord-quick-panel" id="ord-quick-${oid}" style="display:none" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}">
             <textarea rows="2" placeholder="Quick reply to ${escHtml(it.buyer_username || "buyer")}…"></textarea>
             <div class="ord-quick-actions">
-              <button type="button" onclick="_ordQuickCancel(${jsAttr(oid)})">Cancel</button>
-              <button type="button" class="ord-btn-primary" onclick="_ordQuickSend(${jsAttr(oid)})">Send</button>
+              <button type="button" data-sd-click="${_sdOn(((a0) => function (event) { _ordQuickCancel(a0) })(String(oid ?? "")))}">Cancel</button>
+              <button type="button" class="ord-btn-primary" data-sd-click="${_sdOn(((a0) => function (event) { _ordQuickSend(a0) })(String(oid ?? "")))}">Send</button>
             </div>
           </div>
         </div>
@@ -143,9 +143,9 @@ async function _renderOrdersPage() {
     // Pagination
     const pages = d.pages || 1;
     const pager = pages > 1 ? `<div class="ord-pager">
-      <button ${_ordersState.page <= 1 ? "disabled" : ""} onclick="_ordersGoto(${_ordersState.page - 1})">← Prev</button>
+      <button ${_ordersState.page <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _ordersGoto(a0) })(_sdLit(_ordersState.page - 1)))}">← Prev</button>
       <span>Page ${_ordersState.page} / ${pages}</span>
-      <button ${_ordersState.page >= pages ? "disabled" : ""} onclick="_ordersGoto(${_ordersState.page + 1})">Next →</button>
+      <button ${_ordersState.page >= pages ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _ordersGoto(a0) })(_sdLit(_ordersState.page + 1)))}">Next →</button>
     </div>` : "";
     listEl.innerHTML = rows + pager;
   } catch (e) {
@@ -230,7 +230,7 @@ async function openOrderDetail(orderId) {
   const overlay = document.createElement("div");
   overlay.id = "order-detail-overlay";
   overlay.innerHTML = `<div id="order-detail-panel" role="dialog" aria-modal="true">
-    <button type="button" class="ord-detail-close" onclick="closeOrderDetail()" aria-label="Close">×</button>
+    <button type="button" class="ord-detail-close" data-sd-click="${_sdOn(function (event) { closeOrderDetail() })}" aria-label="Close">×</button>
     <div id="order-detail-body"><div style="padding:1rem;color:var(--muted)">Loading order…</div></div>
   </div>`;
   document.body.appendChild(overlay);
@@ -303,7 +303,7 @@ async function openOrderDetail(orderId) {
         <h3>Status</h3>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
           <select id="ord-status-select" data-current-status="${escHtml(it.status || "")}">${statusOptions}</select>
-          <button onclick="_ordChangeStatus(${jsAttr(it.order_id)})" class="ord-btn-primary">Update status</button>
+          <button data-sd-click="${_sdOn(((a0) => function (event) { _ordChangeStatus(a0) })(String(it.order_id ?? "")))}" class="ord-btn-primary">Update status</button>
         </div>
       </div>
 
@@ -312,7 +312,7 @@ async function openOrderDetail(orderId) {
         <div class="ord-msgs">${msgsHtml}</div>
         <textarea id="ord-new-msg" rows="3" placeholder="Write a message to the buyer…" style="width:100%;margin-top:0.5rem;padding:0.5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-family:inherit"></textarea>
         <div style="margin-top:0.4rem;text-align:right">
-          <button onclick="_ordSendMessage(${jsAttr(it.order_id)})" class="ord-btn-primary">Send message</button>
+          <button data-sd-click="${_sdOn(((a0) => function (event) { _ordSendMessage(a0) })(String(it.order_id ?? "")))}" class="ord-btn-primary">Send message</button>
         </div>
       </div>
     `;

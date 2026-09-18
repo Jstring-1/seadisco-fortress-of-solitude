@@ -100,7 +100,7 @@ async function openInventoryEditor(opts = {}) {
   overlay.id = "inventory-editor-overlay";
   overlay.innerHTML = `
     <div id="inventory-editor-panel" role="dialog" aria-modal="true" aria-label="${mode === "edit" ? "Edit listing" : "New listing"}">
-      <button type="button" class="inv-editor-close" onclick="_invRequestClose()" aria-label="Close">×</button>
+      <button type="button" class="inv-editor-close" data-sd-click="${_sdOn(function (event) { _invRequestClose() })}" aria-label="Close">×</button>
       <h2 class="inv-editor-title">${mode === "edit" ? "Edit listing" : "New listing"}</h2>
       <div class="inv-editor-release">
         ${releaseId
@@ -125,7 +125,7 @@ async function openInventoryEditor(opts = {}) {
           <div class="inv-price-row">
             <input type="number" step="0.01" min="0" id="inv-price" value="${prefill.price ?? ""}"/>
             <select id="inv-currency">${INV_CURRENCIES.map(c => `<option${c === (prefill.priceCurrency || window._userCurrency || "USD") ? " selected" : ""}>${c}</option>`).join("")}</select>
-            <button type="button" class="inv-editor-suggest" onclick="_invGetPriceSuggestions()" title="Show Discogs median price suggestions for this release">Suggest price</button>
+            <button type="button" class="inv-editor-suggest" data-sd-click="${_sdOn(function (event) { _invGetPriceSuggestions() })}" title="Show Discogs median price suggestions for this release">Suggest price</button>
           </div>
         </label>
         <label class="inv-editor-label">Status *
@@ -156,10 +156,10 @@ async function openInventoryEditor(opts = {}) {
       <div id="inv-editor-error" class="inv-editor-error" style="display:none"></div>
 
       <div class="inv-editor-actions">
-        ${mode === "edit" ? `<button type="button" class="inv-editor-delete" onclick="_invDeleteFromEditor()">Delete listing</button>` : ""}
+        ${mode === "edit" ? `<button type="button" class="inv-editor-delete" data-sd-click="${_sdOn(function (event) { _invDeleteFromEditor() })}">Delete listing</button>` : ""}
         <span style="flex:1"></span>
-        <button type="button" class="inv-editor-cancel" onclick="_invRequestClose()">Cancel</button>
-        <button type="button" class="inv-editor-save" onclick="_invSaveFromEditor()">${mode === "edit" ? "Save changes" : "Create listing"}</button>
+        <button type="button" class="inv-editor-cancel" data-sd-click="${_sdOn(function (event) { _invRequestClose() })}">Cancel</button>
+        <button type="button" class="inv-editor-save" data-sd-click="${_sdOn(function (event) { _invSaveFromEditor() })}">${mode === "edit" ? "Save changes" : "Create listing"}</button>
       </div>
     </div>
   `;
@@ -225,7 +225,7 @@ function _invRenderReleaseResults(results) {
     const label = Array.isArray(r.label) ? r.label[0] : "";
     const meta = [year, format, label].filter(Boolean).join(" · ");
     const payload = encodeURIComponent(JSON.stringify({ id, title }));
-    return `<div class="inv-release-result" onclick="_invPickRelease(JSON.parse(decodeURIComponent(${jsAttr(payload)})))">
+    return `<div class="inv-release-result" data-sd-click="${_sdOn(((a0) => function (event) { _invPickRelease(JSON.parse(decodeURIComponent(a0))) })(String(payload ?? "")))}">
       ${thumb ? `<img src="${escHtml(thumb)}" alt=""/>` : `<div class="inv-release-thumb-ph"></div>`}
       <div class="inv-release-info">
         <div class="inv-release-title">${escHtml(title)}</div>

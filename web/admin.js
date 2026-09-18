@@ -171,7 +171,7 @@ function switchAdminTab(group) {
   document.querySelectorAll('.admin-tab-panel').forEach(p => p.style.display = 'none');
   g.panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
   document.querySelectorAll('.admin-tab').forEach(b => {
-    b.classList.toggle('active', (b.getAttribute('onclick') || '').includes("'" + group + "'"));
+    b.classList.toggle('active', b.dataset.adminTab === group);
   });
   if (!_adminTabLoaded[group]) {
     _adminTabLoaded[group] = true;
@@ -322,7 +322,7 @@ async function loadAdminWorkerStatus() {
     bar.innerHTML = `
       <strong style="color:#fc8">⚙ Workers running:</strong>
       ${badges.map(b => b.tab ? `
-        <button type="button" onclick="switchAdminTab(${jsAttr(b.tab)})"
+        <button type="button" data-sd-click="${_sdOn(((a0) => function (event) { switchAdminTab(a0) })(String(b.tab ?? "")))}"
           style="margin-left:0.4rem;padding:0.15rem 0.55rem;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;cursor:pointer;font-size:0.78rem">
           ${_adminWorkerEscape(b.label)} ↗
         </button>`
@@ -330,7 +330,7 @@ async function loadAdminWorkerStatus() {
       // Stop right here so a runaway sweep can still be halted.
       : `<span style="margin-left:0.4rem;padding:0.15rem 0.2rem 0.15rem 0.55rem;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;font-size:0.78rem">
           ${_adminWorkerEscape(b.label)}
-          <button type="button" class="admin-btn" onclick="_adminStopWorker(${jsAttr(b.stop)}, this)" style="margin-left:0.3rem;font-size:0.72rem;padding:0.05rem 0.4rem;color:#e88" title="Stop this worker">■ Stop</button>
+          <button type="button" class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { _adminStopWorker(a0, this) })(String(b.stop ?? "")))}" style="margin-left:0.3rem;font-size:0.72rem;padding:0.05rem 0.4rem;color:#e88" title="Stop this worker">■ Stop</button>
         </span>`).join('')}
     `;
   } catch (err) {
@@ -652,7 +652,7 @@ async function loadDbStats(triggerBtn) {
         const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
         const exists = count >= 0;
         const nameMarkup = exists
-          ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t)})" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t}</a>`
+          ? `<a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();adminOpenDbTablePopup(a0) })(String(t ?? "")))}" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" data-sd-mouseover="${_sdOn(function (event) { this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)' })}" data-sd-mouseout="${_sdOn(function (event) { this.style.borderBottomColor='transparent';this.style.color='var(--muted)' })}" title="Show schema, indexes, size">${t}</a>`
           : `<span style="color:var(--muted)">${t}</span>`;
         html += `<div style="display:flex;justify-content:space-between;gap:0.6rem;padding:0.12rem 0;font-size:0.78rem">${nameMarkup}<span style="margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums">${sizeMap[t] ? fmtBytes(sizeMap[t]) : ""}</span><span style="color:${color};font-weight:500;min-width:4.5em;text-align:right;font-variant-numeric:tabular-nums">${display}</span></div>`;
       }
@@ -674,7 +674,7 @@ async function loadDbStats(triggerBtn) {
           const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
           const exists = count >= 0;
           const nameMarkup = exists
-            ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t.table)})" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t.table}</a>`
+            ? `<a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();adminOpenDbTablePopup(a0) })(String(t.table ?? "")))}" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" data-sd-mouseover="${_sdOn(function (event) { this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)' })}" data-sd-mouseout="${_sdOn(function (event) { this.style.borderBottomColor='transparent';this.style.color='var(--muted)' })}" title="Show schema, indexes, size">${t.table}</a>`
             : `<span style="color:var(--muted);font-family:monospace">${t.table}</span>`;
           return `<div style="display:flex;justify-content:space-between;gap:0.6rem;font-size:0.78rem">${nameMarkup}<span style="margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums">${fmtBytes(t.bytes)}</span><span style="color:${color};font-weight:500;min-width:4.5em;text-align:right;font-variant-numeric:tabular-nums">${display}</span></div>`;
         }).join("") +
@@ -813,7 +813,7 @@ async function loadCacheRate(_elRetry = 0) {
     if (_elRetry < 10) { setTimeout(() => loadCacheRate(_elRetry + 1), 300); }
     return;
   }
-  const retryLink = `<a href="#" onclick="event.preventDefault();loadCacheRate();return false" style="color:var(--accent);margin-left:0.5rem">↻ retry</a>`;
+  const retryLink = `<a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();loadCacheRate();return false })}" style="color:var(--accent);margin-left:0.5rem">↻ retry</a>`;
   try {
     // Hard 12s timeout so a saturated pool / slow scan can't hang the
     // card. AbortController aborts the fetch; the catch renders the
@@ -963,7 +963,7 @@ function _renderCacheAnalytics() {
   const facetCol = (title, rows, keyName) => {
     const list = (rows || []).map(r => {
       const name = keyName === "decade" ? `${r.decade}s` : (r.name || "(none)");
-      const click = keyName === "decade" ? "" : `onclick="_caFacetPin(${jsAttr(keyName)},${jsAttr(String(r.name || ""))})"`;
+      const click = keyName === "decade" ? "" : `data-sd-click="${_sdOn(((a0, a1) => function (event) { _caFacetPin(a0,a1) })(String((keyName) ?? ""), String((String(r.name || "")) ?? "")))}"`;
       const style = keyName === "decade"
         ? ""
         : "cursor:pointer;text-decoration:underline;text-decoration-style:dotted";
@@ -1017,7 +1017,7 @@ function _renderCacheAnalytics() {
     <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
       <span>${label}</span>
       <input id="${id}" type="text" value="${_eHtml(f[id.replace(/^ca-/, '').replace(/-/g, '_')] || "")}"
-             oninput="_caFilterInput(event)" placeholder="${_eHtml(placeholder)}"
+             data-sd-input="${_sdOn(function (event) { _caFilterInput(event) })}" placeholder="${_eHtml(placeholder)}"
              style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
     </label>`;
   el.innerHTML = `
@@ -1030,15 +1030,15 @@ function _renderCacheAnalytics() {
       <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
         <span>Year range</span>
         <div style="display:flex;gap:0.3rem">
-          <input id="ca-year-from" type="number" value="${_eHtml(String(f.yearFrom || ""))}" oninput="_caFilterInput(event)" placeholder="from"
+          <input id="ca-year-from" type="number" value="${_eHtml(String(f.yearFrom || ""))}" data-sd-input="${_sdOn(function (event) { _caFilterInput(event) })}" placeholder="from"
                  style="width:50%;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
-          <input id="ca-year-to"   type="number" value="${_eHtml(String(f.yearTo   || ""))}" oninput="_caFilterInput(event)" placeholder="to"
+          <input id="ca-year-to"   type="number" value="${_eHtml(String(f.yearTo   || ""))}" data-sd-input="${_sdOn(function (event) { _caFilterInput(event) })}" placeholder="to"
                  style="width:50%;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
         </div>
       </label>
       <label style="display:flex;flex-direction:column;gap:0.15rem;font-size:0.75rem;color:var(--muted)">
         <span>Type</span>
-        <select id="ca-type" onchange="_caFilterInput(event)"
+        <select id="ca-type" data-sd-change="${_sdOn(function (event) { _caFilterInput(event) })}"
                 style="padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
           <option value=""${f.type === "" ? " selected" : ""}>Both</option>
           <option value="release"${f.type === "release" ? " selected" : ""}>Release</option>
@@ -1047,8 +1047,8 @@ function _renderCacheAnalytics() {
       </label>
     </div>
     <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center;flex-wrap:wrap">
-      <button class="admin-btn" type="button" onclick="_caRun()" ${_cacheAnalyticsLoading ? "disabled" : ""}>▶ Analyze</button>
-      <button class="admin-btn" type="button" onclick="_caReset()">Reset</button>
+      <button class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _caRun() })}" ${_cacheAnalyticsLoading ? "disabled" : ""}>▶ Analyze</button>
+      <button class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _caReset() })}">Reset</button>
     </div>
     ${resultsHtml}
   `;
@@ -1189,7 +1189,7 @@ async function loadCacheWarm(opts) {
         ${activeBlock}
         <div class="cw-form-grid" style="display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:0.5rem;align-items:end">
           <label style="font-size:0.74rem;color:var(--muted)">Genre
-            <select id="cw-form-genre" onchange="_cwSyncStyleList()" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">${genreOptions}</select>
+            <select id="cw-form-genre" data-sd-change="${_sdOn(function (event) { _cwSyncStyleList() })}" ${running ? "disabled" : ""} style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">${genreOptions}</select>
           </label>
           <label style="font-size:0.74rem;color:var(--muted)">Style <em style="color:#888">(optional)</em>
             <input id="cw-form-style" type="text" list="cw-styles-${currentList}" value="${esc(selectedStyle)}" ${running ? "disabled" : ""} placeholder="(all of genre)" style="width:100%;padding:0.4rem 0.5rem;font-size:0.86rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
@@ -1202,22 +1202,22 @@ async function loadCacheWarm(opts) {
           </label>
           <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
             ${running
-              ? `<button class="admin-btn" onclick="cacheWarmStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
-              : `<button class="admin-btn" onclick="cacheWarmStartFromForm(false)" title="Resume from the persisted cursor for this combo, or start fresh if none. From-year only applies on first run for the combo.">▶ Start</button>
-                 <button class="admin-btn" onclick="cacheWarmStartFromForm(true)" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>
-                 <button class="admin-btn" onclick="cacheWarmStartNoYearForForm()" title="Sweep releases in this genre/style that have NO year on Discogs — year-filtered runs (e.g. 1900-1970) skip these. Cursor for the no-year run is independent of the dated cursor.">📅 No-year sweep</button>`}
-            <button class="admin-btn" onclick="cacheWarmForceClear()" title="Force-clear the in-memory 'running' lock when the worker is stuck or crashed silently. Doesn't affect cached data. Use if Start refuses to fire.">⚠ Force clear lock</button>
+              ? `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { cacheWarmStop() })}" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
+              : `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { cacheWarmStartFromForm(false) })}" title="Resume from the persisted cursor for this combo, or start fresh if none. From-year only applies on first run for the combo.">▶ Start</button>
+                 <button class="admin-btn" data-sd-click="${_sdOn(function (event) { cacheWarmStartFromForm(true) })}" title="Reset the cursor for this combo to From-year before starting.">↻ Start over</button>
+                 <button class="admin-btn" data-sd-click="${_sdOn(function (event) { cacheWarmStartNoYearForForm() })}" title="Sweep releases in this genre/style that have NO year on Discogs — year-filtered runs (e.g. 1900-1970) skip these. Cursor for the no-year run is independent of the dated cursor.">📅 No-year sweep</button>`}
+            <button class="admin-btn" data-sd-click="${_sdOn(function (event) { cacheWarmForceClear() })}" title="Force-clear the in-memory 'running' lock when the worker is stuck or crashed silently. Doesn't affect cached data. Use if Start refuses to fire.">⚠ Force clear lock</button>
           </div>
         </div>
       </div>
 
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;flex-wrap:wrap">
-        <button class="admin-btn" type="button" onclick="_cwRunSelected()" title="Queue every checked row to run 1900–1970 (each chains a no-year sweep), back-to-back. Works while a run is active — they line up behind it.">▶ Run selected (1900-1970)</button>
-        <button id="cw-del-selected-btn" class="admin-btn" type="button" onclick="_cwDeleteSelected()" title="Delete every release_cache row for all checked combos and zero their run-stat columns. One confirm for the batch. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫ Delete selected</button>
+        <button class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _cwRunSelected() })}" title="Queue every checked row to run 1900–1970 (each chains a no-year sweep), back-to-back. Works while a run is active — they line up behind it.">▶ Run selected (1900-1970)</button>
+        <button id="cw-del-selected-btn" class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _cwDeleteSelected() })}" title="Delete every release_cache row for all checked combos and zero their run-stat columns. One confirm for the batch. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫ Delete selected</button>
         <span id="cw-sel-count" style="font-size:0.76rem;color:var(--muted)">${_cwSelected.size ? _cwSelected.size + " selected" : ""}</span>
         ${queue.length ? `<span style="font-size:0.76rem;color:var(--accent)" title="${esc(queue.map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}">queued: <strong>${queue.length}</strong> — ${esc(queue.slice(0, 4).map(q => q.genreKey + (q.styleKey ? "/" + q.styleKey : "")).join(", "))}${queue.length > 4 ? "…" : ""}</span>
-             <button class="admin-btn" type="button" onclick="_cwClearQueue()" title="Remove all pending queued combos. Doesn't stop the active run.">✕ Clear queue</button>` : ""}
-        <button class="admin-btn" type="button" onclick="_cwToggleGenresOnly()" style="margin-left:auto" title="Hide rows that have a style set so only top-level genre rows remain.">${_cwGenresOnly ? "Show all (genres + styles)" : "Hide styles (genres only)"}</button>
+             <button class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _cwClearQueue() })}" title="Remove all pending queued combos. Doesn't stop the active run.">✕ Clear queue</button>` : ""}
+        <button class="admin-btn" type="button" data-sd-click="${_sdOn(function (event) { _cwToggleGenresOnly() })}" style="margin-left:auto" title="Hide rows that have a style set so only top-level genre rows remain.">${_cwGenresOnly ? "Show all (genres + styles)" : "Hide styles (genres only)"}</button>
       </div>
       ${rows.length
         ? (() => {
@@ -1231,7 +1231,7 @@ async function loadCacheWarm(opts) {
           const th = (key, label, align = "left") => {
             const isActive = _cwSort.col === key;
             const arrow = isActive ? (_cwSort.dir === "asc" ? " ↑" : " ↓") : "";
-            return `<th style="text-align:${align};cursor:pointer;user-select:none" onclick="_cwSortBy(${jsAttr(key)})" title="Sort by ${label}">${label}${arrow}</th>`;
+            return `<th style="text-align:${align};cursor:pointer;user-select:none" data-sd-click="${_sdOn(((a0) => function (event) { _cwSortBy(a0) })(String(key ?? "")))}" title="Sort by ${label}">${label}${arrow}</th>`;
           };
           return `<div class="cw-table-wrap" style="overflow-x:auto"><table class="api-log-table cw-stats-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
@@ -1247,7 +1247,7 @@ async function loadCacheWarm(opts) {
               <col style="width:20%">
             </colgroup>
             <thead><tr>
-              <th style="text-align:center"><input type="checkbox" onclick="_cwSelectAllVisible(this.checked)" title="Select / deselect all visible rows"></th>
+              <th style="text-align:center"><input type="checkbox" data-sd-click="${_sdOn(function (event) { _cwSelectAllVisible(this.checked) })}" title="Select / deselect all visible rows"></th>
               ${th("genre_key",     "Genre",       "left")}
               ${th("style_key",     "Style",       "left")}
               ${th("in_cache",      "In cache",    "right")}
@@ -1282,7 +1282,7 @@ async function loadCacheWarm(opts) {
               const isAuto = !r.has_run;
               const styleLabel = r.style_key || "(all)";
               return `<tr${isActive ? ' style="background:rgba(125,225,150,0.06)"' : (isAuto ? ' style="opacity:0.78"' : "")}>
-                <td style="text-align:center"><input type="checkbox" class="cw-sel" data-g="${esc(r.genre_key)}" data-s="${esc(r.style_key || "")}" ${_cwSelected.has(_cwSelKey(r.genre_key, r.style_key)) ? "checked" : ""} onchange="_cwSelToggle(this)"></td>
+                <td style="text-align:center"><input type="checkbox" class="cw-sel" data-g="${esc(r.genre_key)}" data-s="${esc(r.style_key || "")}" ${_cwSelected.has(_cwSelKey(r.genre_key, r.style_key)) ? "checked" : ""} data-sd-change="${_sdOn(function (event) { _cwSelToggle(this) })}"></td>
                 <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.genre_key)}">${esc(r.genre_key)}</td>
                 <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${r.style_key ? "var(--text)" : "var(--muted)"}" title="${esc(styleLabel)}">${esc(styleLabel)}</td>
                 <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${fmt(r.in_cache)}</strong></td>
@@ -1292,9 +1292,9 @@ async function loadCacheWarm(opts) {
                 <td style="text-align:right;color:var(--muted);font-size:0.74rem">${cursor}</td>
                 <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}${nyPill}</td>
                 <td style="text-align:right;white-space:nowrap">
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues(${jsAttr(safeG)},${jsAttr(safeS)})" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm(${jsAttr(safeG)},${jsAttr(safeS)})" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo(${jsAttr(safeG)},${jsAttr(safeS)}, ${r.in_cache || 0}, this)" title="Delete every release_cache row for this (genre, style) combo. Deletes immediately; toast confirms the count. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} data-sd-click="${_sdOn(((a0, a1) => function (event) { cacheWarmRunComboBlues(a0,a1) })(String(safeG ?? ""), String(safeS ?? "")))}" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} data-sd-click="${_sdOn(((a0, a1) => function (event) { _cwLoadIntoForm(a0,a1) })(String(safeG ?? ""), String(safeS ?? "")))}" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { _cwDeleteCombo(a0,a1, a2, this) })(String(safeG ?? ""), String(safeS ?? ""), _sdLit(r.in_cache || 0)))}" title="Delete every release_cache row for this (genre, style) combo. Deletes immediately; toast confirms the count. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
                 </td>
               </tr>`;
             }).join("")}</tbody>
@@ -1636,7 +1636,7 @@ function _rcxRenderLabelsList() {
   const rows = filtered.slice(0, 600).map(it => {
     const checked = window._rcxSelectedLabels.has(it.name) ? "checked" : "";
     return `<label style="display:flex;gap:0.4rem;align-items:center;padding:0.15rem 0;cursor:pointer">
-      <input type="checkbox" ${checked} onchange="_rcxToggleLabel(this,${jsAttr(it.name)})">
+      <input type="checkbox" ${checked} data-sd-change="${_sdOn(((a0) => function (event) { _rcxToggleLabel(this,a0) })(String(it.name ?? "")))}">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span>
       <span style="color:var(--muted);font-size:0.72rem">${Number(it.count).toLocaleString()}</span>
     </label>`;
@@ -1979,11 +1979,11 @@ async function loadYtReview() {
       <div style="display:flex;flex-wrap:wrap;gap:0.7rem;align-items:center;margin-bottom:0.5rem">
         ${runPill}
         ${running
-          ? `<button class="admin-btn" onclick="ytrStop()" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
-          : `<button class="admin-btn" onclick="ytrStart()" title="Walk pre-1960 Blues masters (earliest year first) and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
-             <button class="admin-btn" onclick="ytrRestartFromTop()" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>
-             ${c.pending ? `<button class="admin-btn" style="color:#e88" onclick="ytrDismissPending()" title="Throw out all ${Number(c.pending).toLocaleString()} pending tracks' candidates, forget those tracks were searched, and rewind the walk. Does not start the worker — the next ▶ Start (or scheduled daily run) re-searches them with the current search query. Approved / rejected / skipped rows are kept; rejected videos won't come back.">⟳ Dismiss pending &amp; re-search</button>` : ""}
-             <button class="admin-btn" onclick="ytrResetQuota()" title="Zero the app's daily search counter. Use ONLY when Google Cloud Console shows the 'Search Queries per day' quota has headroom — the app's count can drift high after a Pacific-midnight reset and block the worker while Google still has budget.">↺ Resync quota</button>`}
+          ? `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrStop() })}" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
+          : `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrStart() })}" title="Walk pre-1960 Blues masters (earliest year first) and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
+             <button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrRestartFromTop() })}" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>
+             ${c.pending ? `<button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(function (event) { ytrDismissPending() })}" title="Throw out all ${Number(c.pending).toLocaleString()} pending tracks' candidates, forget those tracks were searched, and rewind the walk. Does not start the worker — the next ▶ Start (or scheduled daily run) re-searches them with the current search query. Approved / rejected / skipped rows are kept; rejected videos won't come back.">⟳ Dismiss pending &amp; re-search</button>` : ""}
+             <button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrResetQuota() })}" title="Zero the app's daily search counter. Use ONLY when Google Cloud Console shows the 'Search Queries per day' quota has headroom — the app's count can drift high after a Pacific-midnight reset and block the worker while Google still has budget.">↺ Resync quota</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
         <span style="font-size:0.74rem;color:var(--muted)" title="Worker searches today / daily cap. Hard cap so manual searches always have budget left.">worker: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.searchesToday||0).toLocaleString()}</strong>/${Number(s.dailyBudget||9000).toLocaleString()}</span>
         <span style="font-size:0.74rem;color:var(--muted)" title="Project-wide YouTube quota units consumed today (worker + manual). Resets at midnight Pacific — Google's quota window.">project: <strong style="color:var(--text);font-variant-numeric:tabular-nums">${Number(s.projectUnitsToday||0).toLocaleString()}</strong>/${Number(s.projectUnitsCap||950000).toLocaleString()} u</span>
@@ -1997,7 +1997,7 @@ async function loadYtReview() {
         ${ytrTile("Searched", st.total_searched || 0, "var(--text)")}
         ${ytrTile("Queued",   st.total_queued   || 0, "var(--text)")}
         ${ytrTile("Auto-pinned", c.auto, (c.auto ? "#f0c674" : "var(--muted)"), "auto")}
-        <div style="cursor:pointer" onclick="ytrShowErrors()" title="Click to view recent worker errors.">
+        <div style="cursor:pointer" data-sd-click="${_sdOn(function (event) { ytrShowErrors() })}" title="Click to view recent worker errors.">
           ${ytrTile("Errors",   st.total_errors   || 0, st.total_errors ? "#e88" : "var(--muted)")}
         </div>
       </div>
@@ -2029,7 +2029,7 @@ async function loadYtReview() {
   } catch (e) { stEl.innerHTML = `<span style="color:#e88">Failed: ${esc(e?.message || e)}</span>`; }
 }
 function ytrTile(label, n, color, status) {
-  const onclick = status ? ` style="cursor:pointer;text-decoration:underline" onclick="ytrSetStatus(${jsAttr(status)})"` : "";
+  const onclick = status ? ` style="cursor:pointer;text-decoration:underline" data-sd-click="${_sdOn(((a0) => function (event) { ytrSetStatus(a0) })(String((status) ?? "")))}"` : "";
   return `<div${onclick ? ' ' + onclick : ''} style="border:1px solid var(--border);border-radius:5px;padding:0.4rem 0.55rem">
     <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">${label}</div>
     <div data-ytr-count="${status || ''}" style="font-size:0.95rem;font-weight:600;color:${color};font-variant-numeric:tabular-nums">${Number(n||0).toLocaleString()}</div>
@@ -2115,10 +2115,10 @@ async function loadYtChannels() {
           <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${Number(c.auto_approvals || 0)}</td>
           <td style="padding:0.25rem 0.4rem">${badge}</td>
           <td style="padding:0.25rem 0.4rem;white-space:nowrap">
-            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'trusted')" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
-            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'blocked')" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
-            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'')" title="Clear the manual override and let the tally decide again.">Auto</button>
-            <button class="admin-btn" style="color:#e88" onclick="ytrBanChannel(${jsAttr(id)}, ${escHtml(JSON.stringify(String(c.channel_title || "")))})" title="Ban: remove this channel from ALL YouTube results, drop its pending candidates and auto-approvals.">Ban</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrSetChannelTrust(a0,'trusted') })(String(id ?? "")))}" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrSetChannelTrust(a0,'blocked') })(String(id ?? "")))}" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrSetChannelTrust(a0,'') })(String(id ?? "")))}" title="Clear the manual override and let the tally decide again.">Auto</button>
+            <button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(((a0, a1) => function (event) { ytrBanChannel(a0, a1) })(String(id ?? ""), String(c.channel_title || "")))}" title="Ban: remove this channel from ALL YouTube results, drop its pending candidates and auto-approvals.">Ban</button>
           </td>
         </tr>`;
       }).join("")}
@@ -2156,7 +2156,7 @@ async function loadYtBans() {
         return `<tr style="border-top:1px solid var(--border)">
           <td class="ytr-ch-cell" data-ch="${id}" data-title="${esc(b.channel_title || "")}" style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(b.channel_title || b.channel_id)}</a></td>
           <td style="padding:0.25rem 0.4rem;color:var(--muted);font-size:0.72rem">${esc(b.reason || "")}</td>
-          <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" onclick="ytrUnban(${jsAttr(id)})" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
+          <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrUnban(a0) })(String(id ?? "")))}" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
         </tr>`;
       }).join("")}
     </table>`;
@@ -2403,7 +2403,7 @@ async function loadYtReviewQueue() {
     const autoBar = _ytrStatus === "auto"
       ? `<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;font-size:0.76rem;color:var(--muted)">
           Pins the auto-approver made. Keep moves one to Approved; Remove deletes the pin and rejects it.
-          <button class="admin-btn" style="margin-left:auto" onclick="ytrKeepAutoPage(this)" title="Keep every auto-pin shown on this page.">✓ Keep all on page</button>
+          <button class="admin-btn" style="margin-left:auto" data-sd-click="${_sdOn(function (event) { ytrKeepAutoPage(this) })}" title="Keep every auto-pin shown on this page.">✓ Keep all on page</button>
         </div>`
       : "";
     el.innerHTML = autoBar + ytrGroupedHtml(visible);
@@ -2430,8 +2430,8 @@ function ytrGroupedHtml(rows) {
     // "Reject all" / "Ban all" only make sense while reviewing the pending queue.
     const nCh = new Set(group.map(r => r.candidate_channel_id).filter(Boolean)).size;
     const rejectAll = _ytrStatus === "pending"
-      ? `<button class="admin-btn" onclick="ytrRejectGroup(this)" title="Reject all ${n} candidate${n === 1 ? "" : "s"} for this track — none of them are right." style="margin-left:auto;flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">✗ Reject all</button>`
-        + (nCh ? `<button class="admin-btn" onclick="ytrBanGroup(this)" title="Ban all ${nCh} channel${nCh === 1 ? "" : "s"} behind this track's candidates from ALL YouTube results, and reject the rest." style="flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">⛔ Ban all</button>` : "")
+      ? `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrRejectGroup(this) })}" title="Reject all ${n} candidate${n === 1 ? "" : "s"} for this track — none of them are right." style="margin-left:auto;flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">✗ Reject all</button>`
+        + (nCh ? `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrBanGroup(this) })}" title="Ban all ${nCh} channel${nCh === 1 ? "" : "s"} behind this track's candidates from ALL YouTube results, and reject the rest." style="flex-shrink:0;font-size:0.7rem;padding:0.1rem 0.45rem;color:#e88;border-color:#5a2b2b">⛔ Ban all</button>` : "")
       : "";
     const head = `<div class="ytr-group-head">
       <span class="ytr-group-count" title="${n} candidate${n === 1 ? "" : "s"} for this track">${n}</span>
@@ -2481,24 +2481,24 @@ function ytrRowHtml(r) {
     ${showActions
       ? `<div style="display:flex;flex-direction:column;gap:0.3rem;align-items:flex-end">
           <div style="display:flex;gap:0.3rem;align-items:center">
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'approve',this)" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'reject',this)" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
-            <button class="admin-btn" onclick="ytrDecide(${r.id},'skip',this)" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
-            ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" onclick="ytrBanChannel(${jsAttr(r.candidate_channel_id)}, ${escHtml(JSON.stringify(String(r.candidate_channel_title || "")))})" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrDecide(a0,'approve',this) })(_sdLit(r.id)))}" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrDecide(a0,'reject',this) })(_sdLit(r.id)))}" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrDecide(a0,'skip',this) })(_sdLit(r.id)))}" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
+            ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(((a0, a1) => function (event) { ytrBanChannel(a0, a1) })(String(r.candidate_channel_id ?? ""), String(r.candidate_channel_title || "")))}" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
           </div>
           <div style="display:flex;gap:0.3rem;align-items:center">
-            <input type="text" id="ytr-custom-${r.id}" placeholder="paste YouTube URL or ID" style="width:14rem;padding:0.15rem 0.35rem;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrCustomApprove(${r.id});}">
-            <button class="admin-btn" onclick="ytrCustomApprove(${r.id})" title="Pin your own URL to this track instead of the worker's candidate. Overwrites any existing override.">↳ Use my URL</button>
+            <input type="text" id="ytr-custom-${r.id}" placeholder="paste YouTube URL or ID" style="width:14rem;padding:0.15rem 0.35rem;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px" data-sd-keydown="${_sdOn(((a0) => function (event) { if(event.key==='Enter'){event.preventDefault();ytrCustomApprove(a0);} })(_sdLit(r.id)))}">
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrCustomApprove(a0) })(_sdLit(r.id)))}" title="Pin your own URL to this track instead of the worker's candidate. Overwrites any existing override.">↳ Use my URL</button>
           </div>
         </div>`
       : showAuto
         ? `<div style="display:flex;gap:0.3rem;align-items:center">
-            <button class="admin-btn" onclick="ytrKeepAuto([${r.id}], this)" title="Keep this pin. Moves it to Approved and counts as your approval for the channel's trust.">✓ Keep</button>
-            <button class="admin-btn" style="color:#e88" onclick="ytrRemoveAuto(${r.id}, this)" title="Delete the pin and mark the candidate rejected. The track becomes unpinned.">✗ Remove</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrKeepAuto([a0], this) })(_sdLit(r.id)))}" title="Keep this pin. Moves it to Approved and counts as your approval for the channel's trust.">✓ Keep</button>
+            <button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(((a0) => function (event) { ytrRemoveAuto(a0, this) })(_sdLit(r.id)))}" title="Delete the pin and mark the candidate rejected. The track becomes unpinned.">✗ Remove</button>
           </div>`
       : showDelete
         ? `<div style="display:flex;gap:0.3rem;align-items:center">
-            <button class="admin-btn" onclick="ytrDeleteApproval(${r.id})" title="Remove the override this approval created and mark the candidate rejected.">🗑 Delete</button>
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrDeleteApproval(a0) })(_sdLit(r.id)))}" title="Remove the override this approval created and mark the candidate rejected.">🗑 Delete</button>
           </div>`
         : `<div style="color:var(--muted);font-size:0.74rem">${esc(r.status || "")}</div>`}
   </div>`;
@@ -2552,9 +2552,9 @@ function ytrRenderPager(total) {
   const cur = _ytrPage + 1;
   if (pages <= 1) { el.innerHTML = `<span style="color:var(--muted)">${total} row${total === 1 ? "" : "s"}</span>`; return; }
   el.innerHTML = `
-    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} onclick="ytrPage(${_ytrPage - 1})">‹ Prev</button>
+    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { ytrPage(a0) })(_sdLit(_ytrPage - 1)))}">‹ Prev</button>
     <span style="color:var(--muted)">Page ${cur} / ${pages} · ${total.toLocaleString()} ${_ytrStatus === "auto" ? "auto-pinned" : _ytrStatus}</span>
-    <button class="admin-btn" ${cur >= pages ? "disabled" : ""} onclick="ytrPage(${_ytrPage + 1})">Next ›</button>
+    <button class="admin-btn" ${cur >= pages ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { ytrPage(a0) })(_sdLit(_ytrPage + 1)))}">Next ›</button>
   `;
 }
 function ytrPage(p) { _ytrPage = Math.max(0, p); loadYtReviewQueue(); }
@@ -2987,7 +2987,7 @@ async function ytrShowErrors() {
   overlay.innerHTML = `<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;max-width:900px;width:100%;max-height:80vh;overflow:auto;padding:1rem">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem">
       <div style="font-weight:600">YT Review worker errors</div>
-      <button class="admin-btn" onclick="document.getElementById('ytr-errors-modal').remove()">Close</button>
+      <button class="admin-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ytr-errors-modal').remove() })}">Close</button>
     </div>
     <div id="ytr-errors-body" style="color:var(--muted);font-size:0.85rem">Loading…</div>
   </div>`;
@@ -3126,7 +3126,7 @@ function renderFeedback(items) {
         <span style="color:#aaa;font-size:0.8rem">${escHtml(user_email || "unknown")}</span>
         <div style="display:flex;gap:0.75rem;align-items:center">
           <span style="color:#555;font-size:0.75rem">${date}</span>
-          <button onclick="deleteFeedbackItem(${id})" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;padding:0" title="Delete">\u2715</button>
+          <button data-sd-click="${_sdOn(((a0) => function (event) { deleteFeedbackItem(a0) })(_sdLit(id)))}" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;padding:0" title="Delete">\u2715</button>
         </div>
       </div>
       <div style="color:var(--fg);white-space:pre-wrap">${escHtml(message)}</div>
@@ -3257,7 +3257,7 @@ async function loadApiHealth() {
       for (const [k, j] of Object.entries(hr.jobs)) {
         const key = _jobKey[k];
         const histLink = key
-          ? ` <a href="#" onclick="event.preventDefault();_adminToggleJobHistory(${jsAttr(key)},this)" style="font-size:0.72rem;color:#7eb8da;text-decoration:none">history</a><div class="admin-job-hist" data-job="${key}" style="display:none;margin:0.3rem 0 0.4rem 0.6rem"></div>`
+          ? ` <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_adminToggleJobHistory(a0,this) })(String(key ?? "")))}" style="font-size:0.72rem;color:#7eb8da;text-decoration:none">history</a><div class="admin-job-hist" data-job="${key}" style="display:none;margin:0.3rem 0 0.4rem 0.6rem"></div>`
           : "";
         html += `<li><strong>${esc(k)}</strong>: ${esc(j)}${histLink}</li>`;
       }
@@ -3391,8 +3391,8 @@ async function loadAdminMediaStats() {
     const tt = Array.isArray(d.topTitles30d) ? d.topTitles30d : [];
     if (tt.length) {
       const expand = _adminTopPlayedLimit <= 10
-        ? `<a href="#" onclick="_adminSetTopPlayed(100);return false" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 100</a>`
-        : `<a href="#" onclick="_adminSetTopPlayed(10);return false" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 10</a>`;
+        ? `<a href="#" data-sd-click="${_sdOn(function (event) { _adminSetTopPlayed(100);return false })}" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 100</a>`
+        : `<a href="#" data-sd-click="${_sdOn(function (event) { _adminSetTopPlayed(10);return false })}" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 10</a>`;
       html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Most played (30d)${expand}</h3>
         <ol class="admin-job-list" style="padding-left:1.4rem">${tt.map(x => {
           const u = trackUrl(x.source, x.external_id);
@@ -3534,9 +3534,9 @@ async function loadAdminItems() {
     // Pagination
     if (data.pages > 1) {
       let pagHtml = "";
-      if (_adminItemsPage > 1) pagHtml += `<a href="#" onclick="event.preventDefault();_adminItemsPage--;loadAdminItems()" style="color:var(--accent);text-decoration:none;margin:0 0.3rem">\u2190 Prev</a>`;
+      if (_adminItemsPage > 1) pagHtml += `<a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_adminItemsPage--;loadAdminItems() })}" style="color:var(--accent);text-decoration:none;margin:0 0.3rem">\u2190 Prev</a>`;
       pagHtml += `<span style="color:var(--muted)">Page ${_adminItemsPage} of ${data.pages}</span>`;
-      if (_adminItemsPage < data.pages) pagHtml += `<a href="#" onclick="event.preventDefault();_adminItemsPage++;loadAdminItems()" style="color:var(--accent);text-decoration:none;margin:0 0.3rem">Next \u2192</a>`;
+      if (_adminItemsPage < data.pages) pagHtml += `<a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_adminItemsPage++;loadAdminItems() })}" style="color:var(--accent);text-decoration:none;margin:0 0.3rem">Next \u2192</a>`;
       pag.innerHTML = pagHtml;
       pag.style.display = "block";
     }
@@ -3630,7 +3630,7 @@ function _renderAdminSubmissionsTable() {
       <td style="padding:0.35rem 0.5rem">${escHtml(trim(o.track_title || "", 32))}</td>
       <td style="padding:0.35rem 0.5rem">${ytLink}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.submitted_by, 12))}</td>
-      <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,${jsAttr(o.release_id)},${jsAttr(o.release_type)},${jsAttr(o.track_position)})">Delete</button></td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { adminDeleteSubmission(this,a0,a1,a2) })(String(o.release_id ?? ""), String(o.release_type ?? ""), String(o.track_position ?? "")))}">Delete</button></td>
     </tr>`;
   }).join("");
   el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
@@ -3739,7 +3739,7 @@ function _renderAdminUnavailableTable() {
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.last_reported_at))}</td>
       <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(String(o.sample_error_code ?? "—"))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.sample_user_id || "", 12))}</td>
-      <td style="padding:0.35rem 0.5rem"><button class="admin-btn" onclick="adminClearUnavailable(this,${jsAttr(o.video_id)})" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { adminClearUnavailable(this,a0) })(String(o.video_id ?? "")))}" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
     </tr>`;
   }).join("");
   el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
@@ -3968,7 +3968,7 @@ function _adminUnifiedRenderGroupBar() {
   if (!bar) return;
   bar.innerHTML = _ADMIN_UNIFIED_GROUPS.map(g => {
     const on = _adminUnifiedGroup === g.key;
-    return `<button class="admin-btn${on ? " active" : ""}" onclick="_adminUnifiedSetGroup(${jsAttr(g.key)})" ${on ? 'style="background:var(--accent);color:#000;font-weight:600"' : ""}>${g.label}</button>`;
+    return `<button class="admin-btn${on ? " active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _adminUnifiedSetGroup(a0) })(String(g.key ?? "")))}" ${on ? 'style="background:var(--accent);color:#000;font-weight:600"' : ""}>${g.label}</button>`;
   }).join("");
 }
 
@@ -4025,8 +4025,8 @@ function adminDeleteUser(clerkUserId) {
       <p style="color:var(--muted);font-size:0.8rem;margin:0 0 1rem;line-height:1.5">This removes <strong>all</strong> of their SeaDisco data <strong>and</strong> their Clerk login, so they can't sign back in. It cannot be undone.</p>
       <div id="admin-delete-user-status" style="color:#e88;font-size:0.8rem;margin-bottom:0.6rem"></div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end">
-        <button class="admin-btn" onclick="document.getElementById('admin-delete-user-overlay')?.remove()">Cancel</button>
-        <button class="admin-btn" id="admin-delete-user-confirm" style="background:#7a2b2b;color:#fff;border-color:#7a2b2b" onclick="_adminDeleteUserConfirm(${jsAttr(clerkUserId)}, this)">Delete permanently</button>
+        <button class="admin-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('admin-delete-user-overlay')?.remove() })}">Cancel</button>
+        <button class="admin-btn" id="admin-delete-user-confirm" style="background:#7a2b2b;color:#fff;border-color:#7a2b2b" data-sd-click="${_sdOn(((a0) => function (event) { _adminDeleteUserConfirm(a0, this) })(String(clerkUserId ?? "")))}">Delete permanently</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -4115,7 +4115,7 @@ function _adminUnifiedCell(u, col) {
     // Own row can't be deleted (the server also refuses the admin account).
     const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
     if (!u.clerkUserId || isSelf) return "";
-    return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser(${jsAttr(u.clerkUserId)})" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
+    return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" data-sd-click="${_sdOn(((a0) => function (event) { event.stopPropagation();adminDeleteUser(a0) })(String(u.clerkUserId ?? "")))}" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
   }
   if (col.type === "range") {
     const f = v => { if (!v) return null; const dt = new Date(v); return isNaN(dt.getTime()) ? null : dt.toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
@@ -4145,7 +4145,7 @@ function _adminUnifiedCell(u, col) {
     // Manual per-user sync button. Only offered when the user has a linked
     // Discogs handle (the sync endpoint keys on discogs_username).
     const btn = u.discogsUsername
-      ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(${jsAttr(u.discogsUsername)}, this)" title="Run a full Discogs library sync for this user">Sync</button>`
+      ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" data-sd-click="${_sdOn(((a0) => function (event) { adminSyncUser(a0, this) })(String(u.discogsUsername ?? "")))}" title="Run a full Discogs library sync for this user">Sync</button>`
       : "";
     // Render by STATUS, not by "has a sync_error". A gapped completion and a
     // restart-interrupted "stopped" run BOTH carry a sync_error note but are
@@ -4157,7 +4157,7 @@ function _adminUnifiedCell(u, col) {
     // message to the delegated handler.
     const hasErr = !!u.syncError;
     const errAttr = hasErr
-      ? ` title="${escHtml(String(u.syncError))} (click for full detail)" data-err="${escHtml(String(u.syncError))}" onclick="event.stopPropagation();_adminSyncErrDetail(this)"`
+      ? ` title="${escHtml(String(u.syncError))} (click for full detail)" data-err="${escHtml(String(u.syncError))}" data-sd-click="${_sdOn(function (event) { event.stopPropagation();_adminSyncErrDetail(this) })}"`
       : "";
     const clickCur = hasErr ? "cursor:pointer;text-decoration:underline dotted" : "";
     const shortErr = hasErr ? (String(u.syncError).length > 44 ? String(u.syncError).slice(0, 44) + "…" : String(u.syncError)) : "";
@@ -4220,7 +4220,7 @@ function _adminUnifiedRender() {
     if (c.type === "delete") return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem"></th>`;
     const active = _adminUnifiedSort.col === c.key;
     const arrow = active ? (_adminUnifiedSort.dir === "asc" ? " ↑" : " ↓") : "";
-    return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy(${jsAttr(c.key)})" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
+    return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _adminUnifiedSortBy(a0) })(String(c.key ?? "")))}" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
   };
   const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)"><tr>${cols.map((c, i) => th(c, i)).join("")}</tr></thead>`;
   const body = rows.map(u => {
@@ -4364,7 +4364,7 @@ async function adminOpenDbTablePopup(tableName) {
   overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(720px,100%);max-height:88vh;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.04) inset">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem">
       <h3 style="margin:0;font-family:monospace;font-size:1rem">${escHtml(tableName)}</h3>
-      <button class="admin-btn" onclick="document.getElementById('admin-db-table-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      <button class="admin-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('admin-db-table-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem">×</button>
     </div>
     <div id="admin-db-table-body" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
   </div>`;

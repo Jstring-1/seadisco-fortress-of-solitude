@@ -742,11 +742,15 @@ const _clerkCspHost = (() => {
     return /^[a-z0-9.-]+$/i.test(h) ? `https://${h}` : "";
   } catch { return ""; }
 })();
-const _cspDirectives = [
+// Scripts: no 'unsafe-inline'. The page's own inline <script> blocks carry
+// a per-request nonce (stamped by _withNonce), and event handlers are
+// bound from data-sd-* attributes in JS (see _sdOn in web/shared.js), so
+// injected markup can't run code even if it slips past escaping.
+const _cspDirectivesFor = (nonce: string) => [
   "default-src 'self'",
   // jsdelivr is limited to the two pinned packages (the whole host would
   // let an injected script pull any npm package).
-  `script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev ${_clerkCspHost} https://www.googletagmanager.com https://www.youtube.com https://s.ytimg.com https://cdn.jsdelivr.net/npm/hls.js@1.7.3/ https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/`,
+  `script-src 'self' 'nonce-${nonce}' https://*.clerk.accounts.dev ${_clerkCspHost} https://challenges.cloudflare.com https://www.googletagmanager.com https://www.youtube.com https://s.ytimg.com https://cdn.jsdelivr.net/npm/hls.js@1.7.3/ https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
@@ -765,7 +769,9 @@ const _cspHeaderName = _cspEnforce ? "Content-Security-Policy" : "Content-Securi
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader(_cspHeaderName, _cspDirectives);
+  const nonce = crypto.randomBytes(16).toString("base64");
+  res.locals.cspNonce = nonce;
+  res.setHeader(_cspHeaderName, _cspDirectivesFor(nonce));
   // `preload` flag enables submission to the HSTS preload list at
   // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
   // redirect on the FIRST visit too instead of only after they've
@@ -815,7 +821,7 @@ function _buildClerkInject(): string {
       .toString("utf8")
       .replace(/\$+$/, "");
     if (!host || !/^[a-z0-9.-]+$/i.test(host)) return "";
-    return `<script async crossorigin="anonymous" data-clerk-publishable-key="${authPk}" src="https://${host}/npm/@clerk/clerk-js@4/dist/clerk.browser.js" onload="window._clerkScriptReady=true"></script>`;
+    return `<script async crossorigin="anonymous" data-clerk-publishable-key="${authPk}" src="https://${host}/npm/@clerk/clerk-js@4/dist/clerk.browser.js"></script>`;
   } catch { return ""; }
 }
 const _clerkInject = _buildClerkInject();
@@ -924,6 +930,14 @@ function _headTagsForView(view: string): string {
   ].join("\n  ");
 }
 
+// Stamp this response's CSP nonce onto every inline <script> (ones
+// without src). Inline scripts without it are blocked by the policy.
+function _withNonce(html: string, res: express.Response): string {
+  const nonce = String(res.locals.cspNonce || "");
+  if (!nonce) return html;
+  return html.replace(/<script(?![^>]*src=)(?![^>]*nonce=)([^>]*)>/g, `<script nonce="${nonce}"$1>`);
+}
+
 // Matches the whole marked region. The START marker may carry a trailing
 // explanatory comment (…START — notes -->), so consume up to the first
 // SD_HEAD_END rather than requiring a bare `<!-- SD_HEAD_START -->`.
@@ -948,7 +962,7 @@ function _sendHtml(res: express.Response, relPath: string, req?: express.Request
   // Diagnostic header — `curl -I https://seadisco.com` will show
   // exactly which theme the server thinks it's injecting.
   res.setHeader("X-SeaDisco-Theme", _siteTheme || "(unset)");
-  res.send(html);
+  res.send(_withNonce(html, res));
   return true;
 }
 
@@ -1107,7 +1121,7 @@ async function _sendEntityPage(req: express.Request, res: express.Response, type
     // kept out of the index.
     html = html.replace(_SD_HEAD_RE, _headTagsForView("home").replace(`content="index, follow"`, `content="noindex, follow"`));
     html = html.replace("<body>", `<body>\n${opScript}`);
-    res.status(Number.isFinite(id) && id > 0 ? 200 : 404).send(html);
+    res.status(Number.isFinite(id) && id > 0 ? 200 : 404).send(_withNonce(html, res));
     return;
   }
   const canonical = entityPath(type, id, data);
@@ -1121,7 +1135,7 @@ async function _sendEntityPage(req: express.Request, res: express.Response, type
   html = html.replace("<body>", `<body>\n${opScript}`);
   // The entity H1 replaces the generic home H1.
   html = html.replace(/<h1 class="sr-only">[^<]*<\/h1>/, _entityBody(type, data));
-  res.send(html);
+  res.send(_withNonce(html, res));
 }
 
 app.get(["/master/:id/:slug", "/release/:id/:slug"], async (req, res) => {

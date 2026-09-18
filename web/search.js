@@ -583,10 +583,10 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML = errData.error === "no_token"
           ? `<div class="empty-state"><div class="empty-state-icon">💿</div>` +
             `<div class="empty-state-title">Connect Discogs to search</div>` +
-            `<div class="empty-state-subtitle">Searching the catalog uses your own Discogs account. <a href="#" onclick="_sdConnectDiscogs();return false;" style="color:var(--accent)">Connect Discogs</a> — it takes one click.${keepPlaying}</div></div>`
+            `<div class="empty-state-subtitle">Searching the catalog uses your own Discogs account. <a href="#" data-sd-click="${_sdOn(function (event) { _sdConnectDiscogs();return false; })}" style="color:var(--accent)">Connect Discogs</a> — it takes one click.${keepPlaying}</div></div>`
           : `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
             `<div class="empty-state-title">Sign in to search Discogs</div>` +
-            `<div class="empty-state-subtitle"><a href="#" onclick="openSignUpModal();return false;" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog.${keepPlaying}</div></div>`;
+            `<div class="empty-state-subtitle"><a href="#" data-sd-click="${_sdOn(function (event) { openSignUpModal();return false; })}" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog.${keepPlaying}</div></div>`;
         return;
       }
       // discogs_auth = signed in + token on file, but Discogs upstream
@@ -597,7 +597,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔌</div>` +
           `<div class="empty-state-title">Discogs connection expired</div>` +
-          `<div class="empty-state-subtitle">${escHtml(errData.message || "Reconnect your Discogs account.")} <a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Open Account settings</a></div></div>`;
+          `<div class="empty-state-subtitle">${escHtml(errData.message || "Reconnect your Discogs account.")} <a href="/?v=account" data-sd-click="${_sdOn(function (event) { switchView('account');return false; })}" style="color:var(--accent)">Open Account settings</a></div></div>`;
         showToast("Reconnect Discogs to keep searching", "error", 6000);
         return;
       }
@@ -606,7 +606,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in</a> and connect your Discogs account to continue.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?v=account" data-sd-click="${_sdOn(function (event) { switchView('account');return false; })}" style="color:var(--accent)">Sign in</a> and connect your Discogs account to continue.</div></div>`;
         return;
       }
       // discogs_rate_limited = our OAuth account is being throttled
@@ -666,14 +666,14 @@ async function doSearch(page = 1, skipPushState = false) {
       if (alts.length > 0) {
         const popupEl = document.getElementById("alts-popup");
         popupEl.innerHTML = `<h4>Other artists</h4>` +
-          alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} onclick="selectAltArtist(event,this);closeAltsPopup()">${escHtml(a.name)}</a>`).join("");
+          alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} data-sd-click="${_sdOn(function (event) { selectAltArtist(event,this);closeAltsPopup() })}">${escHtml(a.name)}</a>`).join("");
         // Surface the disambiguation UI. The popup used to be filled but
         // nothing on the page ever opened it, so same-named artists were
         // unreachable and a search for the wrong "John Lee" was a dead end.
         const n = alts.length;
         document.getElementById("artist-alts").innerHTML =
           `<div class="artist-alts-hint" style="font-size:0.8rem;color:var(--muted);margin:0.2rem 0 0.4rem">Not the right artist? ` +
-          `<a href="#" onclick="openAltsPopup(event)" style="color:var(--accent)">${n} other artist${n === 1 ? "" : "s"} with this name</a></div>`;
+          `<a href="#" data-sd-click="${_sdOn(function (event) { openAltsPopup(event) })}" style="color:var(--accent)">${n} other artist${n === 1 ? "" : "s"} with this name</a></div>`;
       } else {
         document.getElementById("alts-popup").innerHTML = "<h4>Other artists</h4>";
       }
@@ -767,7 +767,7 @@ async function doSearch(page = 1, skipPushState = false) {
           : "";
 
         const readMore = needsMore
-          ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
+          ? ` <a href="#" data-sd-click="${_sdOn(function (event) { openBioFull(event) })}" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
           : "";
         const heading = bioData.name
           ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}</strong>`
@@ -809,7 +809,7 @@ async function doSearch(page = 1, skipPushState = false) {
               if (blurbEl.querySelector(".ba-bio-archive-link")) return;
               blurbEl.insertAdjacentHTML(
                 "beforeend",
-                ` <a href="#" class="ba-bio-archive-link" onclick="event.preventDefault();_baOpenArtistFromBadge(${hit.id});return false" style="display:inline-block;margin-top:0.4rem;color:#ffd166;text-decoration:none;font-size:0.84rem">🎸 View in Blues Archive →</a>`,
+                ` <a href="#" class="ba-bio-archive-link" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_baOpenArtistFromBadge(a0);return false })(_sdLit(hit.id)))}" style="display:inline-block;margin-top:0.4rem;color:#ffd166;text-decoration:none;font-size:0.84rem">🎸 View in Blues Archive →</a>`,
               );
             } catch { /* silent */ }
           })();
@@ -1388,9 +1388,9 @@ function _sdBuildStripCardHtml(item, absIndex, mode) {
   if (inSubmitted) {
     // Global feed — no per-user dismiss.
   } else if (inSuggestions && window._clerk?.user) {
-    dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,${jsAttr(item.id)},${jsAttr(item.type || "master")})" title="Hide this suggestion forever">✕</button>`;
+    dismiss = `<button class="recent-dismiss" data-sd-click="${_sdOn(((a0, a1) => function (event) { _sdDismissSuggestion(event,a0,a1) })(String(item.id ?? ""), String((item.type || "master") ?? "")))}" title="Hide this suggestion forever">✕</button>`;
   } else if (!item._isSuggested) {
-    dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,${jsAttr(item.id)})" title="Remove from history">✕</button>`;
+    dismiss = `<button class="recent-dismiss" data-sd-click="${_sdOn(((a0) => function (event) { removeFromHistory(event,a0) })(String(item.id ?? "")))}" title="Remove from history">✕</button>`;
   }
   return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
 }
@@ -1564,7 +1564,7 @@ function renderCard(item, index, opts) {
   // for cards from any surface — favorites, collection, etc. Only
   // release/master cards get them; artist/label cards have no
   // tracks/images to enrich.
-  const enrichAttrs = isRelease ? ` data-card-id="${escHtml(String(item.id))}" data-card-type="${escHtml(type)}"` : "";
+  const enrichAttrs = isRelease ? ` data-card-id="${escHtml(String(item.id))}" data-card-type="${escHtml(type)}" data-discogs-url="${escHtml(url)}"` : "";
   // _sdCardOuterClick filters by event.target — in wide mode only
   // clicks on the main cover image open the modal, so internal
   // entity links, play/queue buttons etc. don't trigger it.
@@ -1573,9 +1573,9 @@ function renderCard(item, index, opts) {
   // is intercepted and opens the popup as before.
   const cardHref = (type === "master" || type === "release") ? _sdEntityPath(type, item.id, fullTitle) : "#";
   const cardAttrs = isRelease
-    ? `class="${typeClass}"${enrichAttrs} href="${escHtml(cardHref)}" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,${jsAttr(String(item.id))},${jsAttr(type)},${jsAttr(url)})" `
+    ? `class="${typeClass}"${enrichAttrs} href="${escHtml(cardHref)}" title="${escHtml(fullTitle)}" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { _sdCardOuterClick(event,a0,a1,a2) })(String((String(item.id)) ?? ""), String((type) ?? ""), String((url) ?? "")))}" `
     : (isArtist || isLabel)
-      ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${escHtml(String(item.id))}" onclick="searchByEntity(event,this)"`
+      ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${escHtml(String(item.id))}" data-sd-click="${_sdOn(function (event) { searchByEntity(event,this) })}"`
       : `class="${typeClass}" href="${escHtml(url)}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order matching the navbar — collection,
@@ -1595,8 +1595,8 @@ function renderCard(item, index, opts) {
   const userHasInventory = (window._inventoryIds?.size ?? 0) > 0;
   if (releaseId && isReleaseOrMaster) {
     if (type === "release") {
-      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
-      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,a0) })(_sdLit(releaseId)))}" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,a0) })(_sdLit(releaseId)))}" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
     } else {
       // Master — look up distinct-release count for this master
       const colCount = Number(window._collectionMasterCounts?.[releaseId]) || 0;
@@ -1611,8 +1611,8 @@ function renderCard(item, index, opts) {
         : "Open to add a version to wantlist";
       const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
       const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
-      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(releaseId)},'master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
-      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(releaseId)},'master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openModal(event,a0,'master','') })(String(releaseId ?? "")))}" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openModal(event,a0,'master','') })(String(releaseId ?? "")))}" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
   }
   // Favorite badge — always rendered (placeholder when not favorited).
@@ -1621,7 +1621,7 @@ function renderCard(item, index, opts) {
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
   if (type && item.id)
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},${jsAttr(type)})" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,a0,a1) })(_sdLit(item.id), String(type ?? "")))}" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
   if (releaseId && isReleaseOrMaster) {
     // Inventory badge — placeholder visible whenever the user has any
     // inventory items. Active when this release is one of them.
@@ -1646,7 +1646,7 @@ function renderCard(item, index, opts) {
     item._instanceCount ?? (isRelease ? (window._collectionInstanceCounts?.[item.id] ?? 0) : 0)
   );
   const instanceBadge = (instanceCount > 1 && isRelease)
-    ? `<span class="card-instance-badge" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${item.id})" title="${instanceCount} copies in your collection — click to view">(${instanceCount})</span>`
+    ? `<span class="card-instance-badge" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openInstancesPopover(event,a0) })(_sdLit(item.id)))}" title="${instanceCount} copies in your collection — click to view">(${instanceCount})</span>`
     : "";
   // Contribution-count badge — opt-in only via opts.showContributionBadge.
   // _contributionCount gets snapshotted into user_favorites when an item
@@ -1695,7 +1695,7 @@ function renderCard(item, index, opts) {
     // Store notes for popup lookup
     if (!window._cardNotes) window._cardNotes = {};
     window._cardNotes[releaseId] = notes;
-    notesHtml = `<div class="card-notes-btn" onclick="event.preventDefault();event.stopPropagation();showCardNotes(event,${releaseId})" title="View notes">📝</div>`;
+    notesHtml = `<div class="card-notes-btn" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();showCardNotes(event,a0) })(_sdLit(releaseId)))}" title="View notes">📝</div>`;
   }
 
   // Admin-only "+ add to Blues DB" icon — renders only when:
@@ -2426,9 +2426,9 @@ async function loadRandomRecords(more) {
   if (hasMoreLocal || isFeedMode) {
     grid.insertAdjacentHTML("beforeend",
       `<div class="random-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
-      `<button onclick="loadRandomRecords(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
-      `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
-      `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
+      `<button data-sd-click="${_sdOn(function (event) { loadRandomRecords(true) })}" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
+      `data-sd-mouseover="${_sdOn(function (event) { this.style.borderColor='var(--accent)';this.style.color='var(--accent)' })}" ` +
+      `data-sd-mouseout="${_sdOn(function (event) { this.style.borderColor='var(--border)';this.style.color='var(--muted)' })}"` +
       `>Load More</button></div>`
     );
   }

@@ -93,13 +93,12 @@ function _recordHistory(id, type) {
 /** Apply visited state to all currently rendered cards and version links */
 function applyVisitedCards() {
   if (!_visited.size) return;
-  document.querySelectorAll(".card[onclick]").forEach(el => {
-    const m = el.getAttribute("onclick")?.match(/openModal\(event,'(\d+)'/);
-    if (m && _visited.has(m[1])) el.classList.add("card-visited");
+  // Read ids from data attributes (handlers are no longer inline text).
+  document.querySelectorAll(".card[data-card-id]").forEach(el => {
+    if (_visited.has(String(el.dataset.cardId))) el.classList.add("card-visited");
   });
-  document.querySelectorAll(".catno-link[onclick]").forEach(el => {
-    const m = el.getAttribute("onclick")?.match(/openVersionPopup\(event,(\d+)\)/);
-    if (m && _visited.has(m[1])) el.classList.add("link-visited");
+  document.querySelectorAll(".catno-link[data-version-id]").forEach(el => {
+    if (_visited.has(String(el.dataset.versionId))) el.classList.add("link-visited");
   });
 }
 
@@ -494,7 +493,7 @@ function openBioFull(event) {
   let html = renderBioMarkup(text ?? "");
   if (alternatives.length > 0) {
     const altLinks = alternatives.map(a =>
-      `<a href="#" class="bio-artist-link modal-internal-link" onclick="selectAltArtist(event,this);closeBioFull()" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} title="Search for ${escHtml(a.name)}" style="color:var(--accent)">${escHtml(a.name)}</a>`
+      `<a href="#" class="bio-artist-link modal-internal-link" data-sd-click="${_sdOn(function (event) { selectAltArtist(event,this);closeBioFull() })}" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} title="Search for ${escHtml(a.name)}" style="color:var(--accent)">${escHtml(a.name)}</a>`
     ).join('<span style="color:#555;margin:0 0.3em">·</span>');
     html += `<div style="font-size:0.78rem;margin-top:0.7rem;line-height:1.6"><span style="color:#777;margin-right:0.4em">Also:</span>${altLinks}</div>`;
   }
@@ -618,7 +617,7 @@ async function _renderWikiPopupSearch(q, contentEl) {
       return `
         <div class="wiki-result">
           <div class="wiki-result-head">
-            <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},${jsAttr(safeQ)})" title="Open in popup">${escHtml(rec.title || "")}</a>
+            <a href="#" class="wiki-result-title" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();openWikiArticle(a0,a1) })(String(safeTitle ?? ""), String(safeQ ?? "")))}" title="Open in popup">${escHtml(rec.title || "")}</a>
             ${_wikiSaveBtnHtml(rec.title || "")}
           </div>
           <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
@@ -666,7 +665,7 @@ async function openWikiArticle(title, sourceQuery) {
     const safeSrc = String(sourceQuery || "");
     const backDisplay = _wikiHeadingDisplay(sourceQuery || "");
     const backBtn = sourceQuery
-      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup(${jsAttr(safeSrc)})">← Back to "${escHtml(backDisplay)}" results</button>`
+      ? `<button type="button" class="wiki-back-btn" data-sd-click="${_sdOn(((a0) => function (event) { openWikiPopup(a0) })(String(safeSrc ?? "")))}">← Back to "${escHtml(backDisplay)}" results</button>`
       : "";
     // Render ★ next to the article heading so the user can save the
     // article they're currently reading without bouncing back to a list.
@@ -900,8 +899,8 @@ async function openLocPopup(query) {
             ${safeMeta ? `<div class="loc-popup-row-meta">${safeMeta}</div>` : ""}
           </div>
           <div class="loc-popup-row-actions">
-            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_sdLocPopupToggleSave(this,${i})" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
-            <button type="button" class="archive-btn archive-btn-play" onclick="_sdLocPopupPlay(${i})" title="Play in the bar">▶ Play</button>
+            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _sdLocPopupToggleSave(this,a0) })(_sdLit(i)))}" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
+            <button type="button" class="archive-btn archive-btn-play" data-sd-click="${_sdOn(((a0) => function (event) { _sdLocPopupPlay(a0) })(_sdLit(i)))}" title="Play in the bar">▶ Play</button>
           </div>
         </div>`;
     }).join("");
@@ -1023,8 +1022,8 @@ async function openArchivePopup(query) {
             ${safeMeta ? `<div class="loc-popup-row-meta">${safeMeta}</div>` : ""}
           </div>
           <div class="loc-popup-row-actions">
-            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_sdArchivePopupToggleSave(this,${i})" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
-            <button type="button" class="archive-btn archive-btn-play" onclick="_sdArchivePopupPlay(${i})" title="Play in the bar">▶ Play</button>
+            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _sdArchivePopupToggleSave(this,a0) })(_sdLit(i)))}" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
+            <button type="button" class="archive-btn archive-btn-play" data-sd-click="${_sdOn(((a0) => function (event) { _sdArchivePopupPlay(a0) })(_sdLit(i)))}" title="Play in the bar">▶ Play</button>
           </div>
         </div>`;
     }).join("");
@@ -1157,7 +1156,7 @@ function _wikiResultRowHtml(rec) {
   return `
     <div class="wiki-result">
       <div class="wiki-result-head">
-        <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},'')" title="Open article">${escHtml(rec.title || "")}</a>
+        <a href="#" class="wiki-result-title" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();openWikiArticle(a0,'') })(String(safeTitle ?? "")))}" title="Open article">${escHtml(rec.title || "")}</a>
         ${_wikiSaveBtnHtml(rec.title || "")}
       </div>
       <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
@@ -1205,7 +1204,7 @@ function _wikiSaveBtnHtml(title) {
   const isSaved = !!(_wikiSavedTitles && _wikiSavedTitles.has(title));
   const cls = isSaved ? "wiki-save-btn is-saved" : "wiki-save-btn";
   const tip = isSaved ? "Remove from saved" : "Save article for later";
-  return `<button type="button" class="${cls}" data-wiki-title="${escHtml(title)}" onclick="event.preventDefault();event.stopPropagation();_wikiToggleSave(${jsAttr(safe)}, this)" title="${tip}">★</button>`;
+  return `<button type="button" class="${cls}" data-wiki-title="${escHtml(title)}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_wikiToggleSave(a0, this) })(String(safe ?? "")))}" title="${tip}">★</button>`;
 }
 
 // Update every ★ button in the DOM that targets this title so they
@@ -1317,7 +1316,7 @@ function _wikiRenderSavedListHtml(items) {
     return `
       <div class="wiki-result">
         <div class="wiki-result-head">
-          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},'')" title="Open article">${escHtml(it.title || "")}</a>
+          <a href="#" class="wiki-result-title" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();openWikiArticle(a0,'') })(String(safeTitle ?? "")))}" title="Open article">${escHtml(it.title || "")}</a>
           ${_wikiSaveBtnHtml(it.title || "")}
         </div>
         ${snippetHtml}
@@ -1396,7 +1395,7 @@ function _renderWikiLoadMoreFooter(loadedCount, totalhits, nextOffset) {
     ? `<span class="wiki-results-counter">${loadedCount} of ${total.toLocaleString()} results</span>`
     : `<span class="wiki-results-counter">${loadedCount} results</span>`;
   const btn = hasMore
-    ? `<button type="button" class="wiki-load-more" onclick="loadMoreWikiResults()">Load more</button>`
+    ? `<button type="button" class="wiki-load-more" data-sd-click="${_sdOn(function (event) { loadMoreWikiResults() })}">Load more</button>`
     : `<span class="wiki-results-end">— end of results —</span>`;
   return `<div class="wiki-results-footer">${counter}${btn}</div>`;
 }
@@ -1463,7 +1462,7 @@ function bluesAddIcon(discogsId, name) {
     .toLowerCase();
   if (nameKey && window._adminBluesNames?.has(nameKey)) return "";
   const safeName = String(name || "");
-  return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtist(${discogsId}, ${jsAttr(safeName)}, this);return false" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
+  return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();event.stopPropagation();_bluesAddArtist(a0, a1, this);return false })(_sdLit(discogsId), String(safeName ?? "")))}" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
 }
 
 async function _bluesAddArtist(discogsId, name, anchor) {
@@ -1532,7 +1531,7 @@ async function _baReStampArtistsAfterAdd(root, discogsId, name) {
       if (id !== String(discogsId) && nm !== String(name).trim().toLowerCase() && nmClean !== String(name).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()) return;
       n.insertAdjacentHTML(
         "afterend",
-        `<a href="/?v=blues-archive&baArtist=${hit.id}" class="ba-archive-badge" data-ba-artist-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${hit.id});return false" title="In Blues Archive: ${escHtml(hit.name)}" aria-label="In Blues Archive: ${escHtml(hit.name)}">🎸</a>`,
+        `<a href="/?v=blues-archive&baArtist=${hit.id}" class="ba-archive-badge" data-ba-artist-id="${hit.id}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(a0);return false })(_sdLit(hit.id)))}" title="In Blues Archive: ${escHtml(hit.name)}" aria-label="In Blues Archive: ${escHtml(hit.name)}">🎸</a>`,
       );
     });
   } catch { /* silent */ }
@@ -1592,7 +1591,7 @@ function wikiIcon(query, label = "", extraTerms = "") {
   const lab = label || query;
   // No leading space — wiki-icon's small left margin in CSS provides
   // just enough breathing room from the preceding ⌕ glass.
-  return `<a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup(${jsAttr(q)})" title="Wikipedia: ${escHtml(lab)}">W</a>`;
+  return `<a href="#" class="wiki-icon" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();openWikiPopup(a0) })(String(q ?? "")))}" title="Wikipedia: ${escHtml(lab)}">W</a>`;
 }
 
 // ── Per-track Library of Congress lookup ───────────────────────────────
@@ -1609,7 +1608,7 @@ function locIcon(trackTitle, artistName) {
   // no client-side gate needed.
   const t = String(trackTitle);
   const a = String(artistName || "");
-  return ` <a href="#" class="track-loc-icon" onclick="locTrackSearch(event, ${jsAttr(t)}, ${jsAttr(a)}, this)" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;
+  return ` <a href="#" class="track-loc-icon" data-sd-click="${_sdOn(((a0, a1) => function (event) { locTrackSearch(event, a0, a1, this) })(String(t ?? ""), String(a ?? "")))}" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;
 }
 
 let _locTrackPopupEl = null;
@@ -1647,7 +1646,7 @@ function _renderLocTrackPopup(anchor, items) {
       ${items.slice(0, 10).map((it, i) => {
         const contributor = Array.isArray(it.contributors) && it.contributors.length ? it.contributors.join(", ") : "";
         const yr = it.year ? ` · ${escHtml(String(it.year))}` : "";
-        return `<a href="#" class="track-loc-popup-row" data-i="${i}" onclick="event.preventDefault();_locPlayFromTrackPopup(${i})">
+        return `<a href="#" class="track-loc-popup-row" data-i="${i}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_locPlayFromTrackPopup(a0) })(_sdLit(i)))}">
           <div class="track-loc-popup-title">${escHtml(it.title || "Untitled")}</div>
           <div class="track-loc-popup-meta">${escHtml(contributor)}${yr}</div>
         </a>`;
@@ -2653,7 +2652,7 @@ function _renderNowPlayingTitle(parts) {
     // spans keyboard-accessible.
     const artistAttr = (scope === "track" && cleanArtist)
       ? ` data-np-artist="${escHtml(cleanArtist)}"` : "";
-    return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}"${artistAttr} onclick="event.stopPropagation();_npTitleClick(this,event);return false" title="Lookup options for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
+    return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}"${artistAttr} data-sd-click="${_sdOn(function (event) { event.stopPropagation();_npTitleClick(this,event);return false })}" title="Lookup options for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
   };
   if (parts?.track)  out.push(link("track",   parts.track,  "vt-track"));
   if (parts?.album)  out.push(link("release", parts.album,  "vt-album"));
@@ -2745,7 +2744,7 @@ async function _baStampMiniPlayerNow() {
       if (hit) {
         artistSpan.insertAdjacentHTML(
           "afterend",
-          ` <a href="#" class="ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${hit.id});return false" title="${escHtml("In Blues Archive: " + hit.name)}">🎸</a>`,
+          ` <a href="#" class="ba-archive-badge" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(a0);return false })(_sdLit(hit.id)))}" title="${escHtml("In Blues Archive: " + hit.name)}">🎸</a>`,
         );
       }
     }
@@ -2755,7 +2754,7 @@ async function _baStampMiniPlayerNow() {
       if (hit) {
         trackSpan.insertAdjacentHTML(
           "afterend",
-          ` <a href="#" class="ba-archive-badge ba-lyric-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml("Lyric in Blues Archive" + (hit.artist ? ` (${hit.artist})` : "") + " — open viewer")}">📜</a>`,
+          ` <a href="#" class="ba-archive-badge ba-lyric-badge" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(a0);return false })(_sdLit(hit.id)))}" title="${escHtml("Lyric in Blues Archive" + (hit.artist ? ` (${hit.artist})` : "") + " — open viewer")}">📜</a>`,
         );
       }
     }
@@ -3454,7 +3453,7 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
         || root?.querySelector?.("h2")?.textContent
         || "").trim();
       const entityType  = isMaster ? "master" : "release";
-      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-artist-id="${escHtml(String(trackArtistId || ""))}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(url)})" title="Play this track">▶</a>`;
+      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-artist-id="${escHtml(String(trackArtistId || ""))}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(((a0) => function (event) { openVideo(event,a0) })(String(url ?? "")))}" title="Play this track">▶</a>`;
       // ＋ queue button sits immediately after ▶ in the play-cell so
       // the play / queue affordances stay grouped together (matches
       // the static render at <span class="track-play-cell">${playCell}${queueAdd}</span>).
@@ -3464,10 +3463,10 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       // full-album video alongside per-track ones.
       const isFullAlbumRow = String(pos) === "ALBUM";
       const fullAlbumAttr = isFullAlbumRow ? ' data-fullalbum="1"' : "";
-      const queueAddHtml = ` <a href="#" class="queue-add-icon"${fullAlbumAttr} data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="${isFullAlbumRow ? "Add full album to play queue" : "Add to play queue"}">＋</a>`;
+      const queueAddHtml = ` <a href="#" class="queue-add-icon"${fullAlbumAttr} data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackQueueAdd(this);return false })}" title="${isFullAlbumRow ? "Add full album to play queue" : "Add to play queue"}">＋</a>`;
       // ♪ save-to-playlist button — mirror the static render so a
       // dynamically-injected override row gets it too.
-      const playlistAddHtml = ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="${isFullAlbumRow ? "Save the full album to a playlist" : "Save this track to a playlist"}">♪</a>`;
+      const playlistAddHtml = ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackPlaylistAdd(this);return false })}" title="${isFullAlbumRow ? "Save the full album to a playlist" : "Save this track to a playlist"}">♪</a>`;
       if (playCell) playCell.innerHTML = `${playHtml}${queueAddHtml}${playlistAddHtml}`;
       // Migrate any pre-existing queue-add icon that was historically
       // injected into the title cell back into the play cell — keeps
@@ -3542,20 +3541,20 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       if (pos === "ALBUM") {
         // Full Album pseudo-row keeps its original delete-only affordance.
         if (isOverride) {
-          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this full-album video">✕</a>`);
+          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminDelete(this);return false })}" title="Admin: remove this full-album video">✕</a>`);
         }
       } else {
         // ✏ on every regular row: set/replace the video for this track
         // (works for Discogs-matched, override, blocked, and missing rows).
-        decorate(` <a href="#" class="track-yt-admin-replace" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminReplace(this);return false" title="Admin: set/replace the YouTube video for this track">✏</a>`);
+        decorate(` <a href="#" class="track-yt-admin-replace" data-pos="${escHtml(pos)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminReplace(this);return false })}" title="Admin: set/replace the YouTube video for this track">✏</a>`);
         if (isOverride || isBlocked) {
           const delTitle = isBlocked
             ? "Admin: unhide the Discogs video (remove the block)"
             : "Admin: remove this override (revert to the Discogs match, or missing)";
-          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="${delTitle}">✕</a>`);
+          decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminDelete(this);return false })}" title="${delTitle}">✕</a>`);
         } else if (linkNow) {
           // Discogs-matched row: ✕ hides the wrong match.
-          decorate(` <a href="#" class="track-yt-admin-block" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminBlock(this);return false" title="Admin: hide this Discogs video (mark as wrong match)">✕</a>`);
+          decorate(` <a href="#" class="track-yt-admin-block" data-pos="${escHtml(pos)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminBlock(this);return false })}" title="Admin: hide this Discogs video (mark as wrong match)">✕</a>`);
         }
       }
     }
@@ -3657,10 +3656,7 @@ function _trackYtRefreshHeadingPlayableCount(root) {
     playAll.className = "tracklist-play-all";
     playAll.title = "Play the first track and queue the rest of the album";
     playAll.textContent = "▶";
-    playAll.setAttribute(
-      "onclick",
-      `event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,${JSON.stringify(String(firstUrl))})`
-    );
+    playAll.addEventListener("click", function (event) { event.preventDefault(); event.stopPropagation(); playAlbumAndQueue(this, String(firstUrl)); });
     span.append(" ");
     span.appendChild(playAll);
   }
@@ -3669,10 +3665,7 @@ function _trackYtRefreshHeadingPlayableCount(root) {
   queueAll.className = "tracklist-queue-album";
   queueAll.title = "Add all playable tracks to the bottom of your queue";
   queueAll.textContent = "＋";
-  queueAll.setAttribute(
-    "onclick",
-    "event.preventDefault();event.stopPropagation();queueAddAlbum(this)"
-  );
+  queueAll.addEventListener("click", function (event) { event.preventDefault(); event.stopPropagation(); queueAddAlbum(this); });
   span.append(" ");
   span.appendChild(queueAll);
   // ♪ — add every playable track to a saved playlist (mirrors the
@@ -3682,10 +3675,7 @@ function _trackYtRefreshHeadingPlayableCount(root) {
   playlistAll.className = "tracklist-queue-album tracklist-playlist-album";
   playlistAll.title = "Add all playable tracks to a playlist";
   playlistAll.textContent = "♪";
-  playlistAll.setAttribute(
-    "onclick",
-    "event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)"
-  );
+  playlistAll.addEventListener("click", function (event) { event.preventDefault(); event.stopPropagation(); _albumPlaylistAdd(this); });
   span.append(" ");
   span.appendChild(playlistAll);
   if (existingMissing) {
@@ -5137,7 +5127,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const labelCodeRow = identifierGroups["Label Code"]
     ? `<span class="detail-label">Label Code</span><span>${escHtml(identifierGroups["Label Code"])}</span>` : "";
   const matrixRow = identifierGroups["Matrix / Runout"]
-    ? (() => { const val = identifierGroups["Matrix / Runout"]; return `<span class="detail-label">Matrix / Runout</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText(${jsAttr(val)});this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`; })() : "";
+    ? (() => { const val = identifierGroups["Matrix / Runout"]; return `<span class="detail-label">Matrix / Runout</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" data-sd-click="${_sdOn(((a0) => function (event) { navigator.clipboard.writeText(a0);this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200) })(String(val ?? "")))}" title="Click to copy">${escHtml(val)}</span>`; })() : "";
 
   // Remaining identifiers (exclude Label Code and Matrix / Runout — placed separately)
   const otherIdentifierTypes = ["Barcode","ASIN","Catalog Number"];
@@ -5148,7 +5138,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const vals = identifierGroups[t].split(", ");
         const linked = vals.map(v => {
           const esc = v;
-          return `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value=${jsAttr(esc)};toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query',${jsAttr(esc)})" title="Search your collection for ${escHtml(v)}">⌕</a>`;
+          return `<a href="#" class="modal-internal-link catno-link" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();closeModal();document.getElementById('query').value=a0;toggleAdvanced(false);document.querySelector('input[name=\'result-type\'][value=\'\']').checked=true;doSearch(1) })(String(esc ?? "")))}" title="Search for this catalog number">${escHtml(v)}</a> <a href="#" class="catno-collection-search" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();searchCollectionFor('cw-query',a0) })(String(esc ?? "")))}" title="Search your collection for ${escHtml(v)}">⌕</a>`;
         }).join(", ");
         return `<span class="detail-label">${escHtml(t)}</span><span>${linked}</span>`;
       }
@@ -5174,7 +5164,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .filter(s => s.name)
     .map(s => {
       const label = s.catno ? `${s.name} (${s.catno})` : s.name;
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();openSeriesBrowser(${s.id},${jsAttr(s.name)})" title="Browse series: ${escHtml(s.name)}">${escHtml(label)}</a>`;
+      return `<a href="#" class="modal-internal-link" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();openSeriesBrowser(a0,a1) })(_sdLit(s.id), String(s.name ?? "")))}" title="Browse series: ${escHtml(s.name)}">${escHtml(label)}</a>`;
     }).join(", ");
 
   const isMaster = searchResult.type === "master";
@@ -5182,7 +5172,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const detailRows = [
     labelEntries.length ? `<span class="detail-label">Label</span><span>${labelEntries.map(({ id: lId, name: ln }) => entityLookupLinkHtml("label", ln, { className: "modal-internal-link", title: `Lookup options for ${ln}`, entityId: lId })).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value=${jsAttr(catnoEsc)};doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query',${jsAttr(catnoEsc)})" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();closeModal();clearForm();document.getElementById('query').value=a0;doSearch(1) })(String(catnoEsc ?? "")))}" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();searchCollectionFor('cw-query',a0) })(String(catnoEsc ?? "")))}" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
@@ -5247,10 +5237,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // paste-URL form so users can stage videos they found externally.
   // hasYtAccess is no longer required (was admin/demo/YT_OPEN_TO_USERS).
   const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user)
-    ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Stage YouTube URLs for missing tracks (paste links you found on youtube.com)">🎵 ${missingCount} missing</a>`
+    ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" data-sd-mouseenter="${_sdOn(function (event) { _ytEnrichLastSearched(this) })}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false })}" title="Stage YouTube URLs for missing tracks (paste links you found on youtube.com)">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,${jsAttr(firstPlayableUrl)})" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a> <a href="#" class="tracklist-queue-album tracklist-playlist-album" onclick="event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)" title="Add all playable tracks to a playlist">♪</a>` : ""}${albumFindMissingLink})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,a0) })(String(firstPlayableUrl ?? "")))}" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();queueAddAlbum(this) })}" title="Add all playable tracks to the bottom of your queue">＋</a> <a href="#" class="tracklist-queue-album tracklist-playlist-album" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this) })}" title="Add all playable tracks to a playlist">♪</a>` : ""}${albumFindMissingLink})</span>`
     : (albumFindMissingLink ? `<span class="tracklist-playable">(${albumFindMissingLink})</span>` : "");
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   // Render the tracklist block whenever there's something to show in
@@ -5265,8 +5255,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const trackHTML = _showTrackHTML ? `
     <div class="album-tracklist">
       <div class="tracklist-header">
-        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
-        <input type="text" class="tracklist-filter" placeholder="filter tracks…" oninput="filterTracks(this)" />
+        <div class="tracklist-heading tracklist-toggle" data-sd-click="${_sdOn(function (event) { toggleTracklist(this) })}" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
+        <input type="text" class="tracklist-filter" placeholder="filter tracks…" data-sd-input="${_sdOn(function (event) { filterTracks(this) })}" />
         <span class="tracklist-header-actions">${playableMeta}</span>
       </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
@@ -5280,7 +5270,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const trackArtistFA = artists.length ? artists[0] : "";
         const entityType = isMaster ? "master" : "release";
         const playCellFA = fullAlbumUrl
-          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(fullAlbumUrl)})" title="Play the full album">▶</a>`
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(((a0) => function (event) { openVideo(event,a0) })(String(fullAlbumUrl ?? "")))}" title="Play the full album">▶</a>`
           : "";
         // data-fullalbum="1" marks this queue-add icon so queueAddAlbum
         // (the bulk-queue scan over .queue-add-icon[data-yt-url]) skips
@@ -5288,15 +5278,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // track ones via "Play album" / "Queue album". The single ＋
         // button on this row still works for an individual queue add.
         const queueAddFA = fullAlbumUrl
-          ? ` <a href="#" class="queue-add-icon" data-fullalbum="1" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add full album to play queue">＋</a>`
+          ? ` <a href="#" class="queue-add-icon" data-fullalbum="1" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackQueueAdd(this);return false })}" title="Add full album to play queue">＋</a>`
           : "";
         const playlistAddFA = fullAlbumUrl
-          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Save the full album to a playlist">♪</a>`
+          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackPlaylistAdd(this);return false })}" title="Save the full album to a playlist">♪</a>`
           : "";
         const overrideBadgeFA = fullAlbumUrl
           ? ` <span class="track-yt-override-badge" title="User-suggested full-album video">🎵</span>${
               window._isAdmin
-                ? ` <a href="#" class="track-yt-admin-delete" data-pos="ALBUM" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`
+                ? ` <a href="#" class="track-yt-admin-delete" data-pos="ALBUM" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminDelete(this);return false })}" title="Admin: remove this user-suggested video">✕</a>`
                 : ""
             }`
           : "";
@@ -5339,7 +5329,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // external YouTube-search fallback was moved to the end of the
         // title cell, after the wiki W icon.
         const playCell = url
-          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(url)})" title="Play this track">▶</a>`
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(((a0) => function (event) { openVideo(event,a0) })(String(url ?? "")))}" title="Play this track">▶</a>`
           : "";
         // Track title now opens the unified lookup popup (SeaDisco /
         // collection / YouTube / Wikipedia / LOC) instead of going
@@ -5367,7 +5357,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // queue. Only renders when the row has a confirmed YT URL match
         // (otherwise there's nothing to queue from this row).
         const queueAdd = url
-          ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
+          ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackQueueAdd(this);return false })}" title="Add to play queue">＋</a>`
           : "";
         // ♪ → save this track into an existing playlist. Same size /
         // style as the ＋ button. For non-admin: only when there's a
@@ -5375,9 +5365,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // (no URL) so they can save them to a playlist and rely on the
         // queue's YT-search affordance when the row comes up.
         const playlistAdd = url
-          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</a>`
+          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackPlaylistAdd(this);return false })}" title="Save this track to a playlist">♪</a>`
           : (window._isAdmin
-              ? ` <a href="#" class="queue-add-icon track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Admin: save this unavailable track to a playlist (the queue will offer a YT search link when it comes up)">♪</a>`
+              ? ` <a href="#" class="queue-add-icon track-playlist-add track-playlist-add-unavail" data-yt-url="" data-unavailable="1" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackPlaylistAdd(this);return false })}" title="Admin: save this unavailable track to a playlist (the queue will offer a YT search link when it comes up)">♪</a>`
               : "");
         // Crowd-sourced override badge (shown only when this row's URL
         // came from track_youtube_overrides, not Discogs's videos[]).
@@ -5386,7 +5376,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const overrideBadge = overrideRow
           ? ` <span class="track-yt-override-badge" title="User-suggested YouTube video">🎵</span>${
               window._isAdmin
-                ? ` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(trackPos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`
+                ? ` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(trackPos)}" data-sd-click="${_sdOn(function (event) { event.preventDefault();_trackYtAdminDelete(this);return false })}" title="Admin: remove this user-suggested video">✕</a>`
                 : ""
             }`
           : "";
@@ -5422,7 +5412,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     <div class="album-credits">
       <div class="credits-header">
         <div class="tracklist-heading">Credits</div>
-        ${creditItems.length > 4 ? `<input type="text" class="tracklist-filter" placeholder="filter credits…" oninput="filterCredits(this)" />` : ""}
+        ${creditItems.length > 4 ? `<input type="text" class="tracklist-filter" placeholder="filter credits…" data-sd-input="${_sdOn(function (event) { filterCredits(this) })}" />` : ""}
       </div>
       <div class="credits-body">${creditItems.join('<span class="credit-sep"> · </span>')}</div>
     </div>` : "";
@@ -5436,15 +5426,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
         <img class="album-cover" src="${escHtml(img)}" alt="${escHtml(title)}" loading="lazy" decoding="async"
-             onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
+             data-sd-click="${_sdOn(((a0) => function (event) { openLightbox(a0,0) })(allImages))}"
              title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />
         ${allImages.length > 1 ? `<div class="album-thumb-strip">${allImages.slice(1).map((u, i) =>
-          `<img src="${escHtml(u)}" loading="lazy" decoding="async" class="album-thumb" onclick="openLightbox(${escHtml(JSON.stringify(allImages))},${i + 1})" onerror="this.style.display='none'" title="Photo ${i + 2} of ${allImages.length}">`
+          `<img src="${escHtml(u)}" loading="lazy" decoding="async" class="album-thumb" data-sd-click="${_sdOn(((a0, a1) => function (event) { openLightbox(a0,a1) })(allImages, _sdLit(i + 1)))}" data-sd-error="${_sdOn(function (event) { this.style.display='none' })}" title="Photo ${i + 2} of ${allImages.length}">`
         ).join("")}</div>` : ""}
       </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
-        ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText(${jsAttr(String(releaseId))});this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
+        ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" data-sd-click="${_sdOn(((a0) => function (event) { navigator.clipboard.writeText(a0);this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200) })(String(String(releaseId) ?? "")))}" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" data-sd-click="${_sdOn(function (event) { sharePopup(this) })}" title="Copy share link">share</button></div>` : ""}
         ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">${
           d._signInForMore === "auth"
             ? "Sign in to load full release details (tracklist, credits, marketplace)."
@@ -5464,7 +5454,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           if (have || want) parts.push(`${(have ?? 0).toLocaleString()} have · ${(want ?? 0).toLocaleString()} want`);
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
-        ${(!isMaster && d.master_id) ? `<div style="margin-top:0.4rem"><a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
+        ${(!isMaster && d.master_id) ? `<div style="margin-top:0.4rem"><a href="#" class="modal-internal-link" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();closeModal();setTimeout(()=>openModal(null,a0,'master',("https://www.discogs.com/master/" + String(a1))),100) })(_sdLit(d.master_id), d.master_id))}" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.25rem;display:inline-block">View on Discogs ↗</a>` : ""}
         ${stats?.numForSale > 0 && (stats?.lowestPrice != null || stats?.medianPrice != null || stats?.highestPrice != null)
           ? (() => {
@@ -5490,7 +5480,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:var(--accent);text-decoration:none">(${count}) :: ${priceBar} ↗</a>
-                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates(${jsAttr(String(stats.releaseId))},${jsAttr(estId)})" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
+                ${!isMaster ? `<a href="#" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();loadPriceEstimates(a0,a1) })(String(String(stats.releaseId) ?? ""), String(estId ?? "")))}" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
               </div>`;
             })()
           : (stats?.numForSale === 0
@@ -5646,7 +5636,7 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
   } catch { return; }
 
   const badge = (archiveId, tip) =>
-    `<a href="/?v=blues-archive&baArtist=${archiveId}" class="ba-archive-badge" data-ba-artist-id="${archiveId}" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId});return false" title="${escHtml(tip || "In Blues Archive")}" aria-label="${escHtml(tip || "In Blues Archive")}">🎸</a>`;
+    `<a href="/?v=blues-archive&baArtist=${archiveId}" class="ba-archive-badge" data-ba-artist-id="${archiveId}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(a0);return false })(_sdLit(archiveId)))}" title="${escHtml(tip || "In Blues Archive")}" aria-label="${escHtml(tip || "In Blues Archive")}">🎸</a>`;
 
   // Stamp album-artist links: lookup by lk-id first (preferred), then
   // by lowercase name (raw or disambiguator-stripped). Insert badge
@@ -5705,7 +5695,7 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
           : `Lyric in Blues Archive${hit.artist ? ` (${hit.artist})` : ""} — open viewer`;
         n.insertAdjacentHTML(
           "afterend",
-          `<a href="#" class="ba-archive-badge ba-lyric-badge${hit.pinned ? " ba-lyric-badge-pinned" : ""}" data-ba-lyric-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">📜</a>`,
+          `<a href="#" class="ba-archive-badge ba-lyric-badge${hit.pinned ? " ba-lyric-badge-pinned" : ""}" data-ba-lyric-id="${hit.id}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(a0);return false })(_sdLit(hit.id)))}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">📜</a>`,
         );
       }
     }
@@ -5778,7 +5768,7 @@ async function _baOpenLyricPublic(lyricId) {
   const shell = (inner) => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(680px,100%)">
       <div style="display:flex;justify-content:flex-end;margin-bottom:0.3rem">
-        <button class="archive-btn" onclick="document.getElementById('ba-lyric-public-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem" aria-label="Close">×</button>
+        <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-lyric-public-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem" aria-label="Close">×</button>
       </div>
       ${inner}
     </div>`;
@@ -5882,7 +5872,7 @@ function renderActionsImmediate(rid, entityType = "release") {
   const inWant = window._wantlistIds?.has(rid);
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},${jsAttr(entityType)})" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" data-sd-click="${_sdOn(((a0, a1) => function (event) { toggleFavoriteFromModal(a0,a1) })(_sdLit(rid), String(entityType ?? "")))}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
       ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
   if (entityType !== "release") {
@@ -5896,12 +5886,12 @@ function renderActionsImmediate(rid, entityType = "release") {
   // Sell action for releases the user hasn't yet listed.
   const sellBtn = hasListing
     ? ""
-    : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
+    : `<button class="modal-act-btn" id="modal-sell-btn" data-sd-click="${_sdOn(((a0) => function (event) { openInventoryEditor({mode:'create',releaseId:a0}) })(_sdLit(rid)))}" title="Create a marketplace listing for this release">Sell</button>`;
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
-    <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+    <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" data-sd-click="${_sdOn(((a0) => function (event) { toggleCollection(a0) })(_sdLit(rid)))}" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
       ${inCol ? 'Collected' : 'Collection'}
     </button>
-    <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+    <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" data-sd-click="${_sdOn(((a0) => function (event) { toggleWantlist(a0) })(_sdLit(rid)))}" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
       ${inWant ? 'Wanted' : 'Want'}
     </button>
     ${sellBtn}
@@ -5992,10 +5982,8 @@ async function openInstancesPopover(event, releaseId) {
   } catch {}
 
   // Find the card's discogs URL so the modal can link back
-  const card = anchor.closest("a[onclick]");
-  let discogsUrl = "#";
-  const match = card?.getAttribute("onclick")?.match(/openModal\(event,['"]?\d+['"]?,\s*'\w+',\s*'([^']+)'/);
-  if (match) discogsUrl = match[1];
+  const card = anchor.closest(".card[data-card-id]");
+  const discogsUrl = card?.dataset.discogsUrl || "#";
 
   const rows = instances.map((inst, idx) => {
     const folderName = folderMap.get(Number(inst.folder_id)) || `Folder ${inst.folder_id}`;
@@ -6111,7 +6099,7 @@ function renderSaleListingRow(l) {
       <span class="modal-sale-status ${statusClass}">${escHtml(status || "—")}</span>
       ${posted ? `<span class="modal-sale-date">${escHtml(posted)}</span>` : ""}
       <span style="flex:1"></span>
-      <button type="button" class="modal-sale-edit" onclick="openInventoryEditor({mode:'edit',listingId:${id}})" title="Edit this listing">Edit</button>
+      <button type="button" class="modal-sale-edit" data-sd-click="${_sdOn(((a0) => function (event) { openInventoryEditor({mode:'edit',listingId:a0}) })(_sdLit(id)))}" title="Edit this listing">Edit</button>
     </div>
     <div class="modal-sale-row-cond">
       <span><strong>Media:</strong> ${escHtml(cond)}</span>
@@ -6199,7 +6187,7 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
     collectionBlock = `
       <div class="modal-instances-header">
         <span class="modal-instances-title">${headerText} ${hint}</span>
-        <button type="button" class="modal-add-copy-btn" onclick="openAddCopyFolderPicker(${Number(releaseId)})" title="Add another copy of this release to a folder">+ Add another copy</button>
+        <button type="button" class="modal-add-copy-btn" data-sd-click="${_sdOn(((a0) => function (event) { openAddCopyFolderPicker(a0) })(_sdLit(Number(releaseId))))}" title="Add another copy of this release to a folder">+ Add another copy</button>
       </div>
       ${multi ? `<ul class="modal-instances-list">${rows}</ul>` : ""}
     `;
@@ -6216,7 +6204,7 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
     saleBlock = `
       <div class="modal-sale-header">
         <span class="modal-sale-title">${saleHeader}</span>
-        <button type="button" class="modal-sale-toggle" id="modal-sale-toggle" aria-expanded="false" onclick="toggleSaleListingDetails(this)">Show details</button>
+        <button type="button" class="modal-sale-toggle" id="modal-sale-toggle" aria-expanded="false" data-sd-click="${_sdOn(function (event) { toggleSaleListingDetails(this) })}">Show details</button>
       </div>
       <ul class="modal-sale-list" id="modal-sale-list">
         ${saleListings.map(l => renderSaleListingRow(l)).join("")}
@@ -6387,13 +6375,13 @@ async function renderNotesPanel(releaseId) {
             .join("");
           return `<label class="modal-notes-row">
             <span class="modal-notes-label">${label}</span>
-            <select class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" onchange="saveCollectionField(event,${rid},${fid})">${opts}</select>
+            <select class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" data-sd-change="${_sdOn(((a0, a1) => function (event) { saveCollectionField(event,a0,a1) })(_sdLit(rid), _sdLit(fid)))}">${opts}</select>
           </label>`;
         }
         const isTextarea = f.type === "textarea" || (cur && cur.length > 40);
         const input = isTextarea
-          ? `<textarea class="modal-notes-input" rows="2" data-field-id="${fid}" data-initial="${escHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')">${escHtml(cur)}</textarea>`
-          : `<input type="text" class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" value="${escHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')" />`;
+          ? `<textarea class="modal-notes-input" rows="2" data-field-id="${fid}" data-initial="${escHtml(cur)}" data-sd-blur="${_sdOn(((a0, a1) => function (event) { saveCollectionField(event,a0,a1) })(_sdLit(rid), _sdLit(fid)))}" data-sd-keydown="${_sdOn(((a0, a1) => function (event) { handleNotesKey(event,a0,a1,'collection') })(_sdLit(rid), _sdLit(fid)))}">${escHtml(cur)}</textarea>`
+          : `<input type="text" class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" value="${escHtml(cur)}" data-sd-blur="${_sdOn(((a0, a1) => function (event) { saveCollectionField(event,a0,a1) })(_sdLit(rid), _sdLit(fid)))}" data-sd-keydown="${_sdOn(((a0, a1) => function (event) { handleNotesKey(event,a0,a1,'collection') })(_sdLit(rid), _sdLit(fid)))}" />`;
         return `<label class="modal-notes-row">
           <span class="modal-notes-label">${label}</span>
           ${input}
@@ -6413,7 +6401,7 @@ async function renderNotesPanel(releaseId) {
     html += `<div class="modal-notes-block">
       <div class="modal-notes-title">Wantlist notes</div>
       <label class="modal-notes-row">
-        <textarea class="modal-notes-input" rows="2" data-initial="${escHtml(cur)}" placeholder="Notes visible only to you" onblur="saveWantlistNotes(event,${rid})" onkeydown="handleNotesKey(event,${rid},0,'wantlist')">${escHtml(cur)}</textarea>
+        <textarea class="modal-notes-input" rows="2" data-initial="${escHtml(cur)}" placeholder="Notes visible only to you" data-sd-blur="${_sdOn(((a0) => function (event) { saveWantlistNotes(event,a0) })(_sdLit(rid)))}" data-sd-keydown="${_sdOn(((a0) => function (event) { handleNotesKey(event,a0,0,'wantlist') })(_sdLit(rid)))}">${escHtml(cur)}</textarea>
       </label>
     </div>`;
   }
@@ -6426,7 +6414,7 @@ async function renderNotesPanel(releaseId) {
                     : inCol              ? "Collection fields"
                     :                      "Wantlist notes";
   panel.innerHTML = `
-    <button type="button" class="modal-notes-header" onclick="toggleNotesPanel()" title="Click to collapse or expand">
+    <button type="button" class="modal-notes-header" data-sd-click="${_sdOn(function (event) { toggleNotesPanel() })}" title="Click to collapse or expand">
       <span class="modal-notes-chev">${collapsed ? "▸" : "▾"}</span>
       <span class="modal-notes-header-label">${escHtml(headerLabel)}</span>
     </button>
@@ -6523,7 +6511,7 @@ function loadModalActions(releaseId, context) {
   const inWant = window._wantlistIds?.has(rid);
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},${jsAttr(entityType)})" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" data-sd-click="${_sdOn(((a0, a1) => function (event) { toggleFavoriteFromModal(a0,a1) })(_sdLit(rid), String(entityType ?? "")))}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
       ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
 
@@ -6536,12 +6524,12 @@ function loadModalActions(releaseId, context) {
     // panel below handles editing and details.
     const sellBtn = hasListing
       ? ""
-      : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
+      : `<button class="modal-act-btn" id="modal-sell-btn" data-sd-click="${_sdOn(((a0) => function (event) { openInventoryEditor({mode:'create',releaseId:a0}) })(_sdLit(rid)))}" title="Create a marketplace listing for this release">Sell</button>`;
     el.innerHTML = `
-      <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+      <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" data-sd-click="${_sdOn(((a0) => function (event) { toggleCollection(a0) })(_sdLit(rid)))}" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
         ${inCol ? 'Collected' : 'Collection'}
       </button>
-      <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+      <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" data-sd-click="${_sdOn(((a0) => function (event) { toggleWantlist(a0) })(_sdLit(rid)))}" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
         ${inWant ? 'Wanted' : 'Want'}
       </button>
       ${sellBtn}
@@ -6566,7 +6554,7 @@ function renderStars(rating, releaseId) {
   let html = '';
   for (let i = 1; i <= 5; i++) {
     const active = i <= rating;
-    html += `<span class="modal-star ${active ? 'active' : ''}" onclick="setRating(event,${releaseId},${i})" onmouseover="previewStars(this,${i})" onmouseout="resetStars(this)" title="Rate ${i} out of 5">${active ? '★' : '☆'}</span>`;
+    html += `<span class="modal-star ${active ? 'active' : ''}" data-sd-click="${_sdOn(((a0, a1) => function (event) { setRating(event,a0,a1) })(_sdLit(releaseId), _sdLit(i)))}" data-sd-mouseover="${_sdOn(((a0) => function (event) { previewStars(this,a0) })(_sdLit(i)))}" data-sd-mouseout="${_sdOn(function (event) { resetStars(this) })}" title="Rate ${i} out of 5">${active ? '★' : '☆'}</span>`;
   }
   return html;
 }
@@ -6742,10 +6730,10 @@ async function setRating(event, releaseId, rating) {
 function refreshCardBadges(releaseId) {
   // Re-render badges on any visible card with this release ID
   document.querySelectorAll(`.card-thumb-badges`).forEach(el => {
-    const card = el.closest('a[onclick]');
+    const card = el.closest('.card');
     if (!card) return;
-    // Match openModal cards (releases/masters)
-    const modalMatch = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?,\s*'(\w+)'/);
+    // Release/master cards carry their id + type as data attributes.
+    const modalMatch = card.dataset.cardId ? [null, card.dataset.cardId, card.dataset.cardType] : null;
     // Match searchByEntity cards (artists/labels)
     const entityMatch = !modalMatch ? card.dataset.entityId : null;
     const entityType = !modalMatch ? card.dataset.entityType : null;
@@ -6769,8 +6757,8 @@ function refreshCardBadges(releaseId) {
     if (type === "release") {
       const inCol = window._collectionIds?.has(id);
       const inWant = window._wantlistIds?.has(id);
-      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${id})" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
-      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${id})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,a0) })(_sdLit(id)))}" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,a0) })(_sdLit(id)))}" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
     } else if (type === "master") {
       const colCount = Number(window._collectionMasterCounts?.[id]) || 0;
       const wantCount = Number(window._wantlistMasterCounts?.[id]) || 0;
@@ -6784,12 +6772,12 @@ function refreshCardBadges(releaseId) {
         : "Open to add a version to wantlist";
       const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
       const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
-      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(id)},'master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
-      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(id)},'master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openModal(event,a0,'master','') })(String(id ?? "")))}" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openModal(event,a0,'master','') })(String(id ?? "")))}" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
     const favKey = `${type}:${id}`;
     const isFav = window._favoriteKeys?.has(favKey);
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},${jsAttr(type)})" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,a0,a1) })(_sdLit(id), String(type ?? "")))}" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
     if (type === "release") {
       if (userHasInventory) {
         const inInv = window._inventoryIds?.has(id);
@@ -6907,23 +6895,23 @@ function renderMasterVersions() {
     // the row layout stays stable across versions.
     const navIcon = (typeof window._sdNavIconSvg === "function") ? window._sdNavIconSvg : (() => "");
     const badge = `<span class="mv-dots">` +
-      `<span class="mv-dot${inCol ? ' active' : ''}" style="${inCol ? 'color:#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${v.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}">${navIcon("collection")}</span>` +
-      `<span class="mv-dot${inWant ? ' active' : ''}" style="${inWant ? 'color:#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${v.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}">${navIcon("wantlist")}</span>` +
-      `<span class="mv-dot${isFav ? ' active' : ''}" style="${isFav ? 'color:#ff7eb6' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${v.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}">${navIcon("favorites")}</span>` +
+      `<span class="mv-dot${inCol ? ' active' : ''}" style="${inCol ? 'color:#6ddf70' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleCol(this,a0) })(_sdLit(v.id)))}" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}">${navIcon("collection")}</span>` +
+      `<span class="mv-dot${inWant ? ' active' : ''}" style="${inWant ? 'color:#f0c95c' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleWant(this,a0) })(_sdLit(v.id)))}" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}">${navIcon("wantlist")}</span>` +
+      `<span class="mv-dot${isFav ? ' active' : ''}" style="${isFav ? 'color:#ff7eb6' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleFav(this,a0) })(_sdLit(v.id)))}" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}">${navIcon("favorites")}</span>` +
       `<span class="mv-dot${inList ? ' active' : ''}" style="${inList ? 'color:#a0ccf0' : ''}" title="${escHtml(inList ? (listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists") : "Not in any of your lists")}">${navIcon("lists")}</span>` +
       `<span class="mv-dot${inInv ? ' active' : ''}" style="${inInv ? 'color:#cda0f5' : ''}" title="${inInv ? 'In your inventory' : 'Not in your inventory'}">${navIcon("inventory")}</span>` +
       `</span>`;
     const fmtText = _mvGetDisplayFormat(v);
     const fmtCell = inCol
-      ? `<span title="Click to view your copy / change folder"><a href="#" class="modal-internal-link mv-format-owned" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${v.id})" style="color:#7ec87e">${escHtml(fmtText)}</a></span>`
+      ? `<span title="Click to view your copy / change folder"><a href="#" class="modal-internal-link mv-format-owned" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();openInstancesPopover(event,a0) })(_sdLit(v.id)))}" style="color:#7ec87e">${escHtml(fmtText)}</a></span>`
       : `<span style="color:#888" title="${escHtml(fmtText)}">${escHtml(fmtText)}</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       ${fmtCell}
       ${badge}
-      <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
-      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value=${jsAttr(v.label)};applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label',${jsAttr(v.label)})" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
+      <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" data-version-id="${escHtml(String(v.id))}" data-sd-click="${_sdOn(((a0) => function (event) { openVersionPopup(event,a0) })(_sdLit(v.id)))}" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
+      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value=a0;applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1) })(String(v.label ?? "")))}" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();searchCollectionFor('cw-label',a0) })(String(v.label ?? "")))}" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
   }).join("");
   applyVisitedCards();
 }
@@ -6969,8 +6957,8 @@ async function openSeriesBrowser(seriesId, seriesName) {
 
     const formatPills = formats.length > 1
       ? `<div class="sr-pill-row">${[
-          `<button class="sr-pill sr-format-pill" data-filter="" onclick="setSrFormatFilter('')">All</button>`,
-          ...formats.map(f => `<button class="sr-pill sr-format-pill" data-filter="${escHtml(f)}" onclick="setSrFormatFilter(${jsAttr(f)})">${escHtml(f)}</button>`)
+          `<button class="sr-pill sr-format-pill" data-filter="" data-sd-click="${_sdOn(function (event) { setSrFormatFilter('') })}">All</button>`,
+          ...formats.map(f => `<button class="sr-pill sr-format-pill" data-filter="${escHtml(f)}" data-sd-click="${_sdOn(((a0) => function (event) { setSrFormatFilter(a0) })(String(f ?? "")))}">${escHtml(f)}</button>`)
         ].join("")}</div>`
       : "";
 
@@ -7026,9 +7014,9 @@ function renderSeriesReleases() {
     const inInv  = window._inventoryIds?.has(r.id);
     const isFav  = window._favoriteKeys?.has(`release:${r.id}`);
     const badge = `<span class="mv-dots">` +
-      `<span class="mv-dot${inCol ? ' active' : ''}" style="background:${inCol ? '#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${r.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}"></span>` +
-      `<span class="mv-dot${inWant ? ' active' : ''}" style="background:${inWant ? '#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${r.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}"></span>` +
-      `<span class="mv-dot${isFav ? ' active' : ''}" style="background:${isFav ? '#ff6b35' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${r.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}"></span>` +
+      `<span class="mv-dot${inCol ? ' active' : ''}" style="background:${inCol ? '#6ddf70' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleCol(this,a0) })(_sdLit(r.id)))}" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}"></span>` +
+      `<span class="mv-dot${inWant ? ' active' : ''}" style="background:${inWant ? '#f0c95c' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleWant(this,a0) })(_sdLit(r.id)))}" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}"></span>` +
+      `<span class="mv-dot${isFav ? ' active' : ''}" style="background:${isFav ? '#ff6b35' : ''}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();mvToggleFav(this,a0) })(_sdLit(r.id)))}" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}"></span>` +
       (inList ? `<span class="mv-dot active" style="background:#a0ccf0" title="In a list"></span>` : '') +
       (inInv ? `<span class="mv-dot active" style="background:#cda0f5" title="In your inventory"></span>` : '') +
       `</span>`;
@@ -7042,7 +7030,7 @@ function renderSeriesReleases() {
 
     return `
       ${thumbHtml}
-      <a href="#" class="sr-title" onclick="event.preventDefault();openVersionPopup(event,${r.id})" title="${escHtml(titleArtist)}">${escHtml(titleArtist)}</a>
+      <a href="#" class="sr-title" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();openVersionPopup(event,a0) })(_sdLit(r.id)))}" title="${escHtml(titleArtist)}">${escHtml(titleArtist)}</a>
       ${badge}
       <span style="color:#888">${escHtml(yearStr)}</span>
       <span style="color:#666" title="${escHtml(r.format)}">${escHtml(r.catno || r.format || "—")}</span>`;
@@ -7078,12 +7066,12 @@ async function loadMasterVersions(event, masterId) {
     _mvCountryFilter = countrySet.has(savedCountry) ? savedCountry : "";
 
     const formatPills = [
-      `<button class="mv-format-pill mv-pill" data-filter="" onclick="setMvFormatFilter('')">All</button>`,
-      ...formats.map(f => `<button class="mv-format-pill mv-pill" data-filter="${escHtml(f)}" onclick="setMvFormatFilter(${jsAttr(f)})">${escHtml(f)}</button>`)
+      `<button class="mv-format-pill mv-pill" data-filter="" data-sd-click="${_sdOn(function (event) { setMvFormatFilter('') })}">All</button>`,
+      ...formats.map(f => `<button class="mv-format-pill mv-pill" data-filter="${escHtml(f)}" data-sd-click="${_sdOn(((a0) => function (event) { setMvFormatFilter(a0) })(String(f ?? "")))}">${escHtml(f)}</button>`)
     ].join("");
     const countryPills = [
-      `<button class="mv-country-pill mv-pill" data-filter="" onclick="setMvCountryFilter('')">All</button>`,
-      ...countries.map(c => `<button class="mv-country-pill mv-pill" data-filter="${escHtml(c)}" onclick="setMvCountryFilter(${jsAttr(c)})">${escHtml(c)}</button>`)
+      `<button class="mv-country-pill mv-pill" data-filter="" data-sd-click="${_sdOn(function (event) { setMvCountryFilter('') })}">All</button>`,
+      ...countries.map(c => `<button class="mv-country-pill mv-pill" data-filter="${escHtml(c)}" data-sd-click="${_sdOn(((a0) => function (event) { setMvCountryFilter(a0) })(String(c ?? "")))}">${escHtml(c)}</button>`)
     ].join("");
 
     list.innerHTML = `

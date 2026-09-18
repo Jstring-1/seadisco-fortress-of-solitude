@@ -158,7 +158,7 @@ async function _baOpenBansOverlay() {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(800px,100%);max-height:80vh;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.8rem">
         <h3 style="margin:0;font-size:1.05rem">Rescrape ban list</h3>
-        <button class="archive-btn" onclick="document.getElementById('ba-bans-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+        <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-bans-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
       <p style="margin:0 0 0.8rem;font-size:0.82rem;color:var(--muted)">Titles and artist names listed here are SKIPPED by the wiki rescrape. Use × to unban a row — the next rescrape will treat that title / artist as eligible again.</p>
       <div id="ba-bans-body" style="font-size:0.86rem">Loading…</div>
@@ -188,7 +188,7 @@ async function _baRenderBansBody() {
       const items = list.map(b => {
         const when = b.banned_at ? new Date(b.banned_at).toLocaleDateString() : "";
         return `<li style="display:flex;align-items:baseline;gap:0.4rem;padding:0.25rem 0;border-bottom:1px solid rgba(255,255,255,0.04)">
-          <button class="archive-btn" onclick="_baRemoveBan(${b.id})" title="Unban this ${kind}" style="font-size:0.78rem;padding:0.1rem 0.45rem;color:#e88;border-color:rgba(232,136,136,0.4)">×</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baRemoveBan(a0) })(_sdLit(b.id)))}" title="Unban this ${kind}" style="font-size:0.78rem;padding:0.1rem 0.45rem;color:#e88;border-color:rgba(232,136,136,0.4)">×</button>
           <span style="flex:1;color:var(--text)">${escHtml(b.value || "")}</span>
           <span style="font-size:0.74rem;color:var(--muted)" title="${escHtml(b.reason || "")}">${escHtml(when)}</span>
         </li>`;
@@ -272,7 +272,7 @@ function _baSortTh(label, key, state, fn, extraStyle, title) {
   const active = state.key === key;
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
   const titleAttr = title ? ` title="${String(title).replace(/"/g, "&quot;")}"` : "";
-  return `<th class="admin-sort-th${active ? " is-active" : ""}"${titleAttr} style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}(${jsAttr(key)})">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
+  return `<th class="admin-sort-th${active ? " is-active" : ""}"${titleAttr} style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" data-sd-click="${_sdOn(function () { return window[fn](key); })}">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
 }
 
 function initBluesArchiveView() {
@@ -529,39 +529,39 @@ async function _baOpenLyric(id) {
              editing long titles a lot easier than the previous layout
              that squeezed the input around the buttons. -->
         <div style="display:flex;gap:0.4rem;align-items:center;justify-content:flex-end;margin-bottom:0.5rem;flex-wrap:wrap">
-          <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
-          <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${row.id})" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
-          <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row (a future wiki rescrape can pull the same title back in unless you also ban it).">Delete</button>
-          <button class="archive-btn" onclick="_baDeleteAndBanLyric(${row.id}, ${JSON.stringify(row.page_title || "")})" style="color:#e88" title="Delete this row AND fingerprint its EXACT text body (SHA-256 of the normalized plaintext). A re-upload of the same body gets skipped on rescrape, but a re-upload with even a single character changed comes through normally. Doesn't care about title or artist. Manage bans from the Lyrics toolbar Bans button.">Delete + block this exact text</button>
-          <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+          <button class="archive-btn" data-ba-fav-id="${row.id}" data-sd-click="${_sdOn(((a0) => function (event) { _baToggleLyricFavorite(a0) })(_sdLit(row.id)))}" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
+          <button id="ba-edit-save-btn" class="archive-btn archive-btn-suggest" data-sd-click="${_sdOn(((a0) => function (event) { _baSaveLyricEdit(a0) })(_sdLit(row.id)))}" title="Save any changed fields" disabled style="opacity:0.55">Save</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baDeleteLyric(a0) })(_sdLit(row.id)))}" style="color:#e88" title="Permanently delete this lyric row (a future wiki rescrape can pull the same title back in unless you also ban it).">Delete</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0, a1) => function (event) { _baDeleteAndBanLyric(a0, a1) })(_sdLit(row.id), _sdLit(JSON.stringify(row.page_title || ""))))}" style="color:#e88" title="Delete this row AND fingerprint its EXACT text body (SHA-256 of the normalized plaintext). A re-upload of the same body gets skipped on rescrape, but a re-upload with even a single character changed comes through normally. Doesn't care about title or artist. Manage bans from the Lyrics toolbar Bans button.">Delete + block this exact text</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-lyric-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem">×</button>
         </div>
-        <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.45rem 0.6rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:0.6rem" onfocus="this.style.background='rgba(255,255,255,0.03)'" onblur="this.style.background='transparent'" oninput="_baLyricDirty()">
+        <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(title required)" style="width:100%;font-size:1.05rem;font-weight:600;padding:0.45rem 0.6rem;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:0.6rem" data-sd-focus="${_sdOn(function (event) { this.style.background='rgba(255,255,255,0.03)' })}" data-sd-blur="${_sdOn(function (event) { this.style.background='transparent' })}" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">
         <datalist id="ba-tuning-options">${tuningOpts}</datalist>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Artist</label>
-            <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()" autocomplete="off">
+            <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}" autocomplete="off">
           </div>
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Tuning</label>
-            <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+            <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 110px;gap:0.5rem;margin-bottom:0.6rem">
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Discogs release ID${releaseLink}</label>
-            <input id="ba-edit-release-id" type="number" min="1" value="${row.discogs_release_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+            <input id="ba-edit-release-id" type="number" min="1" value="${row.discogs_release_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">
           </div>
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">Discogs master ID${masterLink}</label>
-            <input id="ba-edit-master-id" type="number" min="1" value="${row.discogs_master_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+            <input id="ba-edit-master-id" type="number" min="1" value="${row.discogs_master_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">
           </div>
           <div>
             <label style="display:block;margin:0 0 0.2rem;font-size:0.74rem;color:var(--muted)">First year</label>
-            <input id="ba-edit-first-year" type="number" min="1850" max="2100" value="${row.first_release_year ?? ""}" placeholder="YYYY" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" oninput="_baLyricDirty()">
+            <input id="ba-edit-first-year" type="number" min="1850" max="2100" value="${row.first_release_year ?? ""}" placeholder="YYYY" style="width:100%;padding:0.35rem 0.55rem;font-size:0.82rem" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">
           </div>
         </div>
-        <textarea id="ba-edit-plaintext" rows="20" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.55rem 0.8rem;font-size:0.88rem;line-height:1.5;font-family:inherit;max-height:60vh" oninput="_baLyricDirty()">${escHtml(row.plaintext || "")}</textarea>
+        <textarea id="ba-edit-plaintext" rows="20" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.55rem 0.8rem;font-size:0.88rem;line-height:1.5;font-family:inherit;max-height:60vh" data-sd-input="${_sdOn(function (event) { _baLyricDirty() })}">${escHtml(row.plaintext || "")}</textarea>
         <div id="ba-edit-status" style="font-size:0.74rem;color:var(--muted);margin-top:0.4rem;min-height:1em"></div>
       </div>
     `;
@@ -676,7 +676,7 @@ async function _baOpenLyricEditor(id, prefill) {
           ${row.page_url ? `<div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url)}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>` : ""}
           ${isNew && row.page_title && row.artist ? `<div style="font-size:0.76rem;color:var(--muted);margin-top:0.15rem"><a href="https://www.google.com/search?q=${encodeURIComponent(`${row.artist} Lyrics ${row.page_title}`)}" target="_blank" rel="noopener" style="color:var(--accent)" title="Open a Google search to find the lyrics text">🔍 Google "${escHtml(row.artist)} Lyrics ${escHtml(row.page_title)}" ↗</a></div>` : ""}
         </div>
-        <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+        <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-lyric-edit-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
       <datalist id="ba-tuning-options">${opts}</datalist>
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Title</label>
@@ -709,9 +709,9 @@ async function _baOpenLyricEditor(id, prefill) {
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="The lyric body the viewer popup renders verbatim. Editing here overwrites the stored plaintext directly — for wiki-sourced rows, use this to override the scraped body with hand-corrected lyrics.">Lyrics (plaintext)</label>
       <textarea id="ba-edit-plaintext" rows="14" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;font-family:inherit;line-height:1.45">${escHtml(row.plaintext || "")}</textarea>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap">
-        ${isNew ? "" : `<button class="archive-btn" onclick="_baDeleteLyric(${id})" style="margin-right:auto;color:#e88" title="Permanently delete this lyric row">Delete</button>`}
-        <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()">Cancel</button>
-        <button class="archive-btn archive-btn-suggest" onclick="${isNew ? "_baCreateLyric()" : `_baSaveLyricEdit(${id})`}">${isNew ? "Create" : "Save"}</button>
+        ${isNew ? "" : `<button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baDeleteLyric(a0) })(_sdLit(id)))}" style="margin-right:auto;color:#e88" title="Permanently delete this lyric row">Delete</button>`}
+        <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-lyric-edit-overlay')?.remove() })}">Cancel</button>
+        <button class="archive-btn archive-btn-suggest" data-sd-click="${_sdOn(isNew ? function () { _baCreateLyric(); } : function () { _baSaveLyricEdit(_sdLit(id)); })}">${isNew ? "Create" : "Save"}</button>
       </div>
       <div id="ba-edit-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
     </div>
@@ -804,7 +804,7 @@ async function _baSaveLyricEdit(id) {
             statusEl.innerHTML =
               `Save failed: lyric #${escHtml(String(body.conflictId))} already has ` +
               `<strong>${escHtml(otherTitle)}</strong> by <strong>${escHtml(otherArtist)}</strong> on this source. ` +
-              `<a href="#" onclick="event.preventDefault();document.getElementById('ba-lyric-edit-overlay')?.remove();_baOpenLyric(${Number(body.conflictId)})" style="color:var(--accent);text-decoration:underline">Open it ↗</a> ` +
+              `<a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();document.getElementById('ba-lyric-edit-overlay')?.remove();_baOpenLyric(a0) })(_sdLit(Number(body.conflictId))))}" style="color:var(--accent);text-decoration:underline">Open it ↗</a> ` +
               `<span style="color:var(--muted)">· then delete or rename one of them.</span>`;
           }
           return;
@@ -1354,7 +1354,7 @@ async function _baLoadSetlists() {
     listEl.innerHTML = rows.map(s => {
       const sel = (_baCurrentSetlistId === s.id) ? "background:rgba(255,255,255,0.06);" : "";
       const updated = s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "";
-      return `<div style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);cursor:pointer;${sel}" onclick="_baOpenSetlist(${s.id})">
+      return `<div style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);cursor:pointer;${sel}" data-sd-click="${_sdOn(((a0) => function (event) { _baOpenSetlist(a0) })(_sdLit(s.id)))}">
         <div style="font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
         <div style="font-size:0.72rem;color:var(--muted);margin-top:0.1rem">${s.item_count} song${s.item_count === 1 ? "" : "s"}${updated ? " · " + escHtml(updated) : ""}</div>
       </div>`;
@@ -1383,13 +1383,13 @@ async function _baOpenSetlist(id) {
           return `<li data-li="${it.lyric_id}" style="display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.4rem;border-bottom:1px solid var(--border)">
             <span style="color:var(--muted);font-size:0.78rem;width:1.8em;text-align:right">${pos}.</span>
             <span style="flex:1;min-width:0">
-              <a href="#" onclick="event.preventDefault();_baOpenLyric(${it.lyric_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
+              <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_baOpenLyric(a0) })(_sdLit(it.lyric_id)))}" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
               <span style="color:var(--muted);font-size:0.78rem;margin-left:0.4rem">${escHtml(it.artist || "")}</span>
               ${tuning}
             </span>
-            <button class="archive-btn" title="Move up"   ${i === 0 ? "disabled" : ""} onclick="_baSetlistMoveItem(${s.id}, ${it.lyric_id}, -1)" style="padding:0 0.5rem">↑</button>
-            <button class="archive-btn" title="Move down" ${i === items.length - 1 ? "disabled" : ""} onclick="_baSetlistMoveItem(${s.id}, ${it.lyric_id}, +1)" style="padding:0 0.5rem">↓</button>
-            <button class="archive-btn" title="Remove from setlist" onclick="_baSetlistRemoveItem(${s.id}, ${it.lyric_id})" style="color:#e88;padding:0 0.5rem">×</button>
+            <button class="archive-btn" title="Move up"   ${i === 0 ? "disabled" : ""} data-sd-click="${_sdOn(((a0, a1) => function (event) { _baSetlistMoveItem(a0, a1, -1) })(_sdLit(s.id), _sdLit(it.lyric_id)))}" style="padding:0 0.5rem">↑</button>
+            <button class="archive-btn" title="Move down" ${i === items.length - 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0, a1) => function (event) { _baSetlistMoveItem(a0, a1, +1) })(_sdLit(s.id), _sdLit(it.lyric_id)))}" style="padding:0 0.5rem">↓</button>
+            <button class="archive-btn" title="Remove from setlist" data-sd-click="${_sdOn(((a0, a1) => function (event) { _baSetlistRemoveItem(a0, a1) })(_sdLit(s.id), _sdLit(it.lyric_id)))}" style="color:#e88;padding:0 0.5rem">×</button>
           </li>`;
         }).join("")}</ol>`
       : `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No songs yet. Add lyrics from their viewer popup (the + Setlist button).</div>`;
@@ -1400,11 +1400,11 @@ async function _baOpenSetlist(id) {
           ${s.notes ? `<div style="font-size:0.78rem;color:var(--muted);white-space:pre-wrap">${escHtml(s.notes)}</div>` : ""}
         </div>
         <div style="display:flex;gap:0.3rem;flex-wrap:wrap;justify-content:flex-end">
-          <button class="archive-btn" onclick="_baRenameSetlist(${s.id})" title="Rename / edit notes">Edit</button>
-          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.txt')" title="Download as performer-friendly plain text">Export TXT</button>
-          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.csv')" title="Download as CSV (spreadsheet-friendly)">Export CSV</button>
-          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.json')" title="Download as JSON (round-trip)">Export JSON</button>
-          <button class="archive-btn" onclick="_baDeleteSetlist(${s.id})" style="color:#e88" title="Permanently delete this setlist">Delete</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baRenameSetlist(a0) })(_sdLit(s.id)))}" title="Rename / edit notes">Edit</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { window.open(("/api/blues-archive/setlists/" + String(a0) + "/export.txt")) })(s.id))}" title="Download as performer-friendly plain text">Export TXT</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { window.open(("/api/blues-archive/setlists/" + String(a0) + "/export.csv")) })(s.id))}" title="Download as CSV (spreadsheet-friendly)">Export CSV</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { window.open(("/api/blues-archive/setlists/" + String(a0) + "/export.json")) })(s.id))}" title="Download as JSON (round-trip)">Export JSON</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baDeleteSetlist(a0) })(_sdLit(s.id)))}" style="color:#e88" title="Permanently delete this setlist">Delete</button>
         </div>
       </div>
       ${itemsHtml}`;
@@ -1563,16 +1563,16 @@ function _baPickSetlistDialog() {
     });
     overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
     const items = _baSetlistsCache.map(s =>
-      `<button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin:0.2rem 0;padding:0.4rem 0.6rem" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(${s.id})"><strong>${escHtml(s.name)}</strong> <span style="color:var(--muted);font-size:0.72rem;margin-left:0.4rem">${s.item_count} song${s.item_count === 1 ? "" : "s"}</span></button>`
+      `<button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin:0.2rem 0;padding:0.4rem 0.6rem" data-sd-click="${_sdOn(((a0) => function (event) { document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(a0) })(_sdLit(s.id)))}"><strong>${escHtml(s.name)}</strong> <span style="color:var(--muted);font-size:0.72rem;margin-left:0.4rem">${s.item_count} song${s.item_count === 1 ? "" : "s"}</span></button>`
     ).join("");
     overlay.innerHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(440px,100%)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
           <h3 style="margin:0;font-size:1rem">Add to setlist…</h3>
-          <button class="archive-btn" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(null)">Cancel</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(null) })}">Cancel</button>
         </div>
         ${items}
-        <button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin-top:0.6rem;padding:0.4rem 0.6rem;color:var(--accent)" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.('__new__')">+ Create new setlist…</button>
+        <button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin-top:0.6rem;padding:0.4rem 0.6rem;color:var(--accent)" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.('__new__') })}">+ Create new setlist…</button>
       </div>`;
     document.body.appendChild(overlay);
     window.__baPickSetlistResolve = async (val) => {
@@ -1617,11 +1617,11 @@ async function _baShowFavorites() {
         <li style="display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.4rem;border-bottom:1px solid var(--border)">
           <span style="color:var(--muted);font-size:0.78rem;width:1.8em;text-align:right">${i + 1}.</span>
           <span style="flex:1;min-width:0">
-            <a href="#" onclick="event.preventDefault();_baOpenLyric(${it.id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
+            <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_baOpenLyric(a0) })(_sdLit(it.id)))}" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
             <span style="color:var(--muted);font-size:0.78rem;margin-left:0.4rem">${escHtml(it.artist || "")}</span>
             ${it.tuning ? `<span style="color:#888;font-size:0.74rem;margin-left:0.4rem">${escHtml(it.tuning)}</span>` : ""}
           </span>
-          <button class="archive-btn" onclick="_baAddLyricToSetlist(${it.id})" title="Add to a setlist…">+ Setlist</button>
+          <button class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _baAddLyricToSetlist(a0) })(_sdLit(it.id)))}" title="Add to a setlist…">+ Setlist</button>
         </li>
       `).join("")}</ol>`;
   } catch (e) {
@@ -1796,7 +1796,7 @@ function _baLyricFavStar(l) {
   // as "favorited / not" at a glance. The data-ba-fav-id hook lets
   // _baToggleLyricFavorite re-stamp the colour without re-rendering.
   const colour = fav ? "#ffd166" : "var(--muted)";
-  return `<a href="#" data-ba-fav-id="${id}" onclick="event.preventDefault();event.stopPropagation();_baToggleLyricFavorite(${id})" title="${tip}" style="color:${colour};text-decoration:none;margin-right:0.25rem;font-size:0.95em">${glyph}</a>`;
+  return `<a href="#" data-ba-fav-id="${id}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baToggleLyricFavorite(a0) })(_sdLit(id)))}" title="${tip}" style="color:${colour};text-decoration:none;margin-right:0.25rem;font-size:0.95em">${glyph}</a>`;
 }
 
 // Small inline badge shown after the lyric title to indicate whether
@@ -1823,7 +1823,7 @@ function _baLyricPinBadge(l) {
   if (hasMaster)  tipParts.push(`Discogs master ${mid}`);
   if (hasRelease) tipParts.push(`Discogs release ${rid}`);
   const tip = tipParts.join(" · ");
-  return `<a href="${href}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${tip}" style="text-decoration:none;margin-right:0.3rem;font-size:0.78em">💿</a>`;
+  return `<a href="${href}" target="_blank" rel="noopener" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}" title="${tip}" style="text-decoration:none;margin-right:0.3rem;font-size:0.78em">💿</a>`;
 }
 
 // Single-row HTML — extracted so saves can do surgical in-place
@@ -1858,19 +1858,19 @@ function _baLyricRowHtml(l) {
                    `&a=${encodeURIComponent(fullArtist)}` +
                    `&r=${encodeURIComponent("master+")}` +
                    `&s=${encodeURIComponent("year:asc")}`;
-  const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const searchLink = `<a href="/${searchQs}" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
   const favStar = _baLyricFavStar(l);
   const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   const selectedAttr = _baLyricsSelectedIds.has(Number(l.id)) ? " checked" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
-    <td style="text-align:center"><input type="checkbox" class="ba-lyric-cb" data-lyric-cb="${l.id}"${selectedAttr} onclick="event.stopPropagation();_baLyricsToggleRow(${l.id}, this.checked)"></td>
+    <td style="text-align:center"><input type="checkbox" class="ba-lyric-cb" data-lyric-cb="${l.id}"${selectedAttr} data-sd-click="${_sdOn(((a0) => function (event) { event.stopPropagation();_baLyricsToggleRow(a0, this.checked) })(_sdLit(l.id)))}"></td>
     <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
-    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
-    <td class="ba-lyric-snippet" style="font-size:0.7rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
-    <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
+    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" data-sd-click="${_sdOn(((a0) => function (event) { _baOpenLyric(a0) })(_sdLit(l.id)))}" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
+    <td class="ba-lyric-snippet" style="font-size:0.7rem;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-sd-click="${_sdOn(((a0) => function (event) { _baOpenLyric(a0) })(_sdLit(l.id)))}" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
+    <td style="text-align:right"><a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenLyricEditor(a0) })(_sdLit(l.id)))}" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
   </tr>`;
 }
 
@@ -1891,16 +1891,16 @@ function _baLyricRowHtmlPopup(l, artistName) {
                    `&a=${encodeURIComponent(artistName || l.artist || "")}` +
                    `&r=${encodeURIComponent("master+")}` +
                    `&s=${encodeURIComponent("year:asc")}`;
-  const searchLink = `<a href="/${searchQs}" onclick="event.stopPropagation()" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
+  const searchLink = `<a href="/${searchQs}" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}" class="ba-lyric-search" title="Search SeaDisco — masters+, oldest first">🔍</a>`;
   const favStar = _baLyricFavStar(l);
   const pinBadge = _baLyricPinBadge(l);
   const visitedCls = _baVisitedLyrics.has(Number(l.id)) ? "ba-lyric-visited" : "";
   return `<tr data-lyric-row="${l.id}" class="${visitedCls}">
     <td style="font-weight:600;color:var(--text);white-space:nowrap">${favStar}${searchLink} ${pinBadge}${titleHtml}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
-    <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
-    <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
-    <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
+    <td style="white-space:nowrap;color:var(--accent);cursor:pointer" data-sd-click="${_sdOn(((a0) => function (event) { _baOpenLyric(a0) })(_sdLit(l.id)))}">${escHtml(l.tuning || "")}</td>
+    <td class="ba-lyric-snippet" style="font-size:0.76rem;cursor:pointer" data-sd-click="${_sdOn(((a0) => function (event) { _baOpenLyric(a0) })(_sdLit(l.id)))}">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+    <td style="text-align:right"><a href="#" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();event.stopPropagation();_baOpenLyricEditor(a0) })(_sdLit(l.id)))}" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
   </tr>`;
 }
 
@@ -1950,7 +1950,7 @@ function _baRenderLyricsTable() {
         <col style="width:32px">
       </colgroup>
       <thead><tr>
-        <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-lyrics-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baLyricsToggleAllOnPage(this.checked)"></th>
+        <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-lyrics-cb-all" ${allOnPageSelected ? "checked" : ""} data-sd-click="${_sdOn(function (event) { _baLyricsToggleAllOnPage(this.checked) })}"></th>
         ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
         ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
         ${_baSortTh("Year",    "first_release_year", S, "_baSortLyricsList", "text-align:right;padding-right:0.6rem")}
@@ -2079,16 +2079,16 @@ function _baLyricsRenderBulkBar() {
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
       <strong>${n.toLocaleString()} selected</strong>${capNote}
       <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baLyricsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching</a>
+      <a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_baLyricsSelectAllMatching() })}" style="color:var(--accent);text-decoration:none">Select all matching</a>
       <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baLyricsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
+      <a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_baLyricsClearSelection() })}" style="color:var(--muted);text-decoration:none">Clear selection</a>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
         <label style="font-weight:600">Set tuning →</label>
-        <input id="ba-lyrics-bulk-tuning" type="text" list="ba-lyrics-bulk-tuning-list" placeholder="e.g. Open D" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" onkeydown="if(event.key==='Enter'){event.preventDefault();_baLyricsBulkSetTuningFromInput()}">
+        <input id="ba-lyrics-bulk-tuning" type="text" list="ba-lyrics-bulk-tuning-list" placeholder="e.g. Open D" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" data-sd-keydown="${_sdOn(function (event) { if(event.key==='Enter'){event.preventDefault();_baLyricsBulkSetTuningFromInput()} })}">
         <datalist id="ba-lyrics-bulk-tuning-list">${tuningOpts}</datalist>
-        <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuningFromInput()" title="Apply the text above to every selected row.">Apply</button>
-        <button type="button" class="archive-btn" onclick="_baLyricsBulkSetTuning(null)" title="Clear the tuning column on every selected row.">Clear tuning</button>
-        <button type="button" class="archive-btn" onclick="_baLyricsBulkDelete()" title="Hard-delete every selected lyric row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baLyricsBulkSetTuningFromInput() })}" title="Apply the text above to every selected row.">Apply</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baLyricsBulkSetTuning(null) })}" title="Clear the tuning column on every selected row.">Clear tuning</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baLyricsBulkDelete() })}" title="Hard-delete every selected lyric row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
       </span>
     </div>
   `;
@@ -2171,9 +2171,9 @@ function _baRenderLyricsPager() {
   const cur = _baLyricsPage + 1;
   if (pageCount <= 1) { el.innerHTML = ""; return; }
   el.innerHTML = `
-    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baLyricsGoToPage(${_baLyricsPage - 1})">‹ Prev</button>
+    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _baLyricsGoToPage(a0) })(_sdLit(_baLyricsPage - 1)))}">‹ Prev</button>
     <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
-    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baLyricsGoToPage(${_baLyricsPage + 1})">Next ›</button>
+    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _baLyricsGoToPage(a0) })(_sdLit(_baLyricsPage + 1)))}">Next ›</button>
   `;
 }
 
@@ -2311,12 +2311,12 @@ async function _baLoadTuningsGrid() {
           : "";
         const selectedAttr = _baTuningsSelectedIds.has(Number(r.id)) ? " checked" : "";
         return `<tr>
-          <td style="text-align:center"><input type="checkbox" class="ba-tuning-cb" data-tuning-cb="${r.id}"${selectedAttr} onclick="event.stopPropagation();_baTuningsToggleRow(${r.id}, this.checked)"></td>
+          <td style="text-align:center"><input type="checkbox" class="ba-tuning-cb" data-tuning-cb="${r.id}"${selectedAttr} data-sd-click="${_sdOn(((a0) => function (event) { event.stopPropagation();_baTuningsToggleRow(a0, this.checked) })(_sdLit(r.id)))}"></td>
           <td style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(artist)}">${escHtml(artist)}</td>
           <td style="color:var(--text);overflow:hidden;text-overflow:ellipsis" title="${escHtml(displayTitle)}">${searchLink}${escHtml(displayTitle)}</td>
           <td style="color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(String(r.position || ""))}">${escHtml(String(r.position || ""))}</td>
           <td style="color:var(--muted);font-size:0.78rem;overflow:hidden" title="${escHtml(displayNotes)}">${escHtml(displayNotes)}</td>
-          <td style="text-align:right;white-space:nowrap"><a href="#" onclick="event.preventDefault();_baDeleteTuning(${r.id}, ${JSON.stringify(displayTitle).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")})" title="Delete this tuning row" style="color:#e88;text-decoration:none;font-weight:600;padding:0.1rem 0.4rem">×</a></td>
+          <td style="text-align:right;white-space:nowrap"><a href="#" data-sd-click="${_sdOn(((a0, a1) => function (event) { event.preventDefault();_baDeleteTuning(a0, a1) })(_sdLit(r.id), _sdLit(JSON.stringify(displayTitle).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"))))}" title="Delete this tuning row" style="color:#e88;text-decoration:none;font-weight:600;padding:0.1rem 0.4rem">×</a></td>
         </tr>`;
       };
       const pageIds = rows.map(rr => Number(rr.id));
@@ -2333,7 +2333,7 @@ async function _baLoadTuningsGrid() {
             <col style="width:32px">
           </colgroup>
           <thead><tr>
-            <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-tunings-cb-all" ${allOnPageSelected ? "checked" : ""} onclick="_baTuningsToggleAllOnPage(this.checked)"></th>
+            <th style="text-align:center" title="Select all on this page"><input type="checkbox" id="ba-tunings-cb-all" ${allOnPageSelected ? "checked" : ""} data-sd-click="${_sdOn(function (event) { _baTuningsToggleAllOnPage(this.checked) })}"></th>
             ${_baSortTh("Artist",   "artist",   S, "_baSortTunings")}
             ${_baSortTh("Title",    "title",    S, "_baSortTunings")}
             ${_baSortTh("Position", "position", S, "_baSortTunings")}
@@ -2457,16 +2457,16 @@ function _baTuningsRenderBulkBar() {
     <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
       <strong>${n.toLocaleString()} selected</strong>${capNote}
       <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baTuningsSelectAllMatching()" style="color:var(--accent);text-decoration:none">Select all matching</a>
+      <a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_baTuningsSelectAllMatching() })}" style="color:var(--accent);text-decoration:none">Select all matching</a>
       <span style="color:var(--muted)">·</span>
-      <a href="#" onclick="event.preventDefault();_baTuningsClearSelection()" style="color:var(--muted);text-decoration:none">Clear selection</a>
+      <a href="#" data-sd-click="${_sdOn(function (event) { event.preventDefault();_baTuningsClearSelection() })}" style="color:var(--muted);text-decoration:none">Clear selection</a>
       <span style="margin-left:auto;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
         <label style="font-weight:600">Set position →</label>
-        <input id="ba-tunings-bulk-position" type="text" list="ba-tunings-bulk-position-list" placeholder="e.g. Open G" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" onkeydown="if(event.key==='Enter'){event.preventDefault();_baTuningsBulkSetPositionFromInput()}">
+        <input id="ba-tunings-bulk-position" type="text" list="ba-tunings-bulk-position-list" placeholder="e.g. Open G" style="padding:0.35rem 0.5rem;font-size:0.82rem;min-width:160px" data-sd-keydown="${_sdOn(function (event) { if(event.key==='Enter'){event.preventDefault();_baTuningsBulkSetPositionFromInput()} })}">
         <datalist id="ba-tunings-bulk-position-list">${positionOpts}</datalist>
-        <button type="button" class="archive-btn" onclick="_baTuningsBulkSetPositionFromInput()" title="Apply the text above to every selected row.">Apply</button>
-        <button type="button" class="archive-btn" onclick="_baTuningsBulkSetPosition(null)" title="Clear the position column on every selected row.">Clear position</button>
-        <button type="button" class="archive-btn" onclick="_baTuningsBulkDelete()" title="Hard-delete every selected tuning row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baTuningsBulkSetPositionFromInput() })}" title="Apply the text above to every selected row.">Apply</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baTuningsBulkSetPosition(null) })}" title="Clear the position column on every selected row.">Clear position</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _baTuningsBulkDelete() })}" title="Hard-delete every selected tuning row. Cannot be undone." style="color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete selected</button>
       </span>
     </div>
   `;
@@ -2568,15 +2568,15 @@ function _baOpenTuningAdd() {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.8rem">
         <h3 style="margin:0">Add tuning</h3>
-        <button type="button" class="archive-btn" onclick="document.getElementById('ba-tuning-add-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+        <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-tuning-add-overlay')?.remove() })}" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
-      <form id="ba-tuning-add-form" onsubmit="event.preventDefault();_baSubmitTuningAdd()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem;font-size:0.86rem">
+      <form id="ba-tuning-add-form" data-sd-submit="${_sdOn(function (event) { event.preventDefault();_baSubmitTuningAdd() })}" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem;font-size:0.86rem">
         <label style="grid-column:1/-1">Artist <input name="artist" required style="width:100%" placeholder="e.g. Charley Patton"></label>
         <label style="grid-column:1/-1">Title <input name="title" required style="width:100%" placeholder="e.g. Pony Blues"></label>
         <label style="grid-column:1/-1">Position <input name="position" placeholder="e.g. Open G"></label>
         <label style="grid-column:1/-1">Notes <textarea name="notes" rows="3" style="width:100%" placeholder="Optional"></textarea></label>
         <div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:0.5rem;margin-top:0.5rem">
-          <button type="button" class="archive-btn" onclick="document.getElementById('ba-tuning-add-overlay')?.remove()">Cancel</button>
+          <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('ba-tuning-add-overlay')?.remove() })}">Cancel</button>
           <button type="submit" class="archive-btn archive-btn-suggest">Save</button>
         </div>
         <div id="ba-tuning-add-status" style="grid-column:1/-1;color:var(--muted);font-size:0.78rem;min-height:1em"></div>
@@ -2627,9 +2627,9 @@ function _baRenderTuningsPager() {
   const cur = _baTuningsPage + 1;
   if (pageCount <= 1) { el.innerHTML = ""; return; }
   el.innerHTML = `
-    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baTuningsGoToPage(${_baTuningsPage - 1})">‹ Prev</button>
+    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _baTuningsGoToPage(a0) })(_sdLit(_baTuningsPage - 1)))}">‹ Prev</button>
     <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
-    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baTuningsGoToPage(${_baTuningsPage + 1})">Next ›</button>`;
+    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { _baTuningsGoToPage(a0) })(_sdLit(_baTuningsPage + 1)))}">Next ›</button>`;
 }
 function _baTuningsGoToPage(p) { _baTuningsPage = Math.max(0, p); _baLoadTuningsGrid(); }
 window._baTuningsGoToPage = _baTuningsGoToPage;
@@ -2686,7 +2686,8 @@ async function _baLoadStats() {
       // even when the DB is freshly empty.
       const count = Number(n) || 0;
       if (count === 0 && !opts.alwaysShow) return "";
-      const click = opts.onclick ? ` onclick="${opts.onclick}"` : "";
+      // opts.onclick is a function (no inline JS in markup — see _sdOn).
+      const click = opts.onclick ? ` data-sd-click="${_sdOn(opts.onclick)}"` : "";
       const cur = opts.onclick ? "cursor:pointer;" : "";
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
       return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}font-size:0.7rem;padding:0.05rem 0.25rem;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
@@ -2699,17 +2700,17 @@ async function _baLoadStats() {
       lyricsEl.innerHTML = [
         chip("Lyrics total", s.lyrics_total, {
           alwaysShow: true,
-          onclick: "_baJumpAllLyrics()",
+          onclick: () => _baJumpAllLyrics(),
           title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com). Click to clear any active filter.",
         }),
         chip("Orphan lyrics", s.lyrics_orphan, {
           tone: "warn",
-          onclick: "_baJumpOrphans()",
+          onclick: () => _baJumpOrphans(),
           title: "Lyrics whose artist string doesn't link to a blues_artists row (artist_id IS NULL). Click to filter to unmatched only.",
         }),
         chip("Missing tuning", s.lyrics_missing_tuning, {
           tone: "warn",
-          onclick: "_baJumpMissingTuning()",
+          onclick: () => _baJumpMissingTuning(),
           title: "Lyrics with no tuning extracted from the wiki page (tuning IS NULL). Click to filter to '(unspecified)'.",
         }),
       ].join("");

@@ -164,7 +164,7 @@ function _renderYoutubeResults() {
   resultsEl.innerHTML = _ytLastResults.map(it => _youtubeRowHtml(it)).join("");
   if (pageEl) {
     pageEl.innerHTML = _ytNextPageToken
-      ? `<button type="button" class="archive-load-more" onclick="_youtubeLoadMore()">Load more results</button>`
+      ? `<button type="button" class="archive-load-more" data-sd-click="${_sdOn(function (event) { _youtubeLoadMore() })}">Load more results</button>`
       : "";
   }
 }
@@ -388,16 +388,16 @@ function _youtubeRowHtml(it) {
   const matchClass = isLikelyMatch ? " is-yt-match" : "";
   const thumb = it.thumbnail || `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
   const isSaved = !!_ytSavedIds?.has(id);
-  const saveBtn = `<button type="button" class="archive-btn yt-save-btn${isSaved ? " is-saved" : ""}" onclick="_youtubeToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>`;
-  const playBtn = `<button type="button" class="archive-btn archive-btn-play" onclick="_youtubePlayRow(this)" title="Play in the bar">▶ Play</button>`;
-  const queueBtn = `<button type="button" class="archive-btn archive-btn-queue" onclick="_youtubeQueueRow(this)" title="Add to play queue">＋ Queue</button>`;
+  const saveBtn = `<button type="button" class="archive-btn yt-save-btn${isSaved ? " is-saved" : ""}" data-sd-click="${_sdOn(function (event) { _youtubeToggleSave(this) })}" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>`;
+  const playBtn = `<button type="button" class="archive-btn archive-btn-play" data-sd-click="${_sdOn(function (event) { _youtubePlayRow(this) })}" title="Play in the bar">▶ Play</button>`;
+  const queueBtn = `<button type="button" class="archive-btn archive-btn-queue" data-sd-click="${_sdOn(function (event) { _youtubeQueueRow(this) })}" title="Add to play queue">＋ Queue</button>`;
   const linkBtn = `<a class="archive-btn archive-btn-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">Open on YouTube ↗</a>`;
   // When the popup was opened from the per-track 🎵 Suggest affordance,
   // window._sdSuggestForTrack is set with the track context. Render an
   // extra "✓ Suggest" button so users can pin the picked video to that
   // track. First-submission-wins on the server.
   const suggestBtn = window._sdSuggestForTrack
-    ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_youtubeSuggestForTrack(this)" title="Suggest this video for the track">✓ Suggest</button>`
+    ? `<button type="button" class="archive-btn archive-btn-suggest" data-sd-click="${_sdOn(function (event) { _youtubeSuggestForTrack(this) })}" title="Suggest this video for the track">✓ Suggest</button>`
     : "";
   // Album-mode: when window._sdSuggestAlbumContext is set, render a
   // dropdown of missing tracks and a "Stage" button. Picking from
@@ -427,11 +427,11 @@ function _youtubeRowHtml(it) {
       return `<option value="${escHtml(t.position)}"${sel}${taken ? " disabled" : ""}>${escHtml(label)}</option>`;
     }).join("");
     albumAssignControl = `
-      <select class="sd-filter-select album-assign-select" data-vid="${safeId}" data-vtitle="${safeTitle}" onchange="_youtubeAlbumAssignChanged(this)">
+      <select class="sd-filter-select album-assign-select" data-vid="${safeId}" data-vtitle="${safeTitle}" data-sd-change="${_sdOn(function (event) { _youtubeAlbumAssignChanged(this) })}">
         <option value="">— skip —</option>
         ${opts}
       </select>
-      <button type="button" class="archive-btn archive-btn-suggest album-assign-stage${isStaged ? " is-staged" : ""}" onclick="_youtubeAlbumStage(this)" title="${isStaged ? "Already staged — click to update" : "Stage this assignment (submit all at the bottom)"}">${isStaged ? "✓ Staged" : "Stage"}</button>
+      <button type="button" class="archive-btn archive-btn-suggest album-assign-stage${isStaged ? " is-staged" : ""}" data-sd-click="${_sdOn(function (event) { _youtubeAlbumStage(this) })}" title="${isStaged ? "Already staged — click to update" : "Stage this assignment (submit all at the bottom)"}">${isStaged ? "✓ Staged" : "Stage"}</button>
     `;
   }
   // Duration is populated server-side from a videos.list contentDetails
@@ -1182,9 +1182,9 @@ function _albumRenderFooter() {
   footer.innerHTML = `
     <div class="album-suggest-status-list">${rows}</div>
     <div class="album-suggest-submit-row">
-      <button type="button" class="archive-btn" onclick="_youtubeAlbumStageAll(this)" title="Walk every result row and stage its auto-matched track in one click. Already-staged tracks are left alone; results with no auto-match are skipped.">⤓ Stage all suggestions</button>
-      <button type="button" class="archive-btn archive-btn-suggest album-suggest-submit-btn" ${stagedCount ? "" : "disabled"} onclick="_youtubeAlbumSubmit(this)">Submit ${stagedCount} assignment${stagedCount === 1 ? "" : "s"}</button>
-      <button type="button" class="archive-btn" onclick="_youtubePopupRequestClose()">Cancel</button>
+      <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _youtubeAlbumStageAll(this) })}" title="Walk every result row and stage its auto-matched track in one click. Already-staged tracks are left alone; results with no auto-match are skipped.">⤓ Stage all suggestions</button>
+      <button type="button" class="archive-btn archive-btn-suggest album-suggest-submit-btn" ${stagedCount ? "" : "disabled"} data-sd-click="${_sdOn(function (event) { _youtubeAlbumSubmit(this) })}">Submit ${stagedCount} assignment${stagedCount === 1 ? "" : "s"}</button>
+      <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { _youtubePopupRequestClose() })}">Cancel</button>
     </div>
   `;
 }

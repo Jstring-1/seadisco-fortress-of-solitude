@@ -44,7 +44,7 @@ function _adminToggleSort(state, key) {
 function _adminSortTh(label, key, state, fn, extraStyle) {
   const active = state.key === key;
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
-  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" onclick="${fn}(${jsAttr(key)})">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
+  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" data-sd-click="${_sdOn(function () { return window[fn](key); })}">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
 }
 // Clickable album cell — opens the shared in-page album modal
 // (modal.js is loaded on /admin). Falls back to a dash when there's
@@ -55,7 +55,7 @@ function _adminAlbumLink(type, id, label) {
   const t = String(type), i = String(id);
   const lbl = label || `${t}/${i}`;
   const url = `https://www.discogs.com/${t}/${i}`;
-  return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(i)},${jsAttr(t)},${jsAttr(url)})" title="Open album popup" style="color:#7eb8da;text-decoration:none">${escHtml(lbl)} ↗</a>`;
+  return `<a href="#" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { event.preventDefault();event.stopPropagation();openModal(event,a0,a1,a2) })(String(i ?? ""), String(t ?? ""), String(url ?? "")))}" title="Open album popup" style="color:#7eb8da;text-decoration:none">${escHtml(lbl)} ↗</a>`;
 }
 
 const _adminSubSortState  = { key: "submitted_at",  dir: "desc" };
@@ -139,12 +139,12 @@ function _lyricsRenderTable() {
       <th></th>
     </tr></thead>
     <tbody>${rows.map(row => `
-      <tr style="cursor:pointer" onclick="lyricsOpenViewer(${row.id})">
+      <tr style="cursor:pointer" data-sd-click="${_sdOn(((a0) => function (event) { lyricsOpenViewer(a0) })(_sdLit(row.id)))}">
         <td style="white-space:nowrap;color:var(--text);font-weight:600">${escHtml(row.page_title || "")}</td>
         <td style="white-space:nowrap">${escHtml(row.artist || "—")}</td>
         <td style="white-space:nowrap;color:var(--accent)">${escHtml(row.tuning || "")}</td>
         <td style="font-size:0.75rem;color:#888">${escHtml((row.snippet || "").replace(/\s+/g, " ").slice(0, 120))}…</td>
-        <td><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-size:0.74rem">wiki ↗</a></td>
+        <td><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}" style="color:var(--accent);text-decoration:none;font-size:0.74rem">wiki ↗</a></td>
       </tr>`).join("")}
     </tbody></table>`;
 }
@@ -190,9 +190,9 @@ function lyricsRenderPager() {
   const cur = _lyricsPage + 1;
   if (pageCount <= 1) { el.innerHTML = ""; return; }
   el.innerHTML = `
-    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} onclick="lyricsGoToPage(${_lyricsPage - 1})">‹ Prev</button>
+    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { lyricsGoToPage(a0) })(_sdLit(_lyricsPage - 1)))}">‹ Prev</button>
     <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
-    <button class="admin-btn" ${cur >= pageCount ? "disabled" : ""} onclick="lyricsGoToPage(${_lyricsPage + 1})">Next ›</button>
+    <button class="admin-btn" ${cur >= pageCount ? "disabled" : ""} data-sd-click="${_sdOn(((a0) => function (event) { lyricsGoToPage(a0) })(_sdLit(_lyricsPage + 1)))}">Next ›</button>
   `;
 }
 
@@ -539,7 +539,7 @@ function _lyricsRenderRecentlyAdded(s) {
       panel.innerHTML = `
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
           <strong style="font-size:0.86rem">Pre-scrape complete <span style="color:var(--muted);font-weight:400">— no new lyrics on the wiki</span></strong>
-          <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'">×</button>
+          <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('lyrics-scrape-added').style.display='none' })}">×</button>
         </div>
         <div style="color:var(--muted);font-size:0.84rem">Wiki has ${(s.wikiTotalPages || 0).toLocaleString()} pages and you already have all of them. A rescrape would be a no-op right now.</div>`;
       return;
@@ -561,7 +561,7 @@ function _lyricsRenderRecentlyAdded(s) {
       panel.innerHTML = `
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
           <strong style="font-size:0.86rem">${escHtml(headerLabel)} ${sub}</strong>
-          <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'">×</button>
+          <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('lyrics-scrape-added').style.display='none' })}">×</button>
         </div>
         <div style="max-height:240px;overflow-y:auto">${html}</div>
         ${!s.running && total > 0 ? `<div style="margin-top:0.5rem;font-size:0.78rem;color:var(--muted)">Ready to fetch? Click <strong style="color:var(--text)">Rescrape new</strong> to pull these (and skip everything you already have).</div>` : ""}`;
@@ -595,7 +595,7 @@ function _lyricsRenderRecentlyAdded(s) {
   panel.innerHTML = `
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.4rem">
       <strong style="font-size:0.86rem">${escHtml(label)} <span style="color:var(--muted);font-weight:400">(${rows.length}${rows.length >= 500 ? "+ shown; older trimmed" : ""})</span></strong>
-      <button type="button" class="archive-btn" onclick="document.getElementById('lyrics-scrape-added').style.display='none'" title="Dismiss this panel">×</button>
+      <button type="button" class="archive-btn" data-sd-click="${_sdOn(function (event) { document.getElementById('lyrics-scrape-added').style.display='none' })}" title="Dismiss this panel">×</button>
     </div>
     <div style="max-height:240px;overflow-y:auto">${html}</div>`;
 }

@@ -556,7 +556,7 @@ function _archiveRenderRowsOnly(opts) {
   const html = slice.map(({ it, _origIdx }) => _archiveRowHtml(it, _origIdx)).join("");
   const remaining = view.length - _archiveShown;
   const loadMore = remaining > 0
-    ? `<div class="archive-load-more-wrap"><button type="button" class="archive-load-more" onclick="archiveLoadMore()">Load ${Math.min(_ARCHIVE_PAGE, remaining)} more (${remaining} left)</button></div>`
+    ? `<div class="archive-load-more-wrap"><button type="button" class="archive-load-more" data-sd-click="${_sdOn(function (event) { archiveLoadMore() })}">Load ${Math.min(_ARCHIVE_PAGE, remaining)} more (${remaining} left)</button></div>`
     : "";
   rowsEl.innerHTML = html + loadMore;
   _updateArchiveCount(view.length);
@@ -606,23 +606,23 @@ function _archiveRowHtml(it, i, opts = {}) {
   // if the item turns out to have no audio.
   const playable  = true;
   const isSaved   = !!_archiveSavedIds?.has(it.identifier);
-  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="archiveToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save to your list"}">${isSaved ? "★" : "☆"}</button>`;
+  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" data-sd-click="${_sdOn(function (event) { archiveToggleSave(this) })}" title="${isSaved ? "Remove from Saved" : "Save to your list"}">${isSaved ? "★" : "☆"}</button>`;
   // Saved-view rows source from the row's data-* (since `i` is
   // meaningless without _archiveList). Search-view rows have their
   // own array so they get an index-based handler that reads from
   // _archiveSearchResults instead of _archiveList. Default (curated)
   // uses the original index path.
-  const playHandler  = opts.savedView  ? `archivePlaySavedFromRow(this)`
-                     : opts.searchView ? `archivePlaySearchItem(${i})`
-                     :                   `archivePlayItem(${i})`;
-  const queueHandler = opts.savedView  ? `archiveQueueSavedFromRow(this)`
-                     : opts.searchView ? `archiveQueueSearchItem(${i})`
-                     :                   `archiveQueueItem(${i})`;
+  const playHandler  = opts.savedView  ? function () { archivePlaySavedFromRow(this); }
+                     : opts.searchView ? function () { archivePlaySearchItem(i); }
+                     :                   function () { archivePlayItem(i); };
+  const queueHandler = opts.savedView  ? function () { archiveQueueSavedFromRow(this); }
+                     : opts.searchView ? function () { archiveQueueSearchItem(i); }
+                     :                   function () { archiveQueueItem(i); };
   const playBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-play" onclick="${playHandler}" title="Play in the bar">▶ Play</button>`
+    ? `<button type="button" class="archive-btn archive-btn-play" data-sd-click="${_sdOn(playHandler)}" title="Play in the bar">▶ Play</button>`
     : `<button type="button" class="archive-btn archive-btn-play is-disabled" disabled>▶ No stream</button>`;
   const queueBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-queue" onclick="${queueHandler}" title="Add to play queue">＋ Queue</button>`
+    ? `<button type="button" class="archive-btn archive-btn-queue" data-sd-click="${_sdOn(queueHandler)}" title="Add to play queue">＋ Queue</button>`
     : "";
   // External "Open on archive.org" link removed per request — the
   // info popup ("⓵") and the in-app player cover the same ground
@@ -668,7 +668,7 @@ function _archiveRowHtml(it, i, opts = {}) {
     : "";
   return `
     <div class="archive-row" data-id="${safeId}"${dataAttrs}>
-      <div class="archive-row-main" onclick="_archiveOpenInfoPopup(${jsAttr(it.identifier)})" style="cursor:pointer">
+      <div class="archive-row-main" data-sd-click="${_sdOn(((a0) => function (event) { _archiveOpenInfoPopup(a0) })(String(it.identifier ?? "")))}" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeCreator ? `<div class="archive-row-creator">${safeCreator}</div>` : ""}
         ${(safeDate || ratingHtml || collectionBadgeHtml) ? `<div class="archive-row-meta-row">
@@ -741,7 +741,7 @@ function _renderArchiveList() {
   });
   listEl.innerHTML = `
     <div class="archive-panel archive-panel-search" style="display:${showSearch ? "" : "none"}">
-      <form class="loc-form archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
+      <form class="loc-form archive-search-form" data-sd-submit="${_sdOn(function (event) { event.preventDefault();_archiveOnSearchSubmit(this) })}">
         <div class="loc-form-row">
           <input type="search" id="archive-q" name="q" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
           <button type="submit" class="loc-submit" id="archive-submit-btn">Search</button>
@@ -790,15 +790,15 @@ function _renderArchiveList() {
     <div class="archive-panel archive-panel-curated" style="display:${showCurated ? "" : "none"}">
       <div class="archive-curated-picker">
         <label class="archive-curated-picker-label" for="archive-curated-select">Collection</label>
-        <select id="archive-curated-select" class="archive-curated-select" onchange="_archiveCuratedSelect(this)">${
+        <select id="archive-curated-select" class="archive-curated-select" data-sd-change="${_sdOn(function (event) { _archiveCuratedSelect(this) })}">${
           (_archiveCuratedList || [{ slug: "aadamjacobs", title: "Aadam Jacobs" }])
             .map(c => `<option value="${escHtml(c.slug)}"${c.slug === _archiveCuratedSlug ? " selected" : ""}>${escHtml(c.title)}</option>`)
             .join("")
         }</select>
       </div>
       <div class="archive-meta-bar">
-        <input type="text" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
-        <select class="archive-sort" onchange="_archiveOnSortChange(this)">${sortOpts}</select>
+        <input type="text" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" data-sd-input="${_sdOn(function (event) { _archiveOnFilterInput(this) })}" />
+        <select class="archive-sort" data-sd-change="${_sdOn(function (event) { _archiveOnSortChange(this) })}">${sortOpts}</select>
         <span class="archive-meta-count" id="archive-count">${
           _archiveList ? `${curatedTotal} item${curatedTotal === 1 ? "" : "s"}` : "Loading…"
         }</span>
@@ -810,8 +810,8 @@ function _renderArchiveList() {
 
     <div class="archive-panel archive-panel-saved" style="display:${showSaved ? "" : "none"}">
       <div class="archive-meta-bar">
-        <input type="text" class="archive-filter" placeholder="Filter saved…" value="${savedFilterVal}" oninput="_archiveOnSavedFilterInput(this)" />
-        <select class="archive-sort" onchange="_archiveOnSavedSortChange(this)">${savedSortOpts}</select>
+        <input type="text" class="archive-filter" placeholder="Filter saved…" value="${savedFilterVal}" data-sd-input="${_sdOn(function (event) { _archiveOnSavedFilterInput(this) })}" />
+        <select class="archive-sort" data-sd-change="${_sdOn(function (event) { _archiveOnSavedSortChange(this) })}">${savedSortOpts}</select>
         <span class="archive-meta-count"><span id="archive-saved-count">0</span> saved</span>
       </div>
       <div id="archive-saved-rows"><div class="loc-empty">Loading…</div></div>
@@ -1387,7 +1387,7 @@ function _archiveInfoPopupHtml(d) {
   // services/img endpoint serves a generic icon for items with no
   // explicit thumbnail, but we keep an onerror guard anyway.
   const coverHtml = d.coverUrl
-    ? `<img class="archive-info-cover" src="${esc(d.coverUrl)}" alt="" onerror="this.style.display='none'">`
+    ? `<img class="archive-info-cover" src="${esc(d.coverUrl)}" alt="" data-sd-error="${_sdOn(function (event) { this.style.display='none' })}">`
     : `<div class="archive-info-cover archive-info-cover-empty">♪</div>`;
 
   const creatorLine = (d.creator?.length)
@@ -1406,12 +1406,12 @@ function _archiveInfoPopupHtml(d) {
   // Action buttons row — Play (top-of-item), Queue All, Save, Open on
   // archive.org. Mirrors the LOC popup's action bar.
   const playBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-play" onclick="_archiveInfoPlayPrimary(${jsAttr(d.identifier)})">▶ Play</button>`
+    ? `<button type="button" class="archive-btn archive-btn-play" data-sd-click="${_sdOn(((a0) => function (event) { _archiveInfoPlayPrimary(a0) })(String(d.identifier ?? "")))}">▶ Play</button>`
     : `<button type="button" class="archive-btn archive-btn-play is-disabled" disabled>▶ No stream</button>`;
   const queueBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-queue" onclick="_archiveInfoQueueAll(${jsAttr(d.identifier)})">＋ Queue all tracks</button>`
+    ? `<button type="button" class="archive-btn archive-btn-queue" data-sd-click="${_sdOn(((a0) => function (event) { _archiveInfoQueueAll(a0) })(String(d.identifier ?? "")))}">＋ Queue all tracks</button>`
     : "";
-  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_archiveInfoToggleSave(this, ${jsAttr(d.identifier)})">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
+  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _archiveInfoToggleSave(this, a0) })(String(d.identifier ?? "")))}">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
   const linkBtn = `<a class="archive-btn archive-btn-link" href="${esc(d.itemUrl)}" target="_blank" rel="noopener">Open on archive.org ↗</a>`;
 
   // Description — strip embedded HTML markup, escape, then convert
@@ -1432,8 +1432,8 @@ function _archiveInfoPopupHtml(d) {
           const dur = _archiveFmtDuration(f.length);
           const trackLabel = f.title || fname;
           return `<div class="archive-info-file-row">
-            <button class="archive-info-file-play" data-i="${i}" onclick="_archiveInfoPlayFile(${jsAttr(d.identifier)}, ${i})" title="Play this file">▶</button>
-            <button class="archive-info-file-queue" data-i="${i}" onclick="_archiveInfoQueueFile(${jsAttr(d.identifier)}, ${i})" title="Add to queue">＋</button>
+            <button class="archive-info-file-play" data-i="${i}" data-sd-click="${_sdOn(((a0, a1) => function (event) { _archiveInfoPlayFile(a0, a1) })(String(d.identifier ?? ""), _sdLit(i)))}" title="Play this file">▶</button>
+            <button class="archive-info-file-queue" data-i="${i}" data-sd-click="${_sdOn(((a0, a1) => function (event) { _archiveInfoQueueFile(a0, a1) })(String(d.identifier ?? ""), _sdLit(i)))}" title="Add to queue">＋</button>
             <span class="archive-info-file-title">${esc(trackLabel)}</span>
             ${dur ? `<span class="archive-info-file-dur">${dur}</span>` : ""}
             ${f.format ? `<span class="archive-info-file-fmt">${esc(f.format)}</span>` : ""}

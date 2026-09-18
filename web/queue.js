@@ -1158,13 +1158,13 @@ function _ensureQueueDrawer() {
     </div>
     <div class="queue-drawer-head">
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
-      <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
-      <button type="button" class="queue-drawer-shuffle shuffle-btn" onclick="_queueToggleShuffle()" title="Shuffle: off">⤨</button>
-      <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
-      <button type="button" class="queue-drawer-save" onclick="_playlistSavePrompt()" title="Save current queue as a playlist">💾</button>
-      <button type="button" class="queue-drawer-load" onclick="_playlistOpenPicker()" title="Load one of your saved playlists">📂</button>
-      <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
-      <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">&#9660;</button>
+      <button type="button" class="queue-drawer-repeat repeat-off" data-sd-click="${_sdOn(function (event) { _queueCycleRepeat() })}" title="Repeat: off (click to cycle)">→</button>
+      <button type="button" class="queue-drawer-shuffle shuffle-btn" data-sd-click="${_sdOn(function (event) { _queueToggleShuffle() })}" title="Shuffle: off">⤨</button>
+      <button type="button" class="queue-drawer-consume" data-sd-click="${_sdOn(function (event) { _queueToggleConsume() })}" title="Consume on play: OFF (click to enable)">✂</button>
+      <button type="button" class="queue-drawer-save" data-sd-click="${_sdOn(function (event) { _playlistSavePrompt() })}" title="Save current queue as a playlist">💾</button>
+      <button type="button" class="queue-drawer-load" data-sd-click="${_sdOn(function (event) { _playlistOpenPicker() })}" title="Load one of your saved playlists">📂</button>
+      <button type="button" class="queue-drawer-clear" data-sd-click="${_sdOn(function (event) { queueClear() })}" title="Clear queue">Clear</button>
+      <button type="button" class="queue-drawer-close" data-sd-click="${_sdOn(function (event) { queueToggleDrawer() })}" title="Close">&#9660;</button>
     </div>
     <div class="queue-drawer-list" id="queue-drawer-list"></div>
   `;
@@ -1351,7 +1351,7 @@ async function _renderQueueDrawer() {
       thumbUrl = `https://i.ytimg.com/vi/${encodeURIComponent(it.externalId)}/default.jpg`;
     }
     const thumbHtml = thumbUrl
-      ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" onerror="this.classList.add('thumb-broken')">`
+      ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" data-sd-error="${_sdOn(function (event) { this.classList.add('thumb-broken') })}">`
       : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : (it.source === "unavail" ? "🔍" : "▶")}</span>`;
     // Unavailable rows come in two flavors:
     //   * `source === "unavail"` — admin-only saved-track-with-no-video
@@ -1371,19 +1371,15 @@ async function _renderQueueDrawer() {
     // Fall-back label — if we don't know the release, still make the
     // title a YouTube search so the user has SOMETHING actionable.
     const ytSearchHref = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`;
-    // jsAttr: a JS string literal escaped for the double-quoted onclick.
-    const _relIdJs = jsAttr(releaseId);
     // openModal(event, id, type) is the real release/master modal opener
     // (modal.js). The old window.openAlbumModal/openMasterModal names were
     // never defined, so the && guard silently no-oped. Pass null for the
     // event (stopPropagation is handled on the thumb wrapper below).
     const _relType = releaseType.toLowerCase() === "master" ? "master" : "release";
-    const openAlbumJs = canOpenAlbum
-      ? `window.openModal && window.openModal(null, ${_relIdJs}, '${_relType}')`
-      : "";
+    const openAlbum = () => { if (window.openModal) window.openModal(null, releaseId, _relType); };
     const titleCell = isUnavail
       ? (canOpenAlbum
-          ? `<button class="queue-row-play queue-row-play-unavail" onclick="${openAlbumJs}" title="Unavailable — open the album to pick a replacement">
+          ? `<button class="queue-row-play queue-row-play-unavail" data-sd-click="${_sdOn(openAlbum)}" title="Unavailable — open the album to pick a replacement">
               <span class="queue-row-title">${safeTitle}</span>
               ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
             </button>`
@@ -1391,14 +1387,14 @@ async function _renderQueueDrawer() {
               <span class="queue-row-title">${safeTitle}</span>
               ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
             </a>`)
-      : `<button class="queue-row-play" onclick="queueJumpTo(null,${jsAttr(String(it.externalId))})" title="${isPlaying ? "Currently playing" : "Play this now"}">
+      : `<button class="queue-row-play" data-sd-click="${_sdOn(((a0) => function (event) { queueJumpTo(null,a0) })(String(String(it.externalId) ?? "")))}" title="${isPlaying ? "Currently playing" : "Play this now"}">
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>`;
     return `
       <div class="queue-row${isPlaying ? " is-playing" : ""}${isUnavail ? " queue-row-unavail" : ""}" data-position="${it.position}">
         <span class="queue-row-handle" title="Drag to reorder">⋮⋮</span>
-        <span class="queue-row-thumb-wrap${canOpenAlbum ? " queue-row-thumb-open" : ""}" title="${canOpenAlbum ? "Open album" : sourceTitle}${isUnavail ? " — unavailable" : ""}"${canOpenAlbum ? ` onclick="event.stopPropagation();${openAlbumJs}"` : ""}>
+        <span class="queue-row-thumb-wrap${canOpenAlbum ? " queue-row-thumb-open" : ""}" title="${canOpenAlbum ? "Open album" : sourceTitle}${isUnavail ? " — unavailable" : ""}"${canOpenAlbum ? ` data-sd-click="${_sdOn(function (event) { event.stopPropagation(); openAlbum(); })}"` : ""}>
           ${thumbHtml}
           <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
@@ -1957,7 +1953,7 @@ async function queueAddAlbumOrPlay(items, opts) {
 // for tooltip clarity; click handler is attached separately by callers.
 function queueAddIconHtml(kind = "yt") {
   const tip = kind === "loc" ? "Add to queue" : "Add to queue (YouTube)";
-  return `<a href="#" class="queue-add-icon" title="${tip}" onclick="event.preventDefault();event.stopPropagation();return false">＋</a>`;
+  return `<a href="#" class="queue-add-icon" title="${tip}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();return false })}">＋</a>`;
 }
 
 // Sync "is there a next item" check used by the player nav buttons
@@ -2298,7 +2294,7 @@ async function _playlistSavePrompt() {
       <div class="playlist-picker-card">
         <div class="playlist-picker-head">
           <span class="playlist-picker-title">Save playlist</span>
-          <button type="button" class="playlist-picker-close" onclick="_playlistSaveClosePicker()">×</button>
+          <button type="button" class="playlist-picker-close" data-sd-click="${_sdOn(function (event) { _playlistSaveClosePicker() })}">×</button>
         </div>
         <div class="playlist-picker-body" id="playlist-save-picker-body">Loading…</div>
       </div>`;
@@ -2330,7 +2326,7 @@ async function _playlistSavePrompt() {
            <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
            <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
            <span class="playlist-picker-actions">
-             <button type="button" class="playlist-picker-load" data-id="${p.id}" data-name="${esc(p.name)}" onclick="_playlistSaveOverwrite(this)" title="Overwrite &quot;${esc(p.name)}&quot; with the current queue">Overwrite</button>
+             <button type="button" class="playlist-picker-load" data-id="${p.id}" data-name="${esc(p.name)}" data-sd-click="${_sdOn(function (event) { _playlistSaveOverwrite(this) })}" title="Overwrite &quot;${esc(p.name)}&quot; with the current queue">Overwrite</button>
            </span>
          </li>`).join("")}</ul>`
     : `<div class="playlist-picker-empty">No saved playlists yet.</div>`;
@@ -2339,7 +2335,7 @@ async function _playlistSavePrompt() {
     <div class="playlist-picker-subnote">Save the current queue (${n} track${n === 1 ? "" : "s"}) as a new playlist:</div>
     <div class="playlist-save-newrow">
       <input type="text" id="playlist-save-name" class="playlist-save-input" maxlength="80" value="${esc(def)}" placeholder="Playlist name" />
-      <button type="button" class="playlist-picker-load" onclick="_playlistSaveNew()">Save new</button>
+      <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _playlistSaveNew() })}">Save new</button>
     </div>
     ${list}`;
   const input = body.querySelector("#playlist-save-name");
@@ -2449,7 +2445,7 @@ async function _playlistOpenPicker() {
       <div class="playlist-picker-card">
         <div class="playlist-picker-head">
           <span class="playlist-picker-title">Your playlists</span>
-          <button type="button" class="playlist-picker-close" onclick="_playlistClosePicker()">×</button>
+          <button type="button" class="playlist-picker-close" data-sd-click="${_sdOn(function (event) { _playlistClosePicker() })}">×</button>
         </div>
         <div class="playlist-picker-body" id="playlist-picker-body">Loading…</div>
       </div>`;
@@ -2598,7 +2594,7 @@ async function _trackPlaylistShowPicker(items, opts) {
       <div class="playlist-picker-card">
         <div class="playlist-picker-head">
           <span class="playlist-picker-title">Save to playlist</span>
-          <button type="button" class="playlist-picker-close" onclick="_trackPlaylistClosePicker()">×</button>
+          <button type="button" class="playlist-picker-close" data-sd-click="${_sdOn(function (event) { _trackPlaylistClosePicker() })}">×</button>
         </div>
         <div class="playlist-picker-body" id="track-playlist-picker-body">Loading…</div>
       </div>`;
@@ -2628,7 +2624,7 @@ async function _trackPlaylistShowPicker(items, opts) {
              <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
              <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
              <span class="playlist-picker-actions">
-               <button type="button" class="playlist-picker-load" onclick="_trackPlaylistDoAdd(${p.id})" title="Add to &quot;${esc(p.name)}&quot;">＋ Add</button>
+               <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(((a0) => function (event) { _trackPlaylistDoAdd(a0) })(_sdLit(p.id)))}" title="Add to &quot;${esc(p.name)}&quot;">＋ Add</button>
              </span>
            </li>`).join("")}</ul>`
       : `<div class="playlist-picker-empty" style="margin-top:0.7rem">No saved playlists yet.</div>`;
@@ -2636,7 +2632,7 @@ async function _trackPlaylistShowPicker(items, opts) {
       <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong>${countNote} to a new playlist:</div>
       <div class="playlist-save-newrow">
         <input type="text" id="track-playlist-new-name" class="playlist-save-input" maxlength="80" value="${esc(def)}" placeholder="Playlist name" />
-        <button type="button" class="playlist-picker-load" onclick="_trackPlaylistAddToNew()">＋ Create</button>
+        <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _trackPlaylistAddToNew() })}">＋ Create</button>
       </div>
       ${existingHtml}`;
     const input = body.querySelector("#track-playlist-new-name");
@@ -2995,7 +2991,7 @@ async function _playlistRefreshPicker() {
       <span class="playlist-picker-count">tracks from your recent albums</span>
       <span class="playlist-picker-actions">
         <select id="cw-picker-genre-recent" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre — leave on All to play the most recent 24">${genreOpts}</select>
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('recent', document.getElementById('cw-picker-genre-recent')?.value || '')" title="Play tracks from the albums in your recent history">▶ Play</button>
+        <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _playlistClosePicker();_sdPlayHomeStripDirect('recent', document.getElementById('cw-picker-genre-recent')?.value || '') })}" title="Play tracks from the albums in your recent history">▶ Play</button>
       </span>
     </li>
     <li class="playlist-picker-row playlist-picker-row-default" data-default="suggestions">
@@ -3003,7 +2999,7 @@ async function _playlistRefreshPicker() {
       <span class="playlist-picker-count">tracks from your suggestions feed</span>
       <span class="playlist-picker-actions">
         <select id="cw-picker-genre-suggestions" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre — leave on All to play the top 24 suggestions">${genreOpts}</select>
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('suggestions', document.getElementById('cw-picker-genre-suggestions')?.value || '')" title="Play tracks from your personal suggestions feed">▶ Play</button>
+        <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _playlistClosePicker();_sdPlayHomeStripDirect('suggestions', document.getElementById('cw-picker-genre-suggestions')?.value || '') })}" title="Play tracks from your personal suggestions feed">▶ Play</button>
       </span>
     </li>
     <li class="playlist-picker-row playlist-picker-row-default" data-default="favorites">
@@ -3011,7 +3007,7 @@ async function _playlistRefreshPicker() {
       <span class="playlist-picker-count">random selection from your favorites</span>
       <span class="playlist-picker-actions">
         <select id="cw-picker-genre-favorites" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre">${genreOpts}</select>
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('favorites', document.getElementById('cw-picker-genre-favorites')?.value || '')" title="Play a random 24-track mix from your favorites">▶ Play</button>
+        <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _playlistClosePicker();_sdPlayHomeStripDirect('favorites', document.getElementById('cw-picker-genre-favorites')?.value || '') })}" title="Play a random 24-track mix from your favorites">▶ Play</button>
       </span>
     </li>
     <li class="playlist-picker-row playlist-picker-row-default" data-default="wantlist">
@@ -3019,7 +3015,7 @@ async function _playlistRefreshPicker() {
       <span class="playlist-picker-count">random selection from your wantlist</span>
       <span class="playlist-picker-actions">
         <select id="cw-picker-genre-wantlist" class="playlist-picker-genre" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.4rem;font-size:0.78rem;margin-right:0.4rem;max-width:140px" title="Filter by genre">${genreOpts}</select>
-        <button type="button" class="playlist-picker-load" onclick="_playlistClosePicker();_sdPlayHomeStripDirect('wantlist', document.getElementById('cw-picker-genre-wantlist')?.value || '')" title="Play a random 24-track mix from your wantlist">▶ Play</button>
+        <button type="button" class="playlist-picker-load" data-sd-click="${_sdOn(function (event) { _playlistClosePicker();_sdPlayHomeStripDirect('wantlist', document.getElementById('cw-picker-genre-wantlist')?.value || '') })}" title="Play a random 24-track mix from your wantlist">▶ Play</button>
       </span>
     </li>`;
   try {
@@ -3041,10 +3037,10 @@ async function _playlistRefreshPicker() {
           <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
           <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
           <span class="playlist-picker-actions">
-            <button type="button" class="playlist-picker-load"   onclick="_playlistLoad(${p.id})"  title="Load into queue">▶ Load</button>
-            <button type="button" class="playlist-picker-share"  onclick="_playlistShare(${p.id})" title="Copy share link">🔗</button>
-            <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, ${jsArg(p.name)})" title="Rename">✏</button>
-            <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, ${jsArg(p.name)})" title="Delete">🗑</button>
+            <button type="button" class="playlist-picker-load"   data-sd-click="${_sdOn(((a0) => function (event) { _playlistLoad(a0) })(_sdLit(p.id)))}"  title="Load into queue">▶ Load</button>
+            <button type="button" class="playlist-picker-share"  data-sd-click="${_sdOn(((a0) => function (event) { _playlistShare(a0) })(_sdLit(p.id)))}" title="Copy share link">🔗</button>
+            <button type="button" class="playlist-picker-rename" data-sd-click="${_sdOn(((a0, a1) => function (event) { _playlistRename(a0, a1) })(_sdLit(p.id), _sdLit(jsArg(p.name))))}" title="Rename">✏</button>
+            <button type="button" class="playlist-picker-delete" data-sd-click="${_sdOn(((a0, a1) => function (event) { _playlistDelete(a0, a1) })(_sdLit(p.id), _sdLit(jsArg(p.name))))}" title="Delete">🗑</button>
           </span>
         </li>`).join("")
       : `<li class="playlist-picker-empty-row"><div class="playlist-picker-empty">No saved playlists yet. Click 💾 in the queue drawer to save the current queue.</div></li>`;

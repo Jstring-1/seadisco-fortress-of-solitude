@@ -63,7 +63,7 @@ async function showAuthSection() {
           <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;max-width:380px;margin:0 auto 1rem">${escHtml(err.message || "Your account is hibernated due to inactivity.")}</p>
           <p style="color:#666;font-size:0.82rem">Your data is preserved. Contact the admin to reactivate.</p>
           <div style="margin-top:1.5rem">
-            <button onclick="signOut()" style="background:none;border:1px solid #444;color:#aaa;font-size:0.85rem;padding:0.4rem 1rem;border-radius:5px;cursor:pointer">Sign out</button>
+            <button data-sd-click="${_sdOn(function (event) { signOut() })}" style="background:none;border:1px solid #444;color:#aaa;font-size:0.85rem;padding:0.4rem 1rem;border-radius:5px;cursor:pointer">Sign out</button>
           </div>
         </div>`;
       return;
@@ -165,7 +165,7 @@ async function loadProfilePanel() {
       ? `<span class="profile-badge profile-badge-oauth" title="Connected via OAuth">OAuth</span>`
       : "";
     const disconnectHtml = isOAuth
-      ? `<button type="button" class="profile-disconnect" onclick="disconnectOAuth()" title="Disconnect your Discogs connection">Disconnect</button>`
+      ? `<button type="button" class="profile-disconnect" data-sd-click="${_sdOn(function (event) { disconnectOAuth() })}" title="Disconnect your Discogs connection">Disconnect</button>`
       : "";
 
     panel.innerHTML = `
@@ -181,15 +181,15 @@ async function loadProfilePanel() {
             </div>
           </div>
           <div class="profile-head-actions">
-            <button type="button" class="profile-refresh" onclick="refreshProfilePanel(this)" title="Re-sync profile from Discogs">\u21bb</button>
+            <button type="button" class="profile-refresh" data-sd-click="${_sdOn(function (event) { refreshProfilePanel(this) })}" title="Re-sync profile from Discogs">\u21bb</button>
             ${disconnectHtml}
           </div>
         </div>
         <div class="profile-stats">
-          <a href="/?v=collection" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='collection';switchView('records');return false" title="Open your collection"><div class="profile-stat-num">${fmt(d.num_collection)}</div><div class="profile-stat-label">Collection</div></a>
-          <a href="/?v=wantlist" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='wantlist';switchView('records');return false" title="Open your wantlist"><div class="profile-stat-num">${fmt(d.num_wantlist)}</div><div class="profile-stat-label">Wantlist</div></a>
-          <a href="/?v=lists" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='lists';switchView('records');return false" title="Open your lists"><div class="profile-stat-num">${fmt(d.num_lists)}</div><div class="profile-stat-label">Lists</div></a>
-          <a href="/?v=inventory" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='inventory';switchView('records');return false" title="Open your inventory"><div class="profile-stat-num">${fmt(d.num_for_sale)}</div><div class="profile-stat-label">For sale</div></a>
+          <a href="/?v=collection" class="profile-stat profile-stat-link" data-sd-click="${_sdOn(function (event) { event.preventDefault();_cwTab='collection';switchView('records');return false })}" title="Open your collection"><div class="profile-stat-num">${fmt(d.num_collection)}</div><div class="profile-stat-label">Collection</div></a>
+          <a href="/?v=wantlist" class="profile-stat profile-stat-link" data-sd-click="${_sdOn(function (event) { event.preventDefault();_cwTab='wantlist';switchView('records');return false })}" title="Open your wantlist"><div class="profile-stat-num">${fmt(d.num_wantlist)}</div><div class="profile-stat-label">Wantlist</div></a>
+          <a href="/?v=lists" class="profile-stat profile-stat-link" data-sd-click="${_sdOn(function (event) { event.preventDefault();_cwTab='lists';switchView('records');return false })}" title="Open your lists"><div class="profile-stat-num">${fmt(d.num_lists)}</div><div class="profile-stat-label">Lists</div></a>
+          <a href="/?v=inventory" class="profile-stat profile-stat-link" data-sd-click="${_sdOn(function (event) { event.preventDefault();_cwTab='inventory';switchView('records');return false })}" title="Open your inventory"><div class="profile-stat-num">${fmt(d.num_for_sale)}</div><div class="profile-stat-label">For sale</div></a>
           <div class="profile-stat"><div class="profile-stat-num">${fmt(d.releases_rated)}</div><div class="profile-stat-label">Rated</div></div>
         </div>
         <div class="profile-seller">Seller: ${esc(sellerText)}</div>
@@ -614,7 +614,7 @@ async function renderOfflineSection() {
     } else if (canInstall) {
       installRow = `
         <div style="margin-top:0.6rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
-          <button type="button" onclick="offlineInstallApp()" style="font-size:0.82rem;padding:0.35rem 0.9rem;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:5px;cursor:pointer">Install as app</button>
+          <button type="button" data-sd-click="${_sdOn(function (event) { offlineInstallApp() })}" style="font-size:0.82rem;padding:0.35rem 0.9rem;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:5px;cursor:pointer">Install as app</button>
           <span style="font-size:0.78rem;color:var(--muted)">Adds a desktop / home-screen icon. Same site, opens in its own window.</span>
         </div>`;
     } else {
@@ -627,15 +627,15 @@ async function renderOfflineSection() {
       Download your collection, wantlist, favorites, lists, and inventory to this device so you can browse them when you're offline. Cover thumbnails are pre-fetched too. Read-only — adding or editing still needs a connection.
     </p>
     <label class="offline-toggle" style="display:inline-flex;align-items:center;gap:0.55rem;cursor:pointer;user-select:none">
-      <input type="checkbox" ${enabled ? "checked" : ""} onchange="${enabled ? "disableOffline" : "enableOffline"}(this)" style="width:1rem;height:1rem;accent-color:var(--accent);cursor:pointer">
+      <input type="checkbox" ${enabled ? "checked" : ""} data-sd-change="${_sdOn(function () { return (enabled ? disableOffline : enableOffline)(this); })}" style="width:1rem;height:1rem;accent-color:var(--accent);cursor:pointer">
       <span style="font-size:0.88rem">${enabled ? "Offline access is on" : "Enable offline access"}</span>
     </label>
     <div id="offline-progress" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted);display:none"></div>
     <div style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem">${escHtml(sizeBlurb)}${lastSync ? ` · ${escHtml(lastSync)}` : ""}</div>
     ${enabled ? `
       <div style="margin-top:0.6rem;display:flex;gap:0.6rem;flex-wrap:wrap">
-        <button type="button" onclick="offlineSyncNow(this)" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync now</button>
-        <button type="button" onclick="offlineClearCache(this)" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer">Clear cache</button>
+        <button type="button" data-sd-click="${_sdOn(function (event) { offlineSyncNow(this) })}" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync now</button>
+        <button type="button" data-sd-click="${_sdOn(function (event) { offlineClearCache(this) })}" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer">Clear cache</button>
       </div>
     ` : ""}
     ${installRow}

@@ -14,13 +14,13 @@
       <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
-          <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
-          <button onclick="adminRevokeSessions()" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
+          <button data-sd-click="@p17_click" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
+          <button data-sd-click="@p18_click" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
           <!-- View / Feedback split off behind a separator — these are
                "open a thing" controls, not destructive site actions. -->
           <span class="admin-action-sep" aria-hidden="true"></span>
-          <button onclick="adminToggleViewAsUser()" id="admin-view-btn" class="admin-btn" title="Preview the main site as a regular user (hides admin-only affordances). Click again to restore.">View as user</button>
-          <button onclick="adminOpenFeedback()" id="admin-feedback-btn" class="admin-btn" title="Feedback inbox">✉ Feedback<span id="admin-feedback-dot" class="admin-mail-dot" style="display:none"></span></button>
+          <button data-sd-click="@p22_click" id="admin-view-btn" class="admin-btn" title="Preview the main site as a regular user (hides admin-only affordances). Click again to restore.">View as user</button>
+          <button data-sd-click="@p23_click" id="admin-feedback-btn" class="admin-btn" title="Feedback inbox">✉ Feedback<span id="admin-feedback-dot" class="admin-mail-dot" style="display:none"></span></button>
         </div>
         <div id="admin-archive-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
@@ -28,13 +28,13 @@
 
       <!-- Section nav tabs -->
       <div class="admin-tab-bar">
-        <button class="admin-tab active" onclick="switchAdminTab('overview')">Overview</button>
-        <button class="admin-tab" onclick="switchAdminTab('media')">Media</button>
-        <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
-        <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
-        <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
-        <button class="admin-tab" onclick="switchAdminTab('yt-review')">YT Review</button>
-        <button class="admin-tab" onclick="switchAdminTab('query')">Query</button>
+        <button class="admin-tab active" data-admin-tab="overview" data-sd-click="@p31_click">Overview</button>
+        <button class="admin-tab" data-admin-tab="media" data-sd-click="@p32_click">Media</button>
+        <button class="admin-tab" data-admin-tab="content" data-sd-click="@p33_click">Content</button>
+        <button class="admin-tab" data-admin-tab="system" data-sd-click="@p34_click">System</button>
+        <button class="admin-tab" data-admin-tab="cache" data-sd-click="@p35_click">Cache</button>
+        <button class="admin-tab" data-admin-tab="yt-review" data-sd-click="@p36_click">YT Review</button>
+        <button class="admin-tab" data-admin-tab="query" data-sd-click="@p37_click">Query</button>
       </div>
 
       <!-- Persistent worker-status bar. Populated by
@@ -47,7 +47,7 @@
       <div class="admin-tab-panel admin-grp-overview" id="panel-overview-kpis">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Overview</h2>
-          <button class="admin-refresh-btn" id="overview-kpis-refresh-btn" onclick="_adminClickRefresh(this, loadAdminOverview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="overview-kpis-refresh-btn" data-sd-click="@p50_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="overview-kpis-refresh-status" class="admin-refresh-status"></span>
         </div>
         <!-- Container is a plain block: loadAdminOverview() fills it with
@@ -61,7 +61,7 @@
       <div class="admin-tab-panel admin-grp-media" id="panel-media-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Media &amp; usage</h2>
-          <button class="admin-refresh-btn" id="media-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminMediaStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="media-stats-refresh-btn" data-sd-click="@p64_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="media-stats-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="admin-media-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
@@ -74,16 +74,16 @@
       <div class="admin-tab-panel admin-grp-overview" id="panel-users-unified" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0" title="Every per-user metric on one aligned row. Toggle the column group below; rows keep their position so you can compare a user across groups without re-matching names.">Users</h2>
-          <button class="admin-refresh-btn" id="users-unified-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUsersUnified)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="users-unified-refresh-btn" data-sd-click="@p77_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="users-unified-refresh-status" class="admin-refresh-status"></span>
-          <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user suggestion generator for the admin user only">Run suggestions for me</button>
-          <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user suggestion generator for every user (background, may take minutes)">Run for everyone</button>
-          <button class="admin-btn" id="admin-sync-stop-btn" onclick="adminSyncStop(this)" title="Reset any sync stuck on 'syncing' (e.g. a run whose server process died mid-sync during a redeploy). Flips those rows to 'stopped' so the user can be re-synced.">Reset stuck syncs</button>
+          <button class="admin-btn" id="suggestions-run-self-btn" data-sd-click="@p79_click" title="Run the per-user suggestion generator for the admin user only">Run suggestions for me</button>
+          <button class="admin-btn" id="suggestions-run-all-btn" data-sd-click="@p80_click" title="Run the per-user suggestion generator for every user (background, may take minutes)">Run for everyone</button>
+          <button class="admin-btn" id="admin-sync-stop-btn" data-sd-click="@p81_click" title="Reset any sync stuck on 'syncing' (e.g. a run whose server process died mid-sync during a redeploy). Flips those rows to 'stopped' so the user can be re-synced.">Reset stuck syncs</button>
           <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
           <div id="users-unified-groupbar" style="display:flex;gap:0.25rem"></div>
-          <input type="search" id="users-unified-filter" class="sd-filter-input" placeholder="filter by name…" oninput="_adminUnifiedFilterInput(this.value)" style="margin-left:auto;width:14rem" title="Filter by Clerk username, Discogs handle, or Clerk user id.">
+          <input type="search" id="users-unified-filter" class="sd-filter-input" placeholder="filter by name…" data-sd-input="@p86_input" style="margin-left:auto;width:14rem" title="Filter by Clerk username, Discogs handle, or Clerk user id.">
         </div>
         <div id="users-unified-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
@@ -93,11 +93,11 @@
       <div class="admin-tab-panel admin-grp-system" id="panel-system-bar" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
           <h2 style="margin:0">System</h2>
-          <button class="admin-btn" onclick="adminOpenApis()" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom">Active APIs ↗</button>
-          <button class="admin-refresh-btn" onclick="loadAdminSystem()" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-btn" data-sd-click="@p96_click" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom">Active APIs ↗</button>
+          <button class="admin-refresh-btn" data-sd-click="@p97_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
         </div>
         <div id="admin-system-info" style="font-size:0.8rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0.3rem 1.1rem;margin-bottom:0.7rem">Loading…</div>
-        <details id="admin-audit-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadAdminAudit()">
+        <details id="admin-audit-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" data-sd-toggle="@p100_toggle">
           <summary style="cursor:pointer;font-size:0.82rem;font-weight:600" title="Every admin write (who, what, result) plus automatic account deletions and database downloads.">Recent admin actions</summary>
           <div id="admin-audit" style="margin-top:0.5rem;font-size:0.76rem;color:var(--muted)"></div>
         </details>
@@ -107,7 +107,7 @@
       <div class="admin-tab-panel admin-grp-system" id="panel-db-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Database</h2>
-          <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="db-stats-refresh-btn" data-sd-click="@p110_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
@@ -129,7 +129,7 @@
           <summary style="cursor:pointer;font-weight:600;font-size:0.95rem">🔥 Cache-warm runs</summary>
           <div style="margin-top:0.6rem">
             <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-              <button class="admin-refresh-btn" id="cw-refresh-btn" onclick="_adminClickRefresh(this, loadCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+              <button class="admin-refresh-btn" id="cw-refresh-btn" data-sd-click="@p132_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
               <span id="cw-refresh-status" class="admin-refresh-status"></span>
             </div>
             <div id="cw-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
@@ -140,7 +140,7 @@
           <summary title="How fast release_cache is being written (inserts + refreshes) by cached_at. Counts cache-WRITE activity, not strictly first-seen inserts." style="cursor:pointer;font-weight:600;font-size:0.95rem">📈 Cache write rate</summary>
           <div id="cache-rate-card" class="admin-card" style="margin-top:0.6rem">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
-              <button class="admin-refresh-btn" onclick="loadCacheRate()" title="Refresh cache rate"><span class="admin-refresh-icon">&#8635;</span></button>
+              <button class="admin-refresh-btn" data-sd-click="@p143_click" title="Refresh cache rate"><span class="admin-refresh-icon">&#8635;</span></button>
             </div>
             <div id="cache-rate-content" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
           </div>
@@ -151,7 +151,7 @@
           <div style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">
             <p style="margin:0 0 0.6rem">Removes pressings whose master is already cached, so the master covers them. Never touches orphan releases, pressings with no cached master, or anything referenced by a user library / playlist / queue / override.</p>
             <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.6rem">
-              <button class="admin-btn" onclick="loadRedundantPreview(this)">Preview</button>
+              <button class="admin-btn" data-sd-click="@p154_click">Preview</button>
               <span id="rr-preview" style="font-size:0.8rem"></span>
             </div>
             <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
@@ -161,7 +161,7 @@
                   <option value="all">All redundant pressings</option>
                 </select>
               </label>
-              <button class="admin-btn admin-btn-danger" onclick="pruneRedundant(this)">Prune now</button>
+              <button class="admin-btn admin-btn-danger" data-sd-click="@p164_click">Prune now</button>
               <span id="rr-result" style="font-size:0.8rem"></span>
             </div>
           </div>
@@ -190,7 +190,7 @@
                   <input id="rcx-format" type="text" placeholder="Vinyl, CD…" class="admin-input">
                 </label>
                 <label>Genre
-                  <select id="rcx-genre" onchange="_rcxSyncStyleList()" class="admin-input">
+                  <select id="rcx-genre" data-sd-change="@p193_change" class="admin-input">
                     <option value="">(any)</option>
                     <option value="Blues">Blues</option>
                     <option value="Folk, World, &amp; Country">Folk, World, &amp; Country</option>
@@ -222,11 +222,11 @@
                   <input id="rcx-country" type="text" placeholder="US" class="admin-input">
                 </label>
                 <label style="grid-column:span 2;position:relative">Labels (any of)
-                  <button type="button" id="rcx-labels-btn" onclick="_rcxToggleLabelsPanel(event)" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;text-align:left;cursor:pointer">(any)</button>
+                  <button type="button" id="rcx-labels-btn" data-sd-click="@p225_click" style="width:100%;padding:0.3rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px;text-align:left;cursor:pointer">(any)</button>
                   <div id="rcx-labels-panel" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:0.5rem;margin-top:0.2rem;box-shadow:0 6px 18px rgba(0,0,0,0.4);flex-direction:column;gap:0.4rem">
-                    <input id="rcx-labels-search" type="text" placeholder="Filter labels…" oninput="_rcxRenderLabelsList()" style="padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
+                    <input id="rcx-labels-search" type="text" placeholder="Filter labels…" data-sd-input="@p227_input" style="padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px">
                     <div style="display:flex;gap:0.4rem;align-items:center;font-size:0.72rem">
-                      <button class="admin-btn" type="button" onclick="_rcxClearLabels()" style="padding:0.15rem 0.4rem;font-size:0.7rem">Clear</button>
+                      <button class="admin-btn" type="button" data-sd-click="@p229_click" style="padding:0.15rem 0.4rem;font-size:0.7rem">Clear</button>
                       <span id="rcx-labels-count" style="color:var(--muted)"></span>
                     </div>
                     <div id="rcx-labels-list" style="overflow-y:auto;max-height:240px;border:1px solid var(--border);border-radius:3px;padding:0.3rem 0.4rem;font-size:0.78rem">Loading…</div>
@@ -250,16 +250,16 @@
                 <input id="rcx-has-yt" type="checkbox"> Only rows with YouTube videos
               </label>
               <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
-                <button class="admin-btn" type="button" onclick="rcxPreview()">Preview row count</button>
+                <button class="admin-btn" type="button" data-sd-click="@p253_click">Preview row count</button>
                 <select id="rcx-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                   <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option>
                 </select>
-                <button class="admin-btn" type="button" onclick="rcxDownload()">Download</button>
-                <button class="admin-btn" type="button" onclick="rcxDumpV1()"
+                <button class="admin-btn" type="button" data-sd-click="@p257_click">Download</button>
+                <button class="admin-btn" type="button" data-sd-click="@p258_click"
                         title="Stream every row of release_cache as NDJSON — straight SELECT *, all columns. Ignores the filters.">📦 Dump release_cache</button>
-                <button class="admin-btn" type="button" onclick="rcxDumpAll()"
+                <button class="admin-btn" type="button" data-sd-click="@p260_click"
                         title="Stream EVERY base table in the database as one NDJSON file, each row tagged with __table. The true whole-DB export. Large — this is everything.">🗄 Dump whole DB</button>
-                <button class="admin-btn" type="button" onclick="rcxDelete()" title="Delete every row of release_cache matching these filters. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
+                <button class="admin-btn" type="button" data-sd-click="@p262_click" title="Delete every row of release_cache matching these filters. Requires at least one filter set." style="margin-left:auto;color:#e88;border-color:rgba(232,136,136,0.5)">⚠ Delete matching</button>
                 <span id="rcx-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>
             </div>
@@ -284,11 +284,11 @@
                 <label style="display:inline-flex;gap:0.3rem;align-items:center"><input id="bax-has-youtube" type="checkbox"> Has YouTube</label>
               </div>
               <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-top:0.6rem">
-                <button class="admin-btn" type="button" onclick="baxPreview()">Preview row count</button>
+                <button class="admin-btn" type="button" data-sd-click="@p287_click">Preview row count</button>
                 <select id="bax-format-out" style="padding:0.3rem 0.4rem;font-size:0.82rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px">
                   <option value="csv">CSV (flat)</option><option value="json">JSON (full)</option><option value="ndjson">NDJSON (one per line)</option><option value="pdf">PDF (printable)</option>
                 </select>
-                <button class="admin-btn" type="button" onclick="baxDownload()">Download</button>
+                <button class="admin-btn" type="button" data-sd-click="@p291_click">Download</button>
                 <span id="bax-status" style="font-size:0.78rem;color:var(--muted)"></span>
               </div>
             </div>
@@ -303,43 +303,43 @@
       <div class="admin-tab-panel admin-grp-yt-review" id="panel-yt-review" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">YT Review worker</h2>
-          <button class="admin-refresh-btn" id="ytr-refresh-btn" onclick="_adminClickRefresh(this, loadYtReview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="ytr-refresh-btn" data-sd-click="@p306_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="ytr-refresh-status" class="admin-refresh-status"></span>
           <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">Exact matches can auto-pin; everything else is human-reviewed.</span>
         </div>
         <div id="ytr-status" style="border:1px solid var(--border);border-radius:6px;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.02);margin-bottom:0.7rem">Loading…</div>
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.7rem;padding:0.5rem 0.7rem;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02)">
-          <button class="admin-btn" id="ytr-coverage-btn" onclick="ytrLoadCoverage(this)" title="Count cached-master songs that have NO YouTube source — no Discogs video on the master AND no pin — out of the total, overall and for strict-Blues masters (genres = exactly ['Blues']). Heavy query: scans every cached master's tracklist, so it can take a bit.">▶ Compute YT coverage</button>
+          <button class="admin-btn" id="ytr-coverage-btn" data-sd-click="@p312_click" title="Count cached-master songs that have NO YouTube source — no Discogs video on the master AND no pin — out of the total, overall and for strict-Blues masters (genres = exactly ['Blues']). Heavy query: scans every cached master's tracklist, so it can take a bit.">▶ Compute YT coverage</button>
           <span id="ytr-coverage-out" style="font-size:0.8rem;color:var(--muted)">Songs missing a YouTube track, out of the cache — click to compute.</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-bottom:0.6rem">
           <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);cursor:pointer" title="Run the worker automatically once a day (just after midnight Pacific, when Google's YouTube quota resets) so candidates accumulate for review on your own schedule. Manual Start/Stop still work.">
-            <input type="checkbox" id="ytr-daily-toggle" onchange="ytrToggleDaily(this.checked)"> Run automatically once a day
+            <input type="checkbox" id="ytr-daily-toggle" data-sd-change="@p317_change"> Run automatically once a day
           </label>
           <span id="ytr-daily-next" style="font-size:0.72rem;color:var(--muted)"></span>
           <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);cursor:pointer" title="Auto-pin a candidate only when ALL of these hold: it's on an official &quot;Artist - Topic&quot; channel whose name matches the track artist exactly; the video title equals the track title once decorations are stripped; there's no live/alternate-take/remix marker; the video is embeddable and not US-blocked; and the YouTube duration is within a few seconds of the Discogs track time. Anything short of that still goes to the pending queue.">
-            <input type="checkbox" id="ytr-auto-toggle" onchange="ytrToggleAuto(this.checked)"> Auto-approve exact Topic matches
+            <input type="checkbox" id="ytr-auto-toggle" data-sd-change="@p321_change"> Auto-approve exact Topic matches
           </label>
           <span id="ytr-auto-note" style="font-size:0.72rem;color:var(--muted)"></span>
-          <button class="admin-btn" id="ytr-apply-trust-btn" onclick="ytrApplyTrust()" title="Re-check every PENDING candidate against the current trust picture (refreshed from your approve/reject history first). Rows on a Topic or trusted channel that pass the same exact-title / duration / embeddable gate get auto-pinned; banned-channel rows are cleared. Nothing is force-approved. Re-fetches video details, so it spends a little YouTube quota.">✓ Apply trust to pending</button>
+          <button class="admin-btn" id="ytr-apply-trust-btn" data-sd-click="@p324_click" title="Re-check every PENDING candidate against the current trust picture (refreshed from your approve/reject history first). Rows on a Topic or trusted channel that pass the same exact-title / duration / embeddable gate get auto-pinned; banned-channel rows are cleared. Nothing is force-approved. Re-fetches video details, so it spends a little YouTube quota.">✓ Apply trust to pending</button>
           <span id="ytr-apply-trust-note" style="font-size:0.72rem;color:var(--muted)"></span>
-          <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" oninput="ytrFilterInput(this.value)" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
+          <input type="search" id="ytr-filter" class="sd-filter-input" placeholder="filter by artist or track…" data-sd-input="@p326_input" style="margin-left:auto;width:16rem" title="Search the queue by track artist or title — e.g. to check if a specific missing track already has a candidate.">
         </div>
-        <details id="ytr-query-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)ytrLoadQueryConfig()">
+        <details id="ytr-query-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" data-sd-toggle="@p328_toggle">
           <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">Search query</summary>
           <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.6rem">
             How SeaDisco phrases YouTube searches. The <strong>album</strong> template drives the review worker (one search per album) and the album popup's missing-tracks search; the <strong>track</strong> template drives the per-track suggest popup. Placeholders: <code>{artist}</code> <code>{album}</code> <code>{track}</code> <code>{noise}</code>. Discogs' "(N)" and "*" suffixes are stripped from the artist, and quotes around a value that comes out empty are dropped. Saved changes apply to the next worker run and to new popup searches; results cached under the old phrasing aren't reused.
           </div>
           <div class="ytr-q-grid">
             <label for="ytr-q-album">Album search</label>
-            <input type="text" id="ytr-q-album" class="sd-filter-input" oninput="ytrQueryPreview()" spellcheck="false" autocomplete="off">
+            <input type="text" id="ytr-q-album" class="sd-filter-input" data-sd-input="@p335_input" spellcheck="false" autocomplete="off">
             <label for="ytr-q-track">Track search</label>
-            <input type="text" id="ytr-q-track" class="sd-filter-input" oninput="ytrQueryPreview()" spellcheck="false" autocomplete="off">
+            <input type="text" id="ytr-q-track" class="sd-filter-input" data-sd-input="@p337_input" spellcheck="false" autocomplete="off">
             <label for="ytr-q-noise" class="ytr-q-label-top">Noise filter</label>
-            <textarea id="ytr-q-noise" class="sd-filter-input" rows="3" oninput="ytrQueryPreview()" spellcheck="false"></textarea>
+            <textarea id="ytr-q-noise" class="sd-filter-input" rows="3" data-sd-input="@p339_input" spellcheck="false"></textarea>
             <span></span>
             <label class="ytr-q-check" title="Ask YouTube for embeddable videos only. The site can only play embeddable videos, so this keeps all 50 result slots usable.">
-              <input type="checkbox" id="ytr-q-emb" onchange="ytrQueryPreview()"> Embeddable videos only
+              <input type="checkbox" id="ytr-q-emb" data-sd-change="@p342_change"> Embeddable videos only
             </label>
             <label for="ytr-q-pref" class="ytr-q-label-top" title="Not added to the search — any word in a YouTube query is required. Matched afterwards against each result's channel, title and description.">Preferred sources</label>
             <textarea id="ytr-q-pref" class="sd-filter-input" rows="2" spellcheck="false" placeholder="orchard | &quot;document records&quot; | yazoo" title="Separate with | , or new lines. Matching results sort to the top of each track's candidates with a PREFERRED badge."></textarea>
@@ -350,39 +350,39 @@
           </div>
           <div class="ytr-q-sample">
             <span class="ytr-q-sample-label">Preview with</span>
-            <input type="text" id="ytr-qt-artist" class="sd-filter-input" placeholder="artist" value="Muddy Waters" oninput="ytrQueryPreview()" autocomplete="off">
-            <input type="text" id="ytr-qt-album" class="sd-filter-input" placeholder="album" value="Folk Singer" oninput="ytrQueryPreview()" autocomplete="off">
-            <input type="text" id="ytr-qt-track" class="sd-filter-input" placeholder="track (track search only)" value="My Home Is In The Delta" oninput="ytrQueryPreview()" autocomplete="off">
+            <input type="text" id="ytr-qt-artist" class="sd-filter-input" placeholder="artist" value="Muddy Waters" data-sd-input="@p353_input" autocomplete="off">
+            <input type="text" id="ytr-qt-album" class="sd-filter-input" placeholder="album" value="Folk Singer" data-sd-input="@p354_input" autocomplete="off">
+            <input type="text" id="ytr-qt-track" class="sd-filter-input" placeholder="track (track search only)" value="My Home Is In The Delta" data-sd-input="@p355_input" autocomplete="off">
           </div>
           <div id="ytr-q-preview" class="ytr-q-preview"></div>
           <div class="ytr-q-actions">
-            <button class="admin-btn" onclick="ytrSaveQueryConfig(this)">Save</button>
-            <button class="admin-btn" onclick="ytrResetQueryConfig(this)">Reset to defaults</button>
+            <button class="admin-btn" data-sd-click="@p359_click">Save</button>
+            <button class="admin-btn" data-sd-click="@p360_click">Reset to defaults</button>
             <span class="ytr-q-sep" aria-hidden="true"></span>
             <select id="ytr-qt-mode" class="sd-filter-input" title="Which template the test search uses">
               <option value="album">Test album search</option>
               <option value="track">Test track search</option>
             </select>
-            <button class="admin-btn" onclick="ytrTestQuery(this)" title="Run ONE real search with the settings above — saved or not — so you can see what comes back before a worker run. Free if the query is already cached; otherwise 100 quota units against the project cap (not the worker's daily budget).">Run test search</button>
+            <button class="admin-btn" data-sd-click="@p366_click" title="Run ONE real search with the settings above — saved or not — so you can see what comes back before a worker run. Free if the query is already cached; otherwise 100 quota units against the project cap (not the worker's daily budget).">Run test search</button>
             <span id="ytr-q-status" class="ytr-q-status"></span>
           </div>
           <div id="ytr-qt-out" class="ytr-qt-out"></div>
         </details>
-        <details id="ytr-channels-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadYtChannels()">
+        <details id="ytr-channels-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" data-sd-toggle="@p371_toggle">
           <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">Trusted channels</summary>
           <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.5rem">
             Channels you've approved at least 5 times with a 90%+ approval rate are trusted automatically, and a trusted channel auto-pins on artist + title alone (duration only vetoes when both times are known). Only <em>your</em> decisions count — auto-approvals are excluded so a channel can't vouch for itself. Trust decays: a channel that starts producing rejects drops off on the next run.
           </div>
           <div id="ytr-channels">Loading…</div>
         </details>
-        <details id="ytr-bans-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" ontoggle="if(this.open)loadYtBans()">
+        <details id="ytr-bans-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" data-sd-toggle="@p378_toggle">
           <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">Banned channels</summary>
           <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.5rem">
             A banned channel is removed from YouTube results <em>everywhere</em> — the album-popup search and the background review worker — retroactively, even from already-cached results. Banning also drops that channel's pending review candidates and any videos it got auto-approved into (your hand-picked overrides are left alone). Use the Ban button on a channel or queue row, or paste a channel id, a youtube.com/channel/UC… URL, or a youtube.com/@handle URL below (handles are resolved via the YouTube API).
           </div>
           <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem">
-            <input type="text" id="ytr-ban-input" class="sd-filter-input" placeholder="UC… id, youtube.com/channel/… or youtube.com/@handle URL" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrBanFromInput();}">
-            <button class="admin-btn" onclick="ytrBanFromInput()">Ban</button>
+            <input type="text" id="ytr-ban-input" class="sd-filter-input" placeholder="UC… id, youtube.com/channel/… or youtube.com/@handle URL" style="flex:1" data-sd-keydown="@p384_keydown">
+            <button class="admin-btn" data-sd-click="@p385_click">Ban</button>
           </div>
           <div id="ytr-bans">Loading…</div>
         </details>
@@ -402,16 +402,16 @@
 
         <!-- SQL editor -->
         <textarea id="query-sql" spellcheck="false" placeholder="SELECT name, first_recording_year FROM blues_artists WHERE seed_strict_count > 0 AND first_recording_year <= 1930 ORDER BY name;"
-                  onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();queryRun();}"
+                  data-sd-keydown="@p405_keydown"
                   style="width:100%;min-height:8.5rem;padding:0.6rem 0.7rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.82rem;line-height:1.5;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;resize:vertical"></textarea>
 
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0.5rem 0">
-          <button class="admin-btn admin-btn-sync" onclick="queryRun()" id="query-run-btn" title="Run the SELECT (Ctrl/Cmd+Enter). Read-only; capped rows.">▶ Run</button>
+          <button class="admin-btn admin-btn-sync" data-sd-click="@p409_click" id="query-run-btn" title="Run the SELECT (Ctrl/Cmd+Enter). Read-only; capped rows.">▶ Run</button>
           <label style="font-size:0.78rem;color:var(--muted);display:inline-flex;align-items:center;gap:0.3rem">Max rows
             <input id="query-maxrows" type="number" value="1000" min="1" max="5000" style="width:5.5rem;padding:0.25rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
           </label>
-          <button class="admin-btn" onclick="queryDownloadCsv()" id="query-csv-btn" title="Re-run the query and download the full result set (up to 50k rows) as CSV.">⭳ CSV</button>
-          <button class="admin-btn" onclick="document.getElementById('query-sql').value='';document.getElementById('query-results').innerHTML='';" title="Clear the editor + results">Clear</button>
+          <button class="admin-btn" data-sd-click="@p413_click" id="query-csv-btn" title="Re-run the query and download the full result set (up to 50k rows) as CSV.">⭳ CSV</button>
+          <button class="admin-btn" data-sd-click="@p414_click" title="Clear the editor + results">Clear</button>
           <span id="query-run-status" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
 
@@ -446,21 +446,21 @@
       <div class="admin-tab-panel admin-grp-system" id="panel-api-log" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
-          <button class="admin-refresh-btn" id="api-log-refresh-btn" onclick="_adminClickRefresh(this, loadApiLog)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="api-log-refresh-btn" data-sd-click="@p449_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="api-log-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
-          <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <select id="api-log-filter" data-sd-change="@p454_change" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="">All Services</option>
             <option value="discogs">Discogs</option>
           </select>
-          <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <select id="api-log-hours" data-sd-change="@p458_change" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="24">Last 24 hours</option>
             <option value="168">Last 7 days</option>
           </select>
-          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
-          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-scheduled-only" onchange="loadApiLog()"> Scheduled only</label>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-errors-only" data-sd-change="@p462_change"> Errors only</label>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-scheduled-only" data-sd-change="@p463_change"> Scheduled only</label>
         </div>
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
@@ -478,9 +478,9 @@
       <div class="admin-tab-panel admin-grp-content" id="panel-submissions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Submitted Tracks</h2>
-          <button class="admin-refresh-btn" id="submissions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSubmissions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="submissions-refresh-btn" data-sd-click="@p481_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="submissions-refresh-status" class="admin-refresh-status"></span>
-          <input type="search" id="submissions-filter" class="sd-filter-input" placeholder="filter by album, track, video, user…" oninput="_filterAdminSubmissions(this)" style="margin-left:auto;width:14rem">
+          <input type="search" id="submissions-filter" class="sd-filter-input" placeholder="filter by album, track, video, user…" data-sd-input="@p483_input" style="margin-left:auto;width:14rem">
           <span id="submissions-count" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
@@ -490,9 +490,9 @@
       <div class="admin-tab-panel admin-grp-content" id="panel-unavailable" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0" title="Videos auto-reported as broken when the YouTube IFrame Player throws error code 100 (not found), 101, or 150 (embed disabled / region-blocked). After 2 distinct reports, the videoId graduates to 'unavailable' and is filtered out of every album popup site-wide so the affected tracks register as missing and contributors can submit replacements.">Unavailable Videos</h2>
-          <button class="admin-refresh-btn" id="unavailable-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUnavailable)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <button class="admin-refresh-btn" id="unavailable-refresh-btn" data-sd-click="@p493_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="unavailable-refresh-status" class="admin-refresh-status"></span>
-          <input type="search" id="unavailable-filter" class="sd-filter-input" placeholder="filter by videoId, code, user…" oninput="_filterAdminUnavailable(this)" style="margin-left:auto;width:14rem">
+          <input type="search" id="unavailable-filter" class="sd-filter-input" placeholder="filter by videoId, code, user…" data-sd-input="@p495_input" style="margin-left:auto;width:14rem">
           <span id="unavailable-count" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div id="unavailable-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
@@ -503,12 +503,12 @@
 
 <!-- Feedback inbox popup (was an inline section; now opened from the
      ✉ Feedback button in Actions, with an unread dot). -->
-<div id="admin-feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" onclick="if(event.target===this)adminCloseFeedback()">
+<div id="admin-feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" data-sd-click="@p506_click">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:min(680px,100%);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;gap:0.6rem;padding:0.8rem 1rem;border-bottom:1px solid var(--border)">
       <span style="font-weight:600;color:var(--fg)">Feedback Inbox</span>
       <span id="admin-feedback-count" style="font-size:0.75rem;color:var(--muted)"></span>
-      <button class="admin-btn" onclick="adminCloseFeedback()" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
+      <button class="admin-btn" data-sd-click="@p511_click" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
     </div>
     <div id="feedback-list" style="font-size:0.85rem;color:var(--muted);overflow-y:auto;padding:0.6rem 1rem 1rem">Loading...</div>
   </div>
@@ -517,24 +517,24 @@
 <!-- Active APIs popup — external-service health (success %, latency
      p50/p95, errors, last error) + LOC proxy / rate-limit headroom.
      Folds in what used to be the standalone LOC tab. -->
-<div id="admin-apis-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" onclick="if(event.target===this)adminCloseApis()">
+<div id="admin-apis-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" data-sd-click="@p520_click">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:min(860px,100%);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="display:flex;align-items:center;gap:0.6rem;padding:0.8rem 1rem;border-bottom:1px solid var(--border)">
       <span style="font-weight:600;color:var(--fg)">Active APIs</span>
-      <button class="admin-refresh-btn" id="api-health-refresh-btn" onclick="_adminClickRefresh(this, loadApiHealth)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+      <button class="admin-refresh-btn" id="api-health-refresh-btn" data-sd-click="@p524_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
       <span id="api-health-refresh-status" class="admin-refresh-status"></span>
-      <select id="api-health-hours" onchange="loadApiHealth()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+      <select id="api-health-hours" data-sd-change="@p526_change" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
         <option value="24">Last 24 hours</option>
         <option value="168">Last 7 days</option>
       </select>
-      <button class="admin-btn" onclick="adminCloseApis()" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
+      <button class="admin-btn" data-sd-click="@p530_click" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
     </div>
     <div id="admin-api-health" style="font-size:0.82rem;color:var(--muted);overflow-y:auto;padding:0.8rem 1rem 1rem">Loading…</div>
   </div>
 </div>
 
 <!-- User items popup -->
-<div id="admin-items-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeAdminItems()">
+<div id="admin-items-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center" data-sd-click="@p537_click">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:90%;max-width:620px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div>
@@ -542,10 +542,10 @@
         <span id="admin-items-count" style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"></span>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem">
-        <button onclick="adminItemsTab('collection')" id="admin-items-tab-col" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.08);color:var(--fg);cursor:pointer">Collection</button>
-        <button onclick="adminItemsTab('wantlist')" id="admin-items-tab-want" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Wantlist</button>
-        <button onclick="adminItemsTab('favorites')" id="admin-items-tab-fav" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Favorites</button>
-        <button onclick="closeAdminItems()" style="background:none;border:none;color:#666;cursor:pointer;font-size:1.2rem;padding:0 0.3rem">&times;</button>
+        <button data-sd-click="@p545_click" id="admin-items-tab-col" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.08);color:var(--fg);cursor:pointer">Collection</button>
+        <button data-sd-click="@p546_click" id="admin-items-tab-want" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Wantlist</button>
+        <button data-sd-click="@p547_click" id="admin-items-tab-fav" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Favorites</button>
+        <button data-sd-click="@p548_click" style="background:none;border:none;color:#666;cursor:pointer;font-size:1.2rem;padding:0 0.3rem">&times;</button>
       </div>
     </div>
     <div id="admin-items-list" style="flex:1;overflow-y:auto;padding:0.5rem 0.75rem"></div>

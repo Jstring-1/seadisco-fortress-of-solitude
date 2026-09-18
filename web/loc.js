@@ -293,8 +293,8 @@ function _locRenderShell() {
   return `
     <div class="loc-header">
       <div class="loc-tabs">
-        <button type="button" class="loc-tab loc-tab-search active" onclick="_locSwitchTab('search')">Search</button>
-        <button type="button" class="loc-tab loc-tab-saved" onclick="_locSwitchTab('saved')">Saved</button>
+        <button type="button" class="loc-tab loc-tab-search active" data-sd-click="${_sdOn(function (event) { _locSwitchTab('search') })}">Search</button>
+        <button type="button" class="loc-tab loc-tab-saved" data-sd-click="${_sdOn(function (event) { _locSwitchTab('saved') })}">Saved</button>
       </div>
     </div>
 
@@ -304,7 +304,7 @@ function _locRenderShell() {
           <input type="text" id="loc-q" placeholder="Keyword (title, subject, or any text)" />
           <button type="submit" class="loc-submit" id="loc-submit-btn">Search</button>
           <label class="loc-playable-btn" title="Playable only — hide results with no audio stream">
-            <input type="checkbox" id="loc-playable" checked onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})" />
+            <input type="checkbox" id="loc-playable" checked data-sd-change="${_sdOn(function (event) { if(_locLastQuery)_locRunSearchFromForm({resetPage:true}) })}" />
             <span class="loc-playable-icon">♪</span>
           </label>
           <!-- buildSavedSearchUI injects the bookmark dropdown here -->
@@ -319,7 +319,7 @@ function _locRenderShell() {
           <label><span>Year to</span><input type="text" id="loc-end-date" placeholder="1930" inputmode="numeric" maxlength="4" /></label>
           <label class="loc-form-split"><span>Sort &middot; Per page</span>
             <div class="loc-form-split-row">
-              <select id="loc-sort" onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})">
+              <select id="loc-sort" data-sd-change="${_sdOn(function (event) { if(_locLastQuery)_locRunSearchFromForm({resetPage:true}) })}">
                 <option value="relevance" selected>Relevance</option>
                 <option value="date-desc">Year (newest)</option>
                 <option value="date-asc">Year (oldest)</option>
@@ -344,11 +344,11 @@ function _locRenderShell() {
     <div class="loc-panel loc-panel-saved" style="display:none">
       <div class="loc-saved-head">
         <div class="loc-saved-title">Your saved LOC audio <span class="loc-saved-count">(<span id="loc-saved-count">0</span>)</span></div>
-        <button type="button" class="loc-refresh-btn" onclick="_locLoadSaved()" title="Refresh saved list">↻</button>
+        <button type="button" class="loc-refresh-btn" data-sd-click="${_sdOn(function (event) { _locLoadSaved() })}" title="Refresh saved list">↻</button>
       </div>
       <div class="loc-saved-toolbar">
-        <input type="text" id="loc-saved-filter" class="loc-saved-filter-input" placeholder="Filter title, artist, label…" oninput="_locOnSavedFilterInput(this)" />
-        <select id="loc-saved-sort" class="loc-saved-sort" onchange="_locOnSavedSortChange(this)">
+        <input type="text" id="loc-saved-filter" class="loc-saved-filter-input" placeholder="Filter title, artist, label…" data-sd-input="${_sdOn(function (event) { _locOnSavedFilterInput(this) })}" />
+        <select id="loc-saved-sort" class="loc-saved-sort" data-sd-change="${_sdOn(function (event) { _locOnSavedSortChange(this) })}">
           <option value="recent">Recently saved</option>
           <option value="title">Title A–Z</option>
           <option value="year-asc">Year (oldest first)</option>
@@ -583,7 +583,7 @@ function _locRenderPagination(p) {
   if (!p.hasNext) { el.innerHTML = ""; return; }
   el.innerHTML = `
     <div class="load-more-wrap">
-      <button type="button" class="load-more-btn" onclick="_locLoadMore()">Load more results</button>
+      <button type="button" class="load-more-btn" data-sd-click="${_sdOn(function (event) { _locLoadMore() })}">Load more results</button>
     </div>
   `;
 }
@@ -653,14 +653,14 @@ function _locRenderCard(item, opts) {
   // in the Saved tab). The play button is overlaid on the thumb so it's
   // discoverable without opening the popup.
   const actionBadge = savedTab
-    ? `<span class="card-badge loc-remove-badge" onclick="event.preventDefault();event.stopPropagation();_locRemoveSavedFromCard(this)" title="Remove from Saved">🗑</span>`
-    : `<span class="card-badge loc-save-badge${saved ? " is-saved" : ""}" onclick="event.preventDefault();event.stopPropagation();_locToggleSaveFromCard(this)" title="${saved ? "Remove from Saved" : "Save to your list"}">${saved ? "★" : "☆"}</span>`;
+    ? `<span class="card-badge loc-remove-badge" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_locRemoveSavedFromCard(this) })}" title="Remove from Saved">🗑</span>`
+    : `<span class="card-badge loc-save-badge${saved ? " is-saved" : ""}" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_locToggleSaveFromCard(this) })}" title="${saved ? "Remove from Saved" : "Save to your list"}">${saved ? "★" : "☆"}</span>`;
   const playOverlay = canPlay
-    ? `<span class="loc-thumb-play" onclick="event.preventDefault();event.stopPropagation();_locPlayFromCard(this)" title="Play">▶</span>`
+    ? `<span class="loc-thumb-play" data-sd-click="${_sdOn(function (event) { event.preventDefault();event.stopPropagation();_locPlayFromCard(this) })}" title="Play">▶</span>`
     : "";
 
   return `
-    <a class="card card-type-loc card-animate" href="#" title="${titleSafe}" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}" onclick="event.preventDefault();_locOpenInfoPopup(${jsAttr(item.id)})">
+    <a class="card card-type-loc card-animate" href="#" title="${titleSafe}" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_locOpenInfoPopup(a0) })(String(item.id ?? "")))}">
       <div class="card-thumb-wrap">
         ${thumb}
         ${playOverlay}
@@ -778,7 +778,7 @@ async function _locOpenInfoPopup(locId) {
           const label = esc(t.title || `Track ${i + 1}`);
           const dur = t.duration ? `<span class="loc-track-dur">${esc(t.duration)}</span>` : "";
           return `<li class="loc-track-row">
-            <button type="button" class="loc-track-play" onclick="_locPlayTrack(${jsAttr(item.id)},${i})" title="Play this track">▶</button>
+            <button type="button" class="loc-track-play" data-sd-click="${_sdOn(((a0, a1) => function (event) { _locPlayTrack(a0,a1) })(String(item.id ?? ""), _sdLit(i)))}" title="Play this track">▶</button>
             <span class="loc-track-num">${i + 1}.</span>
             <span class="loc-track-title">${label}</span>
             ${dur}
@@ -814,7 +814,7 @@ async function _locOpenInfoPopup(locId) {
         <div class="loc-speaker-credits">${speakers.map(s => {
           const n = esc(s);
           const jsName = String(s ?? "");
-          return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName(${jsAttr(jsName)})" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName(${jsAttr(jsName)})" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName(${jsAttr(jsName)})" title="Search your collection for ${n}">⌕</a>`;
+          return `<a href="#" class="credit-name loc-credit-name" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_locSearchByName(a0) })(String(jsName ?? "")))}" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_locSearchDiscogsByName(a0) })(String(jsName ?? "")))}" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" data-sd-click="${_sdOn(((a0) => function (event) { event.preventDefault();_locSearchCollectionByName(a0) })(String(jsName ?? "")))}" title="Search your collection for ${n}">⌕</a>`;
         }).join('<span class="credit-sep"> · </span>')}</div>
       </div>`
     : "";
@@ -832,12 +832,12 @@ async function _locOpenInfoPopup(locId) {
     : `<div class="loc-info-thumb loc-info-thumb-ph">♪</div>`;
 
   const playBtn = canPlay
-    ? `<button type="button" class="loc-info-btn loc-info-btn-play" onclick="_locPlayFromInfo(${jsAttr(item.id)})">▶ Play</button>`
+    ? `<button type="button" class="loc-info-btn loc-info-btn-play" data-sd-click="${_sdOn(((a0) => function (event) { _locPlayFromInfo(a0) })(String(item.id ?? "")))}">▶ Play</button>`
     : `<button type="button" class="loc-info-btn loc-info-btn-play is-disabled" disabled title="No playable stream">▶ No stream</button>`;
   const queueBtn = canPlay
-    ? `<button type="button" class="loc-info-btn loc-info-btn-queue" onclick="_locQueueFromInfo(${jsAttr(item.id)})" title="Add to play queue">＋ Queue</button>`
+    ? `<button type="button" class="loc-info-btn loc-info-btn-queue" data-sd-click="${_sdOn(((a0) => function (event) { _locQueueFromInfo(a0) })(String(item.id ?? "")))}" title="Add to play queue">＋ Queue</button>`
     : "";
-  const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo(${jsAttr(item.id)})">${saved ? "★ Saved" : "☆ Save"}</button>`;
+  const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" data-sd-click="${_sdOn(((a0) => function (event) { _locToggleSaveFromInfo(a0) })(String(item.id ?? "")))}">${saved ? "★ Saved" : "☆ Save"}</button>`;
   const locLink = `<a class="loc-info-btn loc-info-btn-loc" href="${esc(item.url || item.id)}" target="_blank" rel="noopener">Open on loc.gov ↗</a>`;
 
   // Credit line — "Library of Congress, [Collection name]." format from

@@ -175,7 +175,7 @@ async function _gutenbergLoadAndRenderBookmarks() {
       const dateStr = b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "";
       const titleSafe = escHtml(JSON.stringify(b.bookTitle || ""));
       return `
-        <div class="gutenberg-bookmark-list-row" onclick="_gutenbergCloseAndOpenAt(${b.bookId}, ${titleSafe}, ${pct})">
+        <div class="gutenberg-bookmark-list-row" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { _gutenbergCloseAndOpenAt(a0, a1, a2) })(_sdLit(b.bookId), _sdLit(titleSafe), _sdLit(pct)))}">
           <div class="gutenberg-bookmark-list-main">
             <div class="gutenberg-bookmark-list-label">${escHtml(labelTxt)}</div>
             <div class="gutenberg-bookmark-list-book">${escHtml(b.bookTitle ?? `Book ${b.bookId}`)}${authors ? ` · <span class="gutenberg-bookmark-list-author">${authors}</span>` : ""}</div>
@@ -183,7 +183,7 @@ async function _gutenbergLoadAndRenderBookmarks() {
           <div class="gutenberg-bookmark-list-meta">
             <span class="gutenberg-bookmark-list-pct">${pct}%</span>
             ${dateStr ? `<span class="gutenberg-bookmark-list-date">${escHtml(dateStr)}</span>` : ""}
-            <button type="button" class="gutenberg-bookmark-del" onclick="event.stopPropagation();_gutenbergDeleteBookmarkFromList(${b.id})" title="Delete bookmark">×</button>
+            <button type="button" class="gutenberg-bookmark-del" data-sd-click="${_sdOn(((a0) => function (event) { event.stopPropagation();_gutenbergDeleteBookmarkFromList(a0) })(_sdLit(b.id)))}" title="Delete bookmark">×</button>
           </div>
         </div>`;
     }).join("");
@@ -357,7 +357,7 @@ function _gutenbergRenderPagination() {
   const pag = document.getElementById("gutenberg-pagination");
   if (!pag) return;
   pag.innerHTML = _gutenbergSearchHasMore
-    ? `<button type="button" class="loc-submit" onclick="runGutenbergSearch(document.getElementById('gutenberg-q').value,{append:true})">Load more</button>`
+    ? `<button type="button" class="loc-submit" data-sd-click="${_sdOn(function (event) { runGutenbergSearch(document.getElementById('gutenberg-q').value,{append:true}) })}">Load more</button>`
     : "";
 }
 
@@ -386,7 +386,7 @@ function _gutenbergCardHtml(b) {
     : "";
   // Subjects: clickable, pivot to a fresh search filtered by that subject.
   const subjectChips = (Array.isArray(b.subjects) ? b.subjects : []).map(s =>
-    `<span class="gutenberg-subject-chip" onclick="_gutenbergSearchBySubject(${escHtml(JSON.stringify(s))})" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
+    `<span class="gutenberg-subject-chip" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergSearchBySubject(a0) })(s))}" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
   ).join("");
   const shelfChips = (Array.isArray(b.bookshelves) ? b.bookshelves : []).map(s =>
     `<span class="gutenberg-shelf-chip">${escHtml(s)}</span>`
@@ -395,7 +395,7 @@ function _gutenbergCardHtml(b) {
     ? `<span class="gutenberg-card-stat"><span class="gutenberg-card-stat-label">↓</span> ${Number(b.download_count).toLocaleString()}</span>`
     : "";
   const isSaved = _gutenbergSavedIds.has(b.id);
-  const saveBtn = `<button type="button" class="archive-btn" onclick="_gutenbergToggleSave(${b.id}, this)" title="${isSaved ? "Remove from Library" : "Save to Library"}">${isSaved ? "✓ Saved" : "+ Save"}</button>`;
+  const saveBtn = `<button type="button" class="archive-btn" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergToggleSave(a0, this) })(_sdLit(b.id)))}" title="${isSaved ? "Remove from Library" : "Save to Library"}">${isSaved ? "✓ Saved" : "+ Save"}</button>`;
   const cover = b.cover
     ? `<img class="gutenberg-cover" src="${escHtml(b.cover)}" alt="" loading="lazy" decoding="async">`
     : `<div class="gutenberg-cover gutenberg-cover-placeholder">📖</div>`;
@@ -421,7 +421,7 @@ function _gutenbergCardHtml(b) {
         ${audioSection}
         ${formatLinks ? `<div class="gutenberg-card-section gutenberg-card-formats-section"><span class="gutenberg-card-section-label">Formats:</span><div class="gutenberg-card-formats">${formatLinks}</div></div>` : ""}
         <div class="gutenberg-card-actions">
-          <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergOpenReader(${b.id}, ${titleSafe})">📖 Read</button>
+          <button type="button" class="archive-btn archive-btn-suggest" data-sd-click="${_sdOn(((a0, a1) => function (event) { _gutenbergOpenReader(a0, a1) })(_sdLit(b.id), _sdLit(titleSafe)))}">📖 Read</button>
           ${saveBtn}
           <a href="${escHtml(wikiUrl)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Search Wikipedia for this book">Wikipedia ↗</a>
           <a href="${escHtml(googleUrl)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Google search for this book">Google ↗</a>
@@ -545,8 +545,8 @@ function _gutenbergAudioSectionHtml(meta) {
     const authorSafe = escHtml(JSON.stringify((Array.isArray(meta?.authors) && meta.authors[0]?.name) ? meta.authors[0].name : ""));
     const idJs = Number(meta?.id) || 0;
     const playBtn = playable
-      ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergAudioPlay(${idJs}, ${urlJs}, ${titleSafe}, ${authorSafe})" title="Play through the mini-player">▶ Play</button>
-         <button type="button" class="archive-btn" onclick="_gutenbergAudioQueue(${idJs}, ${urlJs}, ${titleSafe}, ${authorSafe})" title="Add to queue">＋ Queue</button>`
+      ? `<button type="button" class="archive-btn archive-btn-suggest" data-sd-click="${_sdOn(((a0, a1, a2, a3) => function (event) { _gutenbergAudioPlay(a0, a1, a2, a3) })(_sdLit(idJs), _sdLit(urlJs), _sdLit(titleSafe), _sdLit(authorSafe)))}" title="Play through the mini-player">▶ Play</button>
+         <button type="button" class="archive-btn" data-sd-click="${_sdOn(((a0, a1, a2, a3) => function (event) { _gutenbergAudioQueue(a0, a1, a2, a3) })(_sdLit(idJs), _sdLit(urlJs), _sdLit(titleSafe), _sdLit(authorSafe)))}" title="Add to queue">＋ Queue</button>`
       : `<span class="gutenberg-audio-note" title="Not a direct audio file — opens externally">archive / playlist</span>`;
     return `
       <div class="gutenberg-audio-row">
@@ -1055,11 +1055,11 @@ function _gutenbergRenderBookmarkList() {
   }
   list.innerHTML = bms.map(b => `
     <div class="gutenberg-bookmark-row" data-id="${b.id}">
-      <button type="button" class="gutenberg-bookmark-jump" onclick="_gutenbergJumpToBookmark(${b.id})" title="Jump to this bookmark">
+      <button type="button" class="gutenberg-bookmark-jump" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergJumpToBookmark(a0) })(_sdLit(b.id)))}" title="Jump to this bookmark">
         <span class="gutenberg-bookmark-label">${escHtml(b.label || `${Math.round(b.positionPct)}%`)}</span>
         <span class="gutenberg-bookmark-pct">${Math.round(b.positionPct)}%</span>
       </button>
-      <button type="button" class="gutenberg-bookmark-del" onclick="_gutenbergDeleteBookmark(${b.id})" title="Delete bookmark">×</button>
+      <button type="button" class="gutenberg-bookmark-del" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergDeleteBookmark(a0) })(_sdLit(b.id)))}" title="Delete bookmark">×</button>
     </div>`).join("");
 }
 
@@ -1358,13 +1358,13 @@ function _gutenbergRenderAnnotationList() {
     const kindBadge = a.entityType.charAt(0).toUpperCase();
     return `
       <div class="gutenberg-annotation-row" data-id="${a.id}">
-        <button type="button" class="gutenberg-annotation-jump" onclick="_gutenbergJumpToAnnotation(${a.id})" title="${escHtml(a.label || a.entityName)} — jump here">
+        <button type="button" class="gutenberg-annotation-jump" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergJumpToAnnotation(a0) })(_sdLit(a.id)))}" title="${escHtml(a.label || a.entityName)} — jump here">
           <span class="gutenberg-annotation-kind" data-kind="${escHtml(a.entityType)}">${kindBadge}</span>
           <span class="gutenberg-annotation-name">${escHtml(a.entityName)}</span>
           <span class="gutenberg-annotation-pct">${Math.round(a.positionPct)}%</span>
         </button>
-        <button type="button" class="gutenberg-annotation-open" onclick="_gutenbergOpenAnnotationEntity(${a.id})" title="Open ${escHtml(a.entityType)} in SeaDisco">↗</button>
-        ${window._isAdmin ? `<button type="button" class="gutenberg-bookmark-del" onclick="_gutenbergDeleteAnnotation(${a.id})" title="Delete link">×</button>` : ""}
+        <button type="button" class="gutenberg-annotation-open" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergOpenAnnotationEntity(a0) })(_sdLit(a.id)))}" title="Open ${escHtml(a.entityType)} in SeaDisco">↗</button>
+        ${window._isAdmin ? `<button type="button" class="gutenberg-bookmark-del" data-sd-click="${_sdOn(((a0) => function (event) { _gutenbergDeleteAnnotation(a0) })(_sdLit(a.id)))}" title="Delete link">×</button>` : ""}
       </div>`;
   }).join("");
 }

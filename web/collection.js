@@ -841,10 +841,10 @@ async function loadCollectionFolders() {
     el.style.display = "";
     const totalCount = folders.reduce((sum, f) => sum + (f.count ?? 0), 0);
     // Folder-manager icon button — opens the manage-folders popover
-    let html = `<button type="button" class="cw-folder-manage-btn" onclick="openFolderManager()" title="Manage folders" aria-label="Manage folders">📁</button>`;
-    html += `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)" title="All folders (${totalCount} items)">All</span>`;
+    let html = `<button type="button" class="cw-folder-manage-btn" data-sd-click="${_sdOn(function (event) { openFolderManager() })}" title="Manage folders" aria-label="Manage folders">📁</button>`;
+    html += `<span class="pill cw-folder-pill active" data-folder="0" data-sd-click="${_sdOn(function (event) { filterByFolder(0) })}" title="All folders (${totalCount} items)">All</span>`;
     html += folders.map(f =>
-      `<span class="pill cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="Folder: ${escHtml(f.name)} (${f.count} items)">${escHtml(f.name)}</span>`
+      `<span class="pill cw-folder-pill" data-folder="${f.folderId}" data-sd-click="${_sdOn(((a0) => function (event) { filterByFolder(a0) })(_sdLit(f.folderId)))}" title="Folder: ${escHtml(f.name)} (${f.count} items)">${escHtml(f.name)}</span>`
     ).join("");
     el.innerHTML = html;
   } catch { el.style.display = "none"; }
@@ -872,10 +872,10 @@ async function openFolderManager() {
       <td class="fm-actions">
         ${locked
           ? `<span class="fm-locked" title="Built-in folder — cannot be modified">—</span>`
-          : `<button type="button" class="fm-btn fm-btn-edit" onclick="fmStartRename(${fid})" title="Rename">✎</button>
-             <button type="button" class="fm-btn fm-btn-save" onclick="fmSaveRename(${fid})" style="display:none" title="Save">✓</button>
-             <button type="button" class="fm-btn fm-btn-cancel" onclick="fmCancelRename(${fid})" style="display:none" title="Cancel">✕</button>
-             <button type="button" class="fm-btn fm-btn-del" onclick="fmDeleteFolder(${fid},${jsAttr(f.name)},${f.count})" title="Delete">🗑</button>`
+          : `<button type="button" class="fm-btn fm-btn-edit" data-sd-click="${_sdOn(((a0) => function (event) { fmStartRename(a0) })(_sdLit(fid)))}" title="Rename">✎</button>
+             <button type="button" class="fm-btn fm-btn-save" data-sd-click="${_sdOn(((a0) => function (event) { fmSaveRename(a0) })(_sdLit(fid)))}" style="display:none" title="Save">✓</button>
+             <button type="button" class="fm-btn fm-btn-cancel" data-sd-click="${_sdOn(((a0) => function (event) { fmCancelRename(a0) })(_sdLit(fid)))}" style="display:none" title="Cancel">✕</button>
+             <button type="button" class="fm-btn fm-btn-del" data-sd-click="${_sdOn(((a0, a1, a2) => function (event) { fmDeleteFolder(a0,a1,a2) })(_sdLit(fid), String(f.name ?? ""), _sdLit(f.count)))}" title="Delete">🗑</button>`
         }
       </td>
     </tr>`;
@@ -894,16 +894,16 @@ async function openFolderManager() {
     <div class="folder-manager-panel" role="dialog" aria-label="Folder manager">
       <div class="fm-header">
         <h3>Collection folders</h3>
-        <button type="button" class="fm-close" onclick="closeFolderManager()" aria-label="Close">✕</button>
+        <button type="button" class="fm-close" data-sd-click="${_sdOn(function (event) { closeFolderManager() })}" aria-label="Close">✕</button>
       </div>
       <div class="fm-default-row">
         <label for="fm-default-select">Default folder for new additions:</label>
-        <select id="fm-default-select" onchange="fmSaveDefaultFolder(this.value)">${defaultOptions}</select>
+        <select id="fm-default-select" data-sd-change="${_sdOn(function (event) { fmSaveDefaultFolder(this.value) })}">${defaultOptions}</select>
         <span id="fm-default-status" class="fm-default-status"></span>
       </div>
       <div class="fm-create-row">
         <input type="text" id="fm-new-name" placeholder="New folder name" maxlength="80" />
-        <button type="button" class="fm-btn fm-btn-create" onclick="fmCreateFolder()">+ Create</button>
+        <button type="button" class="fm-btn fm-btn-create" data-sd-click="${_sdOn(function (event) { fmCreateFolder() })}">+ Create</button>
       </div>
       <div class="fm-table-wrap">
         <table class="fm-table">
@@ -1053,7 +1053,7 @@ async function openQuickFolderPicker(releaseId, instanceId, fromFolderId) {
     <div class="quick-folder-picker-panel" role="dialog" aria-label="Move to folder">
       <div class="qfp-header">
         <h4>Move to folder</h4>
-        <button type="button" class="qfp-close" onclick="closeQuickFolderPicker()" aria-label="Close">✕</button>
+        <button type="button" class="qfp-close" data-sd-click="${_sdOn(function (event) { closeQuickFolderPicker() })}" aria-label="Close">✕</button>
       </div>
       <ul class="qfp-list">${rows}</ul>
     </div>
@@ -1127,7 +1127,7 @@ async function openAddCopyFolderPicker(releaseId) {
     <div class="quick-folder-picker-panel" role="dialog" aria-label="Add another copy to folder">
       <div class="qfp-header">
         <h4>Add another copy to…</h4>
-        <button type="button" class="qfp-close" onclick="closeQuickFolderPicker()" aria-label="Close">✕</button>
+        <button type="button" class="qfp-close" data-sd-click="${_sdOn(function (event) { closeQuickFolderPicker() })}" aria-label="Close">✕</button>
       </div>
       <ul class="qfp-list">${rows}</ul>
     </div>
@@ -1325,10 +1325,10 @@ function _rfEnsureBar() {
   if (!results || !results.parentNode) return;
   const cols = _RF_COLS.map(c => `
     <div class="rf-col">
-      <button type="button" class="rf-sort" data-col="${c.key}" onclick="_rfToggleSort(${jsAttr(c.key)})" title="Sort by ${c.label}">
+      <button type="button" class="rf-sort" data-col="${c.key}" data-sd-click="${_sdOn(((a0) => function (event) { _rfToggleSort(a0) })(String(c.key ?? "")))}" title="Sort by ${c.label}">
         ${c.label}<span class="rf-caret" data-col="${c.key}"></span>
       </button>
-      <input type="text" class="rf-filter" data-col="${c.key}" placeholder="filter…" oninput="_rfApply()" autocomplete="off" />
+      <input type="text" class="rf-filter" data-col="${c.key}" placeholder="filter…" data-sd-input="${_sdOn(function (event) { _rfApply() })}" autocomplete="off" />
     </div>`).join("");
   const bar = document.createElement("div");
   bar.id = "rf-bar";
@@ -1337,8 +1337,8 @@ function _rfEnsureBar() {
     <div class="rf-cols">${cols}</div>
     <div class="rf-actions">
       <span class="rf-count" id="rf-count"></span>
-      <button type="button" class="rf-btn" onclick="_rfLoadAll(this)" title="Load every item in this tab so filters + sort cover the whole library">⤓ Load all</button>
-      <button type="button" class="rf-btn" onclick="_rfClear()" title="Clear all column filters + sort">✕ Clear</button>
+      <button type="button" class="rf-btn" data-sd-click="${_sdOn(function (event) { _rfLoadAll(this) })}" title="Load every item in this tab so filters + sort cover the whole library">⤓ Load all</button>
+      <button type="button" class="rf-btn" data-sd-click="${_sdOn(function (event) { _rfClear() })}" title="Clear all column filters + sort">✕ Clear</button>
     </div>`;
   results.parentNode.insertBefore(bar, results);
   _rfUpdateCarets();
@@ -1731,7 +1731,7 @@ async function loadInventoryTab(page = 1, filters) {
       setCwStatus("");
       document.getElementById("results").innerHTML = f.q
         ? renderEmptyState("\uD83D\uDD0D", `No inventory items matching "${f.q}"`, "Try a different search")
-        : `<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No listings yet</div><div class="empty-state-sub">Create your first marketplace listing below</div><div style="margin-top:1rem"><button class="inv-new-btn" onclick="openInventoryEditor({mode:'create'})">+ New listing</button></div></div>`;
+        : `<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No listings yet</div><div class="empty-state-sub">Create your first marketplace listing below</div><div style="margin-top:1rem"><button class="inv-new-btn" data-sd-click="${_sdOn(function (event) { openInventoryEditor({mode:'create'}) })}">+ New listing</button></div></div>`;
       return;
     }
     setCwStatus(`${data.total} inventory listings \u2014 page ${page} of ${data.pages}`);
@@ -1758,8 +1758,8 @@ function renderInventoryToolbar() {
     results?.parentElement?.insertBefore(toolbar, results);
   }
   toolbar.innerHTML = `
-    <button class="inv-new-btn" onclick="openInventoryEditor({mode:'create'})" title="Create a new marketplace listing">+ New listing</button>
-    <button class="inv-refresh-btn" onclick="refreshInventoryNow(this)" title="Sync inventory from Discogs">↻ Refresh</button>
+    <button class="inv-new-btn" data-sd-click="${_sdOn(function (event) { openInventoryEditor({mode:'create'}) })}" title="Create a new marketplace listing">+ New listing</button>
+    <button class="inv-refresh-btn" data-sd-click="${_sdOn(function (event) { refreshInventoryNow(this) })}" title="Sync inventory from Discogs">↻ Refresh</button>
   `;
   toolbar.style.display = "flex";
 }
@@ -1818,8 +1818,8 @@ function renderInventoryCard(item, index) {
   // without touching renderCard's internals.
   return `<div class="inv-card-wrap" data-listing-id="${lid}">
     ${card}
-    <div class="inv-card-actions" onclick="event.stopPropagation()">
-      <button class="inv-card-edit" title="Edit listing" onclick="event.stopPropagation();openInventoryEditor({mode:'edit',listingId:${lid}})">✏️</button>
+    <div class="inv-card-actions" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}">
+      <button class="inv-card-edit" title="Edit listing" data-sd-click="${_sdOn(((a0) => function (event) { event.stopPropagation();openInventoryEditor({mode:'edit',listingId:a0}) })(_sdLit(lid)))}">✏️</button>
     </div>
   </div>`;
 }
@@ -1837,14 +1837,14 @@ function renderInventoryPagination() {
   }
   const sorted = [...pages].sort((a, b) => a - b);
 
-  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} onclick="return false">← Prev</button>`;
+  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(function (event) { return false })}">← Prev</button>`;
   let last = 0;
   for (const p of sorted) {
     if (last && p - last > 1) html += `<span class="pag-ellipsis">…</span>`;
     html += `<button class="pag-num${p === currentPage ? " pag-active" : ""}" data-page="${p}">${p}</button>`;
     last = p;
   }
-  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} onclick="return false">Next →</button>`;
+  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} data-sd-click="${_sdOn(function (event) { return false })}">Next →</button>`;
 
   pag.innerHTML = html;
   pag.style.display = "flex";
@@ -2033,8 +2033,8 @@ function renderListsTable() {
     const truncDesc = desc.length > 80 ? desc.slice(0, 77) + "..." : desc;
     const count = list.item_count ?? 0;
     const vis = list.is_public ? "Public" : "Private";
-    return `<tr class="lists-table-row" onclick="openListDetail(${list.list_id},${jsAttr(safeName)})">
-      <td class="lists-td-name">${name} <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lists-ext-link" title="View on Discogs">\u2197</a></td>
+    return `<tr class="lists-table-row" data-sd-click="${_sdOn(((a0, a1) => function (event) { openListDetail(a0,a1) })(_sdLit(list.list_id), String(safeName ?? "")))}">
+      <td class="lists-td-name">${name} <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" data-sd-click="${_sdOn(function (event) { event.stopPropagation() })}" class="lists-ext-link" title="View on Discogs">\u2197</a></td>
       <td class="lists-td-items">${count}</td>
       <td class="lists-td-vis">${vis}</td>
       <td class="lists-td-desc" title="${desc}">${truncDesc}</td>
@@ -2042,9 +2042,9 @@ function renderListsTable() {
   }).join("");
   document.getElementById("results").innerHTML = `<div class="lists-table-wrap"><table class="lists-table">
     <thead><tr>
-      <th class="lists-th-sortable" onclick="sortListsBy('name')">Name${arrow("name")}</th>
-      <th class="lists-th-sortable lists-th-items" onclick="sortListsBy('items')">Items${arrow("items")}</th>
-      <th class="lists-th-sortable" onclick="sortListsBy('visibility')">Visibility${arrow("visibility")}</th>
+      <th class="lists-th-sortable" data-sd-click="${_sdOn(function (event) { sortListsBy('name') })}">Name${arrow("name")}</th>
+      <th class="lists-th-sortable lists-th-items" data-sd-click="${_sdOn(function (event) { sortListsBy('items') })}">Items${arrow("items")}</th>
+      <th class="lists-th-sortable" data-sd-click="${_sdOn(function (event) { sortListsBy('visibility') })}">Visibility${arrow("visibility")}</th>
       <th>Description</th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -2087,7 +2087,7 @@ async function openListDetail(listId, listName) {
       return;
     }
     setCwStatus(`${listName} · ${filtered.length} item${filtered.length !== 1 ? "s" : ""}`);
-    grid.innerHTML = `<div style="margin-bottom:0.5rem"><button onclick="loadListsTab()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem;padding:0">← All lists</button></div>`
+    grid.innerHTML = `<div style="margin-bottom:0.5rem"><button data-sd-click="${_sdOn(function (event) { loadListsTab() })}" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem;padding:0">← All lists</button></div>`
       + filtered.map((item, i) => renderCard(item, i)).join("");
   } catch (e) {
     grid.innerHTML = renderEmptyState("⚠", "Failed to load list items", e.message);
@@ -2419,14 +2419,14 @@ function renderCollectionPagination(tab) {
   }
   const sorted = [...pages].sort((a, b) => a - b);
 
-  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} onclick="return false">← Prev</button>`;
+  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} data-sd-click="${_sdOn(function (event) { return false })}">← Prev</button>`;
   let last = 0;
   for (const p of sorted) {
     if (last && p - last > 1) html += `<span class="pag-ellipsis">…</span>`;
     html += `<button class="pag-num${p === currentPage ? " pag-active" : ""}" data-page="${p}">${p}</button>`;
     last = p;
   }
-  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} onclick="return false">Next →</button>`;
+  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} data-sd-click="${_sdOn(function (event) { return false })}">Next →</button>`;
 
   pag.innerHTML = html;
   pag.style.display = "flex";
@@ -2445,7 +2445,7 @@ async function showSyncStatus(type) {
   try {
     const r = await apiFetch("/api/user/collection?page=1&per_page=1");
   } catch {}
-  el.innerHTML = `<a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+  el.innerHTML = `<a href="#" data-sd-click="${_sdOn(((a0) => function (event) { triggerSync(a0);return false; })(String(type ?? "")))}" style="color:var(--accent);text-decoration:none">Sync now</a>`;
 }
 
 let _mainSyncPoll = null;
@@ -2461,7 +2461,7 @@ async function triggerSync(type = "both") {
     });
     const data = await r.json();
     if (data.skipped) {
-      if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+      if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { triggerSync(a0);return false; })(String(type ?? "")))}" style="color:var(--accent);text-decoration:none">Sync now</a>`;
       return;
     }
     if (_mainSyncPoll) clearInterval(_mainSyncPoll);
@@ -2483,7 +2483,7 @@ async function triggerSync(type = "both") {
             : sd.syncProgress > 0
               ? `${sd.syncProgress.toLocaleString()} new items added`
               : `Up to date`;
-          if (el) el.innerHTML = `${completeMsg} &nbsp;·&nbsp; <a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+          if (el) el.innerHTML = `${completeMsg} &nbsp;·&nbsp; <a href="#" data-sd-click="${_sdOn(((a0) => function (event) { triggerSync(a0);return false; })(String(type ?? "")))}" style="color:var(--accent);text-decoration:none">Sync now</a>`;
           await loadDiscogsIds();
           if (_activeTab === "collection") loadCollectionTab(1);
           else if (_activeTab === "wantlist") loadWantlistTab(1);
