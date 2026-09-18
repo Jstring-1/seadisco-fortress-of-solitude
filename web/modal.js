@@ -2919,6 +2919,9 @@ function _playerSeekToFraction(f) {
 // Called from LOC's timeupdate event AND from a YT-polling interval.
 // While the user is mid-drag, the fill follows the drag fraction
 // instead of the engine's currentTime so the UI doesn't fight them.
+function _sdSetTextIfChanged(el, text) {
+  if (el && el.textContent !== text) el.textContent = text;
+}
 function _updateMiniProgress() {
   const fill   = document.getElementById("mini-progress-fill");
   const knob   = document.getElementById("mini-progress-knob");
@@ -2942,8 +2945,10 @@ function _updateMiniProgress() {
   const pct = Math.max(0, Math.min(1, fraction)) * 100;
   fill.style.width = `${pct}%`;
   if (knob) knob.style.left = `${pct}%`;
-  if (cur) cur.textContent = _formatProgressTime(_miniDragging ? fraction * p.duration : p.current);
-  if (tot) tot.textContent = _formatProgressTime(p.duration);
+  // Only touch the labels when the text actually changes (this runs every
+  // 500ms; a same-value write still replaces the text node).
+  _sdSetTextIfChanged(cur, _formatProgressTime(_miniDragging ? fraction * p.duration : p.current));
+  _sdSetTextIfChanged(tot, _formatProgressTime(p.duration));
   // Mirror position to the OS media session so the lock-screen
   // scrubber stays in sync with playback. Throttled implicitly by
   // the existing 500 ms YT poll / LOC timeupdate cadence.

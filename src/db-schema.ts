@@ -96,6 +96,17 @@ function _splitCsvLine(line: string): string[] {
 
 
 export async function initDb() {
+  // One-off data fixes run once and are then skipped (flag in
+  // app_settings) instead of re-scanning their tables on every boot.
+  // On a brand-new DB the settings table may not exist yet when an early
+  // fix runs; it then simply runs again on the next boot.
+  const oneShot = async (key: string, fn: () => Promise<unknown>) => {
+    let done = false;
+    try { done = (await getAppSetting(key)) === "1"; } catch { /* table not there yet */ }
+    if (done) return;
+    await fn();
+    try { await setAppSetting(key, "1"); } catch { /* retry next boot */ }
+  };
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_tokens (
       clerk_user_id TEXT PRIMARY KEY,
@@ -472,7 +483,7 @@ export async function initDb() {
   // 'track_already_auto_approved'. Collapse any pending row whose
   // (master, track) already has an approved row to 'superseded' so the
   // queue only ever shows genuinely undecided tracks.
-  await getPool().query(`
+  await oneShot("oneshot_ytr_straggler_cleanup", () => getPool().query(`
     UPDATE track_yt_review_queue p
        SET status = 'superseded', reviewed_at = NOW(), reviewed_by = 'auto'
      WHERE p.status = 'pending'
@@ -482,7 +493,7 @@ export async function initDb() {
             AND a.track_position = p.track_position
             AND a.status = 'approved'
        )
-  `);
+  `));
 
   // Single-row state for the YT-review worker. id is pinned to 1 so
   // upserts and reads stay trivial.
@@ -994,7 +1005,7 @@ export async function initDb() {
       UNIQUE(discogs_id, type)
     )
   `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+  // (No separate (discogs_id, type) index: UNIQUE above already creates one.)
   // Powers the admin "Cache write rate" card: range counts by cached_at
   // (last 1h / 24h / 7d) + the hourly GROUP BY use this btree instead of
   // sequential-scanning the whole table on every 30s poll.
@@ -1020,9 +1031,10 @@ export async function initDb() {
   // containment (@>) and key-exists (?) which both leverage the
   // index for sub-millisecond lookups. Safe to add — idempotent
   // and only affects query plans, not data.
-  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_artists_gin ON release_cache USING gin ((data->'artists'))`);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_extra_gin ON release_cache USING gin ((data->'extraartists'))`);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_data_genres_gin ON release_cache USING gin ((data->'genres'))`);
+  // The artists / extraartists GIN indexes served the removed
+  // Constellations feature (no query uses @> / ? on those keys now), and
+  // data->'genres' is indexed once below as release_cache_data_genres_idx.
+  // ensureBackgroundIndexes() drops the leftovers.
 
   // MusicBrainz removed entirely — drop its cache + saves tables on boot
   // (idempotent; no-ops once already gone). The blues_artists.musicbrainz_mbid
@@ -1173,7 +1185,7 @@ export async function initDb() {
       UNIQUE(discogs_release_id, currency)
     )
   `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS price_cache_release_idx ON price_cache (discogs_release_id)`);
+  // (No price_cache_release_idx: UNIQUE(discogs_release_id, currency) covers lookups by release.)
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS price_history (
       id                  SERIAL PRIMARY KEY,
@@ -1403,14 +1415,14 @@ export async function initDb() {
   // dated cursor so the per-combo grid stops reading "1·p1" as a
   // dated position. Idempotent via the IS NULL gate on
   // no_year_last_run_at — runs once per row, never again.
-  await getPool().query(`
+  await oneShot("oneshot_cache_warm_noyear_cursor", () => getPool().query(`
     UPDATE cache_warm_runs
        SET no_year_last_run_at = COALESCE(last_run_at, NOW()),
            current_year        = NULL,
            current_page        = 1
      WHERE current_year = 1
        AND no_year_last_run_at IS NULL
-  `);
+  `));
 
   // ── Genre cache-warm cron state ──────────────────────────────────
   // One row per Discogs genre in the rotation. The nightly worker
@@ -1891,9 +1903,11 @@ export async function initDb() {
   //   "Open D (Vestapol)"    → "Open D"
   //   "Cross Note"           → "Open Em (Cross Note)"
   // Idempotent (rerunning is a no-op once values are normalized).
-  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open G' WHERE tuning = 'Open G (Spanish)'`);
-  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open D' WHERE tuning = 'Open D (Vestapol)'`);
-  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
+  await oneShot("oneshot_tuning_names_v1", async () => {
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open G' WHERE tuning = 'Open G (Spanish)'`);
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open D' WHERE tuning = 'Open D (Vestapol)'`);
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
+  });
 
   // Allow the same page_title to appear under different artists. The
   // original UNIQUE(source_host, page_title) blocked manual adds of
@@ -1932,11 +1946,11 @@ export async function initDb() {
   // before the marker also takes a trailing blank line so the cleaned
   // body doesn't end in whitespace. Idempotent — after the first run
   // no rows match the WHERE clause, so subsequent boots no-op.
-  await getPool().query(`
+  await oneShot("oneshot_weenie_footer_scrub", () => getPool().query(`
     UPDATE blues_lyrics
        SET plaintext = regexp_replace(plaintext, '(?is)\\s*Go\\s+to\\s+(the\\s+)?original\\s+for[ua]m\\s+thread.*$', '')
      WHERE plaintext ~* 'original\\s+for[ua]m\\s+thread'
-  `);
+  `));
 
   // ── Blues Words lexicon (Stephen Calt-style dictionary) ─────────────
   // Headword → definition + one or more song-lyric citations. Seeded

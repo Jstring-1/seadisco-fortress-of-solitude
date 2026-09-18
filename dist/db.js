@@ -4294,6 +4294,46 @@ export async function reviewQueueDeleteApproval(id, reviewer) {
       WHERE id = $1`, [id, reviewer]);
     return { ok: true, masterId, trackPosition };
 }
+// ── Index maintenance that must not block boot ───────────────────
+// CONCURRENTLY can't run inside a transaction and can take minutes on
+// release_cache, so this runs after startup (fire-and-forget) instead of
+// in initDb. Every statement is idempotent.
+export async function ensureBackgroundIndexes() {
+    const steps = [
+        // Card-enrichment fallback looks up cached releases by master id;
+        // without this it scanned every release row.
+        ["create release_cache_release_master_idx",
+            `CREATE INDEX CONCURRENTLY IF NOT EXISTS release_cache_release_master_idx
+        ON release_cache ((data->>'master_id')) WHERE type = 'release'`],
+        // Duplicates / unused (every write paid for them).
+        ["drop release_cache_id_type_idx", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_id_type_idx`],
+        ["drop release_cache_data_genres_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_genres_gin`],
+        ["drop release_cache_data_artists_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_artists_gin`],
+        ["drop release_cache_data_extra_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_extra_gin`],
+        ["drop price_cache_release_idx", `DROP INDEX CONCURRENTLY IF EXISTS price_cache_release_idx`],
+    ];
+    for (const [label, sql] of steps) {
+        const client = await getPool().connect();
+        try {
+            // Index builds outlive the normal per-statement timeout.
+            await client.query("SET statement_timeout = 0");
+            await client.query(sql);
+        }
+        catch (e) {
+            // A half-built CONCURRENTLY index is left INVALID; drop it so the
+            // next boot retries cleanly.
+            console.warn(`[indexes] ${label} failed:`, e?.message ?? e);
+            if (label.startsWith("create ")) {
+                const name = label.slice(7);
+                await client.query(`DROP INDEX CONCURRENTLY IF EXISTS ${name}`).catch(() => { });
+            }
+        }
+        finally {
+            await client.query("RESET statement_timeout").catch(() => { });
+            client.release();
+        }
+    }
+}
 // ── Channel profiles (admin trust / ban tables) ──────────────────
 export async function getChannelProfiles(ids, maxAgeDays) {
     const out = new Map();
@@ -5706,14 +5746,13 @@ async function _getCacheEnrichmentBatchV1(pairs) {
             .map(p => Number(p.id));
         if (missedMasterIds.length) {
             try {
-                const fb = await getPool().query(`SELECT DISTINCT ON ((data->>'master_id')::bigint)
+                const fb = await getPool().query(`SELECT DISTINCT ON ((data->>'master_id'))
                   (data->>'master_id')::bigint AS master_id,
                   data
              FROM release_cache
             WHERE type = 'release'
-              AND (data->>'master_id') IS NOT NULL
-              AND (data->>'master_id')::bigint = ANY($1::bigint[])
-            ORDER BY (data->>'master_id')::bigint, discogs_id ASC`, [missedMasterIds]);
+              AND (data->>'master_id') = ANY($1::text[])
+            ORDER BY (data->>'master_id'), discogs_id ASC`, [missedMasterIds.map(String)]);
                 for (const row of fb.rows) {
                     const mid = Number(row.master_id);
                     if (!Number.isFinite(mid) || mid <= 0)

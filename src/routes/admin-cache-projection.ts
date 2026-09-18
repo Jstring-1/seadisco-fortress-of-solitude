@@ -14,7 +14,6 @@ import {
   getCacheProjectionBackfillStatus,
 } from "../cache-projection-backfill-worker.js";
 import {
-  getProjectedCacheStats,
   isSplitCacheReaderEnabled,
   setSplitCacheReaderEnabled,
 } from "../db.js";
@@ -52,7 +51,9 @@ export function registerAdminCacheProjectionRoutes(app: Express, requireAdmin: R
     try {
       const [worker, stats, splitReaders] = await Promise.all([
         Promise.resolve(getCacheProjectionBackfillStatus()),
-        getProjectedCacheStats().catch(() => null),
+        // Split cache is retired: its tables are gone and the stats query
+        // full-counted release_cache on every poll. Report none.
+        Promise.resolve(null),
         isSplitCacheReaderEnabled().catch(() => false),
       ]);
       res.json({ ...worker, stats, splitReadersEnabled: splitReaders });

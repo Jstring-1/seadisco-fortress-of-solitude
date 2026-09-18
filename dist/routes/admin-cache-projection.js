@@ -7,7 +7,7 @@
 // coupling to search-api module state, so requireAdmin is passed in.
 import express from "express";
 import { startCacheProjectionBackfill, requestCacheProjectionBackfillStop, forceClearCacheProjectionBackfill, getCacheProjectionBackfillStatus, } from "../cache-projection-backfill-worker.js";
-import { getProjectedCacheStats, isSplitCacheReaderEnabled, setSplitCacheReaderEnabled, } from "../db.js";
+import { isSplitCacheReaderEnabled, setSplitCacheReaderEnabled, } from "../db.js";
 export function registerAdminCacheProjectionRoutes(app, requireAdmin) {
     // One-shot scan that projects every existing release_cache row into
     // the new discogs_cache_masters_plus / discogs_cache_pressings +
@@ -57,7 +57,9 @@ export function registerAdminCacheProjectionRoutes(app, requireAdmin) {
         try {
             const [worker, stats, splitReaders] = await Promise.all([
                 Promise.resolve(getCacheProjectionBackfillStatus()),
-                getProjectedCacheStats().catch(() => null),
+                // Split cache is retired: its tables are gone and the stats query
+                // full-counted release_cache on every poll. Report none.
+                Promise.resolve(null),
                 isSplitCacheReaderEnabled().catch(() => false),
             ]);
             res.json({ ...worker, stats, splitReadersEnabled: splitReaders });

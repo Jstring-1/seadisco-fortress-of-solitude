@@ -541,6 +541,7 @@ function _pwRescueWithin(root) {
 _attachClearButtonsGlobally(document);
 _pwIgnoreGlobally(document);
 const _clearFieldObserver = new MutationObserver((mutations) => {
+  if (_sdMutsOnlyInPlayer(mutations)) return;
   for (const m of mutations) {
     for (const node of m.addedNodes) {
       if (!node || node.nodeType !== 1) continue;
@@ -673,8 +674,8 @@ _sdInstallFormClears();
 // when the DOM changes. rAF-debounced so frequent unrelated mutations
 // (mini-player, result grids) don't thrash; idempotent via :scope check.
 let _sdFormClearRaf = 0;
-new MutationObserver(() => {
-  if (_sdFormClearRaf) return;
+new MutationObserver((muts) => {
+  if (_sdFormClearRaf || _sdMutsOnlyInPlayer(muts)) return;
   _sdFormClearRaf = requestAnimationFrame(() => {
     _sdFormClearRaf = 0;
     _sdInstallFormClears();

@@ -99,6 +99,20 @@ function _sdLoadModule(srcPath) {
 }
 window._sdLoadModule = _sdLoadModule;
 
+// True when every mutation in a batch happened inside the mini-player.
+// The player rewrites its progress labels while music plays; the
+// page-wide card / form observers have nothing to do with those, so they
+// bail out instead of rescanning the whole page each tick.
+function _sdMutsOnlyInPlayer(muts) {
+  if (!muts || !muts.length) return false;
+  for (const m of muts) {
+    const t = m.target && m.target.nodeType === 1 ? m.target : m.target?.parentElement;
+    if (!t || !t.closest || !t.closest("#mini-player")) return false;
+  }
+  return true;
+}
+window._sdMutsOnlyInPlayer = _sdMutsOnlyInPlayer;
+
 // Start the Discogs OAuth hand-off from anywhere (search empty state,
 // connect nudge) without needing the lazy account view to be loaded.
 async function _sdConnectDiscogs() {
@@ -514,6 +528,7 @@ function _sdStampAllVisibleCards() {
     root.querySelectorAll?.(".card").forEach(_sdStampListCells);
   };
   const obs = new MutationObserver(muts => {
+    if (_sdMutsOnlyInPlayer(muts)) return;
     let sawCard = false;
     for (const m of muts) {
       for (const n of m.addedNodes) {
@@ -1128,7 +1143,8 @@ if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") 
   const startObserver = () => {
     if (document.body.__sdEnrichBodyObs) return;
     let _sparseDebounce = null;
-    const obs = new MutationObserver(() => {
+    const obs = new MutationObserver((muts) => {
+      if (_sdMutsOnlyInPlayer(muts)) return;
       // Sparse-card marking runs in BOTH compact and wide modes —
       // the ↻ button isn't a wide-only affordance, it's a "stale
       // cache" rescue.
