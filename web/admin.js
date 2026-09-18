@@ -512,7 +512,7 @@ async function adminSyncUser(username, btn) {
     setTimeout(poll, 2000);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = prev; }
-    alert("Sync failed for " + username + (e?.message ? `: ${e.message}` : "")
+    _adminNotify("Sync failed for " + username + (e?.message ? `: ${e.message}` : "")
       + "\n\nIf the row stays on “error”, hover it to read the reason — an expired or revoked Discogs token can't be fixed by re-syncing; the user has to reconnect Discogs.");
   }
 }
@@ -1091,7 +1091,7 @@ async function _caRun() {
     }
     _cacheAnalyticsResult = await r.json();
   } catch (err) {
-    alert(`Analyze failed: ${err}`);
+    _adminNotify(`Analyze failed: ${err}`);
     _cacheAnalyticsResult = null;
   } finally {
     _cacheAnalyticsLoading = false;
@@ -1345,7 +1345,7 @@ function _cwUpdateSelCount() {
   if (el) el.textContent = _cwSelected.size ? _cwSelected.size + " selected" : "";
 }
 async function _cwRunSelected() {
-  if (!_cwSelected.size) { alert("Check one or more rows first."); return; }
+  if (!_cwSelected.size) { _adminNotify("Check one or more rows first."); return; }
   const combos = [..._cwSelected].map(k => {
     const i = k.indexOf("||");
     return { genreKey: k.slice(0, i), styleKey: k.slice(i + 2), fromYear: 1900, toYear: 1970, alsoNoYear: true };
@@ -1358,17 +1358,17 @@ async function _cwRunSelected() {
       body: JSON.stringify({ combos }),
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(j.error || `HTTP ${r.status}`); return; }
+    if (!r.ok) { _adminNotify(j.error || `HTTP ${r.status}`); return; }
     _cwSelected.clear();
     loadCacheWarm();
-  } catch (e) { alert("Batch start failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Batch start failed: " + ((e && e.message) || e)); }
 }
 window._cwRunSelected = _cwRunSelected;
 // Bulk delete every checked combo: delete its cached rows + zero its
 // run-stat columns, same as the per-row ⌫ but for the whole selection.
 // One confirm for the batch (each combo can be huge), then a summary toast.
 async function _cwDeleteSelected() {
-  if (!_cwSelected.size) { alert("Check one or more rows first."); return; }
+  if (!_cwSelected.size) { _adminNotify("Check one or more rows first."); return; }
   const combos = [..._cwSelected].map(k => {
     const i = k.indexOf("||");
     return { genre: k.slice(0, i), style: k.slice(i + 2) };
@@ -1414,7 +1414,7 @@ async function _cwClearQueue() {
     const r = await apiFetch("/api/admin/cache-warm-runs/queue/clear", { method: "POST" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     loadCacheWarm();
-  } catch (e) { alert("Clear queue failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Clear queue failed: " + ((e && e.message) || e)); }
 }
 window._cwClearQueue = _cwClearQueue;
 
@@ -1440,7 +1440,7 @@ async function _cwDeleteCombo(genre, style, expectedCount, btn) {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       if (typeof showToast === "function") showToast(`Delete failed: ${j.error || r.status}`, "error");
-      else alert(`Delete failed: ${j.error || r.status}`);
+      else _adminNotify(`Delete failed: ${j.error || r.status}`);
       return;
     }
     const n = Number(j.deleted ?? 0);
@@ -1458,7 +1458,7 @@ async function _cwDeleteCombo(genre, style, expectedCount, btn) {
     if (typeof loadCacheWarm === "function") { try { loadCacheWarm(); } catch {} }
   } catch (e) {
     if (typeof showToast === "function") showToast(`Delete failed: ${e}`, "error");
-    else alert(`Delete failed: ${e}`);
+    else _adminNotify(`Delete failed: ${e}`);
   } finally {
     if (btn && btn.isConnected) { btn.disabled = false; if (btn.dataset._t) btn.textContent = btn.dataset._t; }
   }
@@ -1469,7 +1469,7 @@ async function cacheWarmStartFromForm(resetCursor) {
   const styleKey = document.getElementById("cw-form-style")?.value || "";
   const from     = document.getElementById("cw-form-from")?.value || "";
   const to       = document.getElementById("cw-form-to")?.value   || "";
-  if (!genreKey) { alert("Pick a genre."); return; }
+  if (!genreKey) { _adminNotify("Pick a genre."); return; }
   try {
     const r = await apiFetch("/api/admin/cache-warm-runs/start", {
       method: "POST",
@@ -1483,7 +1483,7 @@ async function cacheWarmStartFromForm(resetCursor) {
     });
     if (r.status === 409) {
       const body = await r.json().catch(() => ({}));
-      alert(body.error || "Another run is in progress.");
+      _adminNotify(body.error || "Another run is in progress.");
       return;
     }
     if (!r.ok) {
@@ -1491,7 +1491,7 @@ async function cacheWarmStartFromForm(resetCursor) {
       throw new Error(body.error || `HTTP ${r.status}`);
     }
     loadCacheWarm();
-  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Start failed: " + ((e && e.message) || e)); }
 }
 window.cacheWarmStartFromForm = cacheWarmStartFromForm;
 // No-year sweep: starts the worker on the selected genre/style with
@@ -1502,7 +1502,7 @@ window.cacheWarmStartFromForm = cacheWarmStartFromForm;
 async function cacheWarmStartNoYearForForm() {
   const genreKey = document.getElementById("cw-form-genre")?.value || "";
   const styleKey = document.getElementById("cw-form-style")?.value || "";
-  if (!genreKey) { alert("Pick a genre."); return; }
+  if (!genreKey) { _adminNotify("Pick a genre."); return; }
   const label = styleKey ? `${genreKey} / ${styleKey}` : genreKey;
   if (!confirm(`Sweep no-year releases for ${label}? This runs until Discogs returns no more pages.`)) return;
   await _cwStartCombo(genreKey, styleKey, 0, 0, true);
@@ -1571,7 +1571,7 @@ async function rcxDumpV1() {
     const ticket = await _rcxDownloadTicket();
     _rcxTriggerDownload("/api/admin/release-cache/dump-v1?ticket=" + encodeURIComponent(ticket));
   } catch (e) {
-    alert("Could not authorize download: " + (e?.message || e));
+    _adminNotify("Could not authorize download: " + (e?.message || e));
   }
 }
 window.rcxDumpV1 = rcxDumpV1;
@@ -1582,7 +1582,7 @@ async function rcxDumpAll() {
     const ticket = await _rcxDownloadTicket();
     _rcxTriggerDownload("/api/admin/db/dump-all?ticket=" + encodeURIComponent(ticket));
   } catch (e) {
-    alert("Could not authorize download: " + (e?.message || e));
+    _adminNotify("Could not authorize download: " + (e?.message || e));
   }
 }
 window.rcxDumpAll = rcxDumpAll;
@@ -1850,7 +1850,7 @@ async function _cwStartCombo(genreKey, styleKey, fromYear, toYear, resetCursor, 
     });
     if (r.status === 409) {
       const body = await r.json().catch(() => ({}));
-      alert(body.error || "Another run is in progress.");
+      _adminNotify(body.error || "Another run is in progress.");
       return;
     }
     if (!r.ok) {
@@ -1858,7 +1858,7 @@ async function _cwStartCombo(genreKey, styleKey, fromYear, toYear, resetCursor, 
       throw new Error(body.error || `HTTP ${r.status}`);
     }
     loadCacheWarm();
-  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Start failed: " + ((e && e.message) || e)); }
 }
 async function cacheWarmForceClear() {
   if (!confirm("Force-clear the in-memory 'running' lock? Use this when a worker crashed silently and Start now refuses to fire. Doesn't affect cached data.")) return;
@@ -1866,7 +1866,7 @@ async function cacheWarmForceClear() {
     const r = await apiFetch("/api/admin/cache-warm-runs/force-clear", { method: "POST" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadCacheWarm();
-  } catch (e) { alert("Force clear failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Force clear failed: " + ((e && e.message) || e)); }
 }
 window.cacheWarmForceClear = cacheWarmForceClear;
 async function cacheWarmStop() {
@@ -1874,7 +1874,7 @@ async function cacheWarmStop() {
     const r = await apiFetch("/api/admin/cache-warm-runs/stop", { method: "POST" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadCacheWarm();
-  } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
+  } catch (e) { _adminNotify("Stop failed: " + ((e && e.message) || e)); }
 }
 window.cacheWarmStop = cacheWarmStop;
 
@@ -1900,7 +1900,7 @@ let _ytrFilterTimer = null;
 //     committed, re-rendering rows that were already spoken for. Clicking
 //     one of those zombie cards hit the server's atomic
 //     "WHERE status = 'pending'" guard, came back 404
-//     not_found_or_already_decided, and popped a blocking alert().
+//     not_found_or_already_decided, and popped a blocking _adminNotify().
 // _ytrInFlight/_ytrDecided let us drop zombie rows before they ever render,
 // and reloads are coalesced into one pass after the burst settles.
 const _ytrInFlight = new Set();   // ids with a decide POST in flight
@@ -2060,8 +2060,8 @@ async function ytrToggleDaily(enabled) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ enabled: !!enabled }),
     });
-    if (!r.ok) { alert(`Failed to update schedule: HTTP ${r.status}`); }
-  } catch (e) { alert(`Failed to update schedule: ${e?.message || e}`); }
+    if (!r.ok) { _adminNotify(`Failed to update schedule: HTTP ${r.status}`); }
+  } catch (e) { _adminNotify(`Failed to update schedule: ${e?.message || e}`); }
   loadYtReview();
 }
 window.ytrToggleDaily = ytrToggleDaily;
@@ -2072,8 +2072,8 @@ async function ytrToggleAuto(enabled) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ enabled: !!enabled }),
     });
-    if (!r.ok) { alert(`Failed to update auto-approve: HTTP ${r.status}`); }
-  } catch (e) { alert(`Failed to update auto-approve: ${e?.message || e}`); }
+    if (!r.ok) { _adminNotify(`Failed to update auto-approve: HTTP ${r.status}`); }
+  } catch (e) { _adminNotify(`Failed to update auto-approve: ${e?.message || e}`); }
   loadYtReview();
 }
 window.ytrToggleAuto = ytrToggleAuto;
@@ -2133,9 +2133,9 @@ async function ytrSetChannelTrust(channelId, state) {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ channelId, state: state || null }),
     });
-    if (!r.ok) { alert(`Failed: HTTP ${r.status}`); return; }
+    if (!r.ok) { _adminNotify(`Failed: HTTP ${r.status}`); return; }
     loadYtChannels();
-  } catch (e) { alert(`Failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Failed: ${e?.message || e}`); }
 }
 window.ytrSetChannelTrust = ytrSetChannelTrust;
 
@@ -2227,7 +2227,7 @@ async function _ytrPostBan(payload) {
     body: JSON.stringify(payload),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { alert(`Ban failed: ${j.message || j.error || r.status}`); return false; }
+  if (!r.ok) { _adminNotify(`Ban failed: ${j.message || j.error || r.status}`); return false; }
   const bits = [];
   if (j.supersededPending) bits.push(`${j.supersededPending} pending dropped`);
   if (j.removedAutoApproved) bits.push(`${j.removedAutoApproved} auto-approval${j.removedAutoApproved === 1 ? "" : "s"} removed`);
@@ -2257,18 +2257,18 @@ async function ytrUnban(channelId) {
       method: "DELETE", headers: { "content-type": "application/json" },
       body: JSON.stringify({ channelId }),
     });
-    if (!r.ok) { alert(`Unban failed: HTTP ${r.status}`); return; }
+    if (!r.ok) { _adminNotify(`Unban failed: HTTP ${r.status}`); return; }
     loadYtBans();
-  } catch (e) { alert(`Unban failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Unban failed: ${e?.message || e}`); }
 }
 window.ytrUnban = ytrUnban;
 async function ytrStart() {
   try {
     const r = await apiFetch("/api/admin/yt-review/start", { method: "POST" });
-    if (r.status === 409) { alert("Already running."); loadYtReview(); return; }
-    if (!r.ok) { alert(`Start failed: HTTP ${r.status}`); return; }
+    if (r.status === 409) { _adminNotify("Already running."); loadYtReview(); return; }
+    if (!r.ok) { _adminNotify(`Start failed: HTTP ${r.status}`); return; }
     loadYtReview();
-  } catch (e) { alert(`Start failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Start failed: ${e?.message || e}`); }
 }
 window.ytrStart = ytrStart;
 async function ytrRestartFromTop() {
@@ -2280,7 +2280,7 @@ async function ytrRestartFromTop() {
       body: JSON.stringify({ alsoResetSearchLog }),
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Reset failed: ${j.error || r.status}`); return; }
+    if (!r.ok) { _adminNotify(`Reset failed: ${j.error || r.status}`); return; }
     // Fire the worker off immediately. Prior version left the cursor
     // reset but idle, which surprised users who read "restart" as
     // "reset AND start" — matches how other bulk workers behave.
@@ -2288,13 +2288,13 @@ async function ytrRestartFromTop() {
     if (startR.status === 409) {
       // Rare — someone else clicked Start in the ~1s gap. Not worth alerting.
     } else if (!startR.ok) {
-      alert(`Cursor reset but Start failed: HTTP ${startR.status}. Click ▶ Start to run.`);
+      _adminNotify(`Cursor reset but Start failed: HTTP ${startR.status}. Click ▶ Start to run.`);
     }
     if (alsoResetSearchLog) {
-      alert(`Cursor cleared and worker started. Also wiped ${j.clearedSearches ?? 0} per-track search log rows.`);
+      _adminNotify(`Cursor cleared and worker started. Also wiped ${j.clearedSearches ?? 0} per-track search log rows.`);
     }
     loadYtReview();
-  } catch (e) { alert(`Reset failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Reset failed: ${e?.message || e}`); }
 }
 window.ytrRestartFromTop = ytrRestartFromTop;
 async function ytrDismissPending() {
@@ -2302,22 +2302,22 @@ async function ytrDismissPending() {
   try {
     const r = await apiFetch("/api/admin/yt-review/dismiss-pending", { method: "POST" });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Dismiss failed: ${j.error || r.status}`); return; }
+    if (!r.ok) { _adminNotify(`Dismiss failed: ${j.error || r.status}`); return; }
     if (typeof showToast === "function") {
       showToast(`Dismissed ${j.dismissed ?? 0} candidates across ${j.tracks ?? 0} tracks — click ▶ Start to re-search`, "info", 5000);
     }
     loadYtReview();
-  } catch (e) { alert(`Dismiss failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Dismiss failed: ${e?.message || e}`); }
 }
 window.ytrDismissPending = ytrDismissPending;
 async function ytrResetQuota() {
   if (!confirm("Zero the app's daily YouTube search counter?\n\nOnly do this when Google Cloud Console shows the 'Search Queries per day' quota still has headroom. If Google is actually near 100/day, resetting here will just make the worker hit Google's real limit and log 403 errors.")) return;
   try {
     const r = await apiFetch("/api/admin/yt-review/quota/reset", { method: "POST" });
-    if (r.status === 409) { alert("Stop the worker first, then resync."); return; }
-    if (!r.ok) { const j = await r.json().catch(() => ({})); alert(`Resync failed: ${j.error || r.status}`); return; }
+    if (r.status === 409) { _adminNotify("Stop the worker first, then resync."); return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); _adminNotify(`Resync failed: ${j.error || r.status}`); return; }
     loadYtReview();
-  } catch (e) { alert(`Resync failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Resync failed: ${e?.message || e}`); }
 }
 window.ytrResetQuota = ytrResetQuota;
 async function ytrApplyTrust() {
@@ -2349,7 +2349,7 @@ async function ytrStop() {
   try {
     await apiFetch("/api/admin/yt-review/stop", { method: "POST" });
     loadYtReview();
-  } catch (e) { alert(`Stop failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Stop failed: ${e?.message || e}`); }
 }
 window.ytrStop = ytrStop;
 async function loadYtReviewQueue() {
@@ -2877,7 +2877,7 @@ window.ytrTestQuery = ytrTestQuery;
 async function ytrCustomApprove(id) {
   const input = document.getElementById(`ytr-custom-${id}`);
   const url = (input?.value || "").trim();
-  if (!url) { alert("Paste a YouTube URL or 11-char video ID first."); input?.focus(); return; }
+  if (!url) { _adminNotify("Paste a YouTube URL or 11-char video ID first."); input?.focus(); return; }
   try {
     const r = await apiFetch("/api/admin/yt-review/custom-approve", {
       method: "POST",
@@ -2885,12 +2885,12 @@ async function ytrCustomApprove(id) {
       body: JSON.stringify({ id, url }),
     });
     const body = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(`Custom approve failed: ${body?.error || `HTTP ${r.status}`}${body?.detail ? "\n" + body.detail : ""}`); return; }
+    if (!r.ok) { _adminNotify(`Custom approve failed: ${body?.error || `HTTP ${r.status}`}${body?.detail ? "\n" + body.detail : ""}`); return; }
     // This row is decided now — remember it so a racing reload can not
     // re-render it as a clickable pending card.
     _ytrRememberDecided(Number(id));
     loadYtReview();
-  } catch (e) { alert(`Custom approve failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Custom approve failed: ${e?.message || e}`); }
 }
 window.ytrCustomApprove = ytrCustomApprove;
 async function ytrDeleteApproval(id) {
@@ -2903,11 +2903,11 @@ async function ytrDeleteApproval(id) {
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      alert(`Delete failed: ${body?.error || `HTTP ${r.status}`}`);
+      _adminNotify(`Delete failed: ${body?.error || `HTTP ${r.status}`}`);
       return;
     }
     loadYtReview();
-  } catch (e) { alert(`Delete failed: ${e?.message || e}`); }
+  } catch (e) { _adminNotify(`Delete failed: ${e?.message || e}`); }
 }
 window.ytrDeleteApproval = ytrDeleteApproval;
 // Auto-pinned review. Cards leave immediately (optimistic, like decide);
@@ -3764,7 +3764,7 @@ async function adminClearUnavailable(btn, videoId) {
     _renderAdminUnavailableTable();
   } catch (e) {
     btn.disabled = false;
-    alert("Clear failed: " + (e?.message || e));
+    _adminNotify("Clear failed: " + (e?.message || e));
   }
 }
 window.adminClearUnavailable = adminClearUnavailable;
@@ -3782,7 +3782,7 @@ async function adminDeleteSubmission(btn, releaseId, releaseType, trackPosition)
     loadAdminSubmissions();
   } catch (e) {
     btn.disabled = false;
-    alert("Delete failed: " + (e?.message || e));
+    _adminNotify("Delete failed: " + (e?.message || e));
   }
 }
 window.adminDeleteSubmission = adminDeleteSubmission;
@@ -3868,6 +3868,17 @@ function _adminUnifiedFmtDate(v) {
 
 // Relative "time ago" — used for the Last active column so recency reads at a
 // glance. Granularity climbs min → hr → day → mo → yr as it ages.
+// Admin messages use toasts instead of blocking alert() dialogs:
+// anything that reads like a failure is shown as an error toast (and
+// stays up longer); everything else as info.
+function _adminNotify(message) {
+  const msg = String(message ?? "");
+  if (typeof showToast !== "function") { window.alert(msg); return; }
+  const isError = /\b(fail|failed|error|couldn|could not|cannot|unable|invalid|denied|refus|http \d{3})/i.test(msg);
+  showToast(msg, isError ? "error" : "info", isError ? 8000 : 5000);
+}
+window._adminNotify = _adminNotify;
+
 // ── System info + admin action log (System tab) ─────────────────────
 async function loadAdminSystem() {
   const el = document.getElementById("admin-system-info");

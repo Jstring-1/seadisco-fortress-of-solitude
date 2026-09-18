@@ -1875,7 +1875,8 @@ app.get("/api/admin/track-yt", async (req, res) => {
     }
     catch (e) {
         console.error("[/api/admin/track-yt GET] error:", e?.message ?? e);
-        res.json({ overrides: [] });
+        // A DB error must not look like "no submissions".
+        res.status(500).json({ error: String(e?.message ?? e) });
     }
 });
 // DELETE /api/user/account — wipe all user data from our DB (Clerk deletion handled client-side)
@@ -17645,16 +17646,28 @@ app.get("/api/admin/api-log", async (req, res) => {
     const errorsOnly = req.query.errors === "true";
     const scheduledOnly = req.query.scheduled === "true";
     const hours = Math.min(parseInt(req.query.hours) || 24, 168); // max 7 days
-    const result = await getApiRequestLog({ service: service || undefined, errorsOnly, scheduledOnly, hours });
-    res.json(result);
+    // Express 4 doesn't catch async errors: without this a DB error left
+    // the request hanging.
+    try {
+        const result = await getApiRequestLog({ service: service || undefined, errorsOnly, scheduledOnly, hours });
+        res.json(result);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
 });
 // GET /api/admin/api-stats — 24h summary by service
 app.get("/api/admin/api-stats", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const hours = Math.min(parseInt(req.query.hours) || 24, 168);
-    const stats = await getApiRequestStats(hours);
-    res.json({ stats });
+    try {
+        const stats = await getApiRequestStats(hours);
+        res.json({ stats });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
 });
 // GET /api/admin/api-health — per-service health (success %, p50/p95,
 // errors, last error) + background-job status. Powers the consolidated
