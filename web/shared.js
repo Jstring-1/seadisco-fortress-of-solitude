@@ -99,6 +99,20 @@ function _sdLoadModule(srcPath) {
 }
 window._sdLoadModule = _sdLoadModule;
 
+// Album page URL — mirrors entityPath() in search-api.ts so the link a
+// card carries is the canonical one (a mismatch just costs a 301).
+// label is "Artist - Title" (or just the title).
+function _sdEntityPath(type, id, label) {
+  const plain = String(label || "")
+    .replace(/\*+(?=\s|$|[,&])/g, "").replace(/\s*\(\d{1,4}\)/g, " ");
+  let slug = plain.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    .slice(0, 80).replace(/-+$/g, "");
+  return `/${type}/${encodeURIComponent(String(id))}/${slug || "album"}`;
+}
+window._sdEntityPath = _sdEntityPath;
+
 // True when every mutation in a batch happened inside the mini-player.
 // The player rewrites its progress labels while music plays; the
 // page-wide card / form observers have nothing to do with those, so they
@@ -698,8 +712,9 @@ window._sdEnrichWideCards = _sdEnrichWideCards;
 // own handlers (play, queue, search-by-entity) can run without the
 // modal stealing focus.
 function _sdCardOuterClick(event, id, type, url) {
-  // Always cancel the href="#" navigation regardless of wide/compact —
-  // the card link uses # as an anchor sentinel.
+  // Modified clicks (new tab / window) follow the card's real href.
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1)) return;
+  // Otherwise cancel the navigation and open the popup in place.
   if (event && event.preventDefault) event.preventDefault();
   if (document.body.classList.contains("card-mode-wide")) {
     const card = event.currentTarget;

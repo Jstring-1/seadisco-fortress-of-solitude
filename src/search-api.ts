@@ -922,6 +922,262 @@ function _sendHtml(res: express.Response, relPath: string, req?: express.Request
   return true;
 }
 
+// ── Indexable album pages (/master/:id/:slug, /release/:id/:slug) ─────
+// The SPA shows albums in popups, so without these nothing beyond the
+// homepage was indexable. A browser or crawler asking for HTML at
+// /master/:id or /release/:id (plus an optional slug) gets the SPA with
+// album-specific <head> (title, description, canonical, cover-art share
+// tags, MusicAlbum JSON-LD) and a server-rendered summary + tracklist in
+// the body; the album popup then opens on top exactly as ?op= did. API
+// callers (Accept: */* or JSON) keep getting JSON from the same paths.
+// Only CACHED albums render — the page never calls Discogs — and an
+// uncached id serves the plain SPA with noindex.
+function _wantsHtml(req: express.Request): boolean {
+  const accept = String(req.headers.accept || "");
+  return /text\/html/i.test(accept) && req.accepts(["json", "html"]) === "html";
+}
+
+function _slugify(s: string): string {
+  return String(s || "")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    .slice(0, 80).replace(/-+$/g, "") || "album";
+}
+
+// Discogs artist display name without its "(2)" / "*" decorations.
+function _plainArtist(name: any): string {
+  return String(name ?? "").replace(/\*+(?=\s|$|[,&])/g, "").replace(/\s*\(\d{1,4}\)/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function _entityArtistLine(data: any): string {
+  const arts: any[] = Array.isArray(data?.artists) ? data.artists : [];
+  let out = "";
+  arts.forEach((a, i) => {
+    out += _plainArtist(a?.name);
+    if (i < arts.length - 1) out += a?.join ? ` ${String(a.join).trim()} ` : ", ";
+  });
+  return out.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+}
+
+export function entityPath(type: "master" | "release", id: number, data: any): string {
+  const artist = _entityArtistLine(data);
+  const slug = _slugify([artist, data?.title].filter(Boolean).join(" "));
+  return `/${type}/${id}/${slug}`;
+}
+
+function _isoDuration(d: any): string | null {
+  const m = /^(\d+):(\d{1,2})(?::(\d{1,2}))?$/.exec(String(d || "").trim());
+  if (!m) return null;
+  const [h, mi, s] = m[3] != null ? [+m[1], +m[2], +m[3]] : [0, +m[1], +m[2]];
+  return `PT${h ? h + "H" : ""}${mi}M${s}S`;
+}
+
+function _jsonLd(obj: any): string {
+  // Safe inside <script>: no "</script>" / "<!--" breakouts.
+  return JSON.stringify(obj).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
+function _entityHead(type: "master" | "release", id: number, data: any, canonical: string): string {
+  const title = String(data?.title || "Untitled");
+  const artist = _entityArtistLine(data);
+  const year = Number(data?.year) > 0 ? String(data.year) : "";
+  const genres: string[] = [...(data?.genres || []), ...(data?.styles || [])].map(String).filter(Boolean);
+  const tracks: any[] = (Array.isArray(data?.tracklist) ? data.tracklist : []).filter((t: any) => t?.type_ !== "heading" && t?.title);
+  const labels: any[] = Array.isArray(data?.labels) ? data.labels : [];
+  const format = Array.isArray(data?.formats) && data.formats[0]?.name ? String(data.formats[0].name) : "";
+  const img = String((Array.isArray(data?.images) && (data.images.find((i: any) => i?.type === "primary") || data.images[0])?.uri) || "");
+  const pageTitle = `${title}${artist ? ` by ${artist}` : ""}${year ? ` (${year})` : ""} — SeaDisco`;
+  const trackBit = tracks.length ? ` ${tracks.length} track${tracks.length === 1 ? "" : "s"}: ${tracks.slice(0, 4).map(t => t.title).join(", ")}${tracks.length > 4 ? "…" : ""}.` : "";
+  const kind = type === "master" ? "album" : (format ? `${format.toLowerCase()} release` : "release");
+  let desc = `${title}${artist ? ` by ${artist}` : ""}${year ? ` — ${year}` : ""}${genres.length ? ` ${genres.slice(0, 3).join(" / ")}` : ""} ${kind}.${trackBit} Listen and explore on SeaDisco.`;
+  desc = desc.replace(/\s+/g, " ").trim();
+  if (desc.length > 300) desc = desc.slice(0, 297).replace(/\s+\S*$/, "") + "…";
+  const url = _SITE_ORIGIN + canonical;
+  const e = _escAttr;
+  const ld: any = {
+    "@context": "https://schema.org",
+    "@type": type === "master" ? "MusicAlbum" : "MusicRelease",
+    name: title,
+    url,
+    ...(artist ? { byArtist: (Array.isArray(data?.artists) ? data.artists : []).map((a: any) => ({ "@type": "MusicGroup", name: _plainArtist(a?.name) })) } : {}),
+    ...(year ? { datePublished: year } : {}),
+    ...(genres.length ? { genre: genres.slice(0, 6) } : {}),
+    ...(img ? { image: img } : {}),
+    ...(tracks.length ? {
+      numTracks: tracks.length,
+      track: { "@type": "ItemList", numberOfItems: tracks.length, itemListElement: tracks.map((t, i) => {
+        const dur = _isoDuration(t.duration);
+        return { "@type": "ListItem", position: i + 1, item: { "@type": "MusicRecording", name: String(t.title), ...(dur ? { duration: dur } : {}) } };
+      }) },
+    } : {}),
+    ...(labels[0]?.name ? { recordLabel: { "@type": "Organization", name: _plainArtist(labels[0].name) } } : {}),
+    ...(type === "release" && labels[0]?.catno && labels[0].catno !== "none" ? { catalogNumber: String(labels[0].catno) } : {}),
+    ...(type === "release" && format ? { musicReleaseFormat: format } : {}),
+  };
+  return [
+    `<title>${e(pageTitle)}</title>`,
+    `<meta name="description" content="${e(desc)}" />`,
+    `<meta name="robots" content="index, follow" />`,
+    `<link rel="canonical" href="${e(url)}" />`,
+    `<meta property="og:type" content="music.album" />`,
+    `<meta property="og:url" content="${e(url)}" />`,
+    `<meta property="og:title" content="${e(pageTitle)}" />`,
+    `<meta property="og:description" content="${e(desc)}" />`,
+    `<meta property="og:image" content="${e(img || _SITE_ORIGIN + "/og-image.png")}" />`,
+    `<meta name="twitter:card" content="${img ? "summary" : "summary_large_image"}" />`,
+    `<meta name="twitter:title" content="${e(pageTitle)}" />`,
+    `<meta name="twitter:description" content="${e(desc)}" />`,
+    `<meta name="twitter:image" content="${e(img || _SITE_ORIGIN + "/og-image.png")}" />`,
+    `<script type="application/ld+json">${_jsonLd(ld)}</script>`,
+  ].join("\n  ");
+}
+
+// Visible summary for crawlers and no-JS visitors; the popup covers it.
+function _entityBody(type: "master" | "release", data: any): string {
+  const e = _escAttr;
+  const title = String(data?.title || "Untitled");
+  const artist = _entityArtistLine(data);
+  const year = Number(data?.year) > 0 ? String(data.year) : "";
+  const genres: string[] = [...(data?.genres || []), ...(data?.styles || [])].map(String).filter(Boolean);
+  const labels: any[] = Array.isArray(data?.labels) ? data.labels : [];
+  const tracks: any[] = Array.isArray(data?.tracklist) ? data.tracklist : [];
+  const img = (Array.isArray(data?.images) && (data.images.find((i: any) => i?.type === "primary") || data.images[0])) || null;
+  const thumb = img ? String(img.uri150 || img.uri || "") : "";
+  const meta = [year, genres.slice(0, 4).join(" · "), labels[0]?.name ? `${_plainArtist(labels[0].name)}${labels[0].catno && labels[0].catno !== "none" ? ` ${labels[0].catno}` : ""}` : "", data?.country || ""]
+    .filter(Boolean).map((x: string) => e(x)).join(" · ");
+  const rows = tracks.map((t: any) => t?.type_ === "heading"
+    ? `<li class="sd-ssr-heading">${e(String(t.title || ""))}</li>`
+    : `<li><span class="sd-ssr-pos">${e(String(t.position || ""))}</span> ${e(String(t.title || ""))}${t.duration ? ` <span class="sd-ssr-dur">${e(String(t.duration))}</span>` : ""}</li>`).join("");
+  return `<section id="sd-entity-ssr" class="sd-entity-ssr" aria-label="Album details">
+    ${thumb ? `<img class="sd-ssr-cover" src="${e(thumb)}" alt="${e(title)} cover" width="150" height="150" loading="eager">` : ""}
+    <div class="sd-ssr-text">
+      <h1>${e(title)}${artist ? ` <span class="sd-ssr-artist">by ${e(artist)}</span>` : ""}</h1>
+      ${meta ? `<p class="sd-ssr-meta">${meta}</p>` : ""}
+      ${rows ? `<ol class="sd-ssr-tracks">${rows}</ol>` : ""}
+      <p class="sd-ssr-src">Catalog data from <a href="https://www.discogs.com/${type}/${Number(data?.id) || ""}" rel="nofollow noopener" target="_blank">Discogs</a>.</p>
+    </div>
+  </section>`;
+}
+
+async function _sendEntityPage(req: express.Request, res: express.Response, type: "master" | "release", id: number): Promise<void> {
+  let html = _loadHtmlTemplated("index.html");
+  if (!html) { res.status(500).send("Page unavailable"); return; }
+  res.setHeader("Vary", "Accept");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  // Hand the SPA the same ?op= it already restores popups from.
+  const opScript = `<script>try{history.replaceState(null,"","/?op=${type}:${id}")}catch(e){}</script>`;
+  let data: any = null;
+  if (Number.isFinite(id) && id > 0) {
+    try { data = await getCachedRelease(id, type, 10 * 365 * 24 * 3600); } catch { data = null; }
+  }
+  if (!data || !data.title) {
+    // Not cached: plain SPA (the popup fetches it for signed-in users),
+    // kept out of the index.
+    html = html.replace(_SD_HEAD_RE, _headTagsForView("home").replace(`content="index, follow"`, `content="noindex, follow"`));
+    html = html.replace("<body>", `<body>\n${opScript}`);
+    res.status(Number.isFinite(id) && id > 0 ? 200 : 404).send(html);
+    return;
+  }
+  const canonical = entityPath(type, id, data);
+  // Wrong or missing slug: send people and crawlers to the canonical URL.
+  if (req.path !== canonical) {
+    const qs = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+    res.redirect(301, canonical + qs);
+    return;
+  }
+  html = html.replace(_SD_HEAD_RE, _entityHead(type, id, data, canonical));
+  html = html.replace("<body>", `<body>\n${opScript}`);
+  // The entity H1 replaces the generic home H1.
+  html = html.replace(/<h1 class="sr-only">[^<]*<\/h1>/, _entityBody(type, data));
+  res.send(html);
+}
+
+app.get(["/master/:id/:slug", "/release/:id/:slug"], async (req, res) => {
+  const type = req.path.startsWith("/master/") ? "master" : "release";
+  await _sendEntityPage(req, res, type, parseInt(req.params.id, 10));
+});
+
+// ── Sitemaps (generated from the cache) ─────────────────────────────
+// /sitemap.xml is an index: one file of static pages plus one file per
+// 50,000 cached masters / releases (the protocol's per-file cap). Only
+// cached albums with a title are listed — exactly the ones that render
+// as indexable pages above.
+const _SITEMAP_PAGE_SIZE = 50_000;
+let _sitemapCounts: { at: number; master: number; release: number } | null = null;
+async function _sitemapTypeCounts(): Promise<{ master: number; release: number }> {
+  if (_sitemapCounts && Date.now() - _sitemapCounts.at < 6 * 3600_000) return _sitemapCounts;
+  const r = await getPool().query(
+    `SELECT type, COUNT(*)::int AS n FROM release_cache
+      WHERE type IN ('master', 'release') AND COALESCE(data->>'title', '') <> ''
+      GROUP BY type`,
+  );
+  const out = { at: Date.now(), master: 0, release: 0 };
+  for (const row of r.rows) (out as any)[row.type] = Number(row.n) || 0;
+  _sitemapCounts = out;
+  return out;
+}
+function _xmlEsc(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
+app.get("/sitemap.xml", async (_req, res) => {
+  try {
+    const counts = await _sitemapTypeCounts();
+    const files = ["/sitemap-pages.xml"];
+    for (const type of ["master", "release"] as const) {
+      const n = Math.ceil(counts[type] / _SITEMAP_PAGE_SIZE);
+      for (let i = 0; i < n; i++) files.push(`/sitemap-${type}-${i + 1}.xml`);
+    }
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+      files.map(f => `  <sitemap><loc>${_SITE_ORIGIN}${f}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`);
+  } catch (err: any) {
+    console.error("[sitemap]", err?.message ?? err);
+    res.status(503).send("Sitemap temporarily unavailable");
+  }
+});
+
+app.get("/sitemap-pages.xml", (_req, res) => {
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  const urls = Object.values(_VIEW_META).map(m => `${_SITE_ORIGIN}/${m.path}`);
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+    urls.map(u => `  <url><loc>${_xmlEsc(u)}</loc></url>`).join("\n")}\n</urlset>\n`);
+});
+
+app.get(/^\/sitemap-(master|release)-(\d{1,4})\.xml$/, async (req, res) => {
+  const type = (req.params as any)[0] as "master" | "release";
+  const page = parseInt((req.params as any)[1], 10);
+  if (!Number.isFinite(page) || page < 1) { res.status(404).end(); return; }
+  try {
+    const r = await getPool().query(
+      `SELECT discogs_id, data->>'title' AS title, data->'artists' AS artists,
+              to_char(cached_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS lastmod
+         FROM release_cache
+        WHERE type = $1 AND COALESCE(data->>'title', '') <> ''
+        ORDER BY discogs_id
+        LIMIT $2 OFFSET $3`,
+      [type, _SITEMAP_PAGE_SIZE, (page - 1) * _SITEMAP_PAGE_SIZE],
+    );
+    if (!r.rows.length) { res.status(404).end(); return; }
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.write(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`);
+    for (const row of r.rows) {
+      const loc = _SITE_ORIGIN + entityPath(type, Number(row.discogs_id), { title: row.title, artists: row.artists });
+      res.write(`  <url><loc>${_xmlEsc(loc)}</loc>${row.lastmod ? `<lastmod>${row.lastmod}</lastmod>` : ""}</url>\n`);
+    }
+    res.end(`</urlset>\n`);
+  } catch (err: any) {
+    console.error("[sitemap page]", err?.message ?? err);
+    if (!res.headersSent) res.status(503).send("Sitemap temporarily unavailable");
+    else res.end();
+  }
+});
+
 // Serve the main HTML pages with Clerk script inlined in <head>.
 // Must come BEFORE express.static so the static handler doesn't intercept.
 app.get("/", (req, res, next) => { if (!_sendHtml(res, "index.html", req)) next(); });
@@ -15497,6 +15753,8 @@ const _ARTIST_CACHE_TTL_S  = 60 * 60 * 24 * 365;   // 1 year
 
 app.get("/release/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  if (_wantsHtml(req)) { await _sendEntityPage(req, res, "release", id); return; }
+  res.setHeader("Vary", "Accept");
   // Cache hit serves to ANYONE (signed-in or anon) — cached release
   // data is already public via shared URLs, and serving the cache to
   // logged-out visitors lets shared/popup-restore links render
@@ -15529,6 +15787,8 @@ app.get("/release/:id", async (req, res) => {
 // GET /master/:id — cache hit serves to anon, miss requires sign-in.
 app.get("/master/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  if (_wantsHtml(req)) { await _sendEntityPage(req, res, "master", id); return; }
+  res.setHeader("Vary", "Accept");
   const noCache = req.query.nocache === "1";
   if (!noCache) {
     const cached = await getCachedRelease(id, "master", _MASTER_CACHE_TTL_S);

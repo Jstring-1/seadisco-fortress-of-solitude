@@ -152,7 +152,7 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS default_add_folder_id INTEGER DEFAULT 1`);
     // Folder support for collection items
-    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_collection_folders (
       id            SERIAL PRIMARY KEY,
@@ -172,8 +172,8 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
     await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
     // Extra wantlist fields — rating, notes
-    await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
-    await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS notes JSONB`);
+    await getPool().query(`ALTER TABLE IF EXISTS user_wantlist ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE IF EXISTS user_wantlist ADD COLUMN IF NOT EXISTS notes JSONB`);
     // Background sync progress tracking
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'idle'`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_progress INTEGER DEFAULT 0`);

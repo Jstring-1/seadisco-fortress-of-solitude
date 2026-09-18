@@ -1568,12 +1568,12 @@ function renderCard(item, index, opts) {
   // _sdCardOuterClick filters by event.target — in wide mode only
   // clicks on the main cover image open the modal, so internal
   // entity links, play/queue buttons etc. don't trigger it.
-  // url for a single-quoted JS string inside a double-quoted onclick:
-  // escape the attribute-breakers, THEN backslash the JS quote. escHtml
-  // can't be used here — it turns ' into &#39;, which the browser
-  // HTML-decodes back to ' and breaks out of the JS string.
+  // href is the album's real page (/master/:id/:slug) so crawlers can
+  // follow it and ctrl/middle-click opens it in a new tab; a plain click
+  // is intercepted and opens the popup as before.
+  const cardHref = (type === "master" || type === "release") ? _sdEntityPath(type, item.id, fullTitle) : "#";
   const cardAttrs = isRelease
-    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,${jsAttr(String(item.id))},${jsAttr(type)},${jsAttr(url)})" `
+    ? `class="${typeClass}"${enrichAttrs} href="${escHtml(cardHref)}" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,${jsAttr(String(item.id))},${jsAttr(type)},${jsAttr(url)})" `
     : (isArtist || isLabel)
       ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${escHtml(String(item.id))}" onclick="searchByEntity(event,this)"`
       : `class="${typeClass}" href="${escHtml(url)}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;

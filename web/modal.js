@@ -256,6 +256,10 @@ function openModal(event, id, type, discogsUrl, opts) {
 
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
+  // Landing on an album page (/master/:id/:slug) renders a static summary
+  // for crawlers under the popup; once the visitor closes the popup the
+  // page is the normal home view.
+  document.getElementById("sd-entity-ssr")?.remove();
   // Counter-based scroll lock — version/series/youtube/etc. popups
   // each hold their own lock and only the last release drops the
   // body.modal-open class. No more conditional checks needed here.
