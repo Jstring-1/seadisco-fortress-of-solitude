@@ -170,7 +170,7 @@ window._sdGutenbergRenderMentions = async function (container, entityType, entit
       const labelEsc   = m.label   ? escHtml(m.label)   : "";
       const pct = Math.round(Number(m.positionPct) || 0);
       return `
-        <div class="gutenberg-mention-row" onclick="window._sdGutenbergOpenReader(${m.bookId}, ${JSON.stringify(m.bookTitle ?? "").replace(/"/g, "&quot;")}, {startPositionPct:${pct}})" title="Open ${titleEsc} at ${pct}%">
+        <div class="gutenberg-mention-row" onclick="window._sdGutenbergOpenReader(${m.bookId}, ${escHtml(JSON.stringify(m.bookTitle ?? ""))}, {startPositionPct:${pct}})" title="Open ${titleEsc} at ${pct}%">
           <div class="gutenberg-mention-head">
             <span class="gutenberg-mention-title">${titleEsc}</span>
             ${authorStr ? `<span class="gutenberg-mention-author"> · ${authorStr}</span>` : ""}
@@ -997,7 +997,7 @@ function _sdInjectEnrichmentIntoCards(row) {
       const wrap = card.querySelector(".card-thumb-wrap");
       if (wrap && !wrap.querySelector(".card-images-strip")) {
         const stripHtml = `<div class="card-images-strip">${images.map((u, i) =>
-          `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${escAttr(u)}')" />`
+          `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,${jsAttr(u)})" />`
         ).join("")}</div>`;
         wrap.insertAdjacentHTML("beforeend", stripHtml);
         // Full-size stack of additional images, rendered below the
@@ -1007,7 +1007,7 @@ function _sdInjectEnrichmentIntoCards(row) {
         // (tracklist) sets the card's height. Hidden in compact mode
         // by CSS (only `.card-mode-wide .card-images-stack` is shown).
         const stackHtml = `<div class="card-images-stack">${images.slice(1).map((u, i) =>
-          `<img class="card-images-stack-img" src="${escAttr(u)}" alt="image ${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${escAttr(u)}')" />`
+          `<img class="card-images-stack-img" src="${escAttr(u)}" alt="image ${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,${jsAttr(u)})" />`
         ).join("")}</div>`;
         wrap.insertAdjacentHTML("beforeend", stackHtml);
       }
@@ -1034,7 +1034,7 @@ function _sdInjectEnrichmentIntoCards(row) {
           // openVideo / _trackQueueAdd read by class + dataset, no
           // anchor semantics needed.
           const playBtn = url
-            ? `<span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</span>`
+            ? `<span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,${jsAttr(url)})" title="Play this track">▶</span>`
             : `<span class="card-track-play card-track-disabled" aria-hidden="true">▶</span>`;
           const queueBtn = url
             ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
@@ -1062,7 +1062,7 @@ function _sdInjectEnrichmentIntoCards(row) {
               <span class="card-track-pos">★</span>
               <span class="card-track-title">Full album as one track</span>
               <span class="card-track-actions">
-                <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
+                <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,${jsAttr(fullAlbumUrl)})" title="Play full album">▶</span>
                 <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
                 <span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save the full album to a playlist">♪</span>
               </span>
@@ -1268,6 +1268,18 @@ function escHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// ── JS-string-in-attribute escape ────────────────────────────────────────
+// For values passed to inline handlers: onclick="fn(${jsAttr(x)})" — NO
+// surrounding quotes. JSON.stringify makes a valid JS string literal
+// (backslashes, quotes, newlines, U+2028 all escaped) and escHtml then makes
+// it safe inside the double-quoted attribute; the browser decodes the
+// entities back before the JS runs. The old '${escHtml(x)}' pattern is
+// broken: &#39; decodes to ' before the handler is parsed, so an
+// apostrophe in Discogs/Wikipedia data ended the string early.
+function jsAttr(v) {
+  return escHtml(JSON.stringify(String(v ?? "")));
 }
 
 // ── Shared Clerk bootstrap ───────────────────────────────────────────────
@@ -1689,7 +1701,7 @@ function renderSharedHeader(opts) {
   const tab = (label, view, iconKey) => {
     if (isSPA) {
       const cls = view === active ? ' active' : '';
-      return `<button class="${navTabClass}${cls}" data-view="${view}" onclick="switchView('${view}')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass}${cls}" data-view="${view}" onclick="switchView(${jsAttr(view)})" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
     const href = view === "search" ? "/" : `/?v=${view}`;
     const activeCls = view === active ? ' active' : '';
@@ -1780,7 +1792,7 @@ function renderSharedHeader(opts) {
   const recTab = (label, rtab, iconKey, startEmpty) => {
     const emptyCls = startEmpty ? " nav-rec-empty" : "";
     if (isSPA) {
-      return `<button class="${navTabClass} nav-rec-disabled${emptyCls}" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass} nav-rec-disabled${emptyCls}" data-rtab="${rtab}" onclick="showRecordSignIn(${jsAttr(rtab)})" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
     return `<a class="${navTabClass}${emptyCls}" href="/?v=${rtab}" data-rtab="${rtab}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
@@ -1943,7 +1955,7 @@ function renderSharedFooter(opts) {
     const href = _seaDiscoBuildViewHref(view);
     const tip = HINTS[view] || "";
     const id = idAttr ? ` id="${idAttr}"` : "";
-    if (isSPA) return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
+    if (isSPA) return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView(${jsAttr(view)});return false">${label}</a>`;
     return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}">${label}</a>`;
   };
 
@@ -1959,7 +1971,7 @@ function renderSharedFooter(opts) {
     const tip = HINTS[tab] || "";
     const cls = startEmpty ? ' class="nav-rec-empty"' : "";
     if (isSPA) {
-      return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
+      return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab=${jsAttr(tab)};switchView('records');return false">${label}</a>`;
     }
     return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
   };
@@ -1974,7 +1986,7 @@ function renderSharedFooter(opts) {
     const tip = HINTS[mode] || "";
     const href = mode === "recent" ? "/" : `/?strip=${mode}`;
     if (isSPA) {
-      return `<a href="${href}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('search');setTimeout(()=>{if(typeof _sdSwitchHomeStripTab==='function')_sdSwitchHomeStripTab('${mode}');},0);return false">${label}</a>`;
+      return `<a href="${href}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('search');setTimeout(()=>{if(typeof _sdSwitchHomeStripTab==='function')_sdSwitchHomeStripTab(${jsAttr(mode)});},0);return false">${label}</a>`;
     }
     return `<a href="${href}" title="${escHtml(tip)}">${label}</a>`;
   };

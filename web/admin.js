@@ -319,7 +319,7 @@ async function loadAdminWorkerStatus() {
     bar.innerHTML = `
       <strong style="color:#fc8">⚙ Workers running:</strong>
       ${badges.map(b => `
-        <button type="button" onclick="switchAdminTab('${b.tab}')"
+        <button type="button" onclick="switchAdminTab(${jsAttr(b.tab)})"
           style="margin-left:0.4rem;padding:0.15rem 0.55rem;background:rgba(255,255,255,0.06);color:var(--text);border:1px solid rgba(255,255,255,0.18);border-radius:3px;cursor:pointer;font-size:0.78rem">
           ${_adminWorkerEscape(b.label)} ↗
         </button>
@@ -513,7 +513,7 @@ async function loadAdminSyncStatus() {
         const countStr = u.syncProgress > 0 ? ` \u2014 ${u.syncProgress.toLocaleString()} items` : "";
         statusText = `Idle${countStr}`;
       }
-      const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
+      const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser(${jsAttr(u.username)})" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
       const badges = [];
       if (u.hasOAuth) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a5c;color:#7eb8da;font-weight:600;margin-left:0.4rem" title="OAuth connected">OAuth</span>');
       if (!badges.length) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:rgba(255,255,255,0.08);color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>');
@@ -524,15 +524,15 @@ async function loadAdminSyncStatus() {
       // to the @discogs-handle. When both are present and differ,
       // show "clerk (@discogs)" so the admin can match across.
       const dispName = u.clerkUsername
-        ? (u.clerkUsername !== u.username ? `${u.clerkUsername} (@${u.username})` : u.clerkUsername)
-        : `@${u.username}`;
+        ? escHtml(u.clerkUsername !== u.username ? `${u.clerkUsername} (@${u.username})` : u.clerkUsername)
+        : escHtml(`@${u.username}`);
       return `<div class="sync-row">
         <div class="sync-row-header">
           <span style="color:var(--fg);font-weight:600;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>${dispName}${authBadge}</span>
           <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
-            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
-            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
-            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','favorites')" style="font-size:0.68rem;color:#e57;text-decoration:none" title="View favorites">♥${u.favoriteCount ? u.favoriteCount : ''}</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems(${jsAttr(u.username)},'collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems(${jsAttr(u.username)},'wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems(${jsAttr(u.username)},'favorites')" style="font-size:0.68rem;color:#e57;text-decoration:none" title="View favorites">♥${u.favoriteCount ? u.favoriteCount : ''}</a>
             ${syncBtn}
           </span>
         </div>
@@ -818,7 +818,7 @@ async function loadDbStats(triggerBtn) {
         const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
         const exists = count >= 0;
         const nameMarkup = exists
-          ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup('${escHtml(t).replace(/'/g, "\\'")}')" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t}</a>`
+          ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t)})" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t}</a>`
           : `<span style="color:var(--muted)">${t}</span>`;
         html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
       }
@@ -839,7 +839,7 @@ async function loadDbStats(triggerBtn) {
           const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
           const exists = count >= 0;
           const nameMarkup = exists
-            ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup('${escHtml(t.table).replace(/'/g, "\\'")}')" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t.table}</a>`
+            ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t.table)})" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t.table}</a>`
             : `<span style="color:var(--muted);font-family:monospace">${t.table}</span>`;
           return `<div style="display:flex;justify-content:space-between;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
         }).join("") +
@@ -1080,10 +1080,10 @@ async function loadCacheWarmCatno() {
       const sweepPageTxt = Number.isFinite(Number(s.label_sweep_page)) && Number(s.label_sweep_page) > 1
         ? ` (resume p${s.label_sweep_page})` : "";
       const buttons = !running
-        ? `<button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', false)" title="Walk the configured catno range">Catno walk</button>
-           <button class="admin-btn" onclick="_cwcStart('${esc(s.key)}', true)" title="Reset cursor to ${s.lo} and re-walk the catno range">Restart catno</button>
-           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', false)" title="Paginated /search?label= sweep: every master, then every orphan release (no parent master).${sweepPageTxt}">Sweep label</button>
-           <button class="admin-btn" onclick="_cwcSweepLabel('${esc(s.key)}', true)" title="Reset label-sweep page to 1 and re-sweep">Restart sweep</button>`
+        ? `<button class="admin-btn" onclick="_cwcStart(${jsAttr(s.key)}, false)" title="Walk the configured catno range">Catno walk</button>
+           <button class="admin-btn" onclick="_cwcStart(${jsAttr(s.key)}, true)" title="Reset cursor to ${s.lo} and re-walk the catno range">Restart catno</button>
+           <button class="admin-btn" onclick="_cwcSweepLabel(${jsAttr(s.key)}, false)" title="Paginated /search?label= sweep: every master, then every orphan release (no parent master).${sweepPageTxt}">Sweep label</button>
+           <button class="admin-btn" onclick="_cwcSweepLabel(${jsAttr(s.key)}, true)" title="Reset label-sweep page to 1 and re-sweep">Restart sweep</button>`
         : isActive
           ? `<button class="admin-btn" onclick="_cwcStop()">Stop</button>`
           : `<span style="color:var(--muted);font-size:0.78rem">(another series is running)</span>`;
@@ -1097,7 +1097,7 @@ async function loadCacheWarmCatno() {
           <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_cached)}</td>
           <td style="padding:0.4rem 0.5rem;text-align:right">${fmt(s.total_skipped)}</td>
           <td style="padding:0.4rem 0.5rem;text-align:right">${s.total_errors ? `<span style="color:#e88">${fmt(s.total_errors)}</span>` : "0"}</td>
-          <td style="padding:0.4rem 0.5rem;white-space:nowrap;display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">${buttons}<button class="admin-btn" onclick="_cwcReset('${esc(s.key)}')" title="Zero out counters + cursor for this series">Reset</button></td>
+          <td style="padding:0.4rem 0.5rem;white-space:nowrap;display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">${buttons}<button class="admin-btn" onclick="_cwcReset(${jsAttr(s.key)})" title="Zero out counters + cursor for this series">Reset</button></td>
         </tr>`;
     }).join("");
     const recentBlock = (() => {
@@ -1462,7 +1462,7 @@ function _labelDirPopoverHtml() {
                 <div style="font-weight:600">${_eHtml(c.title)}</div>
                 <div style="font-size:0.72rem;color:var(--muted)">ID ${c.id} · <a href="https://www.discogs.com${_eHtml(c.uri)}" target="_blank" rel="noopener" style="color:var(--muted)">view ↗</a></div>
               </div>
-              <button class="admin-btn" type="button" onclick="_labelDirSaveId('${_jsEsc(labelName)}', ${c.id})">Save</button>
+              <button class="admin-btn" type="button" onclick="_labelDirSaveId(${jsAttr(labelName)}, ${c.id})">Save</button>
             </div>`).join("")}
           </div>`;
   return `
@@ -1475,7 +1475,7 @@ function _labelDirPopoverHtml() {
       ${body}
       <div style="margin-top:0.5rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap">
         <input data-labeldir-manual="${_eHtml(labelName)}" type="number" placeholder="…or enter ID manually" style="flex:1;min-width:160px;padding:0.3rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.82rem">
-        <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual('${_jsEsc(labelName)}')">Save manual ID</button>
+        <button class="admin-btn" type="button" onclick="_labelDirSaveIdManual(${jsAttr(labelName)})">Save manual ID</button>
       </div>
     </div>
   `;
@@ -1527,7 +1527,7 @@ function _labelDirMergePopoverHtml() {
     .slice(0, 80);
   const listBody = candidates.length
     ? `<div style="display:flex;flex-direction:column;gap:0.2rem;max-height:46vh;overflow-y:auto">
-        ${candidates.map(c => `<button type="button" onclick="_labelDirConfirmMerge('${_jsEsc(fromName)}', '${_jsEsc(c.label_name)}')"
+        ${candidates.map(c => `<button type="button" onclick="_labelDirConfirmMerge(${jsAttr(fromName)}, ${jsAttr(c.label_name)})"
             style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;background:rgba(255,255,255,0.03);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;text-align:left">
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_eHtml(c.label_name)}">${_eHtml(c.label_name.length > 60 ? c.label_name.slice(0, 60) + "…" : c.label_name)}</span>
             <span style="color:var(--muted);font-size:0.72rem;white-space:nowrap">
@@ -1559,7 +1559,7 @@ function _labelDirMergePopoverHtml() {
 function _labelDirHeader(key, label, align) {
   const active = _labelDirSortKey === key;
   const arrow  = active ? (_labelDirSortDir === "asc" ? " ▲" : " ▼") : "";
-  return `<th onclick="_labelDirToggleSort('${key}')"
+  return `<th onclick="_labelDirToggleSort(${jsAttr(key)})"
               style="padding:0.35rem 0.5rem;text-align:${align};cursor:pointer;user-select:none;${active ? "color:var(--text)" : ""}">
             ${label}${arrow}
           </th>`;
@@ -1606,7 +1606,7 @@ function _labelDirRowHtml(r) {
   const sources = (r.sources || []).map(s => _eHtml(s)).join(", ");
   const idCell = r.label_id
     ? `<a href="https://www.discogs.com/label/${r.label_id}" target="_blank" rel="noopener" style="color:var(--accent)">${r.label_id}</a>
-       <button class="admin-btn" type="button" onclick="_labelDirClearId('${_jsEsc(r.label_name)}')" style="font-size:0.7rem;padding:0.1rem 0.3rem;margin-left:0.3rem" title="Clear ID">×</button>`
+       <button class="admin-btn" type="button" onclick="_labelDirClearId(${jsAttr(r.label_name)})" style="font-size:0.7rem;padding:0.1rem 0.3rem;margin-left:0.3rem" title="Clear ID">×</button>`
     : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
   // Popover renders outside the table — see _labelDirRenderPopover.
   // Keeping it inline (as a <tr> inset) caused the fixed-layout table
@@ -1650,9 +1650,9 @@ function _labelDirRowHtml(r) {
       <td style="padding:0.3rem 0.5rem">${idCell}</td>
       <td style="padding:0.3rem 0.5rem;text-align:right;white-space:nowrap">
         ${_labelDirSweepCell(r)}
-        <button class="admin-btn" type="button" onclick="_labelDirSearch('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem" title="Search Discogs for this label">🔍</button>
-        <button class="admin-btn" type="button" onclick="_labelDirOpenMerge('${_jsEsc(r.label_name)}')" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Merge (rename external rows into another label)">⇄</button>
-        ${r.label_id ? `<button class="admin-btn" type="button" onclick="_labelDirOpenAlias('${_jsEsc(r.label_name)}', ${r.label_id})" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Alias this Discogs ID under another (fold two IDs for the same conceptual label together)">🔗</button>` : ""}
+        <button class="admin-btn" type="button" onclick="_labelDirSearch(${jsAttr(r.label_name)})" style="font-size:0.78rem;padding:0.15rem 0.4rem" title="Search Discogs for this label">🔍</button>
+        <button class="admin-btn" type="button" onclick="_labelDirOpenMerge(${jsAttr(r.label_name)})" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Merge (rename external rows into another label)">⇄</button>
+        ${r.label_id ? `<button class="admin-btn" type="button" onclick="_labelDirOpenAlias(${jsAttr(r.label_name)}, ${r.label_id})" style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-left:0.2rem" title="Alias this Discogs ID under another (fold two IDs for the same conceptual label together)">🔗</button>` : ""}
       </td>
     </tr>
     ${searchBlock}
@@ -1680,20 +1680,9 @@ function _labelDirSweepCell(r) {
       ? `Re-sweep (last completed ${new Date(r.swept_at).toLocaleString()})`
       : `Sweep every master Discogs has tagged with this label, plus any orphan releases (no parent master), into the cache.`;
   return `${sweptBadge}<button class="admin-btn" type="button" ${dis}
-            onclick="_labelDirStartSweep(${r.label_id}, '${_jsEsc(r.label_name)}')"
+            onclick="_labelDirStartSweep(${r.label_id}, ${jsAttr(r.label_name)})"
             title="${_eHtml(title)}"
             style="font-size:0.78rem;padding:0.15rem 0.4rem;margin-right:0.3rem">▶ Sweep</button>`;
-}
-
-function _jsEsc(s) {
-  // Used inside a single-quoted JS string that itself sits in a double-
-  // quoted onclick="" attribute. Two escaping layers are required:
-  //   1. JS-string layer: backslash + single-quote
-  //   2. HTML-attribute layer: &, ", < — without these a " in a scraped
-  //      label name closes the onclick attribute and injects markup.
-  return String(s ?? "")
-    .replace(/\\/g, "\\\\").replace(/'/g, "\\'")
-    .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 function _labelDirOnSearch(ev) {
@@ -2439,7 +2428,7 @@ function _renderCacheAnalytics() {
   const facetCol = (title, rows, keyName) => {
     const list = (rows || []).map(r => {
       const name = keyName === "decade" ? `${r.decade}s` : (r.name || "(none)");
-      const click = keyName === "decade" ? "" : `onclick="_caFacetPin('${keyName}','${_eHtml(String(r.name || "")).replace(/'/g, "\\'")}')"`;
+      const click = keyName === "decade" ? "" : `onclick="_caFacetPin(${jsAttr(keyName)},${jsAttr(String(r.name || ""))})"`;
       const style = keyName === "decade"
         ? ""
         : "cursor:pointer;text-decoration:underline;text-decoration-style:dotted";
@@ -2707,7 +2696,7 @@ async function loadCacheWarm(opts) {
           const th = (key, label, align = "left") => {
             const isActive = _cwSort.col === key;
             const arrow = isActive ? (_cwSort.dir === "asc" ? " ↑" : " ↓") : "";
-            return `<th style="text-align:${align};cursor:pointer;user-select:none" onclick="_cwSortBy('${key}')" title="Sort by ${label}">${label}${arrow}</th>`;
+            return `<th style="text-align:${align};cursor:pointer;user-select:none" onclick="_cwSortBy(${jsAttr(key)})" title="Sort by ${label}">${label}${arrow}</th>`;
           };
           return `<div class="cw-table-wrap" style="overflow-x:auto"><table class="api-log-table cw-stats-table" style="font-size:0.82rem;width:100%;table-layout:fixed">
             <colgroup>
@@ -2736,8 +2725,8 @@ async function loadCacheWarm(opts) {
             </tr></thead>
             <tbody>${rows.map(r => {
               const isActive = !!(active && r.genre_key === active.genreKey && (r.style_key || "") === (active.styleKey || ""));
-              const safeG = esc(r.genre_key).replace(/'/g, "\\'");
-              const safeS = esc(r.style_key || "").replace(/'/g, "\\'");
+              const safeG = String(r.genre_key ?? "");
+              const safeS = String(r.style_key || "");
               const cursor = r.current_year ? `${r.current_year}·p${r.current_page}` : "—";
               const last = r.last_run_at ? new Date(r.last_run_at).toLocaleString() : "—";
               // No-year sweep indicator: server stamps no_year_last_run_at
@@ -2768,9 +2757,9 @@ async function loadCacheWarm(opts) {
                 <td style="text-align:right;color:var(--muted);font-size:0.74rem">${cursor}</td>
                 <td style="color:var(--muted);font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}${nyPill}</td>
                 <td style="text-align:right;white-space:nowrap">
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues('${safeG}','${safeS}')" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm('${safeG}','${safeS}')" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
-                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo('${safeG}','${safeS}', ${r.in_cache || 0}, this)" title="Delete every release_cache row for this (genre, style) combo. Deletes immediately; toast confirms the count. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="cacheWarmRunComboBlues(${jsAttr(safeG)},${jsAttr(safeS)})" title="Start a cache-warm run for this combo with year range 1900–1970, then automatically chain a no-year sweep so long-tail undated releases get picked up too." style="margin-right:0.25rem">▶ 1900-1970</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwLoadIntoForm(${jsAttr(safeG)},${jsAttr(safeS)})" title="Load this combo into the form so you can run it" style="margin-right:0.25rem">↗</button>
+                  <button class="admin-btn" ${running ? "disabled" : ""} onclick="_cwDeleteCombo(${jsAttr(safeG)},${jsAttr(safeS)}, ${r.in_cache || 0}, this)" title="Delete every release_cache row for this (genre, style) combo. Deletes immediately; toast confirms the count. Data re-fetches from Discogs on demand." style="color:#e88;border-color:rgba(232,136,136,0.5)">⌫</button>
                 </td>
               </tr>`;
             }).join("")}</tbody>
@@ -3112,7 +3101,7 @@ function _rcxRenderLabelsList() {
   const rows = filtered.slice(0, 600).map(it => {
     const checked = window._rcxSelectedLabels.has(it.name) ? "checked" : "";
     return `<label style="display:flex;gap:0.4rem;align-items:center;padding:0.15rem 0;cursor:pointer">
-      <input type="checkbox" ${checked} onchange="_rcxToggleLabel(this,'${esc(it.name)}')">
+      <input type="checkbox" ${checked} onchange="_rcxToggleLabel(this,${jsAttr(it.name)})">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span>
       <span style="color:var(--muted);font-size:0.72rem">${Number(it.count).toLocaleString()}</span>
     </label>`;
@@ -3509,7 +3498,7 @@ async function loadYtReview() {
   } catch (e) { stEl.innerHTML = `<span style="color:#e88">Failed: ${esc(e?.message || e)}</span>`; }
 }
 function ytrTile(label, n, color, status) {
-  const onclick = status ? ` style="cursor:pointer;text-decoration:underline" onclick="ytrSetStatus('${status}')"` : "";
+  const onclick = status ? ` style="cursor:pointer;text-decoration:underline" onclick="ytrSetStatus(${jsAttr(status)})"` : "";
   return `<div${onclick ? ' ' + onclick : ''} style="border:1px solid var(--border);border-radius:5px;padding:0.4rem 0.55rem">
     <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase">${label}</div>
     <div data-ytr-count="${status || ''}" style="font-size:0.95rem;font-weight:600;color:${color};font-variant-numeric:tabular-nums">${Number(n||0).toLocaleString()}</div>
@@ -3595,10 +3584,10 @@ async function loadYtChannels() {
           <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${Number(c.auto_approvals || 0)}</td>
           <td style="padding:0.25rem 0.4rem">${badge}</td>
           <td style="padding:0.25rem 0.4rem;white-space:nowrap">
-            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','trusted')" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
-            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','blocked')" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
-            <button class="admin-btn" onclick="ytrSetChannelTrust('${id}','')" title="Clear the manual override and let the tally decide again.">Auto</button>
-            <button class="admin-btn" style="color:#e88" onclick="ytrBanChannel('${id}', ${JSON.stringify(String(c.channel_title || "")).replace(/"/g,'&quot;')})" title="Ban: remove this channel from ALL YouTube results, drop its pending candidates and auto-approvals.">Ban</button>
+            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'trusted')" title="Always trust this channel, regardless of its tally. Survives the automatic refresh.">Trust</button>
+            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'blocked')" title="Never auto-approve from this channel, regardless of its tally.">Block</button>
+            <button class="admin-btn" onclick="ytrSetChannelTrust(${jsAttr(id)},'')" title="Clear the manual override and let the tally decide again.">Auto</button>
+            <button class="admin-btn" style="color:#e88" onclick="ytrBanChannel(${jsAttr(id)}, ${escHtml(JSON.stringify(String(c.channel_title || "")))})" title="Ban: remove this channel from ALL YouTube results, drop its pending candidates and auto-approvals.">Ban</button>
           </td>
         </tr>`;
       }).join("")}
@@ -3636,7 +3625,7 @@ async function loadYtBans() {
         return `<tr style="border-top:1px solid var(--border)">
           <td class="ytr-ch-cell" data-ch="${id}" data-title="${esc(b.channel_title || "")}" style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(b.channel_title || b.channel_id)}</a></td>
           <td style="padding:0.25rem 0.4rem;color:var(--muted);font-size:0.72rem">${esc(b.reason || "")}</td>
-          <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" onclick="ytrUnban('${id}')" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
+          <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" onclick="ytrUnban(${jsAttr(id)})" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
         </tr>`;
       }).join("")}
     </table>`;
@@ -3964,7 +3953,7 @@ function ytrRowHtml(r) {
             <button class="admin-btn" onclick="ytrDecide(${r.id},'approve',this)" title="Approve and pin this video to the track as a master override.">✓ Approve</button>
             <button class="admin-btn" onclick="ytrDecide(${r.id},'reject',this)" title="Reject this candidate. Worker won't re-propose this video on this track.">✗ Reject</button>
             <button class="admin-btn" onclick="ytrDecide(${r.id},'skip',this)" title="Skip — neither pin nor reject, just remove from the pending queue. Track can still be re-proposed.">Skip</button>
-            ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" onclick="ytrBanChannel('${esc(r.candidate_channel_id)}', ${JSON.stringify(String(r.candidate_channel_title || "")).replace(/"/g,'&quot;')})" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
+            ${r.candidate_channel_id ? `<button class="admin-btn" style="color:#e88" onclick="ytrBanChannel(${jsAttr(r.candidate_channel_id)}, ${escHtml(JSON.stringify(String(r.candidate_channel_title || "")))})" title="Ban this channel from ALL YouTube results everywhere.">⛔ Ban ch.</button>` : ""}
           </div>
           <div style="display:flex;gap:0.3rem;align-items:center">
             <input type="text" id="ytr-custom-${r.id}" placeholder="paste YouTube URL or ID" style="width:14rem;padding:0.15rem 0.35rem;font-size:0.75rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:3px" onkeydown="if(event.key==='Enter'){event.preventDefault();ytrCustomApprove(${r.id});}">
@@ -4603,13 +4592,13 @@ function renderFeedback(items) {
     const date = new Date(created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     return `<div id="fb-${id}" style="padding:0.6rem 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem">
-        <span style="color:#aaa;font-size:0.8rem">${user_email || "unknown"}</span>
+        <span style="color:#aaa;font-size:0.8rem">${escHtml(user_email || "unknown")}</span>
         <div style="display:flex;gap:0.75rem;align-items:center">
           <span style="color:#555;font-size:0.75rem">${date}</span>
           <button onclick="deleteFeedbackItem(${id})" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;padding:0" title="Delete">\u2715</button>
         </div>
       </div>
-      <div style="color:var(--fg)">${message.replace(/</g,"&lt;")}</div>
+      <div style="color:var(--fg);white-space:pre-wrap">${escHtml(message)}</div>
     </div>`;
   }).join("");
 }
@@ -4737,7 +4726,7 @@ async function loadApiHealth() {
       for (const [k, j] of Object.entries(hr.jobs)) {
         const key = _jobKey[k];
         const histLink = key
-          ? ` <a href="#" onclick="event.preventDefault();_adminToggleJobHistory('${key}',this)" style="font-size:0.72rem;color:#7eb8da;text-decoration:none">history</a><div class="admin-job-hist" data-job="${key}" style="display:none;margin:0.3rem 0 0.4rem 0.6rem"></div>`
+          ? ` <a href="#" onclick="event.preventDefault();_adminToggleJobHistory(${jsAttr(key)},this)" style="font-size:0.72rem;color:#7eb8da;text-decoration:none">history</a><div class="admin-job-hist" data-job="${key}" style="display:none;margin:0.3rem 0 0.4rem 0.6rem"></div>`
           : "";
         html += `<li><strong>${esc(k)}</strong>: ${esc(j)}${histLink}</li>`;
       }
@@ -5140,7 +5129,7 @@ function _renderAdminSubmissionsTable() {
       <td style="padding:0.35rem 0.5rem">${escHtml(trim(o.track_title || "", 32))}</td>
       <td style="padding:0.35rem 0.5rem">${ytLink}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.submitted_by, 12))}</td>
-      <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,'${escHtml(o.release_id)}','${escHtml(o.release_type)}','${escHtml(o.track_position).replace(/'/g, "\\'")}')">Delete</button></td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,${jsAttr(o.release_id)},${jsAttr(o.release_type)},${jsAttr(o.track_position)})">Delete</button></td>
     </tr>`;
   }).join("");
   el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
@@ -5249,7 +5238,7 @@ function _renderAdminUnavailableTable() {
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.last_reported_at))}</td>
       <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(String(o.sample_error_code ?? "—"))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.sample_user_id || "", 12))}</td>
-      <td style="padding:0.35rem 0.5rem"><button class="admin-btn" onclick="adminClearUnavailable(this,'${escHtml(o.video_id)}')" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn" onclick="adminClearUnavailable(this,${jsAttr(o.video_id)})" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
     </tr>`;
   }).join("");
   el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
@@ -5487,7 +5476,7 @@ function _adminUnifiedRenderGroupBar() {
   if (!bar) return;
   bar.innerHTML = _ADMIN_UNIFIED_GROUPS.map(g => {
     const on = _adminUnifiedGroup === g.key;
-    return `<button class="admin-btn${on ? " active" : ""}" onclick="_adminUnifiedSetGroup('${g.key}')" ${on ? 'style="background:var(--accent);color:#000;font-weight:600"' : ""}>${g.label}</button>`;
+    return `<button class="admin-btn${on ? " active" : ""}" onclick="_adminUnifiedSetGroup(${jsAttr(g.key)})" ${on ? 'style="background:var(--accent);color:#000;font-weight:600"' : ""}>${g.label}</button>`;
   }).join("");
 }
 
@@ -5545,7 +5534,7 @@ function adminDeleteUser(clerkUserId) {
       <div id="admin-delete-user-status" style="color:#e88;font-size:0.8rem;margin-bottom:0.6rem"></div>
       <div style="display:flex;gap:0.5rem;justify-content:flex-end">
         <button class="admin-btn" onclick="document.getElementById('admin-delete-user-overlay')?.remove()">Cancel</button>
-        <button class="admin-btn" id="admin-delete-user-confirm" style="background:#7a2b2b;color:#fff;border-color:#7a2b2b" onclick="_adminDeleteUserConfirm('${escHtml(clerkUserId)}', this)">Delete permanently</button>
+        <button class="admin-btn" id="admin-delete-user-confirm" style="background:#7a2b2b;color:#fff;border-color:#7a2b2b" onclick="_adminDeleteUserConfirm(${jsAttr(clerkUserId)}, this)">Delete permanently</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -5634,7 +5623,7 @@ function _adminUnifiedCell(u, col) {
     // Own row can't be deleted (the server also refuses the admin account).
     const isSelf = u.clerkUserId && u.clerkUserId === window._clerk?.user?.id;
     if (!u.clerkUserId || isSelf) return "";
-    return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser('${escHtml(u.clerkUserId)}')" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
+    return `<button class="admin-btn" title="Delete this user — removes their SeaDisco data and Clerk login" onclick="event.stopPropagation();adminDeleteUser(${jsAttr(u.clerkUserId)})" style="font-size:0.6rem;padding:0.05rem 0.35rem;color:#e88;border-color:#5a2b2b">Delete</button>`;
   }
   if (col.type === "range") {
     const f = v => { if (!v) return null; const dt = new Date(v); return isNaN(dt.getTime()) ? null : dt.toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
@@ -5664,7 +5653,7 @@ function _adminUnifiedCell(u, col) {
     // Manual per-user sync button. Only offered when the user has a linked
     // Discogs handle (the sync endpoint keys on discogs_username).
     const btn = u.discogsUsername
-      ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(&quot;${escHtml(u.discogsUsername)}&quot;, this)" title="Run a full Discogs library sync for this user">Sync</button>`
+      ? ` <button class="admin-btn" style="font-size:0.68rem;padding:0.1rem 0.45rem;margin-left:0.35rem" onclick="adminSyncUser(${jsAttr(u.discogsUsername)}, this)" title="Run a full Discogs library sync for this user">Sync</button>`
       : "";
     // Render by STATUS, not by "has a sync_error". A gapped completion and a
     // restart-interrupted "stopped" run BOTH carry a sync_error note but are
@@ -5739,7 +5728,7 @@ function _adminUnifiedRender() {
     if (c.type === "delete") return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem"></th>`;
     const active = _adminUnifiedSort.col === c.key;
     const arrow = active ? (_adminUnifiedSort.dir === "asc" ? " ↑" : " ↓") : "";
-    return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy('${c.key}')" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
+    return `<th class="${sticky.trim()}" style="padding:0.3rem 0.5rem;text-align:${c.align};cursor:pointer;user-select:none;white-space:nowrap${active ? ";color:var(--text)" : ""}" onclick="_adminUnifiedSortBy(${jsAttr(c.key)})" title="Sort by ${c.label}">${c.label}${arrow}</th>`;
   };
   const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted)"><tr>${cols.map((c, i) => th(c, i)).join("")}</tr></thead>`;
   const body = rows.map(u => {
@@ -5810,7 +5799,7 @@ async function loadAdminBehavior() {
     const th = (key, label, align = "left", extra = "") => {
       const isActive = _adminBehaviorSort.col === key;
       const arrow = isActive ? (_adminBehaviorSort.dir === "asc" ? " ↑" : " ↓") : "";
-      return `<th style="padding:0.3rem 0.5rem;text-align:${align};cursor:pointer;user-select:none${isActive ? ';color:var(--text)' : ''}" onclick="_adminBehaviorSortBy('${key}')" title="Sort by ${label.replace(/<[^>]*>/g, '').trim()}">${label}${arrow}${extra}</th>`;
+      return `<th style="padding:0.3rem 0.5rem;text-align:${align};cursor:pointer;user-select:none${isActive ? ';color:var(--text)' : ''}" onclick="_adminBehaviorSortBy(${jsAttr(key)})" title="Sort by ${label.replace(/<[^>]*>/g, '').trim()}">${label}${arrow}${extra}</th>`;
     };
     // Two-line column header so the "30d / total" pair reads
     // unambiguously without burning horizontal space.

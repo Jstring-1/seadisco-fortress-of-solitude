@@ -173,7 +173,7 @@ async function _gutenbergLoadAndRenderBookmarks() {
       const pct = Math.round(Number(b.positionPct) || 0);
       const labelTxt = b.label || `${pct}%`;
       const dateStr = b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "";
-      const titleSafe = JSON.stringify(b.bookTitle || "").replace(/"/g, "&quot;");
+      const titleSafe = escHtml(JSON.stringify(b.bookTitle || ""));
       return `
         <div class="gutenberg-bookmark-list-row" onclick="_gutenbergCloseAndOpenAt(${b.bookId}, ${titleSafe}, ${pct})">
           <div class="gutenberg-bookmark-list-main">
@@ -386,7 +386,7 @@ function _gutenbergCardHtml(b) {
     : "";
   // Subjects: clickable, pivot to a fresh search filtered by that subject.
   const subjectChips = (Array.isArray(b.subjects) ? b.subjects : []).map(s =>
-    `<span class="gutenberg-subject-chip" onclick="_gutenbergSearchBySubject(${JSON.stringify(s).replace(/"/g, "&quot;")})" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
+    `<span class="gutenberg-subject-chip" onclick="_gutenbergSearchBySubject(${escHtml(JSON.stringify(s))})" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
   ).join("");
   const shelfChips = (Array.isArray(b.bookshelves) ? b.bookshelves : []).map(s =>
     `<span class="gutenberg-shelf-chip">${escHtml(s)}</span>`
@@ -399,7 +399,7 @@ function _gutenbergCardHtml(b) {
   const cover = b.cover
     ? `<img class="gutenberg-cover" src="${escHtml(b.cover)}" alt="" loading="lazy" decoding="async">`
     : `<div class="gutenberg-cover gutenberg-cover-placeholder">📖</div>`;
-  const titleSafe = JSON.stringify(b.title || "").replace(/"/g, "&quot;");
+  const titleSafe = escHtml(JSON.stringify(b.title || ""));
   const formatLinks = _gutenbergFormatLinksHtml(b.formats);
   const audioSection = _gutenbergAudioSectionHtml(b);
   // External search URLs — Wikipedia + Google, both with title +
@@ -540,9 +540,9 @@ function _gutenbergAudioSectionHtml(meta) {
     const playable = _gutenbergAudioIsPlayable(mime, url);
     const labelText = _gutenbergAudioLabel(mime, url);
     const urlSafe = escHtml(url);
-    const urlJs = JSON.stringify(url).replace(/"/g, "&quot;");
-    const titleSafe = JSON.stringify(meta?.title || `Book ${meta?.id}`).replace(/"/g, "&quot;");
-    const authorSafe = JSON.stringify((Array.isArray(meta?.authors) && meta.authors[0]?.name) ? meta.authors[0].name : "").replace(/"/g, "&quot;");
+    const urlJs = escHtml(JSON.stringify(url));
+    const titleSafe = escHtml(JSON.stringify(meta?.title || `Book ${meta?.id}`));
+    const authorSafe = escHtml(JSON.stringify((Array.isArray(meta?.authors) && meta.authors[0]?.name) ? meta.authors[0].name : ""));
     const idJs = Number(meta?.id) || 0;
     const playBtn = playable
       ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergAudioPlay(${idJs}, ${urlJs}, ${titleSafe}, ${authorSafe})" title="Play through the mini-player">▶ Play</button>

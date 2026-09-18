@@ -668,7 +668,7 @@ function _archiveRowHtml(it, i, opts = {}) {
     : "";
   return `
     <div class="archive-row" data-id="${safeId}"${dataAttrs}>
-      <div class="archive-row-main" onclick="_archiveOpenInfoPopup('${safeId.replace(/'/g, "\\'")}')" style="cursor:pointer">
+      <div class="archive-row-main" onclick="_archiveOpenInfoPopup(${jsAttr(it.identifier)})" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeCreator ? `<div class="archive-row-creator">${safeCreator}</div>` : ""}
         ${(safeDate || ratingHtml || collectionBadgeHtml) ? `<div class="archive-row-meta-row">
@@ -1406,12 +1406,12 @@ function _archiveInfoPopupHtml(d) {
   // Action buttons row — Play (top-of-item), Queue All, Save, Open on
   // archive.org. Mirrors the LOC popup's action bar.
   const playBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-play" onclick="_archiveInfoPlayPrimary('${esc(d.identifier).replace(/'/g, "\\'")}')">▶ Play</button>`
+    ? `<button type="button" class="archive-btn archive-btn-play" onclick="_archiveInfoPlayPrimary(${jsAttr(d.identifier)})">▶ Play</button>`
     : `<button type="button" class="archive-btn archive-btn-play is-disabled" disabled>▶ No stream</button>`;
   const queueBtn = playable
-    ? `<button type="button" class="archive-btn archive-btn-queue" onclick="_archiveInfoQueueAll('${esc(d.identifier).replace(/'/g, "\\'")}')">＋ Queue all tracks</button>`
+    ? `<button type="button" class="archive-btn archive-btn-queue" onclick="_archiveInfoQueueAll(${jsAttr(d.identifier)})">＋ Queue all tracks</button>`
     : "";
-  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_archiveInfoToggleSave(this, '${esc(d.identifier).replace(/'/g, "\\'")}')">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
+  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_archiveInfoToggleSave(this, ${jsAttr(d.identifier)})">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
   const linkBtn = `<a class="archive-btn archive-btn-link" href="${esc(d.itemUrl)}" target="_blank" rel="noopener">Open on archive.org ↗</a>`;
 
   // Description — strip embedded HTML markup, escape, then convert
@@ -1432,8 +1432,8 @@ function _archiveInfoPopupHtml(d) {
           const dur = _archiveFmtDuration(f.length);
           const trackLabel = f.title || fname;
           return `<div class="archive-info-file-row">
-            <button class="archive-info-file-play" data-i="${i}" onclick="_archiveInfoPlayFile('${esc(d.identifier).replace(/'/g, "\\'")}', ${i})" title="Play this file">▶</button>
-            <button class="archive-info-file-queue" data-i="${i}" onclick="_archiveInfoQueueFile('${esc(d.identifier).replace(/'/g, "\\'")}', ${i})" title="Add to queue">＋</button>
+            <button class="archive-info-file-play" data-i="${i}" onclick="_archiveInfoPlayFile(${jsAttr(d.identifier)}, ${i})" title="Play this file">▶</button>
+            <button class="archive-info-file-queue" data-i="${i}" onclick="_archiveInfoQueueFile(${jsAttr(d.identifier)}, ${i})" title="Add to queue">＋</button>
             <span class="archive-info-file-title">${esc(trackLabel)}</span>
             ${dur ? `<span class="archive-info-file-dur">${dur}</span>` : ""}
             ${f.format ? `<span class="archive-info-file-fmt">${esc(f.format)}</span>` : ""}

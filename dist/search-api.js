@@ -233,6 +233,13 @@ const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon"
 // queries hit our 90-day cache and never reach upstream, so this is
 // just a backstop against bots scanning the q-space.
 const anonArchiveLimiter = new PerIpRateLimiter(30, 60 * 60_000, "archive-anon");
+// Per-USER limits (keyed by Clerk user id) on signed-in endpoints that
+// spend shared quota or write shared data, so one account can't drain or
+// flood them.
+const ytInfoUserLimiter = new PerIpRateLimiter(120, 60 * 60_000, "yt-info-user");
+const feedbackUserLimiter = new PerIpRateLimiter(10, 60 * 60_000, "feedback-user");
+const ytSuggestUserLimiter = new PerIpRateLimiter(300, 60 * 60_000, "yt-suggest-user");
+const ytReportUserLimiter = new PerIpRateLimiter(60, 60 * 60_000, "yt-report-user");
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
  *  users pass through unchecked (they pay the global limiter / cache).
@@ -1163,6 +1170,11 @@ app.get("/api/track-yt/for-release", async (req, res) => {
 // Requires Clerk session. Ignores the submission silently if a row
 // already exists at that (releaseId, releaseType, trackPosition) — so
 // the client can treat "already taken" as a successful no-op.
+// Release ids are Discogs numeric ids; track positions are short labels
+// like "A1" / "2-3". Both end up in admin HTML, so reject anything else
+// rather than trusting every renderer to escape them.
+const _TRACK_YT_RELEASE_ID_RE = /^\d{1,12}$/;
+const _TRACK_YT_POSITION_RE = /^[^<>"'`\\&\x00-\x1f]{1,16}$/;
 app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
     // Open to every signed-in user. The submission flow itself
     // doesn't spend YouTube quota (the row goes straight into
@@ -1180,8 +1192,12 @@ app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, re
     const videoId = typeof b.videoId === "string" ? b.videoId.trim() : "";
     const videoTitle = typeof b.videoTitle === "string" ? b.videoTitle.slice(0, 256) : null;
     // YouTube videoIds are 11 chars of [A-Za-z0-9_-].
-    if (!releaseId || !trackPosition || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    if (!_TRACK_YT_RELEASE_ID_RE.test(releaseId) || !_TRACK_YT_POSITION_RE.test(trackPosition) || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
         res.status(400).json({ error: "Bad request" });
+        return;
+    }
+    if (!ytSuggestUserLimiter.check(userId)) {
+        res.status(429).json({ error: "Too many suggestions — try again later." });
         return;
     }
     try {
@@ -1219,7 +1235,7 @@ app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (
         const trackTitle = typeof a?.trackTitle === "string" ? a.trackTitle.slice(0, 256) : null;
         const videoId = typeof a?.videoId === "string" ? a.videoId.trim() : "";
         const videoTitle = typeof a?.videoTitle === "string" ? a.videoTitle.slice(0, 256) : null;
-        if (!releaseId || !trackPosition || !/^[A-Za-z0-9_-]{11}$/.test(videoId))
+        if (!_TRACK_YT_RELEASE_ID_RE.test(releaseId) || !_TRACK_YT_POSITION_RE.test(trackPosition) || !/^[A-Za-z0-9_-]{11}$/.test(videoId))
             continue;
         items.push({
             releaseId, releaseType, trackPosition, trackTitle,
@@ -1228,6 +1244,10 @@ app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (
     }
     if (!items.length) {
         res.status(400).json({ error: "No valid assignments" });
+        return;
+    }
+    if (!ytSuggestUserLimiter.check(userId)) {
+        res.status(429).json({ error: "Too many suggestions — try again later." });
         return;
     }
     try {
@@ -6941,19 +6961,29 @@ app.post("/api/feedback", express.json(), async (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const { message, userEmail } = req.body;
-    if (!message?.trim()) {
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    if (!message) {
         res.status(400).json({ error: "Message required" });
         return;
     }
-    await saveFeedback(userId, userEmail ?? "", message.trim());
+    if (!feedbackUserLimiter.check(userId)) {
+        res.status(429).json({ error: "Too much feedback — try again later." });
+        return;
+    }
+    // The email is display-only in the admin inbox; accept it only when it
+    // looks like an address so the field can't carry markup.
+    const rawEmail = typeof req.body?.userEmail === "string" ? req.body.userEmail.trim() : "";
+    const userEmail = rawEmail.length <= 254 && /^[^\s<>"'`@]+@[^\s<>"'`@]+\.[^\s<>"'`@]+$/.test(rawEmail) ? rawEmail : "";
+    await saveFeedback(userId, userEmail, message.slice(0, 5000));
     res.json({ ok: true });
 });
 // ── Admin rate limiter ──────────────────────────────────────────────────
 const adminRateCounts = new Map();
+// req.ip, not the first X-Forwarded-For entry: with `trust proxy` = 1 it's
+// the address Railway's proxy saw, whereas the leftmost XFF entry is
+// whatever the client chose to send (spoofable to dodge the limit).
 function _clientIp(req) {
-    const xff = (req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
-    return (xff || (req.ip ?? "unknown")).replace(/^::ffff:/, "").trim();
+    return String(req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
 }
 app.use("/api/admin", (req, res, next) => {
     // Bypass the per-IP limit for every worker status poll (any GET
@@ -7722,7 +7752,8 @@ app.get("/api/youtube/video-info", async (req, res) => {
     // (cached) and lets users stage URLs they found on youtube.com
     // without burning the 100-unit search.list cost. The daily soft-
     // cap below still gates total usage.
-    if (!await requireUser(req, res))
+    const infoUserId = await requireUser(req, res);
+    if (!infoUserId)
         return;
     const videoId = String(req.query?.videoId ?? "").trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
@@ -7749,6 +7780,11 @@ app.get("/api/youtube/video-info", async (req, res) => {
             error: "youtube_daily_soft_cap",
             message: "YouTube quota exhausted — enter title/duration manually.",
         });
+        return;
+    }
+    // Cache misses spend shared quota — cap them per user.
+    if (!ytInfoUserLimiter.check(String(infoUserId))) {
+        res.status(429).json({ error: "rate_limit", message: "Too many video lookups — try again later." });
         return;
     }
     try {

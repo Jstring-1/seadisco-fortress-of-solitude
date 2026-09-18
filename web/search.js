@@ -1384,9 +1384,9 @@ function _sdBuildStripCardHtml(item, absIndex, mode) {
   if (inSubmitted) {
     // Global feed — no per-user dismiss.
   } else if (inSuggestions && window._clerk?.user) {
-    dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,'${safeId}','${safeType}')" title="Hide this suggestion forever">✕</button>`;
+    dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,${jsAttr(item.id)},${jsAttr(item.type || "master")})" title="Hide this suggestion forever">✕</button>`;
   } else if (!item._isSuggested) {
-    dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
+    dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,${jsAttr(item.id)})" title="Remove from history">✕</button>`;
   }
   return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
 }
@@ -1568,9 +1568,8 @@ function renderCard(item, index, opts) {
   // escape the attribute-breakers, THEN backslash the JS quote. escHtml
   // can't be used here — it turns ' into &#39;, which the browser
   // HTML-decodes back to ' and breaks out of the JS string.
-  const urlAttrJs = String(url).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/'/g, "\\'");
   const cardAttrs = isRelease
-    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,'${escHtml(String(item.id))}','${escHtml(type)}','${urlAttrJs}')" `
+    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,${jsAttr(String(item.id))},${jsAttr(type)},${jsAttr(url)})" `
     : (isArtist || isLabel)
       ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${escHtml(String(item.id))}" onclick="searchByEntity(event,this)"`
       : `class="${typeClass}" href="${escHtml(url)}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
@@ -1608,8 +1607,8 @@ function renderCard(item, index, opts) {
         : "Open to add a version to wantlist";
       const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
       const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
-      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
-      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(releaseId)},'master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(releaseId)},'master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
   }
   // Favorite badge — always rendered (placeholder when not favorited).
@@ -1618,7 +1617,7 @@ function renderCard(item, index, opts) {
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
   if (type && item.id)
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},${jsAttr(type)})" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
   if (releaseId && isReleaseOrMaster) {
     // Inventory badge — placeholder visible whenever the user has any
     // inventory items. Active when this release is one of them.

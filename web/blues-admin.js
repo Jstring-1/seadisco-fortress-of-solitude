@@ -44,7 +44,7 @@ function _adminToggleSort(state, key) {
 function _adminSortTh(label, key, state, fn, extraStyle) {
   const active = state.key === key;
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
-  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
+  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" onclick="${fn}(${jsAttr(key)})">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
 }
 // Clickable album cell — opens the shared in-page album modal
 // (modal.js is loaded on /admin). Falls back to a dash when there's
@@ -55,7 +55,7 @@ function _adminAlbumLink(type, id, label) {
   const t = String(type), i = String(id);
   const lbl = label || `${t}/${i}`;
   const url = `https://www.discogs.com/${t}/${i}`;
-  return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${i}','${t}','${url}')" title="Open album popup" style="color:#7eb8da;text-decoration:none">${escHtml(lbl)} ↗</a>`;
+  return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(i)},${jsAttr(t)},${jsAttr(url)})" title="Open album popup" style="color:#7eb8da;text-decoration:none">${escHtml(lbl)} ↗</a>`;
 }
 
 const _adminSubSortState  = { key: "submitted_at",  dir: "desc" };

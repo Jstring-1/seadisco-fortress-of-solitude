@@ -1351,10 +1351,8 @@ async function _renderQueueDrawer() {
     // Fall-back label — if we don't know the release, still make the
     // title a YouTube search so the user has SOMETHING actionable.
     const ytSearchHref = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${it.data?.artist || ""} ${it.data?.title || ""}`.trim())}`;
-    // Single-quoted id so the call is safe inside a double-quoted
-    // onclick attribute (JSON.stringify emits double quotes, which
-    // truncate the attribute for string release ids).
-    const _relIdJs = `'${releaseId.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+    // jsAttr: a JS string literal escaped for the double-quoted onclick.
+    const _relIdJs = jsAttr(releaseId);
     // openModal(event, id, type) is the real release/master modal opener
     // (modal.js). The old window.openAlbumModal/openMasterModal names were
     // never defined, so the && guard silently no-oped. Pass null for the
@@ -1373,7 +1371,7 @@ async function _renderQueueDrawer() {
               <span class="queue-row-title">${safeTitle}</span>
               ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
             </a>`)
-      : `<button class="queue-row-play" onclick="queueJumpTo(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="${isPlaying ? "Currently playing" : "Play this now"}">
+      : `<button class="queue-row-play" onclick="queueJumpTo(null,${jsAttr(String(it.externalId))})" title="${isPlaying ? "Currently playing" : "Play this now"}">
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>`;

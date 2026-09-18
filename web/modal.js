@@ -606,15 +606,15 @@ async function _renderWikiPopupSearch(q, contentEl) {
       listEl.innerHTML = `<div class="wiki-results-empty">No matches for <em>${escHtml(q)}</em>.</div>`;
       return;
     }
-    const safeQ = String(q).replace(/'/g, "\\'");
+    const safeQ = String(q);
     // Make sure ★ state is loaded so the saved buttons render correctly
     await _wikiLoadSavedIds();
     listEl.innerHTML = rows.map(rec => {
-      const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+      const safeTitle = String(rec.title || "");
       return `
         <div class="wiki-result">
           <div class="wiki-result-head">
-            <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','${escHtml(safeQ)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+            <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},${jsAttr(safeQ)})" title="Open in popup">${escHtml(rec.title || "")}</a>
             ${_wikiSaveBtnHtml(rec.title || "")}
           </div>
           <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
@@ -659,10 +659,10 @@ async function openWikiArticle(title, sourceQuery) {
       return;
     }
     const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="" style="float:right;max-width:140px;margin:0 0 0.5rem 1rem;border-radius:4px">` : "";
-    const safeSrc = String(sourceQuery || "").replace(/'/g, "\\'");
+    const safeSrc = String(sourceQuery || "");
     const backDisplay = _wikiHeadingDisplay(sourceQuery || "");
     const backBtn = sourceQuery
-      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup('${escHtml(safeSrc)}')">← Back to "${escHtml(backDisplay)}" results</button>`
+      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup(${jsAttr(safeSrc)})">← Back to "${escHtml(backDisplay)}" results</button>`
       : "";
     // Render ★ next to the article heading so the user can save the
     // article they're currently reading without bouncing back to a list.
@@ -1144,7 +1144,7 @@ function _pushWikiRecent(q) {
 const _WIKI_PAGE_SIZE = 20;
 
 function _wikiResultRowHtml(rec) {
-  const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+  const safeTitle = String(rec.title || "");
   // Open the article popup directly — the SPA results list already shows
   // the same matches we'd render in an intermediate search popup, so an
   // extra hop just duplicates what the user is looking at. Pass an empty
@@ -1153,7 +1153,7 @@ function _wikiResultRowHtml(rec) {
   return `
     <div class="wiki-result">
       <div class="wiki-result-head">
-        <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(rec.title || "")}</a>
+        <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},'')" title="Open article">${escHtml(rec.title || "")}</a>
         ${_wikiSaveBtnHtml(rec.title || "")}
       </div>
       <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
@@ -1197,11 +1197,11 @@ async function _wikiLoadSavedIds() {
 
 function _wikiSaveBtnHtml(title) {
   if (!title) return "";
-  const safe = String(title).replace(/'/g, "\\'");
+  const safe = String(title);
   const isSaved = !!(_wikiSavedTitles && _wikiSavedTitles.has(title));
   const cls = isSaved ? "wiki-save-btn is-saved" : "wiki-save-btn";
   const tip = isSaved ? "Remove from saved" : "Save article for later";
-  return `<button type="button" class="${cls}" data-wiki-title="${escHtml(title)}" onclick="event.preventDefault();event.stopPropagation();_wikiToggleSave('${escHtml(safe)}', this)" title="${tip}">★</button>`;
+  return `<button type="button" class="${cls}" data-wiki-title="${escHtml(title)}" onclick="event.preventDefault();event.stopPropagation();_wikiToggleSave(${jsAttr(safe)}, this)" title="${tip}">★</button>`;
 }
 
 // Update every ★ button in the DOM that targets this title so they
@@ -1306,14 +1306,14 @@ function _wikiRenderSavedListHtml(items) {
     return `<div class="wiki-results-empty">No saved articles yet. Click ★ on any search result to save it for later.</div>`;
   }
   return `<div class="wiki-results-rows">${items.map(it => {
-    const safeTitle = String(it.title || "").replace(/'/g, "\\'");
+    const safeTitle = String(it.title || "");
     const snippetHtml = it.snippet
       ? `<div class="wiki-result-snippet">${escHtml(String(it.snippet))}</div>`
       : "";
     return `
       <div class="wiki-result">
         <div class="wiki-result-head">
-          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(it.title || "")}</a>
+          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle(${jsAttr(safeTitle)},'')" title="Open article">${escHtml(it.title || "")}</a>
           ${_wikiSaveBtnHtml(it.title || "")}
         </div>
         ${snippetHtml}
@@ -1468,8 +1468,8 @@ function bluesAddIcon(discogsId, name) {
     .trim()
     .toLowerCase();
   if (nameKey && window._adminBluesNames?.has(nameKey)) return "";
-  const safeName = String(name || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
-  return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtist(${discogsId}, '${safeName}', this);return false" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
+  const safeName = String(name || "");
+  return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtist(${discogsId}, ${jsAttr(safeName)}, this);return false" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
 }
 
 async function _bluesAddArtist(discogsId, name, anchor) {
@@ -1594,11 +1594,11 @@ function wikiIcon(query, label = "", extraTerms = "") {
   const composed = extraTerms
     ? `"${phrase}" ${String(extraTerms).trim()}`
     : `"${phrase}"`;
-  const q = composed.replace(/'/g, "\\'");
+  const q = composed;
   const lab = label || query;
   // No leading space — wiki-icon's small left margin in CSS provides
   // just enough breathing room from the preceding ⌕ glass.
-  return `<a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
+  return `<a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup(${jsAttr(q)})" title="Wikipedia: ${escHtml(lab)}">W</a>`;
 }
 
 // ── Per-track Library of Congress lookup ───────────────────────────────
@@ -1613,9 +1613,9 @@ function locIcon(trackTitle, artistName) {
   if (!trackTitle) return "";
   // LOC is now open to all callers (anons throttled at 5/min per IP);
   // no client-side gate needed.
-  const t = String(trackTitle).replace(/'/g, "\\'");
-  const a = String(artistName || "").replace(/'/g, "\\'");
-  return ` <a href="#" class="track-loc-icon" onclick="locTrackSearch(event, '${escHtml(t)}', '${escHtml(a)}', this)" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;
+  const t = String(trackTitle);
+  const a = String(artistName || "");
+  return ` <a href="#" class="track-loc-icon" onclick="locTrackSearch(event, ${jsAttr(t)}, ${jsAttr(a)}, this)" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;
 }
 
 let _locTrackPopupEl = null;
@@ -3455,7 +3455,7 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
         || root?.querySelector?.("h2")?.textContent
         || "").trim();
       const entityType  = isMaster ? "master" : "release";
-      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-artist-id="${escHtml(String(trackArtistId || ""))}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
+      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-artist-id="${escHtml(String(trackArtistId || ""))}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(url)})" title="Play this track">▶</a>`;
       // ＋ queue button sits immediately after ▶ in the play-cell so
       // the play / queue affordances stay grouped together (matches
       // the static render at <span class="track-play-cell">${playCell}${queueAdd}</span>).
@@ -3658,10 +3658,9 @@ function _trackYtRefreshHeadingPlayableCount(root) {
     playAll.className = "tracklist-play-all";
     playAll.title = "Play the first track and queue the rest of the album";
     playAll.textContent = "▶";
-    const safeUrl = firstUrl.replace(/'/g, "\\'");
     playAll.setAttribute(
       "onclick",
-      `event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${safeUrl}')`
+      `event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,${JSON.stringify(String(firstUrl))})`
     );
     span.append(" ");
     span.appendChild(playAll);
@@ -5136,7 +5135,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const labelCodeRow = identifierGroups["Label Code"]
     ? `<span class="detail-label">Label Code</span><span>${escHtml(identifierGroups["Label Code"])}</span>` : "";
   const matrixRow = identifierGroups["Matrix / Runout"]
-    ? (() => { const val = identifierGroups["Matrix / Runout"]; return `<span class="detail-label">Matrix / Runout</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText('${escHtml(val.replace(/'/g, "\\'"))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`; })() : "";
+    ? (() => { const val = identifierGroups["Matrix / Runout"]; return `<span class="detail-label">Matrix / Runout</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText(${jsAttr(val)});this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`; })() : "";
 
   // Remaining identifiers (exclude Label Code and Matrix / Runout — placed separately)
   const otherIdentifierTypes = ["Barcode","ASIN","Catalog Number"];
@@ -5146,8 +5145,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       if (t === "Catalog Number") {
         const vals = identifierGroups[t].split(", ");
         const linked = vals.map(v => {
-          const esc = escHtml(v.replace(/'/g, "\\'"));
-          return `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${esc}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${esc}')" title="Search your collection for ${escHtml(v)}">⌕</a>`;
+          const esc = v;
+          return `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value=${jsAttr(esc)};toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query',${jsAttr(esc)})" title="Search your collection for ${escHtml(v)}">⌕</a>`;
         }).join(", ");
         return `<span class="detail-label">${escHtml(t)}</span><span>${linked}</span>`;
       }
@@ -5173,15 +5172,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .filter(s => s.name)
     .map(s => {
       const label = s.catno ? `${s.name} (${s.catno})` : s.name;
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();openSeriesBrowser(${s.id},'${escHtml(s.name.replace(/'/g, "\\'"))}')" title="Browse series: ${escHtml(s.name)}">${escHtml(label)}</a>`;
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();openSeriesBrowser(${s.id},${jsAttr(s.name)})" title="Browse series: ${escHtml(s.name)}">${escHtml(label)}</a>`;
     }).join(", ");
 
   const isMaster = searchResult.type === "master";
-  const catnoEsc = catno.replace(/'/g, "\\'");
+  const catnoEsc = catno;
   const detailRows = [
     labelEntries.length ? `<span class="detail-label">Label</span><span>${labelEntries.map(({ id: lId, name: ln }) => entityLookupLinkHtml("label", ln, { className: "modal-internal-link", title: `Lookup options for ${ln}`, entityId: lId })).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value=${jsAttr(catnoEsc)};doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query',${jsAttr(catnoEsc)})" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
@@ -5249,7 +5248,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Stage YouTube URLs for missing tracks (paste links you found on youtube.com)">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a> <a href="#" class="tracklist-queue-album tracklist-playlist-album" onclick="event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)" title="Add all playable tracks to a playlist">♪</a>` : ""}${albumFindMissingLink})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,${jsAttr(firstPlayableUrl)})" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a> <a href="#" class="tracklist-queue-album tracklist-playlist-album" onclick="event.preventDefault();event.stopPropagation();_albumPlaylistAdd(this)" title="Add all playable tracks to a playlist">♪</a>` : ""}${albumFindMissingLink})</span>`
     : (albumFindMissingLink ? `<span class="tracklist-playable">(${albumFindMissingLink})</span>` : "");
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   // Render the tracklist block whenever there's something to show in
@@ -5279,7 +5278,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const trackArtistFA = artists.length ? artists[0] : "";
         const entityType = isMaster ? "master" : "release";
         const playCellFA = fullAlbumUrl
-          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${fullAlbumUrl.replace(/'/g, "\\'")}')" title="Play the full album">▶</a>`
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(fullAlbumUrl)})" title="Play the full album">▶</a>`
           : "";
         // data-fullalbum="1" marks this queue-add icon so queueAddAlbum
         // (the bulk-queue scan over .queue-add-icon[data-yt-url]) skips
@@ -5333,13 +5332,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const ytQuery = encodeURIComponent(
           [_ytArtistQ, _ytTrackQ, _ytAlbumQ].filter(Boolean).join(" ")
         );
-        const trackSearchQ = ('"' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
         // Play column: reserved width so rows align even with no playable URL.
         // Only the ▶ play button lives here now (no orange circle); the
         // external YouTube-search fallback was moved to the end of the
         // title cell, after the wiki W icon.
         const playCell = url
-          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,${jsAttr(url)})" title="Play this track">▶</a>`
           : "";
         // Track title now opens the unified lookup popup (SeaDisco /
         // collection / YouTube / Wikipedia / LOC) instead of going
@@ -5444,7 +5442,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
-        ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
+        ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText(${jsAttr(String(releaseId))});this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
         ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">${
           d._signInForMore === "auth"
             ? "Sign in to load full release details (tracklist, credits, marketplace)."
@@ -5490,7 +5488,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:var(--accent);text-decoration:none">(${count}) :: ${priceBar} ↗</a>
-                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
+                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates(${jsAttr(String(stats.releaseId))},${jsAttr(estId)})" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
               </div>`;
             })()
           : (stats?.numForSale === 0
@@ -5882,7 +5880,7 @@ function renderActionsImmediate(rid, entityType = "release") {
   const inWant = window._wantlistIds?.has(rid);
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},${jsAttr(entityType)})" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
       ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
   if (entityType !== "release") {
@@ -6523,7 +6521,7 @@ function loadModalActions(releaseId, context) {
   const inWant = window._wantlistIds?.has(rid);
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},${jsAttr(entityType)})" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
       ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
 
@@ -6784,12 +6782,12 @@ function refreshCardBadges(releaseId) {
         : "Open to add a version to wantlist";
       const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
       const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
-      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${id}','master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
-      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${id}','master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(id)},'master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,${jsAttr(id)},'master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
     const favKey = `${type}:${id}`;
     const isFav = window._favoriteKeys?.has(favKey);
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},${jsAttr(type)})" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
     if (type === "release") {
       if (userHasInventory) {
         const inInv = window._inventoryIds?.has(id);
@@ -6923,7 +6921,7 @@ function renderMasterVersions() {
       ${fmtCell}
       ${badge}
       <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
-      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
+      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value=${jsAttr(v.label)};applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label',${jsAttr(v.label)})" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
   }).join("");
   applyVisitedCards();
 }
@@ -6970,7 +6968,7 @@ async function openSeriesBrowser(seriesId, seriesName) {
     const formatPills = formats.length > 1
       ? `<div class="sr-pill-row">${[
           `<button class="sr-pill sr-format-pill" data-filter="" onclick="setSrFormatFilter('')">All</button>`,
-          ...formats.map(f => `<button class="sr-pill sr-format-pill" data-filter="${escHtml(f)}" onclick="setSrFormatFilter('${f.replace(/'/g,"\\'")}')">${escHtml(f)}</button>`)
+          ...formats.map(f => `<button class="sr-pill sr-format-pill" data-filter="${escHtml(f)}" onclick="setSrFormatFilter(${jsAttr(f)})">${escHtml(f)}</button>`)
         ].join("")}</div>`
       : "";
 
@@ -7079,11 +7077,11 @@ async function loadMasterVersions(event, masterId) {
 
     const formatPills = [
       `<button class="mv-format-pill mv-pill" data-filter="" onclick="setMvFormatFilter('')">All</button>`,
-      ...formats.map(f => `<button class="mv-format-pill mv-pill" data-filter="${escHtml(f)}" onclick="setMvFormatFilter('${f.replace(/'/g,"\\'")}')">${escHtml(f)}</button>`)
+      ...formats.map(f => `<button class="mv-format-pill mv-pill" data-filter="${escHtml(f)}" onclick="setMvFormatFilter(${jsAttr(f)})">${escHtml(f)}</button>`)
     ].join("");
     const countryPills = [
       `<button class="mv-country-pill mv-pill" data-filter="" onclick="setMvCountryFilter('')">All</button>`,
-      ...countries.map(c => `<button class="mv-country-pill mv-pill" data-filter="${escHtml(c)}" onclick="setMvCountryFilter('${c.replace(/'/g,"\\'")}')">${escHtml(c)}</button>`)
+      ...countries.map(c => `<button class="mv-country-pill mv-pill" data-filter="${escHtml(c)}" onclick="setMvCountryFilter(${jsAttr(c)})">${escHtml(c)}</button>`)
     ].join("");
 
     list.innerHTML = `

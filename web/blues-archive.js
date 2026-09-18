@@ -272,7 +272,7 @@ function _baSortTh(label, key, state, fn, extraStyle, title) {
   const active = state.key === key;
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
   const titleAttr = title ? ` title="${String(title).replace(/"/g, "&quot;")}"` : "";
-  return `<th class="admin-sort-th${active ? " is-active" : ""}"${titleAttr} style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
+  return `<th class="admin-sort-th${active ? " is-active" : ""}"${titleAttr} style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}(${jsAttr(key)})">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
 }
 
 function initBluesArchiveView() {

@@ -657,7 +657,7 @@ function _locRenderCard(item, opts) {
     : "";
 
   return `
-    <a class="card card-type-loc card-animate" href="#" title="${titleSafe}" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}" onclick="event.preventDefault();_locOpenInfoPopup('${idAttr.replace(/'/g, "\\'")}')">
+    <a class="card card-type-loc card-animate" href="#" title="${titleSafe}" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}" onclick="event.preventDefault();_locOpenInfoPopup(${jsAttr(item.id)})">
       <div class="card-thumb-wrap">
         ${thumb}
         ${playOverlay}
@@ -775,7 +775,7 @@ async function _locOpenInfoPopup(locId) {
           const label = esc(t.title || `Track ${i + 1}`);
           const dur = t.duration ? `<span class="loc-track-dur">${esc(t.duration)}</span>` : "";
           return `<li class="loc-track-row">
-            <button type="button" class="loc-track-play" onclick="_locPlayTrack('${esc(item.id).replace(/'/g, "\\'")}',${i})" title="Play this track">▶</button>
+            <button type="button" class="loc-track-play" onclick="_locPlayTrack(${jsAttr(item.id)},${i})" title="Play this track">▶</button>
             <span class="loc-track-num">${i + 1}.</span>
             <span class="loc-track-title">${label}</span>
             ${dur}
@@ -810,8 +810,8 @@ async function _locOpenInfoPopup(locId) {
         <div class="loc-info-section-title">Speakers / participants</div>
         <div class="loc-speaker-credits">${speakers.map(s => {
           const n = esc(s);
-          const jsName = n.replace(/'/g, "\\'");
-          return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName('${jsName}')" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${jsName}')" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${jsName}')" title="Search your collection for ${n}">⌕</a>`;
+          const jsName = String(s ?? "");
+          return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName(${jsAttr(jsName)})" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName(${jsAttr(jsName)})" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName(${jsAttr(jsName)})" title="Search your collection for ${n}">⌕</a>`;
         }).join('<span class="credit-sep"> · </span>')}</div>
       </div>`
     : "";
@@ -829,12 +829,12 @@ async function _locOpenInfoPopup(locId) {
     : `<div class="loc-info-thumb loc-info-thumb-ph">♪</div>`;
 
   const playBtn = canPlay
-    ? `<button type="button" class="loc-info-btn loc-info-btn-play" onclick="_locPlayFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">▶ Play</button>`
+    ? `<button type="button" class="loc-info-btn loc-info-btn-play" onclick="_locPlayFromInfo(${jsAttr(item.id)})">▶ Play</button>`
     : `<button type="button" class="loc-info-btn loc-info-btn-play is-disabled" disabled title="No playable stream">▶ No stream</button>`;
   const queueBtn = canPlay
-    ? `<button type="button" class="loc-info-btn loc-info-btn-queue" onclick="_locQueueFromInfo('${esc(item.id).replace(/'/g, "\\'")}')" title="Add to play queue">＋ Queue</button>`
+    ? `<button type="button" class="loc-info-btn loc-info-btn-queue" onclick="_locQueueFromInfo(${jsAttr(item.id)})" title="Add to play queue">＋ Queue</button>`
     : "";
-  const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">${saved ? "★ Saved" : "☆ Save"}</button>`;
+  const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo(${jsAttr(item.id)})">${saved ? "★ Saved" : "☆ Save"}</button>`;
   const locLink = `<a class="loc-info-btn loc-info-btn-loc" href="${esc(item.url || item.id)}" target="_blank" rel="noopener">Open on loc.gov ↗</a>`;
 
   // Credit line — "Library of Congress, [Collection name]." format from

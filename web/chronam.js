@@ -241,7 +241,7 @@ function _chronamRenderPagination(j) {
 
 // ── Card markup ─────────────────────────────────────────────────────
 function _chronamCardHtml(it) {
-  const idAttr = JSON.stringify(it.id || "").replace(/"/g, "&quot;");
+  const idAttr = escHtml(JSON.stringify(it.id || ""));
   const saved  = _chronamSavedIds?.has(it.id);
   const star   = saved ? "★" : "☆";
   const starTitle = saved ? "Remove from Saved" : "Save this page";
@@ -295,7 +295,7 @@ function openChronAmPopup(id) {
   if (!overlay || !content) return;
 
   const place = [it.city, it.state].filter(Boolean).join(" · ");
-  const idAttr = JSON.stringify(it.id || "").replace(/"/g, "&quot;");
+  const idAttr = escHtml(JSON.stringify(it.id || ""));
   const saved  = _chronamSavedIds?.has(it.id);
   const star   = saved ? "★" : "☆";
   const starTitle = saved ? "Remove from Saved" : "Save this page";

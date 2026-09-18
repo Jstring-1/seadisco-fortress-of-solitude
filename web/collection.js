@@ -875,7 +875,7 @@ async function openFolderManager() {
           : `<button type="button" class="fm-btn fm-btn-edit" onclick="fmStartRename(${fid})" title="Rename">✎</button>
              <button type="button" class="fm-btn fm-btn-save" onclick="fmSaveRename(${fid})" style="display:none" title="Save">✓</button>
              <button type="button" class="fm-btn fm-btn-cancel" onclick="fmCancelRename(${fid})" style="display:none" title="Cancel">✕</button>
-             <button type="button" class="fm-btn fm-btn-del" onclick="fmDeleteFolder(${fid},'${escHtml(f.name).replace(/'/g, "\\'")}',${f.count})" title="Delete">🗑</button>`
+             <button type="button" class="fm-btn fm-btn-del" onclick="fmDeleteFolder(${fid},${jsAttr(f.name)},${f.count})" title="Delete">🗑</button>`
         }
       </td>
     </tr>`;
@@ -1325,7 +1325,7 @@ function _rfEnsureBar() {
   if (!results || !results.parentNode) return;
   const cols = _RF_COLS.map(c => `
     <div class="rf-col">
-      <button type="button" class="rf-sort" data-col="${c.key}" onclick="_rfToggleSort('${c.key}')" title="Sort by ${c.label}">
+      <button type="button" class="rf-sort" data-col="${c.key}" onclick="_rfToggleSort(${jsAttr(c.key)})" title="Sort by ${c.label}">
         ${c.label}<span class="rf-caret" data-col="${c.key}"></span>
       </button>
       <input type="text" class="rf-filter" data-col="${c.key}" placeholder="filter…" oninput="_rfApply()" autocomplete="off" />
@@ -2028,12 +2028,12 @@ function renderListsTable() {
   const arrow = col => _listsSortCol === col ? (_listsSortAsc ? " \u25B2" : " \u25BC") : "";
   const rows = sorted.map(list => {
     const name = escHtml(list.name || "Untitled");
-    const safeName = name.replace(/'/g, "\\'");
+    const safeName = name;
     const desc = escHtml(list.description || "");
     const truncDesc = desc.length > 80 ? desc.slice(0, 77) + "..." : desc;
     const count = list.item_count ?? 0;
     const vis = list.is_public ? "Public" : "Private";
-    return `<tr class="lists-table-row" onclick="openListDetail(${list.list_id},'${safeName}')">
+    return `<tr class="lists-table-row" onclick="openListDetail(${list.list_id},${jsAttr(safeName)})">
       <td class="lists-td-name">${name} <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lists-ext-link" title="View on Discogs">\u2197</a></td>
       <td class="lists-td-items">${count}</td>
       <td class="lists-td-vis">${vis}</td>
@@ -2445,7 +2445,7 @@ async function showSyncStatus(type) {
   try {
     const r = await apiFetch("/api/user/collection?page=1&per_page=1");
   } catch {}
-  el.innerHTML = `<a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+  el.innerHTML = `<a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
 }
 
 let _mainSyncPoll = null;
@@ -2461,7 +2461,7 @@ async function triggerSync(type = "both") {
     });
     const data = await r.json();
     if (data.skipped) {
-      if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+      if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
       return;
     }
     if (_mainSyncPoll) clearInterval(_mainSyncPoll);
@@ -2483,7 +2483,7 @@ async function triggerSync(type = "both") {
             : sd.syncProgress > 0
               ? `${sd.syncProgress.toLocaleString()} new items added`
               : `Up to date`;
-          if (el) el.innerHTML = `${completeMsg} &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+          if (el) el.innerHTML = `${completeMsg} &nbsp;·&nbsp; <a href="#" onclick="triggerSync(${jsAttr(type)});return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
           await loadDiscogsIds();
           if (_activeTab === "collection") loadCollectionTab(1);
           else if (_activeTab === "wantlist") loadWantlistTab(1);

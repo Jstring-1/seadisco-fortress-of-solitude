@@ -115,7 +115,7 @@ async function _renderOrdersPage() {
       const hasNew = !!it.has_new;
       const oid = escHtml(it.order_id);
       return `<div class="ord-row${hasNew ? " ord-row-unread" : ""}" data-oid="${oid}">
-        <div class="ord-row-clickarea" onclick="openOrderDetail('${oid}')">
+        <div class="ord-row-clickarea" onclick="openOrderDetail(${jsAttr(oid)})">
           <div class="ord-row-main">
             ${hasNew ? `<span class="ord-unread-dot" title="New activity"></span>` : ""}
             <span class="${_statusChipClass(it.status)}">${escHtml(it.status || "—")}</span>
@@ -129,12 +129,12 @@ async function _renderOrdersPage() {
           </div>
         </div>
         <div class="ord-row-quick">
-          <button type="button" class="ord-quick-toggle" onclick="_ordToggleQuickReply('${oid}', event)" title="Quick reply">💬</button>
+          <button type="button" class="ord-quick-toggle" onclick="_ordToggleQuickReply(${jsAttr(oid)}, event)" title="Quick reply">💬</button>
           <div class="ord-quick-panel" id="ord-quick-${oid}" style="display:none" onclick="event.stopPropagation()">
             <textarea rows="2" placeholder="Quick reply to ${escHtml(it.buyer_username || "buyer")}…"></textarea>
             <div class="ord-quick-actions">
-              <button type="button" onclick="_ordQuickCancel('${oid}')">Cancel</button>
-              <button type="button" class="ord-btn-primary" onclick="_ordQuickSend('${oid}')">Send</button>
+              <button type="button" onclick="_ordQuickCancel(${jsAttr(oid)})">Cancel</button>
+              <button type="button" class="ord-btn-primary" onclick="_ordQuickSend(${jsAttr(oid)})">Send</button>
             </div>
           </div>
         </div>
@@ -303,7 +303,7 @@ async function openOrderDetail(orderId) {
         <h3>Status</h3>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
           <select id="ord-status-select" data-current-status="${escHtml(it.status || "")}">${statusOptions}</select>
-          <button onclick="_ordChangeStatus('${escHtml(it.order_id)}')" class="ord-btn-primary">Update status</button>
+          <button onclick="_ordChangeStatus(${jsAttr(it.order_id)})" class="ord-btn-primary">Update status</button>
         </div>
       </div>
 
@@ -312,7 +312,7 @@ async function openOrderDetail(orderId) {
         <div class="ord-msgs">${msgsHtml}</div>
         <textarea id="ord-new-msg" rows="3" placeholder="Write a message to the buyer…" style="width:100%;margin-top:0.5rem;padding:0.5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-family:inherit"></textarea>
         <div style="margin-top:0.4rem;text-align:right">
-          <button onclick="_ordSendMessage('${escHtml(it.order_id)}')" class="ord-btn-primary">Send message</button>
+          <button onclick="_ordSendMessage(${jsAttr(it.order_id)})" class="ord-btn-primary">Send message</button>
         </div>
       </div>
     `;
