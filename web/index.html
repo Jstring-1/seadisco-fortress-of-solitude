@@ -31,21 +31,24 @@
   <meta property="og:url" content="https://seadisco.com/" />
   <meta property="og:title" content="SeaDisco — Music Discovery Platform" />
   <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, and rate releases." />
-  <meta property="og:image" content="https://seadisco.com/seadisco-logo.png" />
+  <meta property="og:image" content="https://seadisco.com/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SeaDisco — Music Discovery Platform" />
   <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, and rate releases." />
-  <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
+  <meta name="twitter:image" content="https://seadisco.com/og-image.png" />
   <!-- SD_HEAD_END -->
 
   <!-- No PNG asset — point apple-touch-icon at the same inline-SVG 💿
        as the favicon. iOS Safari 10+ accepts data URLs here; users
        adding to Home Screen get the disc emoji. Drops the /apple-
        touch-icon.png 404 we were eating on every page load. -->
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
+  <link rel="icon" type="image/svg+xml" href="/icon-512.svg">
   <link rel="manifest" href="/site.webmanifest">
   <!-- Offline-mode boot detection — runs synchronously BEFORE any
        deferred script. app.js reads window._sdOfflineMode to skip
@@ -97,12 +100,7 @@
     "applicationCategory": "MusicApplication",
     "operatingSystem": "Any",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "featureList": "Music Search, Collection Sync, Wantlist Management, Ratings, OAuth Connection",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://seadisco.com/?q={search_term_string}",
-      "query-input": "required name=search_term_string"
-    }
+    "featureList": "Music Search, Collection Sync, Wantlist Management, Ratings, OAuth Connection"
   }
   </script>
 </head>
@@ -119,6 +117,7 @@
 <div id="search-view">
 
 <main>
+  <h1 class="sr-only">SeaDisco — search Discogs, sync your record collection, and play albums as you browse</h1>
   <span id="auth-status" style="display:none"></span>
 
   <!-- Public mode: search is open to everyone. Sign-up / sign-in is

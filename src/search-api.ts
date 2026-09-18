@@ -870,18 +870,23 @@ function _headTagsForView(view: string): string {
   const m = _VIEW_META[view] || _VIEW_META.home;
   const url = _SITE_ORIGIN + "/" + m.path;
   const t = _escAttr(m.title), d = _escAttr(m.desc), u = _escAttr(url);
-  const img = `${_SITE_ORIGIN}/seadisco-logo.png`;
+  const img = `${_SITE_ORIGIN}/og-image.png`;
+  // Signed-in / admin views and unknown ?v= values have nothing for a
+  // search engine: keep them out of the index (they canonicalise home).
+  const robots = (view && !_VIEW_META[view]) ? "noindex, follow" : "index, follow";
   return [
     `<title>${t}</title>`,
     `<meta name="description" content="${d}" />`,
     `<meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile" />`,
-    `<meta name="robots" content="index, follow" />`,
+    `<meta name="robots" content="${robots}" />`,
     `<link rel="canonical" href="${u}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:url" content="${u}" />`,
     `<meta property="og:title" content="${t}" />`,
     `<meta property="og:description" content="${d}" />`,
     `<meta property="og:image" content="${img}" />`,
+    `<meta property="og:image:width" content="1200" />`,
+    `<meta property="og:image:height" content="630" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,
@@ -905,12 +910,10 @@ function _sendHtml(res: express.Response, relPath: string, req?: express.Request
     const view = (typeof rawView === "string" ? rawView : "").trim().toLowerCase();
     html = html.replace(_SD_HEAD_RE, _headTagsForView(view));
   }
-  // Stronger cache directive — `no-cache` is browser-honored but some
-  // edge caches (Railway proxies, Cloudflare, etc.) still hold pages.
-  // `no-store` is unambiguous: don't cache anywhere. The HTML is
-  // small and re-fetching is cheap.
-  res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
-  res.setHeader("Pragma", "no-cache");
+  // private + no-cache: never stored by shared caches, always revalidated
+  // (so a deploy shows up at once), but — unlike no-store — the browser's
+  // back/forward cache still works.
+  res.setHeader("Cache-Control", "private, no-cache, must-revalidate");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   // Diagnostic header — `curl -I https://seadisco.com` will show
   // exactly which theme the server thinks it's injecting.

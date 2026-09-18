@@ -1,6 +1,8 @@
 User-agent: *
 Allow: /
-Disallow: /account
+# The homepage feed is loaded from /api/feed/ — allow it so crawlers
+# render the page with content. Everything else under /api/ is data.
+Allow: /api/feed/
 Disallow: /api/
 
 Sitemap: https://seadisco.com/sitemap.xml
