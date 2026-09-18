@@ -617,7 +617,10 @@ async function loadDbStats(triggerBtn) {
       }
       return;
     }
-    const { tables, totalRows } = await r.json();
+    const { tables, totalRows, dbBytes } = await r.json();
+    const fmtBytes = b => b >= 1073741824 ? `${(b / 1073741824).toFixed(2)} GB` : b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round((b || 0) / 1024))} KB`;
+    const sizeMap = {};
+    tables.forEach(t => sizeMap[t.table] = t.bytes);
 
     const groups = [
       { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
@@ -638,7 +641,7 @@ async function loadDbStats(triggerBtn) {
     const ungrouped = tables.map(t => t.table).filter(t => !knownTables.has(t));
     if (ungrouped.length) groups.push({ label: "Ungrouped (unrecognized)", tables: ungrouped });
 
-    let html = `<div style="margin-bottom:0.6rem;font-weight:600;color:var(--fg)">${totalRows.toLocaleString()} total rows · ${tables.length} tables</div>`;
+    let html = `<div style="margin-bottom:0.6rem;font-weight:600;color:var(--fg)" title="Row counts are Postgres estimates (updated by autovacuum/ANALYZE); sizes include indexes and TOAST.">≈${totalRows.toLocaleString()} rows · ${tables.length} tables${dbBytes ? ` · ${fmtBytes(dbBytes)} on disk` : ""}</div>`;
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.8rem">';
     for (const g of groups) {
       html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem">`;
@@ -651,7 +654,7 @@ async function loadDbStats(triggerBtn) {
         const nameMarkup = exists
           ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t)})" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t}</a>`
           : `<span style="color:var(--muted)">${t}</span>`;
-        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
+        html += `<div style="display:flex;justify-content:space-between;gap:0.6rem;padding:0.12rem 0;font-size:0.78rem">${nameMarkup}<span style="margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums">${sizeMap[t] ? fmtBytes(sizeMap[t]) : ""}</span><span style="color:${color};font-weight:500;min-width:4.5em;text-align:right;font-variant-numeric:tabular-nums">${display}</span></div>`;
       }
       html += `</div>`;
     }
@@ -662,7 +665,8 @@ async function loadDbStats(triggerBtn) {
     // count desc so the largest tables surface first.
     const flatEl = document.getElementById("db-stats-flat");
     if (flatEl) {
-      const sorted = [...tables].sort((a, b) => (b.rows ?? 0) - (a.rows ?? 0));
+      // Largest on disk first.
+      const sorted = [...tables].sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0));
       flatEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));column-gap:1rem;row-gap:0.15rem">` +
         sorted.map(t => {
           const count = t.rows;
@@ -672,7 +676,7 @@ async function loadDbStats(triggerBtn) {
           const nameMarkup = exists
             ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup(${jsAttr(t.table)})" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t.table}</a>`
             : `<span style="color:var(--muted);font-family:monospace">${t.table}</span>`;
-          return `<div style="display:flex;justify-content:space-between;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
+          return `<div style="display:flex;justify-content:space-between;gap:0.6rem;font-size:0.78rem">${nameMarkup}<span style="margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums">${fmtBytes(t.bytes)}</span><span style="color:${color};font-weight:500;min-width:4.5em;text-align:right;font-variant-numeric:tabular-nums">${display}</span></div>`;
         }).join("") +
         `</div>`;
     }

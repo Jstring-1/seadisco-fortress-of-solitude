@@ -1660,14 +1660,27 @@ export async function upsertCollectionFolders(
   clerkUserId: string,
   folders: Array<{ id: number; name: string; count: number }>
 ): Promise<void> {
-  // Clear old folders and re-insert
-  await getPool().query(`DELETE FROM user_collection_folders WHERE clerk_user_id = $1`, [clerkUserId]);
-  for (const f of folders) {
-    await getPool().query(
-      `INSERT INTO user_collection_folders (clerk_user_id, folder_id, folder_name, item_count)
-       VALUES ($1, $2, $3, $4)`,
-      [clerkUserId, f.id, f.name, f.count]
-    );
+  // Replace the folder list atomically (a reader never sees it empty).
+  const byId = new Map<number, typeof folders[number]>();
+  for (const f of folders) byId.set(Number(f.id), f);
+  const rows = [...byId.values()];
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM user_collection_folders WHERE clerk_user_id = $1`, [clerkUserId]);
+    if (rows.length) {
+      await client.query(
+        `INSERT INTO user_collection_folders (clerk_user_id, folder_id, folder_name, item_count)
+         SELECT $1, x.id, x.nm, x.ct FROM unnest($2::int[], $3::text[], $4::int[]) AS x(id, nm, ct)`,
+        [clerkUserId, rows.map(f => Number(f.id)), rows.map(f => f.name), rows.map(f => Number(f.count) || 0)],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -3156,21 +3169,28 @@ export async function getCollectionPage(
   };
 }
 
-export async function getAllCollectionItems(clerkUserId: string): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT data, folder_id FROM user_collection WHERE clerk_user_id = $1
-     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`,
-    [clerkUserId]
-  );
-  return r.rows;
-}
-
-export async function getAllWantlistItems(clerkUserId: string): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT data FROM user_wantlist WHERE clerk_user_id = $1
-     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`,
-    [clerkUserId]
-  );
+// CSV export reads the library in pages and only the fields the CSV
+// uses (not the full Discogs document), so a 30k-item collection never
+// sits in memory at once. The discogs_release_id / row tie-breaker keeps
+// OFFSET paging stable when artist + title repeat.
+const _EXPORT_FIELDS = `jsonb_build_object(
+    'artists', data->'artists', 'title', data->'title', 'labels', data->'labels',
+    'year', data->'year', 'formats', data->'formats', 'genres', data->'genres',
+    'styles', data->'styles', 'country', data->'country') AS data`;
+export async function getLibraryExportPage(
+  kind: "collection" | "wantlist", clerkUserId: string, offset: number, limit: number,
+): Promise<any[]> {
+  const r = kind === "collection"
+    ? await getPool().query(
+        `SELECT ${_EXPORT_FIELDS}, folder_id FROM user_collection WHERE clerk_user_id = $1
+          ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC, discogs_release_id, instance_id
+          LIMIT $2 OFFSET $3`,
+        [clerkUserId, limit, offset])
+    : await getPool().query(
+        `SELECT ${_EXPORT_FIELDS} FROM user_wantlist WHERE clerk_user_id = $1
+          ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC, discogs_release_id
+          LIMIT $2 OFFSET $3`,
+        [clerkUserId, limit, offset]);
   return r.rows;
 }
 
@@ -3494,15 +3514,22 @@ export async function upsertUserLists(
   clerkUserId: string,
   lists: Array<{ listId: number; name: string; description?: string; itemCount?: number; isPublic?: boolean; data?: object }>
 ): Promise<void> {
-  for (const list of lists) {
-    await getPool().query(
-      `INSERT INTO user_lists (clerk_user_id, list_id, name, description, item_count, is_public, data, synced_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       ON CONFLICT (clerk_user_id, list_id)
-       DO UPDATE SET name = $3, description = $4, item_count = $5, is_public = $6, data = $7, synced_at = NOW()`,
-      [clerkUserId, list.listId, list.name, list.description ?? null, list.itemCount ?? 0, list.isPublic ?? true, list.data ? JSON.stringify(list.data) : null]
-    );
-  }
+  if (!lists.length) return;
+  const byId = new Map<number, typeof lists[number]>();
+  for (const l of lists) byId.set(Number(l.listId), l);
+  const rows = [...byId.values()];
+  await getPool().query(
+    `INSERT INTO user_lists (clerk_user_id, list_id, name, description, item_count, is_public, data, synced_at)
+     SELECT $1, x.id, x.nm, x.ds, x.ct, x.pb, x.dt::jsonb, NOW()
+       FROM unnest($2::int[], $3::text[], $4::text[], $5::int[], $6::boolean[], $7::text[]) AS x(id, nm, ds, ct, pb, dt)
+     ON CONFLICT (clerk_user_id, list_id)
+     DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, item_count = EXCLUDED.item_count,
+                   is_public = EXCLUDED.is_public, data = EXCLUDED.data, synced_at = NOW()`,
+    [clerkUserId,
+     rows.map(l => Number(l.listId)), rows.map(l => l.name), rows.map(l => l.description ?? null),
+     rows.map(l => l.itemCount ?? 0), rows.map(l => l.isPublic ?? true),
+     rows.map(l => l.data ? JSON.stringify(l.data) : null)],
+  );
 }
 
 // ── List items ──────────────────────────────────────────────────────────
@@ -3513,18 +3540,33 @@ export async function upsertListItems(
   items: Array<{ discogsId: number; entityType?: string; comment?: string; data?: object }>
 ): Promise<void> {
   if (!items.length) return;
-  // Remove old items for this list, then insert fresh
-  await getPool().query(
-    `DELETE FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2`,
-    [clerkUserId, listId]
-  );
-  for (const item of items) {
-    await getPool().query(
+  // Replace the list's items in ONE transaction with one bulk insert —
+  // previously a DELETE then a round trip per item, so a reader could
+  // see an empty list mid-sync and a 500-item list cost 501 queries.
+  // Last occurrence wins if Discogs repeats an id.
+  const byId = new Map<number, typeof items[number]>();
+  for (const it of items) byId.set(Number(it.discogsId), it);
+  const rows = [...byId.values()];
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2`, [clerkUserId, listId]);
+    await client.query(
       `INSERT INTO user_list_items (clerk_user_id, list_id, discogs_id, entity_type, comment, data, synced_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (clerk_user_id, list_id, discogs_id) DO UPDATE SET entity_type = $4, comment = $5, data = $6, synced_at = NOW()`,
-      [clerkUserId, listId, item.discogsId, item.entityType ?? "release", item.comment ?? null, item.data ? JSON.stringify(item.data) : null]
+       SELECT $1, $2, x.id, x.et, x.cm, x.dt::jsonb, NOW()
+         FROM unnest($3::int[], $4::text[], $5::text[], $6::text[]) AS x(id, et, cm, dt)`,
+      [clerkUserId, listId,
+       rows.map(r => Number(r.discogsId)),
+       rows.map(r => r.entityType ?? "release"),
+       rows.map(r => r.comment ?? null),
+       rows.map(r => r.data ? JSON.stringify(r.data) : null)],
     );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -5007,27 +5049,29 @@ export async function getRecentJobRuns(jobName: string, limit = 25): Promise<any
 }
 
 // ── Table row counts (admin dashboard) ───────────────────────────────────
-export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number }>> {
-  const tables = [
-    'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
-    'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
-    'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_archive_saves',
-    'user_youtube_saves', 'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
-    'release_cache', 'price_cache', 'price_history',
-    'blues_artists', 'api_request_log', 'oauth_request_tokens',
-    'app_settings',
-  ];
-  const counts = await Promise.all(
-    tables.map(async (t) => {
-      try {
-        const r = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM ${t}`);
-        return { table: t, rows: r.rows[0]?.cnt ?? 0 };
-      } catch {
-        return { table: t, rows: -1 };
-      }
-    })
+// Every table in the public schema with an approximate row count and its
+// on-disk size (table + indexes + TOAST), read from Postgres's own
+// statistics — no COUNT(*), so it's instant even for release_cache and
+// always includes newly added tables. Counts are estimates (refreshed by
+// autovacuum/ANALYZE); pg_class.reltuples is -1 for never-analysed tables,
+// in which case the live-tuple counter is used.
+export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number; bytes: number }>> {
+  const r = await getPool().query(
+    `SELECT c.relname AS table,
+            CASE WHEN c.reltuples >= 0 THEN c.reltuples::bigint ELSE COALESCE(s.n_live_tup, 0) END AS rows,
+            pg_total_relation_size(c.oid) AS bytes
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+      WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+      ORDER BY c.relname`,
   );
-  return counts;
+  return r.rows.map((row: any) => ({ table: String(row.table), rows: Number(row.rows) || 0, bytes: Number(row.bytes) || 0 }));
+}
+
+export async function getDatabaseSize(): Promise<number> {
+  const r = await getPool().query(`SELECT pg_database_size(current_database()) AS b`);
+  return Number(r.rows[0]?.b) || 0;
 }
 
 // ── App settings (key/value) ─────────────────────────────────────────────
