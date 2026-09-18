@@ -799,7 +799,7 @@ function _sdShowConnectDiscogsPopup() {
     <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#333);border-radius:10px;max-width:400px;width:100%;padding:1.4rem 1.5rem;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
       <div style="font-size:2rem;margin-bottom:0.4rem">💿</div>
       <h2 style="margin:0 0 0.5rem;font-size:1.1rem;color:var(--fg,#eee)">Connect your Discogs account</h2>
-      <p style="margin:0 0 1.2rem;font-size:0.86rem;color:var(--muted,#9a9a9a);line-height:1.5">Searching the catalog and syncing your collection, wantlist, and marketplace all need a Discogs connection — it takes one click and you can disconnect anytime.<br><br><span style="color:#c98">Accounts that never connect are removed after 30 days of inactivity.</span></p>
+      <p style="margin:0 0 1.2rem;font-size:0.86rem;color:var(--muted,#9a9a9a);line-height:1.5">Searching the catalog and syncing your collection, wantlist, and marketplace all need a Discogs connection — it takes one click and you can disconnect anytime.<br><br><span style="color:#c98">Accounts that never connect are removed after 30 days of inactivity, along with anything saved to them.</span></p>
       <div style="display:flex;gap:0.6rem;justify-content:center">
         <button id="sd-connect-nudge-later" style="background:none;border:1px solid var(--border,#444);color:var(--muted,#aaa);font-size:0.85rem;padding:0.5rem 1rem;border-radius:6px;cursor:pointer">Maybe later</button>
         <button id="sd-connect-nudge-go" style="background:var(--accent,#5a9aaa);border:1px solid var(--accent,#5a9aaa);color:#08222a;font-weight:600;font-size:0.85rem;padding:0.5rem 1.1rem;border-radius:6px;cursor:pointer">Connect Discogs</button>

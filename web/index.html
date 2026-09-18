@@ -533,7 +533,7 @@ e.g.  miles davis | coltrane
 
   <!-- Inline login/signup bar — visible only when body.sd-anon (signed out). -->
   <div id="anon-cta" class="anon-cta">
-    <span class="anon-cta-text">Sync your vinyl collection and get personalized recommendations.</span>
+    <span class="anon-cta-text">Search all of Discogs, sync your vinyl collection, and play albums as you browse.</span>
     <div class="anon-cta-btns">
       <button type="button" class="anon-cta-join" onclick="openSignUpModal()">Join SeaDisco</button>
       <button type="button" class="anon-cta-signin" onclick="openSignInModal()">Sign in</button>
@@ -610,7 +610,7 @@ e.g.  miles davis | coltrane
 
 <div id="info-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1rem">A guided tour of every feature. Skim the headings or read top-to-bottom — both work.</p>
+  <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1rem">A guided tour of every feature. Skim the headings or read top-to-bottom — both work.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching Discogs</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format, Country). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped), <strong style="color:#ccc">Releases</strong> (individual pressings), or <strong style="color:#ccc">Masters+</strong> (masters plus standalone releases that have no master grouping — useful for finding obscure pressings alongside grouped editions). Sort by relevance, year, title, or label.</p>
@@ -635,15 +635,13 @@ e.g.  miles davis | coltrane
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">On mobile the player surfaces in your OS lock-screen / Bluetooth controls (play/pause/next/previous). Track URLs are shareable — the URL updates as the queue advances, so copying the address bar gives the recipient the exact track you're on with the album-context disc icon ready.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Submitted Tracks (Community YouTube Contributions)</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Discogs's tracklist sometimes lists tracks but doesn't have a YouTube video on file for them. Signed-in users can fill those gaps. On any tracklist row that's missing a YT match, click the small <strong style="color:#c084fc">🎵</strong> next to the title — it opens a YouTube search popup pre-scoped to "Artist - Track Title - Album". Pick the right video, click <strong style="color:#ccc">✓ Suggest</strong>, and your contribution is saved site-wide. The next user who opens that album popup sees your video already wired up to ▶ play and ＋ queue. First-submission-wins — no approval queue.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Discogs's tracklist sometimes lists tracks but doesn't have a YouTube video on file for them. Signed-in users can fill those gaps. When an album has tracks with no video, its tracklist heading shows a <strong style="color:#c084fc">🎵 N missing</strong> link — it opens a popup with a one-click YouTube search for the album. Find the right videos on YouTube, paste their links against the tracks, and your contributions are saved site-wide. The next user who opens that album popup sees your video already wired up to ▶ play and ＋ queue. First-submission-wins — no approval queue.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">By default a submission from a release popup applies at <strong style="color:#ccc">master scope</strong> (lifts to every pressing of the album) when the master is known. Tracks that have a community contribution show a small 🎵 badge next to the title.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The dedicated <strong style="color:#ccc">Submitted Tracks</strong> tab in the navbar shows every album the community has contributed videos to — sortable by Most contributions, Fewest, or Most recent. Each card shows a 🎵 N badge with the count. Open the album to use the contributions or add more.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Recent &amp; Suggestions Feed</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The home page shows a strip of cards under your search bar with a <strong style="color:#ccc">Recent / Suggestions</strong> toggle.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Home Strip</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The home page shows a strip of cards under your search bar with several tabs: <strong style="color:#ccc">Recent</strong>, <strong style="color:#ccc">Feed</strong> (a random sample of vinyl from the catalog), <strong style="color:#ccc">Active</strong> (most-opened on SeaDisco in the last 90 days), <strong style="color:#ccc">Played</strong> (most YouTube plays in the last 90 days), <strong style="color:#ccc">Rare</strong> (early vinyl many collectors want and almost no one owns), and <strong style="color:#ccc">Dig</strong> (long-tail vinyl nobody on SeaDisco has opened yet).</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Recent</strong> is your local browsing history — every album popup you opened, ordered by recency. The × on each card removes it from history. The Clear button wipes everything. History syncs across devices when signed in.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Suggestions</strong> is a personalized feed generated by a background process that runs once daily (overnight, Pacific time). It analyzes the top genre / style / year combinations in your collection + wantlist, then searches Discogs for albums matching that taste profile that you don't already own. Up to 1000 candidates are saved per user — Load More walks through them. The × on a Suggestions card <strong style="color:#ccc">banishes</strong> that album from your feed permanently, so dismissing aggressively doesn't run you out — the next daily pass refills with fresh picks.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Both feeds share a filter input + sort dropdown (Opened, Year, Title, Artist).</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The strip has a filter input and a sort dropdown (Opened, Year, Title, Artist).</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Companion Tabs</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco includes dedicated views for adjacent music data:</p>
@@ -651,7 +649,6 @@ e.g.  miles davis | coltrane
     <li><strong style="color:#ccc">Library of Congress</strong> — search the LOC's public-domain audio archive (early jazz, blues, folk, spoken word). Save items to a personal Saved tab. Playable inline via the cross-source queue.</li>
     <li><strong style="color:#ccc">Wikipedia</strong> — search Wikipedia for artists, albums, labels, genres. Save articles. The lookup popup on any artist/label name in an album popup links here in one click.</li>
     <li><strong style="color:#ccc">Archive.org</strong> — curated live show recordings (jazz, blues, folk). Save individual shows. Playable inline.</li>
-    <li><strong style="color:#ccc">YouTube</strong> — full YouTube search + Saved tab. Star videos to save them; the Saved tab is filterable and sortable.</li>
   </ul>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
@@ -675,12 +672,12 @@ e.g.  miles davis | coltrane
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Save any search and re-run it with one click. Saved searches persist across sessions and sync to your account.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Feedback</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">The Account page handles your Discogs OAuth connection, sync status, offline-access toggle, and account deletion. The "Send feedback" button at the bottom mails the admin directly with whatever you write.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The Account page handles your Discogs OAuth connection, sync status, offline-access toggle, and account deletion. The "Send feedback" button at the bottom sends your message straight to the admin.</p>
 </div>
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: July 15, 2026</p>
+  <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1.2rem">Last updated: July 15, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and, if you connect your Discogs account, the OAuth access credentials returned by Discogs.</p>
@@ -710,11 +707,11 @@ e.g.  miles davis | coltrane
   <p style="font-size:0.84rem;color:#aaa;margin:0">We do not sell, rent, or share your personal data with anyone.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Storage &amp; Security</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs OAuth credentials are stored encrypted at rest by the database provider. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs OAuth credentials are encrypted by SeaDisco before they are stored, and the key is kept outside the database. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Synced user data (collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, and cached profile) is automatically deleted 30 days after it was last synced, or immediately on request. Your authentication tokens are retained for as long as your account exists.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Discogs-connected accounts are unlimited — there is no seat cap. Signing in via Clerk without connecting Discogs is also unlimited, but an account that signs up and never connects Discogs is automatically deleted after 30 days of inactivity. That removes only the Clerk login and email; an unconnected account has no synced data. Connected accounts are not deleted for inactivity — their cached library data may be pruned per the 30-day retention window above and re-syncs from Discogs on demand the next time you use the site.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Discogs-connected accounts are unlimited — there is no seat cap. Signing in via Clerk without connecting Discogs is also unlimited, but an account that signs up and never connects Discogs is automatically deleted after 30 days of inactivity. That deletes the login and email along with anything saved to the account (favorites, playlists, play queue, saved searches). Connected accounts are not deleted for inactivity — their cached library data may be pruned per the 30-day retention window above and re-syncs from Discogs on demand the next time you use the site.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: API logs and search caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion. Note that deleting your SeaDisco account does <strong style="color:#ccc">not</strong> alter anything on Discogs itself — your Discogs account, listings, and orders are untouched.</p>
 
@@ -728,7 +725,7 @@ e.g.  miles davis | coltrane
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: July 15, 2026</p>
+  <p style="font-size:0.78rem;color:var(--muted);margin-bottom:1.2rem">Last updated: July 15, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
@@ -738,7 +735,7 @@ e.g.  miles davis | coltrane
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases) and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account Access</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco is open to public sign-ups via Clerk authentication. Searching the Discogs catalog and the personal features (collection sync, wantlist sync, marketplace listing management) all require connecting your Discogs account via OAuth — a signed-in account that hasn't connected Discogs can only browse the public, cached surfaces (home strips, the Blues Archive). Discogs-connected accounts are unlimited; there is no seat cap. Because of that, an account that signs up but never connects Discogs is treated as an abandoned login: if it goes 30 days with no activity and still has no Discogs connection, it is automatically deleted. This only removes the Clerk login (there is no synced data on an unconnected account). Connected accounts are not deleted for inactivity — their cached collection / wantlist / inventory / order data may be pruned by routine cleanup after about a month of not syncing, but it re-syncs from Discogs automatically the next time you use the site. If you want to leave permanently, use the Delete Account button on the Account page — that erases all of your data immediately and irreversibly.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco is open to public sign-ups via Clerk authentication. Searching the Discogs catalog and the personal features (collection sync, wantlist sync, marketplace listing management) all require connecting your Discogs account via OAuth — a signed-in account that hasn't connected Discogs can use the home strips, the Library of Congress, Wikipedia and Archive.org views, and save favorites, playlists and a play queue. Discogs-connected accounts are unlimited; there is no seat cap. Because of that, an account that signs up but never connects Discogs is treated as an abandoned login: if it goes 30 days with no activity and still has no Discogs connection, it is automatically deleted. This removes the Clerk login and anything saved to the account, such as favorites, playlists and the play queue. Connected accounts are not deleted for inactivity — their cached collection / wantlist / inventory / order data may be pruned by routine cleanup after about a month of not syncing, but it re-syncs from Discogs automatically the next time you use the site. If you want to leave permanently, use the Delete Account button on the Account page — that erases all of your data immediately and irreversibly.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We reserve the right to suspend or remove accounts at our sole discretion, with or without notice, particularly for abuse, automated scraping, or violations of these terms or Discogs' own terms of service.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Marketplace Actions</h3>
@@ -1300,7 +1297,7 @@ e.g.  miles davis | coltrane
           Sign in below (or create an account) to connect your Discogs profile and manage
           your collection, wantlist, favorites, listings, and orders.
         </p>
-        <p style="color:#555;font-size:0.8rem;margin-bottom:0.8rem">
+        <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.8rem">
           SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
           and you can disconnect anytime.
         </p>

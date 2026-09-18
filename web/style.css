@@ -12799,3 +12799,28 @@ body.gutenberg-reader-open { overflow: hidden; }
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.05);
 }
+
+/* Touch screens: the play / queue controls were ~22px — about half the
+   recommended tap size. Enlarge them only where the pointer is a finger. */
+@media (pointer: coarse) {
+  .track-play-btn,
+  #album-info .track-play-btn,
+  #version-info .track-play-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .card-track-play,
+  .card-track-queue,
+  .card-track-playlist {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+  .track-play-cell .queue-add-icon,
+  .track-play-cell .track-playlist-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+  }
+}

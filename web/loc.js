@@ -1581,6 +1581,10 @@ async function _locPlay(item) {
     audio.addEventListener("play",  _locUpdatePlayPauseBtn);
     audio.addEventListener("pause", _locUpdatePlayPauseBtn);
     audio.addEventListener("ended", _locUpdatePlayPauseBtn);
+    // A dead stream (404, unsupported codec, CORS) fires "error", never
+    // "ended" — without this the queue stalled on a broken LOC/Archive
+    // track. Skip it the way the YouTube player skips unavailable videos.
+    audio.addEventListener("error", () => { if (audio.getAttribute("src")) _locSkipBrokenTrack(); });
     audio._locEndedBound = true;
   }
 
@@ -1640,6 +1644,7 @@ async function _locPlay(item) {
         if (!isCurrent()) return;
         if (Hls.isSupported()) {
           const hls = new Hls();
+          hls.on(Hls.Events.ERROR, (_evt, data) => { if (data?.fatal) _locSkipBrokenTrack(); });
           hls.loadSource(item.streamUrl);
           hls.attachMedia(audio);
           audio._hls = hls;
@@ -1677,7 +1682,9 @@ async function _locPlay(item) {
     try {
       await audio.play();
     } catch (err2) {
-      if (err2?.name !== "AbortError") {
+      if (err2?.name === "NotSupportedError") {
+        _locSkipBrokenTrack();
+      } else if (err2?.name !== "AbortError") {
         showToast?.("Playback failed: " + (err2?.message || "unknown"), "error");
       }
     }
@@ -1724,11 +1731,24 @@ function _locToggleExpand() {
 // hand off to it (LOC or YouTube source). Otherwise fall back to the
 // internal multi-track LOC queue (for albums with multiple tracks
 // inside a single LOC item).
-async function _locOnTrackEnded() {
+// Called when the current stream can't play. Once per source (media
+// errors can fire more than once for the same src), and never honours
+// repeat-one — repeating a dead track would loop forever.
+let _locLastBrokenSrc = null;
+function _locSkipBrokenTrack() {
+  const audio = document.getElementById("loc-audio");
+  const src = audio?._hls ? (audio._hls.url || "") : (audio?.getAttribute("src") || "");
+  if (src && src === _locLastBrokenSrc) return;
+  _locLastBrokenSrc = src;
+  showToast?.("Track unavailable — skipping", "info", 3500);
+  _locOnTrackEnded({ skipRepeat: true });
+}
+
+async function _locOnTrackEnded(opts) {
   // Cross-source repeat-one: replay current LOC track without consuming
   // anything from the queue. Honored before queue handoff so the user
   // who toggled "repeat one" never falls through to the next item.
-  if (typeof window._queueGetRepeat === "function" && window._queueGetRepeat() === "one") {
+  if (!opts?.skipRepeat && typeof window._queueGetRepeat === "function" && window._queueGetRepeat() === "one") {
     const audio = document.getElementById("loc-audio");
     if (audio && audio.src) {
       try { audio.currentTime = 0; await audio.play(); } catch {}

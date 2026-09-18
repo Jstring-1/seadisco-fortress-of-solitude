@@ -250,7 +250,11 @@ async function _queueLoad(force = false) {
         try { await _reorderInFlightPromise; } catch {}
       }
       const r = await apiFetch("/api/user/play-queue");
-      if (!r.ok) { _queue = []; return _queue; }
+      if (!r.ok) {
+        if (typeof showToast === "function") showToast("Couldn't load your queue — try again in a moment", "error");
+        _queue = _queue ?? [];
+        return _queue;
+      }
       const j = await r.json();
       let items = Array.isArray(j?.items) ? j.items : [];
       // Hide any rows the user just removed locally whose DELETEs
@@ -265,6 +269,9 @@ async function _queueLoad(force = false) {
       // render (see _renderQueueDrawer) and queueRemove deletes every
       // matching position.
       _queue = items;
+      // Tracks queued before signing in lived in localStorage; carry them
+      // over once instead of silently dropping them.
+      setTimeout(_queueMergeAnonAfterSignIn, 0);
       return _queue;
     } catch {
       _queue = _queue ?? [];
@@ -275,6 +282,19 @@ async function _queueLoad(force = false) {
     }
   })();
   return _queueLoadingPromise;
+}
+
+let _queueAnonMergeDone = false;
+async function _queueMergeAnonAfterSignIn() {
+  if (_queueAnonMergeDone || !window._clerk?.user) return;
+  _queueAnonMergeDone = true;
+  const anon = _loadAnonQueue();
+  if (!anon.length) return;
+  try { localStorage.removeItem(_ANON_QUEUE_KEY); } catch {}
+  const have = new Set((_queue || []).map(it => `${it.source}|${it.externalId}`));
+  const fresh = anon.filter(it => it && it.externalId && !have.has(`${it.source}|${it.externalId}`))
+    .map(it => ({ source: it.source, externalId: it.externalId, data: it.data || {} }));
+  if (fresh.length) await queueAdd(fresh, { mode: "append" });
 }
 
 // ── Add to queue ────────────────────────────────────────────────────
