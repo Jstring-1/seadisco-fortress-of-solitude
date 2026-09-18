@@ -14,6 +14,7 @@
 // app_settings so a Railway restart resumes from the last completed
 // seed. Stop / purge are admin-triggered.
 import fs from "node:fs";
+import { assertApiAllowed } from "./api-guard.js";
 import path from "node:path";
 import { bulkInsertExternalDiscography, getAppSetting, setAppSetting, } from "./db.js";
 const REQ_INTERVAL_MS = 2000; // polite scrape rate
@@ -217,6 +218,7 @@ export async function startExternalDiscographyRun(source, opts = {}) {
                     const url = source === "wirz"
                         ? `https://www.wirz.de/music/${seed.slug}.htm`
                         : `https://www.78discography.com/${seed.slug}.htm`;
+                    assertApiAllowed(source);
                     const res = await fetch(url, { headers: { "User-Agent": UA } });
                     if (!res.ok) {
                         _recordError(source, seed.slug, `HTTP ${res.status}`);

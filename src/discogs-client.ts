@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { logApiRequest, getOAuthCredentials } from "./db.js";
+import { assertApiAllowed } from "./api-guard.js";
 
 const BASE_URL = "https://api.discogs.com";
 
@@ -243,6 +244,7 @@ export class DiscogsClient {
     const start = Date.now();
     let response: Response;
     try {
+      assertApiAllowed("discogs");
       response = await fetch(fullUrl, { headers, signal: controller.signal });
     } catch (err: any) {
       const ms = Date.now() - start;

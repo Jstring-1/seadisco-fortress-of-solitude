@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { logApiRequest, getOAuthCredentials } from "./db.js";
+import { assertApiAllowed } from "./api-guard.js";
 const BASE_URL = "https://api.discogs.com";
 // ── Per-key, priority Discogs request scheduler ───────────────────
 // Discogs enforces its ~60/min authed limit PER CREDENTIAL, so we keep
@@ -216,6 +217,7 @@ export class DiscogsClient {
         const start = Date.now();
         let response;
         try {
+            assertApiAllowed("discogs");
             response = await fetch(fullUrl, { headers, signal: controller.signal });
         }
         catch (err) {

@@ -57,6 +57,7 @@ import {
   isFacetedSweepRunning,
 } from "./faceted-sweep-worker.js";
 import { isSplitCacheReaderEnabled } from "./db.js";
+import { isApiKilled, setApiKilled, assertApiAllowed } from "./api-guard.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -119,7 +120,8 @@ function _extractDiscogsProfile(profile: any): any {
 // ── Global API kill switch ──────────────────────────────────────────────
 const MAX_USERS         = 100;
 const HIBERNATION_DAYS  = 90;
-let _apiKillSwitch = false;
+// (the kill switch itself lives in api-guard.ts — shared with the Discogs
+// client and the workers)
 
 // ── Token-bucket rate limiter (shared across all callers) ──────────────
 //
@@ -345,7 +347,7 @@ function _locStatsRecord(kind: "hit" | "miss" | "failure" | "ratelimit", errorMs
 
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
 async function loggedFetch(service: string, url: string, init?: RequestInit & { context?: string; discogsPriority?: DiscogsPriority }): Promise<Response> {
-  if (_apiKillSwitch) {
+  if (isApiKilled()) {
     const cleanUrl = url.replace(/token=[^&]+/g, "token=***").replace(/key=[^&]+/g, "key=***").replace(/apikey=[^&]+/g, "apikey=***");
     logApiRequest({ service, endpoint: cleanUrl, method: init?.method ?? "GET", statusCode: 0, success: false, durationMs: 0, errorMessage: "BLOCKED — API kill switch active", context: init?.context }).catch(() => {});
     throw new Error("API kill switch is active — all outgoing requests blocked");
@@ -689,6 +691,18 @@ const _dbReady: Promise<void> = process.env.APP_DB_URL
       .then(() => sealPlaintextTokens().catch(err => { console.error("[startup] token encryption pass failed:", err?.message ?? err); }))
       .then(() => {})
   : Promise.resolve();
+// Restore the admin kill switch from app_settings (it used to reset on
+// every redeploy).
+if (process.env.APP_DB_URL) {
+  _dbReady.then(async () => {
+    try {
+      if ((await getAppSetting("api_kill_switch")) === "1") {
+        setApiKilled(true);
+        console.warn("[startup] API kill switch is ON (persisted) — outgoing data-API requests blocked");
+      }
+    } catch { /* default: off */ }
+  });
+}
 // Slow index maintenance runs after boot, never blocking it.
 if (process.env.APP_DB_URL) {
   _dbReady.then(() => ensureBackgroundIndexes()).catch(err => console.warn("[startup] background index pass failed:", err?.message ?? err));
@@ -5851,6 +5865,7 @@ app.get("/api/chronam/search", async (req, res) => {
   const timeoutId = setTimeout(() => controller.abort(), 45_000);
   const t0 = Date.now();
   try {
+    assertApiAllowed("loc");
     const upstream = await fetch(u.toString(), {
       headers: { "User-Agent": "SeaDisco/1.0 (research; contact via seadisco.com)" },
       signal: controller.signal,
@@ -9096,15 +9111,17 @@ app.post("/api/admin/sync-stop", async (req, res) => {
 app.post("/api/admin/api-kill", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const { enabled } = req.body ?? {};
-  _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
-  console.log(`Admin: API kill switch ${_apiKillSwitch ? "ENABLED — all outgoing requests blocked" : "DISABLED — requests flowing"}`);
-  res.json({ ok: true, killSwitch: _apiKillSwitch });
+  setApiKilled(enabled !== undefined ? !!enabled : !isApiKilled());
+  // Persist so a redeploy / restart doesn't silently resume traffic.
+  await setAppSetting("api_kill_switch", isApiKilled() ? "1" : "0").catch(e => console.warn("[api-kill] persist failed:", e?.message ?? e));
+  console.log(`Admin: API kill switch ${isApiKilled() ? "ENABLED — outgoing data-API requests blocked" : "DISABLED — requests flowing"}`);
+  res.json({ ok: true, killSwitch: isApiKilled() });
 });
 
 // GET /api/admin/api-kill — check kill switch status
 app.get("/api/admin/api-kill", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  res.json({ killSwitch: _apiKillSwitch });
+  res.json({ killSwitch: isApiKilled() });
 });
 
 // POST /api/admin/revoke-sessions — log out all Clerk users except admin
@@ -11753,6 +11770,7 @@ async function _lyricsFetchJson(url: string): Promise<any> {
   const timeoutId = setTimeout(() => controller.abort(), 12_000);
   const t0 = Date.now();
   try {
+    assertApiAllowed("lyrics");
     const r = await fetch(url, {
       headers: {
         "User-Agent": _LYRICS_UA,
@@ -12652,6 +12670,7 @@ async function _ytReviewFetchVideoDetails(ids: string[]): Promise<Map<string, Yt
     const url = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,status`
       + `&id=${encodeURIComponent(batch.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
     try {
+      assertApiAllowed("youtube");
       const resp = await fetch(url);
       if (!resp.ok) {
         console.warn(`[yt-review] videos.list failed: HTTP ${resp.status}`);
@@ -12717,6 +12736,7 @@ async function _ytReviewSearch(q: string, opts: { worker?: boolean; embeddableOn
   if (embeddableOnly) params.push("videoEmbeddable=true");
   const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
   try {
+    assertApiAllowed("youtube");
     const resp = await fetch(url);
     if (!resp.ok) {
       let errSummary = "";
@@ -13269,6 +13289,7 @@ async function _ytResolveChannelId(input: string): Promise<string | null> {
   try {
     _ytQuotaMaybeReset();
     const url = `https://www.googleapis.com/youtube/v3/channels?part=id&${param}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    assertApiAllowed("youtube");
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const body: any = await resp.json();
@@ -13756,6 +13777,7 @@ app.get("/api/admin/yt-review/channel-profiles", async (req, res) => {
         const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics`
           + `&id=${encodeURIComponent(batch.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
         try {
+          assertApiAllowed("youtube");
           const resp = await fetch(url);
           if (!resp.ok) { console.warn(`[yt-review] channels.list failed: HTTP ${resp.status}`); continue; }
           const body: any = await resp.json();
