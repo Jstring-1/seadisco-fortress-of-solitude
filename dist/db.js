@@ -4401,31 +4401,19 @@ export async function bumpReviewQuota(workerSearches, projectUnits) {
             quota_project_units   = CASE WHEN quota_date = $1 THEN quota_project_units   + $3 ELSE $3 END
       WHERE id = 1`, [today, workerSearches, projectUnits]);
 }
-// Finds the next earliest STRICT-Blues master (year ASC) past the
-// cursor. "Strict" = genres array is exactly ['Blues'] (length 1) —
-// a master tagged ['Blues','Rock'] is skipped. No-year masters are
-// also skipped for now per the v1.1 spec; revisit when the dated
-// catalog is exhausted. Returns null when no more matches exist past
-// the cursor.
 // Next Blues master to walk, ordered by year then id, after the given
-// cursor. `tier` selects which slice of the catalog:
-//   'strict' — Blues is the SOLE genre (genres length == 1)
-//   'loose'  — Blues is present ALONGSIDE other genres (length > 1)
-// The two tiers are disjoint, so the worker can walk strict to the end,
-// flip to loose, and never re-consider a strict master in the loose pass.
-// Only masters dated before YT_REVIEW_YEAR_CUTOFF are walked.
+// cursor. Any master tagged Blues counts, whether it's the sole genre or
+// one of several. No-year masters are skipped. Only masters dated before
+// YT_REVIEW_YEAR_CUTOFF are walked. Returns null when no more matches
+// exist past the cursor.
 export const YT_REVIEW_YEAR_CUTOFF = 1960;
-export async function getNextBluesMasterAfter(cursorYear, cursorMasterId, tier = "strict") {
-    const genreCountClause = tier === "loose"
-        ? "jsonb_array_length(rc.data->'genres') > 1"
-        : "jsonb_array_length(rc.data->'genres') = 1";
+export async function getNextBluesMasterAfter(cursorYear, cursorMasterId) {
     const r = await getPool().query(`SELECT rc.discogs_id AS master_id,
             (rc.data->>'year')::int AS year,
             rc.data
        FROM release_cache rc
       WHERE rc.type = 'master'
         AND jsonb_typeof(rc.data->'genres') = 'array'
-        AND ${genreCountClause}
         AND rc.data->'genres' ? 'Blues'
         AND rc.data->>'year' ~ '^[0-9]+$'
         AND (rc.data->>'year')::int > 0

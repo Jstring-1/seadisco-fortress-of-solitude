@@ -13425,14 +13425,12 @@ async function _runYtReviewWorker() {
     let searchesThisRun = 0;
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 5;
-    // Tier cycling: walk 'strict' (sole-genre Blues) to the end, flip to
-    // 'loose' (Blues among other genres), then back to strict, forever —
-    // picking up masters newly cached since the last pass. `passSearches`
-    // counts YouTube searches in the current tier pass; two passes in a
-    // row that find zero new work means both tiers are exhausted, so we
-    // stop instead of busy-looping over already-searched masters.
+    // One walk over every Blues-tagged master (sole genre or among others),
+    // earliest year first. At the end the cursor rewinds to pick up masters
+    // cached since the pass started. `passSearches` counts YouTube searches
+    // in the current pass; a pass with zero searches means everything is
+    // caught up, so we stop instead of busy-looping over searched masters.
     let passSearches = 0;
-    let prevPassEmpty = false;
     // Re-derive channel trust from the admin's approve/reject history at
     // the start of every run, so channels vetted since the last run count
     // (and ones that went bad decay out). Held for the whole run — a
@@ -13461,31 +13459,22 @@ async function _runYtReviewWorker() {
             const state = await getReviewState();
             const cursorYear = state?.cursor_year ?? null;
             const cursorMasterId = state?.cursor_master_id ?? null;
-            const tier = state?.walk_tier === "loose" ? "loose" : "strict";
-            const master = await getNextBluesMasterAfter(cursorYear, cursorMasterId, tier);
+            const master = await getNextBluesMasterAfter(cursorYear, cursorMasterId);
             if (!master) {
-                // End of this tier's masters. If this pass and the previous one
-                // both found nothing new, the whole catalog is caught up — stop.
+                // End of the catalog. Rewind either way so the next pass (or the
+                // next Start) begins at the top; stop if this pass found no work.
                 const thisPassEmpty = passSearches === 0;
-                if (thisPassEmpty && prevPassEmpty) {
-                    await updateReviewState({
-                        message: `Caught up — every pre-${YT_REVIEW_YEAR_CUTOFF} strict + multi-genre Blues master searched. Restart to re-scan, or it'll re-check as new masters cache.`,
-                        running: false,
-                    });
-                    break;
-                }
-                prevPassEmpty = thisPassEmpty;
                 passSearches = 0;
-                const nextTier = tier === "strict" ? "loose" : "strict";
                 await updateReviewState({
-                    walk_tier: nextTier,
                     cursor_year: null,
                     cursor_master_id: null,
                     cursor_track_pos: null,
-                    message: nextTier === "loose"
-                        ? `Strict Blues pass complete — widening to multi-genre Blues (1900–${YT_REVIEW_YEAR_CUTOFF - 1}).`
-                        : "Multi-genre pass complete — restarting strict Blues from 1900.",
+                    ...(thisPassEmpty
+                        ? { message: `Caught up — every pre-${YT_REVIEW_YEAR_CUTOFF} Blues master searched. Restart to re-scan, or it'll re-check as new masters cache.`, running: false }
+                        : { message: `Pass complete — rewinding to re-check Blues masters cached since it started.` }),
                 });
+                if (thisPassEmpty)
+                    break;
                 continue;
             }
             const masterId = Number(master.master_id);
@@ -14118,7 +14107,6 @@ app.post("/api/admin/yt-review/reset-cursor", express.json({ limit: "1kb" }), as
             cursor_year: null,
             cursor_master_id: null,
             cursor_track_pos: null,
-            walk_tier: "strict",
             last_error: null,
             message: alsoResetSearchLog
                 ? "Cursor + search log cleared — next Start walks every Blues master + retries every track."
@@ -14153,7 +14141,6 @@ app.post("/api/admin/yt-review/dismiss-pending", async (req, res) => {
             cursor_year: null,
             cursor_master_id: null,
             cursor_track_pos: null,
-            walk_tier: "strict",
             last_error: null,
             message: `Dismissed ${out.dismissed} pending candidate${out.dismissed === 1 ? "" : "s"} across ${out.tracks} track${out.tracks === 1 ? "" : "s"} — next Start re-searches them.`,
         });
