@@ -1737,6 +1737,23 @@ const SEADISCO_CLERK_LOCALIZATION = {
   },
 };
 
+// SeaDisco caps total accounts (see MAX_USERS server-side). When the cap
+// is reached, sign-up is closed: the sign-up modal shows a notice instead
+// and the sign-in modal hides its "Sign up" link. Fails open.
+async function _sdSignupOpen() {
+  try {
+    const r = await fetch("/api/signup-status", { cache: "no-store" });
+    if (!r.ok) return true;
+    const d = await r.json();
+    return d.open !== false;
+  } catch { return true; }
+}
+function _sdSignupClosedNotice() {
+  const msg = "SeaDisco is full right now (100 accounts), so new sign-ups are closed. Spots open up as unused accounts are removed; please try again later.";
+  if (typeof showToast === "function") showToast(msg, "info", 9000);
+  else alert(msg);
+}
+
 // Open Clerk's sign-in modal overlay (no view change). If the user is
 // already signed in, route to the Account view instead. Falls back to
 // the legacy account view if Clerk's modal API is unavailable.
@@ -1758,10 +1775,14 @@ async function openSignInModal() {
       // Localization is applied globally via Clerk.load() — see
       // loadClerkInstance(). Per-component localization is ignored by the
       // vanilla-JS SDK.
+      // Rebuild from current theme at open time so a theme switch
+      // mid-session is reflected the next time the modal opens.
+      const appearance = _seaDiscoBuildClerkAppearance();
+      if (!(await _sdSignupOpen())) {
+        appearance.elements = { ...appearance.elements, footerAction: { display: "none" } };
+      }
       c.openSignIn({
-        // Rebuild from current theme at open time so a theme switch
-        // mid-session is reflected the next time the modal opens.
-        appearance: _seaDiscoBuildClerkAppearance(),
+        appearance,
         afterSignInUrl: location.pathname + location.search,
         afterSignUpUrl: location.pathname + location.search,
       });
@@ -1794,6 +1815,7 @@ async function openSignUpModal() {
       else location.href = "/?v=account";
       return;
     }
+    if (!(await _sdSignupOpen())) { _sdSignupClosedNotice(); return; }
     if (typeof c.openSignUp === "function") {
       c.openSignUp({
         appearance: _seaDiscoBuildClerkAppearance(),

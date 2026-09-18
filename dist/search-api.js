@@ -10,7 +10,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader } from "./discogs-client.js";
-import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, reviewQueueDecide, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
+import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, touchUserActivity, isUserHibernated, reactivateUser, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, runReadonlyQuery, getQueryableSchema, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, reviewQueueDecide, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning, enqueueCacheWarmRuns, getCacheWarmQueue, clearCacheWarmQueue } from "./cache-warm.js";
 import { initCacheWarmCatnoModule, } from "./cache-warm-catno.js";
@@ -84,11 +84,40 @@ function _extractDiscogsProfile(profile) {
         rank: profile.rank,
     };
 }
-// ── Global API kill switch ──────────────────────────────────────────────
+// ── Account cap ─────────────────────────────────────────────────────────
+// Total SeaDisco accounts (Clerk users, connected or not). Matches the
+// Clerk development instance's 100-user limit: new sign-ups are closed in
+// the UI once it's reached, and accounts that never connect Discogs are
+// deleted after UNCONNECTED_DELETE_DAYS idle to free their spot.
 const MAX_USERS = 100;
-const HIBERNATION_DAYS = 90;
-// (the kill switch itself lives in api-guard.ts — shared with the Discogs
-// client and the workers)
+const UNCONNECTED_DELETE_DAYS = 42;
+// (the global API kill switch lives in api-guard.ts — shared with the
+// Discogs client and the workers)
+// Clerk account count, memoized briefly — the public sign-up status check
+// hits this on page loads. null = Clerk unreachable / not configured.
+let _clerkCountMemo = { n: null, at: 0 };
+async function getClerkAccountCount(maxAgeMs = 60_000) {
+    if (_clerkCountMemo.n != null && Date.now() - _clerkCountMemo.at < maxAgeMs)
+        return _clerkCountMemo.n;
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    if (!clerkSecret)
+        return null;
+    try {
+        const cr = await fetch("https://api.clerk.com/v1/users/count", {
+            headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (!cr.ok)
+            return _clerkCountMemo.n;
+        const n = Number((await cr.json())?.total_count);
+        if (!Number.isFinite(n))
+            return _clerkCountMemo.n;
+        _clerkCountMemo = { n, at: Date.now() };
+        return n;
+    }
+    catch {
+        return _clerkCountMemo.n;
+    }
+}
 // ── Token-bucket rate limiter (shared across all callers) ──────────────
 //
 // Used by the LOC proxy so a stampede of clicks from any signed-in user
@@ -1429,17 +1458,19 @@ app.get("/api/me", async (req, res) => {
         ytOpen: _ytOpenToUsers,
     });
 });
-// GET /api/user-count — admin-only (cap is internal, never advertised)
+// GET /api/user-count — admin-only
 app.get("/api/user-count", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
-    try {
-        const count = await getActiveUserCount();
-        res.json({ count, limit: MAX_USERS });
-    }
-    catch {
-        res.json({ count: 0, limit: MAX_USERS });
-    }
+    const count = await getClerkAccountCount();
+    res.json({ count: count ?? 0, limit: MAX_USERS });
+});
+// GET /api/signup-status — public. Whether new accounts can be created.
+// Fails open when Clerk can't be reached (Clerk's own limit still applies).
+app.get("/api/signup-status", async (_req, res) => {
+    const count = await getClerkAccountCount();
+    res.set("Cache-Control", "no-store");
+    res.json({ open: count == null || count < MAX_USERS, limit: MAX_USERS });
 });
 // GET /api/user/token — reports whether the user has connected via Discogs
 // OAuth. Personal Access Tokens are no longer supported; the endpoint name
@@ -1450,7 +1481,7 @@ app.get("/api/user/token", async (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    // Discogs-connected accounts are unlimited, so any hibernated account
+    // Hibernation is retired: any hibernated account
     // (a legacy state — new hibernations no longer happen) reactivates
     // automatically on return. No cap check.
     if (await isUserHibernated(userId)) {
@@ -1934,6 +1965,7 @@ app.delete("/api/user/account", async (req, res) => {
     }
     try {
         await deleteUserData(userId);
+        _clerkCountMemo.at = 0; // a spot may have opened under the account cap
         res.json({ ok: true });
     }
     catch (err) {
@@ -2046,7 +2078,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
         // Access Token UI exists anymore.
         const existingToken = await getUserToken(stored.clerkUserId);
         if (!existingToken) {
-            // Discogs-connected accounts are unlimited — no cap check. Create a
+            // The account cap is enforced at sign-up, not here. Create a
             // placeholder row so the OAuth columns have somewhere to live.
             await setUserToken(stored.clerkUserId, "__oauth__");
         }
@@ -17854,28 +17886,15 @@ app.get("/api/admin/overview", async (req, res) => {
         const o = await getAdminOverview();
         const since = new Date(Date.now() - 7 * 86400000);
         o.sinceLabel7d = `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-        // Seat cap so the UI can show "connected / max" without hardcoding it.
+        // Account cap + retention so the UI doesn't hardcode them.
         o.maxUsers = MAX_USERS;
+        o.unconnectedDeleteDays = UNCONNECTED_DELETE_DAYS;
         // Clerk account count (signed-up users, incl. those who never
         // connected Discogs). user_tokens only has a row once a user
         // connects Discogs, so totalUsers = Discogs-connected; this is the
-        // broader signup figure. Best-effort — null if Clerk unreachable.
-        o.clerkUsers = null;
-        const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
-        if (clerkSecret) {
-            try {
-                const cr = await fetch("https://api.clerk.com/v1/users/count", {
-                    headers: { Authorization: `Bearer ${clerkSecret}` },
-                });
-                if (cr.ok) {
-                    const cj = await cr.json();
-                    const n = Number(cj?.total_count);
-                    if (Number.isFinite(n))
-                        o.clerkUsers = n;
-                }
-            }
-            catch { /* leave null */ }
-        }
+        // broader signup figure and what the cap counts. Null if Clerk is
+        // unreachable.
+        o.clerkUsers = await getClerkAccountCount(0);
         res.json(o);
     }
     catch (e) {
@@ -18014,10 +18033,9 @@ function startDailySyncSchedule() {
             const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
             if (staleTotal > 0)
                 console.log(`[sync-schedule] Pruned stale data: ${JSON.stringify(stale)}`);
-            // Discogs-connected accounts are unlimited and kept; instead we delete
-            // accounts that signed up but NEVER connected Discogs once they've been
-            // idle 30 days — they have no synced data (just an unused login) and we
-            // don't want dead signups accumulating.
+            // Connected accounts are kept; accounts that signed up but NEVER
+            // connected Discogs are deleted once idle UNCONNECTED_DELETE_DAYS, which
+            // frees their spot under the MAX_USERS account cap.
             const deleted = await deleteIdleUnconnectedUsers().catch((e) => {
                 console.error("[sync-schedule] delete-unconnected error:", e);
                 return 0;
@@ -18030,7 +18048,7 @@ function startDailySyncSchedule() {
         }
     }
     // Delete Clerk accounts that never connected Discogs and have been idle
-    // 30+ days. Non-connected accounts have no user_tokens row and no synced
+    // UNCONNECTED_DELETE_DAYS+ days. Non-connected accounts have no user_tokens row and no synced
     // data, so this only removes the login. Admin + demo are always exempt.
     async function deleteIdleUnconnectedUsers() {
         const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
@@ -18039,7 +18057,7 @@ function startDailySyncSchedule() {
         const conn = await getPool().query("SELECT clerk_user_id FROM user_tokens");
         const connected = new Set(conn.rows.map((r) => r.clerk_user_id));
         const exempt = new Set([ADMIN_CLERK_ID, ..._demoClerkIds].filter(Boolean));
-        const cutoff = Date.now() - 30 * 86400000;
+        const cutoff = Date.now() - UNCONNECTED_DELETE_DAYS * 86400000;
         const toMs = (v) => (v == null ? 0 : (Number(v) > 1e12 ? Number(v) : Number(v) * 1000));
         // Collect candidates across all Clerk pages FIRST (offset paging is only
         // stable while we're not mutating), then delete. Also build the FULL set
@@ -18117,6 +18135,8 @@ function startDailySyncSchedule() {
                 console.error("[sync-schedule] orphan sweep error:", e);
             }
         }
+        if (deleted)
+            _clerkCountMemo.at = 0; // spots freed — refresh the cap check
         return deleted;
     }
     async function runScheduledSync() {

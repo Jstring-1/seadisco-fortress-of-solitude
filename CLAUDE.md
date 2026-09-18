@@ -87,7 +87,7 @@ The app has four access tiers, all gated server-side first then mirrored in clie
 
 3. **Demo allowlist** — Clerk user IDs in `DEMO_CLERK_IDS` env-var (comma-separated).
    - Used for the Google API Quota review demo account.
-   - Bypasses `MAX_USERS` cap on signup + hibernated-user reactivation.
+   - Exempt from the idle-unconnected account deletion (the `MAX_USERS` account cap is enforced at sign-up in the UI).
    - Same UX as admin minus admin-only mutations (✕ delete on track-yt overrides, etc.).
    - YT view + submission flow + paste-URL form open.
    - `getDiscogsForRequest` falls back to admin's OAuth credentials for demo users without their own (read-only flows: search, release/master fetches).

@@ -3321,12 +3321,12 @@ async function loadAdminOverview() {
 
     // ── People — who's signed up and connected ──────────────────────
     const people = _kpiGroup("People", "👥", "kpi-people", [
-      _kpiCard("Clerk users", nf(d.clerkUsers ?? "–"), "signed-up accounts", "Every Clerk account, including people who signed up but never connected Discogs.", "🪪"),
-      _kpiCard("Discogs-connected", nf(d.totalUsers), "linked Discogs", "Accounts that completed the Discogs OAuth link (one row in user_tokens). These are the only accounts that count against the seat cap.", "🔗"),
+      _kpiCard("Accounts", `${nf(d.clerkUsers ?? "–")} / ${nf(d.maxUsers || 100)}`, (d.clerkUsers != null && d.clerkUsers >= (d.maxUsers || 100)) ? "full: sign-ups closed" : "of the account cap", "Every Clerk account, including people who signed up but never connected Discogs. All of them count against the account cap; when it's full, new sign-ups are closed.", "🪪"),
+      _kpiCard("Discogs-connected", nf(d.totalUsers), "linked Discogs", "Accounts that completed the Discogs OAuth link (one row in user_tokens).", "🔗"),
       _kpiCard("Connect rate", pct(d.totalUsers, d.clerkUsers), "of signups linked Discogs", "Share of signed-up Clerk accounts that went on to connect a Discogs account (connected ÷ Clerk users). A funnel/health metric.", "📈"),
       _kpiCard("New (7d)", nf(d.newUsers7d), d.sinceLabel7d || "", "Discogs connections created in the last 7 days.", "🌱"),
       _kpiCard("New (30d)", nf(d.newUsers30d), "last 30 days", "Discogs connections created in the last 30 days.", "🌿"),
-      _kpiCard("Unconnected", nf(Math.max(0, (d.clerkUsers ?? 0) - d.totalUsers)), "no Discogs link", "Signed-up accounts that haven't connected Discogs. These are deleted automatically after 30 days of inactivity.", "🚫"),
+      _kpiCard("Unconnected", nf(Math.max(0, (d.clerkUsers ?? 0) - d.totalUsers)), "no Discogs link", `Signed-up accounts that haven't connected Discogs. These are deleted automatically after ${d.unconnectedDeleteDays || 42} days of inactivity, freeing their spot.`, "🚫"),
     ]);
 
     // ── Engagement — who's actually using it ────────────────────────
@@ -4109,7 +4109,7 @@ function _adminUnifiedCell(u, col) {
   if (col.type === "conn") {
     return u.hasOAuth
       ? `<span style="color:#6fcf87;cursor:help" title="Discogs account connected">✓</span>`
-      : `<span style="color:#d0743f;cursor:help" title="Signed up but has NOT connected Discogs — deleted after 30 days of inactivity">✗</span>`;
+      : `<span style="color:#d0743f;cursor:help" title="Signed up but has NOT connected Discogs — deleted after 6 weeks of inactivity">✗</span>`;
   }
   if (col.type === "delete") {
     // Own row can't be deleted (the server also refuses the admin account).
