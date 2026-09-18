@@ -1536,8 +1536,13 @@ app.get("/api/admin/track-yt", async (req, res) => {
 app.delete("/api/user/account", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  await deleteUserData(userId);
-  res.json({ ok: true });
+  try {
+    await deleteUserData(userId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error("[account delete]", err?.message ?? err);
+    res.status(500).json({ error: "Could not delete account data" });
+  }
 });
 
 // ── OAuth 1.0a endpoints ─────────────────────────────────────────────────

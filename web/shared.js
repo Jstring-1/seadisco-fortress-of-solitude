@@ -85,12 +85,34 @@ function _sdLoadModule(srcPath) {
     s.src = srcPath + (v ? `?v=${encodeURIComponent(v)}` : "");
     s.async = false; // preserve order if multiple are loaded back-to-back
     s.onload  = () => { window._sdLoadedModules[srcPath] = true; resolve(); };
-    s.onerror = () => reject(new Error("Failed to load " + srcPath));
+    s.onerror = () => {
+      // Forget the failure so the next navigation retries instead of
+      // leaving the view blank for the rest of the session.
+      delete window._sdModulePromises[srcPath];
+      s.remove();
+      if (typeof showToast === "function") showToast("Couldn't load part of the page — check your connection and try again", "error", 6000);
+      reject(new Error("Failed to load " + srcPath));
+    };
     document.head.appendChild(s);
   });
   return window._sdModulePromises[srcPath];
 }
 window._sdLoadModule = _sdLoadModule;
+
+// Start the Discogs OAuth hand-off from anywhere (search empty state,
+// connect nudge) without needing the lazy account view to be loaded.
+async function _sdConnectDiscogs() {
+  try {
+    const r = await apiFetch("/api/auth/discogs/start");
+    const data = await r.json().catch(() => null);
+    if (data?.authorizeUrl) { window.location.href = data.authorizeUrl; return; }
+    throw new Error(data?.error || "start failed");
+  } catch {
+    if (typeof showToast === "function") showToast("Couldn't reach Discogs — try again from Account", "error", 6000);
+    try { switchView("account"); } catch {}
+  }
+}
+window._sdConnectDiscogs = _sdConnectDiscogs;
 
 // Stubs for entry points exported by lazy-loaded modules. These get
 // called from inline onclick handlers built by other (eager) modules.
@@ -2256,6 +2278,47 @@ window._sdBringToFront = function (el) {
     el.style.zIndex = String(window._sdPopupZTop++);
   } catch {}
 };
+
+// ── Escape closes the TOPMOST popup only ─────────────────────────────────
+// Each entry: selector + how to close it. The one with the highest z-index
+// (later in the DOM wins a tie) is closed; everything under it stays open.
+const _SD_ESC_POPUPS = [
+  ["#modal-overlay",            () => closeModal()],
+  ["#version-overlay",          () => closeVersionPopup()],
+  ["#series-overlay",           () => closeSeriesBrowser()],
+  ["#bio-full-overlay",         () => closeBioFull()],
+  ["#wiki-overlay",             () => closeWikiPopup()],
+  ["#chronam-popup-overlay",    () => closeChronAmPopup()],
+  ["#loc-popup-overlay",        () => closeLocPopup()],
+  ["#archive-popup-overlay",    () => closeArchivePopup()],
+  ["#gutenberg-reader-overlay", () => _gutenbergCloseReader()],
+  ["#loc-info-overlay",         () => _locCloseInfoPopup()],
+  ["#archive-info-overlay",     () => _archiveCloseInfoPopup()],
+  ["#ba-lyric-public-overlay",  el => el.remove()],
+  ["#ba-lyric-overlay",         el => el.remove()],
+  [".lookup-popup",             () => _closeLookupPopup()],
+];
+function _sdTopPopup() {
+  let best = null, bestZ = -Infinity;
+  for (const [sel, close] of _SD_ESC_POPUPS) {
+    for (const el of document.querySelectorAll(sel)) {
+      let cs; try { cs = getComputedStyle(el); } catch { continue; }
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      const z = parseInt(cs.zIndex, 10) || 0;
+      if (z >= bestZ) { best = { el, close }; bestZ = z; }  // tie: the later match wins
+    }
+  }
+  return best;
+}
+// Returns true if a popup was closed.
+function _sdCloseTopPopup() {
+  const top = _sdTopPopup();
+  if (!top) return false;
+  try { top.close(top.el); } catch (e) { console.warn("[escape] close failed", e); }
+  return true;
+}
+window._sdTopPopup = _sdTopPopup;
+window._sdCloseTopPopup = _sdCloseTopPopup;
 
 // Auto-raise: watch each static overlay and bring it to the front the instant
 // it OPENS (the .open class transitions from absent to present), no matter

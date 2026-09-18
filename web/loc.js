@@ -1820,10 +1820,7 @@ function _locClosePlayer() {
   _locPushPlayUrlState(null);
 }
 
-// Close the info popup with Escape
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") _locCloseInfoPopup();
-});
+// Escape for the info popup is handled by _sdCloseTopPopup (shared.js).
 
 // Expose globals for inline onclick handlers
 window.initLocView              = initLocView;

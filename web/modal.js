@@ -1433,16 +1433,6 @@ async function loadMoreWikiResults() {
   }
 }
 
-// Esc closes wiki popup if open (without touching underlying modals)
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    const w = document.getElementById("wiki-overlay");
-    if (w && w.classList.contains("open")) {
-      e.stopPropagation();
-      closeWikiPopup();
-    }
-  }
-}, true);
 
 // Admin-only "+" icon — adds a Discogs artist to the Blues DB inline.
 // Re-enabled (was a no-op for a while when curation moved to /admin).
@@ -4971,8 +4961,11 @@ document.addEventListener("keydown", e => {
     // is the whole design. Previously this also called closeVideo(), so
     // pressing Escape to dismiss a modal (or the image lightbox stacked over
     // it) killed playback. The mini-player × (playerStop) is the way to stop.
-    closeModal();
-    closeBioFull();
+    // Only the popup on top closes — a Wikipedia/LOC/version popup opened
+    // over an album dismisses first and the album stays open under it.
+    // The image lightbox handles its own Escape.
+    if (document.getElementById("lightbox-overlay")?.classList.contains("open")) return;
+    if (typeof _sdCloseTopPopup === "function") _sdCloseTopPopup();
   }
 });
 

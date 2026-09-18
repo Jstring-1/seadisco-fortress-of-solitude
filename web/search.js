@@ -574,15 +574,19 @@ async function doSearch(page = 1, skipPushState = false) {
     bioFetch = bioRes ? { json: () => bioRes.json() } : null;
     if (res.status === 401 || res.status === 429 || res.status === 502) {
       const errData = await res.json().catch(() => ({}));
-      // auth_required = anon user (no Clerk session)
-      // no_token      = signed-in but Discogs OAuth not connected
-      // Both lead to the same "you need to sign in / connect" CTA.
+      // auth_required = anon user (no Clerk session) -> sign up / sign in
+      // no_token      = signed in but Discogs not connected -> connect
       if (errData.error === "no_token" || errData.error === "auth_required") {
         setStatus("");
-        document.getElementById("results").innerHTML =
-          `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
-          `<div class="empty-state-title">Sign in to search Discogs</div>` +
-          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog. The track will keep playing.</div></div>`;
+        const playing = !!document.getElementById("mini-player")?.classList.contains("open");
+        const keepPlaying = playing ? " Your music keeps playing." : "";
+        document.getElementById("results").innerHTML = errData.error === "no_token"
+          ? `<div class="empty-state"><div class="empty-state-icon">💿</div>` +
+            `<div class="empty-state-title">Connect Discogs to search</div>` +
+            `<div class="empty-state-subtitle">Searching the catalog uses your own Discogs account. <a href="#" onclick="_sdConnectDiscogs();return false;" style="color:var(--accent)">Connect Discogs</a> — it takes one click.${keepPlaying}</div></div>`
+          : `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
+            `<div class="empty-state-title">Sign in to search Discogs</div>` +
+            `<div class="empty-state-subtitle"><a href="#" onclick="openSignUpModal();return false;" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog.${keepPlaying}</div></div>`;
         return;
       }
       // discogs_auth = signed in + token on file, but Discogs upstream

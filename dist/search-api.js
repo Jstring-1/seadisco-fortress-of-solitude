@@ -1588,8 +1588,14 @@ app.delete("/api/user/account", async (req, res) => {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    await deleteUserData(userId);
-    res.json({ ok: true });
+    try {
+        await deleteUserData(userId);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        console.error("[account delete]", err?.message ?? err);
+        res.status(500).json({ error: "Could not delete account data" });
+    }
 });
 // ── OAuth 1.0a endpoints ─────────────────────────────────────────────────
 // GET /api/auth/discogs/start — initiate OAuth flow (requires Clerk auth + clerk_user_id in query)

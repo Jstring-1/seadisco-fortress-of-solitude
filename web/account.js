@@ -513,15 +513,29 @@ async function clearDataAndSignOut() {
 async function deleteAccount() {
   if (!confirm("Permanently delete your account and all saved data? This cannot be undone.")) return;
   try {
-    // Delete our DB records first
-    await apiFetch("/api/user/account", { method: "DELETE" });
+    // Delete our DB records first — and stop if that fails, otherwise the
+    // login would be gone while the data (and Discogs tokens) stayed.
+    const r = await apiFetch("/api/user/account", { method: "DELETE" });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body?.error || `server returned ${r.status}`);
+    }
     // Then delete the Clerk account
     await window._clerk?.user?.delete();
     _cachedToken = null;
     _cachedTokenAt = 0;
+    // Drop what this browser kept for the account: offline library copy
+    // and per-user local settings.
+    try { await window.sdIdb?.destroy?.(); } catch {}
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (/^(sd[-_]|seadisco)/i.test(k)) localStorage.removeItem(k);
+      }
+    } catch {}
+    if (typeof showToast === "function") showToast("Your account and data were deleted.", "info", 6000);
     switchView("search");
   } catch (err) {
-    alert("Error deleting account: " + (err?.message ?? err));
+    alert("Error deleting account: " + (err?.message ?? err) + " — your login was not deleted, please try again.");
   }
 }
 

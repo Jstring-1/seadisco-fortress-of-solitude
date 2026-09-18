@@ -775,12 +775,16 @@ async function applyAuthState(clerk) {
 async function _sdMaybePromptConnectDiscogs() {
   try {
     if (window._sdOfflineMode) return;
-    if (sessionStorage.getItem("sd-connect-nudge") === "1") return;
+    // Once a day across tabs (sessionStorage is per-tab, so the old
+    // "once per session" re-prompted in every new tab).
+    let last = 0;
+    try { last = Number(localStorage.getItem("sd-connect-nudge-at") || 0); } catch {}
+    if (Date.now() - last < 24 * 60 * 60 * 1000) return;
     const res = await apiFetch("/api/user/token").catch(() => null);
     if (!res || !res.ok) return;
     const data = await res.json().catch(() => null);
     if (!data || !data.oauthEnabled || data.hasToken) return; // connected / n/a
-    sessionStorage.setItem("sd-connect-nudge", "1");
+    try { localStorage.setItem("sd-connect-nudge-at", String(Date.now())); } catch {}
     _sdShowConnectDiscogsPopup();
   } catch { /* best-effort nudge */ }
 }
@@ -803,7 +807,10 @@ function _sdShowConnectDiscogsPopup() {
     </div>`;
   document.body.appendChild(ov);
   ov.querySelector("#sd-connect-nudge-later").addEventListener("click", close);
-  ov.querySelector("#sd-connect-nudge-go").addEventListener("click", () => { close(); try { switchView("account"); } catch {} });
+  ov.querySelector("#sd-connect-nudge-go").addEventListener("click", () => { close(); _sdConnectDiscogs(); });
+  const onKey = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", onKey); } };
+  document.addEventListener("keydown", onKey);
+  ov.querySelector("#sd-connect-nudge-go").focus();
 }
 
 // Offline-mode boot path — set by the inline script in index.html's

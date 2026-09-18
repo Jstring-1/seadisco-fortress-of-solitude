@@ -444,17 +444,9 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
-    // Close any open modal first
-    const overlay = document.getElementById("modal-overlay");
-    if (overlay && overlay.style.display !== "none" && overlay.style.display !== "") {
-      if (typeof closeModal === "function") closeModal();
-      return;
-    }
-    const vOverlay = document.getElementById("version-overlay");
-    if (vOverlay && vOverlay.style.display !== "none" && vOverlay.style.display !== "") {
-      if (typeof closeVersionPopup === "function") closeVersionPopup();
-      return;
-    }
+    // A popup is open: modal.js's handler closes the top one. Don't also
+    // wipe the search box underneath it.
+    if (typeof _sdTopPopup === "function" && _sdTopPopup()) return;
     // Clear search
     const q = document.getElementById("query");
     if (q && q.value) {
