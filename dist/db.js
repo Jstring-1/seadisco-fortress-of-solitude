@@ -4207,15 +4207,95 @@ export async function getReviewQueueCounts() {
     }
     return out;
 }
-// YouTube coverage of the cached catalogue. A "song" is a real track
-// (non-heading, non-empty position) inside a cached MASTER. A song counts
-// as COVERED when its master carries at least one Discogs video[] OR the
-// track has a non-block pin in track_youtube_overrides; otherwise it's
-// MISSING. (Per-track Discogs-video matching is a fuzzy client-side title
-// match not stored in the DB, so the Discogs side is per-master here.)
-// "strict blues" = master whose genres array is exactly ['Blues'].
-// Expanding every master's tracklist is heavy, so this runs under a
-// raised statement_timeout and is meant to be called on demand.
+export async function getFullyCoveredBluesAlbums(strict, yearFrom = 1920, yearTo = 1960) {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN READ ONLY");
+        await client.query("SET LOCAL statement_timeout = '120000'");
+        const rows = (await client.query(`SELECT rc.discogs_id AS id, rc.type,
+              (rc.data->>'year')::int                          AS year,
+              COALESCE(rc.data->>'title', '')                  AS title,
+              COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
+              COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', '')   AS label,
+              COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), mr.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(rc.data->'images'->0->>'uri150', rc.data->>'thumb', mr.data->'images'->0->>'uri150', '') AS thumb,
+              rc.data->'tracklist' AS tracklist,
+              rc.data->'videos'    AS videos
+         FROM release_cache rc
+         LEFT JOIN release_cache mr
+           ON rc.type = 'master' AND mr.type = 'release'
+          AND rc.data->>'main_release' ~ '^[0-9]+$'
+          AND mr.discogs_id = (rc.data->>'main_release')::int
+        WHERE (rc.type = 'master'
+               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))
+          AND rc.data->'genres' ? 'Blues'
+          ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
+          AND rc.data->>'year' ~ '^[0-9]{4}$'
+          AND (rc.data->>'year')::int BETWEEN $1 AND $2
+          AND jsonb_typeof(rc.data->'tracklist') = 'array'`, [yearFrom, yearTo])).rows;
+        if (!rows.length) {
+            await client.query("COMMIT");
+            return [];
+        }
+        const ov = (await client.query(`SELECT release_id, release_type, track_position, video_id, mode
+         FROM track_youtube_overrides
+        WHERE release_id = ANY($1::text[]) AND track_position <> 'ALBUM'`, [rows.map(r => String(r.id))])).rows;
+        const unavailable = new Set((await client.query(`SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`)).rows.map(r => String(r.video_id)));
+        await client.query("COMMIT");
+        const ovMap = new Map();
+        for (const o of ov) {
+            const k = `${o.release_type}:${o.release_id}`;
+            if (!ovMap.has(k))
+                ovMap.set(k, new Map());
+            ovMap.get(k).set(String(o.track_position), { video_id: String(o.video_id || ""), mode: String(o.mode || "gap") });
+        }
+        const ytId = (uri) => {
+            const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
+            return m ? m[1] : "";
+        };
+        const out = [];
+        for (const r of rows) {
+            const tracks = r.tracklist.filter(t => (t?.type_ ?? "track") === "track" && String(t?.title ?? "").trim() !== "");
+            if (!tracks.length)
+                continue;
+            const videos = (Array.isArray(r.videos) ? r.videos : [])
+                .filter((v) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
+                .map((v) => String(v.title).toLowerCase());
+            const ovs = ovMap.get(`${r.type}:${r.id}`);
+            const playable = (o) => !!o && !!o.video_id && !unavailable.has(o.video_id);
+            const covered = tracks.every(t => {
+                const o = ovs?.get(String(t.position ?? "").trim());
+                if (o?.mode === "block")
+                    return false;
+                if (o?.mode === "replace" && playable(o))
+                    return true;
+                const tl = String(t.title).toLowerCase();
+                if (videos.some((vt) => vt.includes(tl) || tl.includes(vt)))
+                    return true;
+                return playable(o);
+            });
+            if (!covered)
+                continue;
+            out.push({
+                id: Number(r.id), type: r.type, year: Number(r.year),
+                title: String(r.title), artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
+                label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
+                thumb: String(r.thumb), tracks: tracks.length,
+            });
+        }
+        return out;
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
 export async function getYtCoverageStats() {
     const client = await getPool().connect();
     try {

@@ -5580,6 +5580,105 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
 // "strict blues" = master whose genres array is exactly ['Blues'].
 // Expanding every master's tracklist is heavy, so this runs under a
 // raised statement_timeout and is meant to be called on demand.
+// Blues picker (admin home-strip tab): cached Masters+ albums (masters +
+// releases with no master) from 1920–1960 tagged Blues — strict = Blues
+// is the ONLY genre — where EVERY track has a playable YouTube video.
+// "Playable" mirrors the album popup's findVideo(): an override in 'block'
+// mode hides the track; a 'replace' override wins; otherwise a Discogs
+// videos[] title that contains (or is contained in) the track title; then
+// a 'gap' override. Videos flagged unavailable don't count, and the
+// full-album ("ALBUM") slot is ignored. Masters have no labels of their
+// own, so they borrow label/catno from their cached main release.
+export interface BluesPickerAlbum {
+  id: number; type: "master" | "release"; year: number; title: string;
+  artist: string; label: string; catno: string; thumb: string; tracks: number;
+}
+export async function getFullyCoveredBluesAlbums(strict: boolean, yearFrom = 1920, yearTo = 1960): Promise<BluesPickerAlbum[]> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN READ ONLY");
+    await client.query("SET LOCAL statement_timeout = '120000'");
+    const rows = (await client.query(
+      `SELECT rc.discogs_id AS id, rc.type,
+              (rc.data->>'year')::int                          AS year,
+              COALESCE(rc.data->>'title', '')                  AS title,
+              COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
+              COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', '')   AS label,
+              COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), mr.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(rc.data->'images'->0->>'uri150', rc.data->>'thumb', mr.data->'images'->0->>'uri150', '') AS thumb,
+              rc.data->'tracklist' AS tracklist,
+              rc.data->'videos'    AS videos
+         FROM release_cache rc
+         LEFT JOIN release_cache mr
+           ON rc.type = 'master' AND mr.type = 'release'
+          AND rc.data->>'main_release' ~ '^[0-9]+$'
+          AND mr.discogs_id = (rc.data->>'main_release')::int
+        WHERE (rc.type = 'master'
+               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))
+          AND rc.data->'genres' ? 'Blues'
+          ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
+          AND rc.data->>'year' ~ '^[0-9]{4}$'
+          AND (rc.data->>'year')::int BETWEEN $1 AND $2
+          AND jsonb_typeof(rc.data->'tracklist') = 'array'`,
+      [yearFrom, yearTo],
+    )).rows as any[];
+    if (!rows.length) { await client.query("COMMIT"); return []; }
+    const ov = (await client.query(
+      `SELECT release_id, release_type, track_position, video_id, mode
+         FROM track_youtube_overrides
+        WHERE release_id = ANY($1::text[]) AND track_position <> 'ALBUM'`,
+      [rows.map(r => String(r.id))],
+    )).rows as any[];
+    const unavailable = new Set<string>(((await client.query(
+      `SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`,
+    )).rows as any[]).map(r => String(r.video_id)));
+    await client.query("COMMIT");
+
+    const ovMap = new Map<string, Map<string, { video_id: string; mode: string }>>();
+    for (const o of ov) {
+      const k = `${o.release_type}:${o.release_id}`;
+      if (!ovMap.has(k)) ovMap.set(k, new Map());
+      ovMap.get(k)!.set(String(o.track_position), { video_id: String(o.video_id || ""), mode: String(o.mode || "gap") });
+    }
+    const ytId = (uri: string): string => {
+      const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
+      return m ? m[1] : "";
+    };
+    const out: BluesPickerAlbum[] = [];
+    for (const r of rows) {
+      const tracks = (r.tracklist as any[]).filter(t =>
+        (t?.type_ ?? "track") === "track" && String(t?.title ?? "").trim() !== "");
+      if (!tracks.length) continue;
+      const videos = (Array.isArray(r.videos) ? r.videos : [])
+        .filter((v: any) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
+        .map((v: any) => String(v.title).toLowerCase());
+      const ovs = ovMap.get(`${r.type}:${r.id}`);
+      const playable = (o: { video_id: string } | undefined) => !!o && !!o.video_id && !unavailable.has(o.video_id);
+      const covered = tracks.every(t => {
+        const o = ovs?.get(String(t.position ?? "").trim());
+        if (o?.mode === "block") return false;
+        if (o?.mode === "replace" && playable(o)) return true;
+        const tl = String(t.title).toLowerCase();
+        if (videos.some((vt: string) => vt.includes(tl) || tl.includes(vt))) return true;
+        return playable(o);
+      });
+      if (!covered) continue;
+      out.push({
+        id: Number(r.id), type: r.type, year: Number(r.year),
+        title: String(r.title), artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
+        label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
+        thumb: String(r.thumb), tracks: tracks.length,
+      });
+    }
+    return out;
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getYtCoverageStats(): Promise<{
   allTotal: number; allMissing: number; bluesTotal: number; bluesMissing: number;
 }> {

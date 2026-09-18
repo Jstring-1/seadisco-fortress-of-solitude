@@ -1172,7 +1172,8 @@ function _sdInitialHomeStripMode() {
   try {
     const v = new URLSearchParams(location.search).get("strip");
     if (v === "recent" || v === "suggestions" || v === "feed"
-        || v === "rare" || v === "dig" || v === "active" || v === "played") return v;
+        || v === "rare" || v === "dig" || v === "active" || v === "played"
+        || v === "blues") return v;
   } catch {}
   // Recent is the default landing tab. Signed-in users see their
   // own history; anons with no local history fall back to the
@@ -1190,7 +1191,7 @@ function _sdSyncHomeStripTabsVisual() {
   // Recent / Feed / Active / Played / Rare / Dig / Suggestions are
   // the visible tabs. Feed is the default landing tab. Any stray
   // mode collapses to Feed.
-  const _KNOWN_MODES = new Set(["recent","suggestions","feed","rare","dig","active","played"]);
+  const _KNOWN_MODES = new Set(["recent","suggestions","feed","rare","dig","active","played","blues"]);
   if (!_KNOWN_MODES.has(window._sdHomeStripMode)) {
     window._sdHomeStripMode = "feed";
   }
@@ -1202,12 +1203,19 @@ function _sdSyncHomeStripTabsVisual() {
     dig:         document.getElementById("rr-tab-dig"),
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
+    blues:       document.getElementById("rr-tab-blues"),
   };
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
     el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
-    el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
+    // Blues keeps the admin-only (restricted) colours from its class.
+    if (k !== "blues") el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
   }
+  // Blues is an admin-only tab (early-Blues picker, blues-picker.js).
+  const _bluesOn = window._isAdmin === true;
+  if (tabs.blues) tabs.blues.style.display = _bluesOn ? "" : "none";
+  const _bluesSep = document.getElementById("rr-tab-blues-sep");
+  if (_bluesSep) _bluesSep.style.display = _bluesOn ? "" : "none";
   // Anons see both tabs but they're greyed out — clicking either
   // prompts sign-in. Recent's local-history fallback still renders
   // a community-picks sample so the strip isn't empty.
@@ -1259,6 +1267,7 @@ function _sdSwitchHomeStripTab(mode) {
   else if (mode === "dig") m = "dig";
   else if (mode === "active") m = "active";
   else if (mode === "played") m = "played";
+  else if (mode === "blues" && window._isAdmin === true) m = "blues";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -1315,6 +1324,17 @@ function _sdReflectHomeStripModeInUrl(mode) {
     else u.searchParams.set("strip", mode);
     history.replaceState(history.state, "", u.toString());
   } catch {}
+}
+
+// Swap the strip between the card grid (+ its filter/sort controls) and
+// the admin Blues picker panel.
+function _sdBluesPickerShow(on) {
+  const grid = document.getElementById("random-records-grid");
+  const ctrls = document.getElementById("random-records-controls");
+  if (grid) grid.style.display = on ? "none" : "";
+  if (ctrls) ctrls.style.display = on ? "none" : "";
+  const bp = document.getElementById("blues-picker");
+  if (bp) bp.style.display = on ? "" : "none";
 }
 
 // Per-tab filter text. The home strip is one physical input reused
@@ -2169,6 +2189,27 @@ async function loadRandomRecords(more) {
   if (!grid || !wrap) return;
   const _mySeq = ++_randomLoadSeq;
   const _stillCurrent = () => _mySeq === _randomLoadSeq;
+  // Admin Blues tab: the year/label/album picker (blues-picker.js) takes
+  // over the strip area in place of the card grid.
+  if (window._sdHomeStripMode === "blues") {
+    const isAdmin = typeof window._ensureAdminFlag === "function"
+      ? await window._ensureAdminFlag().catch(() => false)
+      : window._isAdmin === true;
+    if (!_stillCurrent()) return;
+    if (isAdmin) {
+      _sdBluesPickerShow(true);
+      if (more) return;
+      wrap.style.display = "";
+      window._sdLoadModule("/blues-picker.js")
+        .then(() => { if (window._sdHomeStripMode === "blues") window._sdBluesPickerOpen?.(); })
+        .catch(() => {});
+      return;
+    }
+    window._sdHomeStripMode = "recent";
+    _sdReflectHomeStripModeInUrl("recent");
+    _sdSyncHomeStripTabsVisual();
+  }
+  _sdBluesPickerShow(false);
   // Suggestions requires auth; Recent + Feed are public. Anons land
   // on Recent unless they explicitly arrive via the footer Feed link.
   if (window._sdAuthResolved

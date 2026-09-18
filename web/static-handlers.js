@@ -106,6 +106,7 @@ window._sdStatic = Object.assign(window._sdStatic || {}, {
   i562_click: function (event) { _sdSwitchHomeStripTab('rare') },
   // index.html:564 <span id="rr-tab-dig">
   i564_click: function (event) { _sdSwitchHomeStripTab('dig') },
+  rr_tab_blues_click: function (event) { _sdSwitchHomeStripTab('blues') },
   // index.html:570 <input id="random-records-filter">
   i570_input: function (event) { _sdHomeStripFilterChanged(this) },
   // index.html:573 <select id="random-records-genre">
