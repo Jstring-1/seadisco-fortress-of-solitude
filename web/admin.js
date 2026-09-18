@@ -3589,7 +3589,7 @@ async function loadYtChannels() {
             ? `<span style="color:#e88;font-weight:600">blocked</span>`
             : `<span style="color:var(--muted)">—</span>`;
         return `<tr style="border-top:1px solid var(--border)">
-          <td style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(c.channel_title || c.channel_id)}</a></td>
+          <td class="ytr-ch-cell" data-ch="${id}" data-title="${esc(c.channel_title || "")}" style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(c.channel_title || c.channel_id)}</a></td>
           <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums">${Number(c.approvals || 0)}</td>
           <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;${Number(c.rejections) ? "color:#e88" : ""}">${Number(c.rejections || 0)}</td>
           <td style="padding:0.25rem 0.4rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${Number(c.auto_approvals || 0)}</td>
@@ -3603,6 +3603,7 @@ async function loadYtChannels() {
         </tr>`;
       }).join("")}
     </table>`;
+    _ytrEnrichChannels(el);
   } catch (e) { el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(e?.message || e)}</span>`; }
 }
 window.loadYtChannels = loadYtChannels;
@@ -3633,15 +3634,72 @@ async function loadYtBans() {
       ${rows.map(b => {
         const id = esc(b.channel_id);
         return `<tr style="border-top:1px solid var(--border)">
-          <td style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(b.channel_title || b.channel_id)}</a></td>
+          <td class="ytr-ch-cell" data-ch="${id}" data-title="${esc(b.channel_title || "")}" style="padding:0.25rem 0.4rem"><a href="https://www.youtube.com/channel/${id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(b.channel_title || b.channel_id)}</a></td>
           <td style="padding:0.25rem 0.4rem;color:var(--muted);font-size:0.72rem">${esc(b.reason || "")}</td>
           <td style="padding:0.25rem 0.4rem;text-align:right"><button class="admin-btn" onclick="ytrUnban('${id}')" title="Lift the ban — the channel can appear in results again.">Unban</button></td>
         </tr>`;
       }).join("")}
     </table>`;
+    _ytrEnrichChannels(el);
   } catch (e) { el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(e?.message || e)}</span>`; }
 }
 window.loadYtBans = loadYtBans;
+
+// Swap each channel cell for a profile: avatar, handle, subs / videos /
+// views / country / start year, description, and a strip of the channel's
+// videos that have been through the review queue (border = decision).
+async function _ytrEnrichChannels(root) {
+  const cells = Array.from(root.querySelectorAll(".ytr-ch-cell[data-ch]"));
+  const ids = Array.from(new Set(cells.map(c => c.getAttribute("data-ch")).filter(Boolean)));
+  if (!ids.length) return;
+  let j;
+  try {
+    const r = await apiFetch(`/api/admin/yt-review/channel-profiles?ids=${encodeURIComponent(ids.join(","))}`);
+    if (!r.ok) return;
+    j = await r.json();
+  } catch { return; }
+  for (const cell of cells) {
+    if (!cell.isConnected) continue;
+    const id = cell.getAttribute("data-ch");
+    cell.innerHTML = _ytrChannelProfileHtml(id, cell.getAttribute("data-title") || "", j.profiles?.[id], j.samples?.[id] || []);
+  }
+}
+function _ytrChannelProfileHtml(id, fallbackTitle, p, samples) {
+  const esc = escHtml;
+  const compact = n => (n == null || !Number.isFinite(Number(n))) ? null
+    : new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(Number(n));
+  const url = `https://www.youtube.com/channel/${encodeURIComponent(id)}`;
+  const title = (p && p.title) || fallbackTitle || id;
+  const meta = [];
+  if (p && !p.gone) {
+    const subs = compact(p.subscriberCount);
+    const vids = compact(p.videoCount);
+    const views = compact(p.viewCount);
+    meta.push(subs != null ? `${subs} subs` : "subs hidden");
+    if (vids != null) meta.push(`${vids} videos`);
+    if (views != null) meta.push(`${views} views`);
+    if (p.country) meta.push(esc(p.country));
+    if (p.publishedAt) meta.push(`since ${String(p.publishedAt).slice(0, 4)}`);
+  }
+  const desc = p && p.description ? String(p.description).replace(/\s+/g, " ").trim() : "";
+  const statusColor = s => s === "approved" ? "#7ed196" : s === "rejected" ? "#e88" : "var(--border)";
+  const strip = samples.length
+    ? `<div class="ytr-ch-samples">${samples.map(v => `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.videoId)}" target="_blank" rel="noopener" title="${esc(v.title || "")} · ${esc(v.status || "")}"><img src="${esc(v.thumb || "")}" alt="" loading="lazy" style="border-color:${statusColor(v.status)}"></a>`).join("")}</div>`
+    : "";
+  return `<div class="ytr-ch">
+    ${p && p.thumbnail
+      ? `<a href="${url}" target="_blank" rel="noopener"><img class="ytr-ch-av" src="${esc(p.thumbnail)}" alt="" loading="lazy"></a>`
+      : `<div class="ytr-ch-av ytr-ch-av-empty"></div>`}
+    <div class="ytr-ch-body">
+      <div class="ytr-ch-name"><a href="${url}" target="_blank" rel="noopener">${esc(title)}</a>${p && p.handle ? ` <span class="ytr-ch-handle">${esc(p.handle)}</span>` : ""}</div>
+      ${p && p.gone
+        ? `<div class="ytr-ch-meta" style="color:#e88">Channel unavailable (closed or terminated)</div>`
+        : meta.length ? `<div class="ytr-ch-meta">${meta.join(" · ")}</div>` : ""}
+      ${desc ? `<div class="ytr-ch-desc" title="${esc(desc)}">${esc(desc.length > 160 ? desc.slice(0, 160) + "…" : desc)}</div>` : ""}
+      ${strip}
+    </div>
+  </div>`;
+}
 
 async function _ytrPostBan(payload) {
   const r = await apiFetch("/api/admin/yt-review/bans", {

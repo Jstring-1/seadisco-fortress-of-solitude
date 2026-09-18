@@ -12766,6 +12766,17 @@ body.gutenberg-reader-open { overflow: hidden; }
 .ytr-q-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 0.2rem; }
 #ytr-query-wrap #ytr-qt-mode { width: auto; }
 .ytr-q-status { font-size: 0.74rem; color: var(--muted); }
+/* ── YT Review: channel profiles in the trust / ban tables ─────────── */
+.ytr-ch { display: flex; gap: 0.55rem; align-items: flex-start; min-width: 16rem; }
+.ytr-ch-av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: rgba(255,255,255,0.05); display: block; }
+.ytr-ch-body { min-width: 0; flex: 1; }
+.ytr-ch-name a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.ytr-ch-handle { color: var(--muted); font-size: 0.72rem; }
+.ytr-ch-meta { color: var(--muted); font-size: 0.72rem; margin-top: 0.1rem; font-variant-numeric: tabular-nums; }
+.ytr-ch-desc { color: var(--muted); font-size: 0.7rem; margin-top: 0.15rem; line-height: 1.35; max-width: 34rem; }
+.ytr-ch-samples { display: flex; gap: 0.25rem; margin-top: 0.3rem; flex-wrap: wrap; }
+.ytr-ch-samples img { width: 64px; height: 36px; object-fit: cover; border-radius: 3px; border: 2px solid var(--border); display: block; }
+.ytr-ch-cell { vertical-align: top; }
 .ytr-qt-out { margin-top: 0.5rem; font-size: 0.76rem; }
 .ytr-qt-out:empty { display: none; }
 .ytr-qt-head { color: var(--muted); margin-bottom: 0.25rem; }

@@ -5588,6 +5588,55 @@ export async function reviewQueueDeleteApproval(id: number, reviewer: string | n
   return { ok: true, masterId, trackPosition };
 }
 
+// ── Channel profiles (admin trust / ban tables) ──────────────────
+export async function getChannelProfiles(ids: string[], maxAgeDays: number): Promise<Map<string, any>> {
+  const out = new Map<string, any>();
+  if (!ids.length) return out;
+  const r = await getPool().query(
+    `SELECT channel_id, data FROM yt_channel_profiles
+      WHERE channel_id = ANY($1::text[]) AND fetched_at > NOW() - ($2::int * INTERVAL '1 day')`,
+    [ids, maxAgeDays],
+  );
+  for (const row of r.rows) out.set(String(row.channel_id), row.data);
+  return out;
+}
+
+export async function upsertChannelProfiles(profiles: Array<{ id: string; data: any }>): Promise<void> {
+  for (const p of profiles) {
+    await getPool().query(
+      `INSERT INTO yt_channel_profiles (channel_id, data, fetched_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (channel_id) DO UPDATE SET data = EXCLUDED.data, fetched_at = NOW()`,
+      [p.id, JSON.stringify(p.data)],
+    );
+  }
+}
+
+// A few of each channel's videos that have passed through the review
+// queue, newest first — a quick look at what the channel actually posts.
+export async function getChannelQueueSamples(ids: string[], perChannel = 4): Promise<Map<string, any[]>> {
+  const out = new Map<string, any[]>();
+  if (!ids.length) return out;
+  const r = await getPool().query(
+    `SELECT channel_id, video_id, title, thumb, status FROM (
+       SELECT candidate_channel_id AS channel_id, candidate_video_id AS video_id,
+              candidate_title AS title, candidate_thumbnail_url AS thumb, status,
+              ROW_NUMBER() OVER (PARTITION BY candidate_channel_id ORDER BY id DESC) AS rn
+         FROM (SELECT DISTINCT ON (candidate_channel_id, candidate_video_id) *
+                 FROM track_yt_review_queue
+                WHERE candidate_channel_id = ANY($1::text[])
+                ORDER BY candidate_channel_id, candidate_video_id, id DESC) q
+     ) s WHERE rn <= $2
+     ORDER BY channel_id, rn`,
+    [ids, perChannel],
+  );
+  for (const row of r.rows) {
+    const k = String(row.channel_id);
+    if (!out.has(k)) out.set(k, []);
+    out.get(k)!.push({ videoId: row.video_id, title: row.title, thumb: row.thumb, status: row.status });
+  }
+  return out;
+}
+
 // ── Channel trust ─────────────────────────────────────────────────
 // Evidence for trust comes ONLY from decisions a human made. Rows the
 // auto-approver decided (reviewed_by = 'auto') are excluded on

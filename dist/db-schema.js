@@ -560,6 +560,15 @@ export async function initDb() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+    // Cached YouTube channel profiles (channels.list snippet+statistics) for
+    // the admin trust / ban tables. Refetched when older than a couple weeks.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS yt_channel_profiles (
+      channel_id  TEXT PRIMARY KEY,
+      data        JSONB NOT NULL,
+      fetched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
     // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
     // The in-memory _ytSearchCache in search-api.ts gets wiped on every
     // deploy. With YT quota at 100 calls/day project-wide, even a few
