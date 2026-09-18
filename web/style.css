@@ -3023,6 +3023,17 @@ body.sd-anon .youtube-saved-tab {
   width: 2rem; height: 4px; border-radius: 2px; background: #333;
 }
 .popup-close-zone:hover::after { background: var(--muted); }
+/* Visible × inside the close strip. Global button rules pin a height, so
+   reset it here. */
+.popup-close-zone .popup-close-x {
+  position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%);
+  height: auto; min-height: 0; width: auto;
+  background: none; border: none; color: var(--muted);
+  font-size: 1.25rem; line-height: 1; padding: 0.05rem 0.4rem; border-radius: 4px;
+  cursor: pointer;
+}
+.popup-close-zone .popup-close-x:hover,
+.popup-close-zone .popup-close-x:focus-visible { color: var(--text); background: var(--border); }
 /* Inline share button next to type badge */
 .popup-share-inline {
   background: none; border: none; cursor: pointer;
@@ -12824,3 +12835,7 @@ body.gutenberg-reader-open { overflow: hidden; }
     min-height: 32px;
   }
 }
+
+/* Dialog boxes get focus for keyboard/AT users when they open; the box
+   itself does not need a focus ring. */
+[role="dialog"][tabindex="-1"]:focus { outline: none; }

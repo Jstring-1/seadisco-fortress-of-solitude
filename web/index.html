@@ -552,17 +552,17 @@ e.g.  miles davis | coltrane
              Dig / Suggestions. Recent is the default landing tab;
              anons without local history get a community-picks
              fallback so the strip is never empty. -->
-        <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
+        <span role="button" tabindex="0" id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
         <span id="rr-tab-sep" class="rr-tab-sep">/</span>
-        <span id="rr-tab-feed" class="rr-tab" onclick="_sdSwitchHomeStripTab('feed')" title="Random sample of vinyl from the catalog cache — explore freely">Feed</span>
+        <span role="button" tabindex="0" id="rr-tab-feed" class="rr-tab" onclick="_sdSwitchHomeStripTab('feed')" title="Random sample of vinyl from the catalog cache — explore freely">Feed</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-active" class="rr-tab" onclick="_sdSwitchHomeStripTab('active')" title="Vinyl most-opened on SeaDisco in the last 90 days">Active</span>
+        <span role="button" tabindex="0" id="rr-tab-active" class="rr-tab" onclick="_sdSwitchHomeStripTab('active')" title="Vinyl most-opened on SeaDisco in the last 90 days">Active</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-played" class="rr-tab" onclick="_sdSwitchHomeStripTab('played')" title="Vinyl with the most YouTube plays on SeaDisco in the last 90 days">Played</span>
+        <span role="button" tabindex="0" id="rr-tab-played" class="rr-tab" onclick="_sdSwitchHomeStripTab('played')" title="Vinyl with the most YouTube plays on SeaDisco in the last 90 days">Played</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-rare" class="rr-tab" onclick="_sdSwitchHomeStripTab('rare')" title="Early-era vinyl with many collectors wanting it and almost no one owning it">Rare</span>
+        <span role="button" tabindex="0" id="rr-tab-rare" class="rr-tab" onclick="_sdSwitchHomeStripTab('rare')" title="Early-era vinyl with many collectors wanting it and almost no one owning it">Rare</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-dig" class="rr-tab" onclick="_sdSwitchHomeStripTab('dig')" title="Long-tail vinyl that nobody on SeaDisco has opened yet — pure crate digging">Dig</span>
+        <span role="button" tabindex="0" id="rr-tab-dig" class="rr-tab" onclick="_sdSwitchHomeStripTab('dig')" title="Long-tail vinyl that nobody on SeaDisco has opened yet — pure crate digging">Dig</span>
         <!-- Legacy id kept as a hidden node so older code paths that
              write to it don't blow up; visible state is on the tabs above. -->
         <span id="random-records-title" style="display:none">Feed</span>
@@ -1543,7 +1543,7 @@ e.g.  miles davis | coltrane
 
 <div id="modal-overlay">
   <div id="modal-box">
-    <div class="popup-close-zone" onclick="closeModal()" title="Click to close"></div>
+    <div class="popup-close-zone" onclick="closeModal()" title="Click to close"><button type="button" class="popup-close-x" onclick="event.stopPropagation();closeModal()" aria-label="Close">×</button></div>
     <div id="modal-loading">Loading…</div>
     <div id="album-info"></div>
   </div>
@@ -1551,7 +1551,7 @@ e.g.  miles davis | coltrane
 
 <div id="version-overlay">
   <div id="version-box">
-    <div class="popup-close-zone" onclick="closeVersionPopup()" title="Click to close"></div>
+    <div class="popup-close-zone" onclick="closeVersionPopup()" title="Click to close"><button type="button" class="popup-close-x" onclick="event.stopPropagation();closeVersionPopup()" aria-label="Close">×</button></div>
     <div id="version-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading…</div>
     <div id="version-info"></div>
   </div>

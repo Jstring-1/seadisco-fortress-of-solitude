@@ -1187,12 +1187,24 @@ window._sdHasYtAccess = function () {
 
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
-  document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
+  const open = !!document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
+  document.getElementById("nav-hamburger")?.setAttribute("aria-expanded", String(open));
 }
 document.addEventListener("click", e => {
   if (!e.target.closest("#main-nav-tabs") && !e.target.closest("#nav-hamburger")) {
     document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
+    document.getElementById("nav-hamburger")?.setAttribute("aria-expanded", "false");
   }
+});
+// Enter / Space activate non-<button> controls marked role="button"
+// (home-strip tabs, card play/queue spans) the way a real button would.
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target;
+  if (!(el instanceof HTMLElement) || el.getAttribute("role") !== "button") return;
+  if (el.tagName === "BUTTON" || el.tagName === "A" && e.key === "Enter") return;
+  e.preventDefault();
+  el.click();
 });
 
 // ── Search param normalization ───────────────────────────────────────────
@@ -1840,7 +1852,7 @@ function renderSharedHeader(opts) {
     </div>
     ${isSPA ? '<h1 class="sr-only">SeaDisco — Music Discovery Platform: Search &amp; Collection</h1>' : ''}
     <nav id="main-nav">
-      <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
+      <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav-tabs">
         <span></span><span></span><span></span>
       </button>
       <div id="nav-tabs-wrap">
@@ -2335,10 +2347,32 @@ window._sdCloseTopPopup = _sdCloseTopPopup;
       const el = document.getElementById(id);
       if (!el || el._sdStackWired) return;
       el._sdStackWired = true;
+      // The first child is the visible box: announce it as a modal dialog.
+      const box = el.firstElementChild;
+      if (box && !box.hasAttribute("role")) {
+        box.setAttribute("role", "dialog");
+        box.setAttribute("aria-modal", "true");
+        if (!box.hasAttribute("tabindex")) box.setAttribute("tabindex", "-1");
+      }
       let wasOpen = el.classList.contains("open");
       new MutationObserver(() => {
         const isOpen = el.classList.contains("open");
-        if (isOpen && !wasOpen) window._sdBringToFront(el);
+        if (isOpen && !wasOpen) {
+          window._sdBringToFront(el);
+          // Move focus into the popup so keyboard / screen-reader users
+          // land in it, and remember where to send focus back.
+          el._sdPrevFocus = document.activeElement;
+          if (box) setTimeout(() => { try { box.focus({ preventScroll: true }); } catch {} }, 0);
+        } else if (!isOpen && wasOpen) {
+          const prev = el._sdPrevFocus;
+          el._sdPrevFocus = null;
+          // Only reclaim focus if it is still inside the closed popup (or lost
+          // to <body>) — never yank it from somewhere the user moved on to.
+          const ae = document.activeElement;
+          if (prev && prev.isConnected && typeof prev.focus === "function" && (!ae || ae === document.body || el.contains(ae))) {
+            try { prev.focus({ preventScroll: true }); } catch {}
+          }
+        }
         wasOpen = isOpen;
       }).observe(el, { attributes: true, attributeFilter: ["class"] });
     });
