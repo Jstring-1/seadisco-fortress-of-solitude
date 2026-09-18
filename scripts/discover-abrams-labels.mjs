@@ -16,7 +16,7 @@
 // it has a chance of matching what Discogs calls the label.
 
 const URL = "https://www.78discography.com/";
-const UA  = "SeaDisco-archival/1.0 (+https://seadisco.com, kylejester@gmail.com)";
+const UA  = "SeaDisco-archival/1.0 (+https://seadisco.com, hello@seadisco.com)";
 
 const res = await fetch(URL, { headers: { "User-Agent": UA } });
 if (!res.ok) {

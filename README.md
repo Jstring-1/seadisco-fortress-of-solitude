@@ -11,7 +11,6 @@ An invite-only music-discovery web app built on top of the Discogs API. Search a
 - **Auth:** Clerk (waitlist-gated sign-up)
 - **Discogs:** OAuth 1.0a (full marketplace access) + Personal Access Token (read-only fallback)
 - **LOC:** `loc.gov` JSON API (admin-only view, rate-limited proxy)
-- **AI:** `@anthropic-ai/sdk` (search recommendations)
 - **Frontend:** Vanilla JS SPA in `web/`, no build step, cache-busted via `?v=YYYYMMDD{letter}` query params
 
 ## Build & run
@@ -33,7 +32,6 @@ Copy `.env.example` to `.env` and fill in:
 | `AUTH_PK` | Clerk publishable key |
 | `CLERK_SECRET_KEY` | Clerk secret key (server-side JWT verification) |
 | `ADMIN_CLERK_ID` | Clerk user id of the admin — gates `/admin` and the LOC view |
-| `ANTHROPIC_API_KEY` | For AI search recommendations |
 | `DISCOGS_CONSUMER_KEY` | OAuth 1.0a consumer key (from discogs.com/settings/developers) |
 | `DISCOGS_CONSUMER_SECRET` | OAuth 1.0a consumer secret |
 

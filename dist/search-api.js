@@ -17172,7 +17172,6 @@ app.get("/artist/:id", async (req, res) => {
         res.status(500).json({ error: "Discogs API error" });
     }
 });
-const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 // GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
 // If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {

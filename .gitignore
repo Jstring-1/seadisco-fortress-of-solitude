@@ -1,5 +1,12 @@
 node_modules/
+# Env files: only the template is tracked.
 .env
+.env.*
+!.env.example
+*.log
 .DS_Store
+Thumbs.db
+.vscode/
+.claude/settings.local.json
 scripts/blueswords-ocr/
 scratch/

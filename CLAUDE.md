@@ -16,7 +16,6 @@
 - **Auth:** Clerk (JWT bearer tokens via `getClerkUserId`, modal sign-in via `openSignInModal()`, waitlist via `openSignUpModal()`)
 - **Discogs:** OAuth 1.0a — read + write (collection, wantlist, marketplace inventory, lists, ratings, folders, orders)
 - **Frontend:** Vanilla JS SPA, no build step on the web/ side. Scripts loaded with `defer` and cache-busted via `?v=YYYYMMDD.HHMM`
-- **AI:** `@anthropic-ai/sdk` for AI search recommendations
 - **Media:** YouTube IFrame Player + LOC `<audio>` element + Archive.org streams. Cross-source unified play queue.
 
 ## Directory layout
@@ -218,7 +217,6 @@ Discogs `/database/search?artist=` does substring matching and chokes on `(N)` d
 | `YT_OPEN_TO_USERS` | Set to `1` to open YT features to all signed-in users (default off, admin+demo only) |
 | `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET` | OAuth 1.0a app credentials |
 | `YOUTUBE_API_KEY` | YouTube Data API v3 (Application restrictions: None) |
-| `ANTHROPIC_API_KEY` | Claude SDK (AI search) |
 | `MAX_USERS` | User cap (default 25) — admin + demo bypass |
 
 ## User preferences
