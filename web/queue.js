@@ -3079,7 +3079,18 @@ async function _playlistLoad(id) {
 window._playlistLoad = _playlistLoad;
 
 async function _playlistShare(id) {
-  const url = `${location.origin}/?pl=${id}`;
+  // Share links carry an unguessable token (minted on first share), not
+  // the sequential playlist id.
+  let token = "";
+  try {
+    const r = await apiFetch(`/api/user/playlists/${encodeURIComponent(id)}/share`, { method: "POST" });
+    if (r.ok) token = (await r.json())?.token || "";
+  } catch {}
+  if (!token) {
+    if (typeof showToast === "function") showToast("Couldn't create a share link", "error");
+    return;
+  }
+  const url = `${location.origin}/?pl=${encodeURIComponent(token)}`;
   try {
     await navigator.clipboard.writeText(url);
     if (typeof showToast === "function") showToast("Share link copied to clipboard");
@@ -3129,15 +3140,15 @@ async function _playlistDelete(id, currentName) {
 }
 window._playlistDelete = _playlistDelete;
 
-// Deep-link: /?pl=<id> on landing → fetch playlist, prompt user to load
-// into their queue. Public read (works even when signed-out) but the
-// load action requires auth, so anons get a sign-in nudge.
+// Deep-link: /?pl=<token> on landing → fetch the shared playlist and load
+// it into the queue. Public read (works even when signed-out) but the
+// load action requires auth, so anons get a sign-in nudge. A bare number
+// is an old id-style link, which now only resolves for the owner.
 async function _playlistHandleDeepLink() {
-  let id;
-  try {
-    id = parseInt(new URLSearchParams(location.search).get("pl") || "", 10);
-  } catch { return; }
-  if (!Number.isFinite(id) || id <= 0) return;
+  let pl = "";
+  try { pl = String(new URLSearchParams(location.search).get("pl") || "").trim(); } catch { return; }
+  const isLegacyId = /^\d{1,12}$/.test(pl);
+  if (!isLegacyId && !/^[A-Za-z0-9_-]{16,64}$/.test(pl)) return;
   // Strip the param immediately so a refresh doesn't re-prompt and the
   // share link doesn't pollute future copies.
   try {
@@ -3146,8 +3157,11 @@ async function _playlistHandleDeepLink() {
     history.replaceState({}, "", u.toString());
   } catch {}
   try {
-    const r = await apiFetch(`/api/playlists/${id}`);
-    if (!r.ok) return;
+    const r = await apiFetch(isLegacyId ? `/api/playlists/${pl}` : `/api/playlists/shared/${encodeURIComponent(pl)}`);
+    if (!r.ok) {
+      if (typeof showToast === "function") showToast("That shared playlist link isn't valid anymore", "error");
+      return;
+    }
     const { playlist } = await r.json();
     if (!playlist?.items?.length) return;
     if (!window._clerk?.user) {

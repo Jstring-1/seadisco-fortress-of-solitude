@@ -408,6 +408,16 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS yt_video_unavailable_status_idx ON youtube_video_unavailable (status)`);
+    // One row per (video, reporter) so report_count counts DISTINCT users —
+    // a single account re-reporting can't push a video over the threshold.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS youtube_video_unavailable_reporters (
+      video_id      TEXT NOT NULL,
+      clerk_user_id TEXT NOT NULL,
+      reported_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (video_id, clerk_user_id)
+    )
+  `);
     // ── YT-match review queue (admin tab, v1) ──────────────────────────
     // Background worker walks earliest-year Blues masters and proposes
     // YouTube videos for tracks that have no override yet. v1 puts
@@ -875,6 +885,10 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_playlists_user_idx ON user_playlists (clerk_user_id, updated_at DESC)`);
+    // Unguessable share handle, minted the first time the owner copies a
+    // share link. Reads by numeric id are owner-only.
+    await getPool().query(`ALTER TABLE user_playlists ADD COLUMN IF NOT EXISTS share_token TEXT`);
+    await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS user_playlists_share_token_idx ON user_playlists (share_token) WHERE share_token IS NOT NULL`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_playlist_items (
       playlist_id   INTEGER     NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE,

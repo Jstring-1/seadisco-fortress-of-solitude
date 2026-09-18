@@ -1909,14 +1909,18 @@ export async function listPlaylists(clerkUserId) {
       ORDER BY p.updated_at DESC`, [clerkUserId]);
     return r.rows;
 }
-// Public: fetch a playlist by id including all items in order. Returns
-// null if not found. Owner clerk_user_id is included so the caller can
-// gate edits — read-side gating is owner-agnostic by design (shareable).
-export async function getPlaylist(id) {
-    const head = await getPool().query(`SELECT id, name, clerk_user_id, created_at, updated_at
-       FROM user_playlists WHERE id = $1`, [id]);
+// Fetch a playlist with all items in order, either by id for its OWNER
+// or by share token for anyone holding the link. Returns null if not
+// found / not the owner. Sequential ids are never readable by others.
+export async function getPlaylist(by) {
+    const head = "shareToken" in by
+        ? await getPool().query(`SELECT id, name, clerk_user_id, created_at, updated_at
+           FROM user_playlists WHERE share_token = $1`, [by.shareToken])
+        : await getPool().query(`SELECT id, name, clerk_user_id, created_at, updated_at
+           FROM user_playlists WHERE id = $1 AND clerk_user_id = $2`, [by.id, by.ownerId]);
     if (!head.rows.length)
         return null;
+    const id = Number(head.rows[0].id);
     const itemsRows = await getPool().query(`SELECT position, source, external_id, data
        FROM user_playlist_items
       WHERE playlist_id = $1
@@ -1934,6 +1938,13 @@ export async function getPlaylist(id) {
             data: r.data ?? {},
         })),
     };
+}
+// Owner-only: return the playlist's share token, minting one on first use.
+export async function ensurePlaylistShareToken(id, clerkUserId, freshToken) {
+    const r = await getPool().query(`UPDATE user_playlists SET share_token = COALESCE(share_token, $3)
+      WHERE id = $1 AND clerk_user_id = $2
+      RETURNING share_token`, [id, clerkUserId, freshToken]);
+    return r.rows[0]?.share_token ?? null;
 }
 // Owner-only rename. Returns true if a row was updated.
 export async function renamePlaylist(id, clerkUserId, name) {
@@ -6306,6 +6317,16 @@ export async function reportYoutubeVideoUnavailable(videoId, reporterUserId, err
     if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
         return { status: "invalid", report_count: 0 };
     }
+    // Count each user once per video. A repeat report from the same
+    // account is acknowledged but doesn't move the count.
+    if (reporterUserId) {
+        const first = await getPool().query(`INSERT INTO youtube_video_unavailable_reporters (video_id, clerk_user_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`, [videoId, reporterUserId]);
+        if ((first.rowCount ?? 0) === 0) {
+            const cur = await getPool().query(`SELECT status, report_count FROM youtube_video_unavailable WHERE video_id = $1`, [videoId]);
+            return cur.rows[0] ?? { status: "flagged", report_count: 0 };
+        }
+    }
     const r = await getPool().query(`INSERT INTO youtube_video_unavailable
        (video_id, status, report_count, sample_user_id, sample_error_code)
      VALUES ($1, 'flagged', 1, $2, $3)
@@ -6376,6 +6397,7 @@ export async function listYoutubeVideoUnavailable(limit = 500) {
 export async function clearYoutubeVideoUnavailable(videoId) {
     try {
         const r = await getPool().query(`DELETE FROM youtube_video_unavailable WHERE video_id = $1`, [videoId]);
+        await getPool().query(`DELETE FROM youtube_video_unavailable_reporters WHERE video_id = $1`, [videoId]);
         return (r.rowCount ?? 0) > 0;
     }
     catch {
