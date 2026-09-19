@@ -4225,24 +4225,34 @@ function _ylWhere(f, args) {
     }
     return w.join(" AND ");
 }
-export async function getYearLabelYears(f) {
-    const args = [];
-    const r = await getPool().query(`SELECT rc.data->>'year' AS year, COUNT(*)::int AS n
-       FROM release_cache rc
-      WHERE ${_ylWhere(f, args)}
-      GROUP BY 1 ORDER BY 1`, args);
-    return r.rows.map(x => ({ year: Number(x.year), n: Number(x.n) }));
-}
-export async function getYearLabelLabels(f, year) {
+// Every (year, label) combination with its album count, for one filter
+// setting. One scan of the cache; the route slices it both ways (years for
+// a label, labels for a year) so either browse order is served from it.
+export async function getYearLabelPairs(f) {
     const args = [];
     const where = _ylWhere(f, args);
-    args.push(String(year));
-    const r = await getPool().query(`SELECT ${_YL_LABEL} AS label, COUNT(*)::int AS n
-       FROM release_cache rc
-       ${_YL_MAIN_JOIN}
-      WHERE ${where} AND rc.data->>'year' = $${args.length}
-      GROUP BY 1 ORDER BY 1`, args);
-    return r.rows.map(x => ({ label: String(x.label ?? ""), n: Number(x.n) }));
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN READ ONLY");
+        await client.query("SET LOCAL statement_timeout = '120000'");
+        const r = await client.query(`SELECT rc.data->>'year' AS year, ${_YL_LABEL} AS label, COUNT(*)::int AS n
+         FROM release_cache rc
+         ${_YL_MAIN_JOIN}
+        WHERE ${where}
+        GROUP BY 1, 2`, args);
+        await client.query("COMMIT");
+        return r.rows.map(x => [Number(x.year), String(x.label ?? ""), Number(x.n)]);
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
 }
 export async function getYearLabelAlbums(f, year, label, limit = 1000) {
     const client = await getPool().connect();

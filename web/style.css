@@ -3735,8 +3735,8 @@ body.sd-anon .anon-cta {
 /* Footer admin-only links (YouTube / Gutenberg / Newspapers / Lyrics /
    Admin) — same muted-gold as the restricted sub-nav tabs so they read
    as admin surfaces in the footer too. */
-/* Home-strip Year-Label browser (year-label.js): year → label → album →
-   releases columns in place of the card grid. */
+/* Home-strip Year-Label browser (year-label.js): year → label → album
+   (or label → year → album) columns in place of the card grid. */
 .yl { margin-top: 0.4rem; }
 .yl-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem 1.1rem; font-size: 0.82rem; }
 .yl-opt { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
@@ -3746,10 +3746,11 @@ body.sd-anon .anon-cta {
 .yl-refresh { cursor: pointer; color: var(--muted); padding: 0 0.3rem; }
 .yl-refresh:hover { color: var(--text); }
 .yl-help { color: var(--muted); font-size: 0.76rem; margin: 0.35rem 0 0.55rem; }
-.yl-cols { display: grid; grid-template-columns: 6.5rem minmax(10rem, 15rem) minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.75rem; }
+.yl-cols { display: grid; grid-template-columns: 6.5rem minmax(10rem, 16rem) minmax(0, 1fr); gap: 0.75rem; }
+.yl-cols.yl-order-ly { grid-template-columns: minmax(10rem, 16rem) 6.5rem minmax(0, 1fr); }
+.yl-cols.yl-order-ly .yl-labels { order: -1; }
 .yl-col { max-height: 32rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 0 0.25rem 0.25rem; font-size: 0.84rem; }
 .yl-col-head { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; background: var(--bg); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.4rem 0.2rem 0.3rem; border-bottom: 1px solid var(--border); margin-bottom: 0.2rem; }
-.yl-col-head .yl-open { text-transform: none; letter-spacing: 0; font-size: 0.78rem; }
 .yl .yl-label-filter { width: 100%; margin: 0.15rem 0 0.25rem; }
 .yl-decade { color: var(--muted); font-size: 0.7rem; padding: 0.45rem 0.45rem 0.1rem; opacity: 0.8; }
 .yl-item { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.22rem 0.45rem; border-radius: 4px; cursor: pointer; color: var(--text); }
@@ -3767,16 +3768,9 @@ body.sd-anon .anon-cta {
 .yl-album-title { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yl-album-meta { color: var(--muted); font-size: 0.74rem; }
 .yl-yt-full { color: #6fcf87; }
-.yl-open { cursor: pointer; color: var(--muted); padding: 0.1rem 0.35rem; border-radius: 3px; flex: none; }
-.yl-album .yl-open { margin-left: auto; }
-.yl-open:hover { color: var(--accent); }
-.yl-item:focus-visible, .yl-album:focus-visible, .yl-refresh:focus-visible, .yl-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (max-width: 1100px) {
-  .yl-cols { grid-template-columns: 6.5rem minmax(10rem, 15rem) minmax(0, 1fr); }
-  .yl-releases { grid-column: 1 / -1; max-height: 20rem; }
-}
+.yl-item:focus-visible, .yl-album:focus-visible, .yl-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 700px) {
-  .yl-cols { grid-template-columns: minmax(0, 1fr); }
+  .yl-cols, .yl-cols.yl-order-ly { grid-template-columns: minmax(0, 1fr); }
   .yl-years #yl-years { display: flex; flex-wrap: wrap; gap: 0.15rem; }
   .yl-years .yl-decade { flex-basis: 100%; }
   .yl-years .yl-item { flex: 0 0 auto; }
