@@ -4207,49 +4207,100 @@ export async function getReviewQueueCounts() {
     }
     return out;
 }
-export async function getBluesPickerAlbums(strict, mastersPlus, yearFrom = 1920, yearTo = 1960) {
+const _YL_YEAR_RE = "^(1[0-9]|20)[0-9]{2}$";
+const _YL_MAIN_JOIN = `LEFT JOIN release_cache mr
+           ON rc.type = 'master' AND mr.type = 'release'
+          AND mr.discogs_id = CASE WHEN rc.data->>'main_release' ~ '^[0-9]{1,9}$'
+                                   THEN (rc.data->>'main_release')::int END`;
+const _YL_LABEL = String.raw `regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', ''), '\s+\(\d+\)$', '')`;
+function _ylWhere(f, args) {
+    const push = (v) => { args.push(v); return `$${args.length}`; };
+    const w = [f.mastersPlus
+            ? `(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
+            : `rc.type = 'release'`];
+    w.push(`rc.data->>'year' ~ '${_YL_YEAR_RE}'`);
+    if (f.genre) {
+        w.push(`jsonb_typeof(rc.data->'genres') = 'array'`);
+        w.push(`rc.data->'genres' ? ${push(f.genre)}`);
+        if (f.strict)
+            w.push(`jsonb_array_length(rc.data->'genres') = 1`);
+    }
+    return w.join(" AND ");
+}
+export async function getYearLabelYears(f) {
+    const args = [];
+    const r = await getPool().query(`SELECT rc.data->>'year' AS year, COUNT(*)::int AS n
+       FROM release_cache rc
+      WHERE ${_ylWhere(f, args)}
+      GROUP BY 1 ORDER BY 1`, args);
+    return r.rows.map(x => ({ year: Number(x.year), n: Number(x.n) }));
+}
+export async function getYearLabelLabels(f, year) {
+    const args = [];
+    const where = _ylWhere(f, args);
+    args.push(String(year));
+    const r = await getPool().query(`SELECT ${_YL_LABEL} AS label, COUNT(*)::int AS n
+       FROM release_cache rc
+       ${_YL_MAIN_JOIN}
+      WHERE ${where} AND rc.data->>'year' = $${args.length}
+      GROUP BY 1 ORDER BY 1`, args);
+    return r.rows.map(x => ({ label: String(x.label ?? ""), n: Number(x.n) }));
+}
+export async function getYearLabelAlbums(f, year, label, limit = 1000) {
     const client = await getPool().connect();
     try {
         await client.query("BEGIN READ ONLY");
-        await client.query("SET LOCAL statement_timeout = '120000'");
+        const args = [];
+        const where = _ylWhere(f, args);
+        args.push(String(year));
+        const yearArg = `$${args.length}`;
+        args.push(label);
+        const labelArg = `$${args.length}`;
+        const cap = Math.max(1, Math.min(5000, limit));
         const rows = (await client.query(`SELECT rc.discogs_id AS id, rc.type,
               CASE WHEN rc.type = 'master' THEN rc.discogs_id
-                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]*$' THEN (rc.data->>'master_id')::int
+                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]{0,8}$' THEN (rc.data->>'master_id')::int
               END                                              AS master_id,
-              (rc.data->>'year')::int                          AS year,
               COALESCE(rc.data->>'title', '')                  AS title,
               COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
-              COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', '')   AS label,
               COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), mr.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(rc.data->'formats'->0->>'name', mr.data->'formats'->0->>'name', '')             AS format,
               COALESCE(rc.data->'images'->0->>'uri150', rc.data->>'thumb', mr.data->'images'->0->>'uri150', '') AS thumb,
               rc.data->'tracklist' AS tracklist,
               rc.data->'videos'    AS videos
          FROM release_cache rc
-         LEFT JOIN release_cache mr
-           ON rc.type = 'master' AND mr.type = 'release'
-          AND rc.data->>'main_release' ~ '^[0-9]+$'
-          AND mr.discogs_id = (rc.data->>'main_release')::int
-        WHERE ${mastersPlus
-            ? `(rc.type = 'master'
-               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
-            : `rc.type = 'release'`}
-          AND rc.data->'genres' ? 'Blues'
-          ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
-          AND rc.data->>'year' ~ '^[0-9]{4}$'
-          AND (rc.data->>'year')::int BETWEEN $1 AND $2
-          AND jsonb_typeof(rc.data->'tracklist') = 'array'`, [yearFrom, yearTo])).rows;
+         ${_YL_MAIN_JOIN}
+        WHERE ${where} AND rc.data->>'year' = ${yearArg} AND ${_YL_LABEL} = ${labelArg}
+        ORDER BY rc.discogs_id
+        LIMIT ${cap + 1}`, args)).rows;
+        const truncated = rows.length > cap;
+        if (truncated)
+            rows.length = cap;
         if (!rows.length) {
             await client.query("COMMIT");
-            return [];
+            return { albums: [], truncated: false };
         }
         const releaseIds = rows.filter(r => r.type === "release").map(r => String(r.id));
         const masterIds = [...new Set(rows.filter(r => r.master_id != null).map(r => String(r.master_id)))];
-        const ov = (await client.query(`SELECT release_id, release_type, track_position, video_id, mode
-         FROM track_youtube_overrides
-        WHERE track_position <> 'ALBUM'
-          AND ((release_type = 'release' AND release_id = ANY($1::text[]))
-            OR (release_type = 'master'  AND release_id = ANY($2::text[])))`, [releaseIds, masterIds])).rows;
-        const unavailable = new Set((await client.query(`SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`)).rows.map(r => String(r.video_id)));
+        const ov = (await client.query(`SELECT o.release_id, o.release_type, o.track_position, o.video_id, o.mode
+         FROM track_youtube_overrides o
+        WHERE o.track_position <> 'ALBUM'
+          AND ((o.release_type = 'release' AND o.release_id = ANY($1::text[]))
+            OR (o.release_type = 'master'  AND o.release_id = ANY($2::text[])))`, [releaseIds, masterIds])).rows;
+        const ytId = (uri) => {
+            const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
+            return m ? m[1] : "";
+        };
+        // Only the video ids these albums reference need an availability check.
+        const vids = new Set(ov.map(o => String(o.video_id || "")).filter(Boolean));
+        for (const r of rows) {
+            for (const v of (Array.isArray(r.videos) ? r.videos : [])) {
+                const id = ytId(String(v?.uri ?? ""));
+                if (id)
+                    vids.add(id);
+            }
+        }
+        const unavailable = new Set(vids.size ? (await client.query(`SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable' AND video_id = ANY($1::text[])`, [[...vids]])).rows.map(r => String(r.video_id)) : []);
         await client.query("COMMIT");
         const ovMap = new Map();
         for (const o of ov) {
@@ -4258,15 +4309,8 @@ export async function getBluesPickerAlbums(strict, mastersPlus, yearFrom = 1920,
                 ovMap.set(k, new Map());
             ovMap.get(k).set(String(o.track_position), { video_id: String(o.video_id || ""), mode: String(o.mode || "gap") });
         }
-        const ytId = (uri) => {
-            const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
-            return m ? m[1] : "";
-        };
-        const out = [];
-        for (const r of rows) {
-            const tracks = r.tracklist.filter(t => (t?.type_ ?? "track") === "track" && String(t?.title ?? "").trim() !== "");
-            if (!tracks.length)
-                continue;
+        const albums = rows.map(r => {
+            const tracks = (Array.isArray(r.tracklist) ? r.tracklist : []).filter((t) => (t?.type_ ?? "track") === "track" && String(t?.title ?? "").trim() !== "");
             const videos = (Array.isArray(r.videos) ? r.videos : [])
                 .filter((v) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
                 .map((v) => String(v.title).toLowerCase());
@@ -4276,7 +4320,7 @@ export async function getBluesPickerAlbums(strict, mastersPlus, yearFrom = 1920,
                 ...(r.type === "release" ? ovMap.get(`release:${r.id}`) ?? [] : []),
             ]);
             const playable = (o) => !!o && !!o.video_id && !unavailable.has(o.video_id);
-            const ytTracks = tracks.filter(t => {
+            const ytTracks = tracks.filter((t) => {
                 const o = ovs.get(String(t.position ?? "").trim());
                 if (o?.mode === "block")
                     return false;
@@ -4287,15 +4331,15 @@ export async function getBluesPickerAlbums(strict, mastersPlus, yearFrom = 1920,
                     return true;
                 return playable(o);
             }).length;
-            out.push({
+            return {
                 id: Number(r.id), type: r.type, masterId: r.master_id != null ? Number(r.master_id) : null,
-                year: Number(r.year), title: String(r.title),
+                year, title: String(r.title),
                 artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
-                label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
+                label, catno: String(r.catno), format: String(r.format),
                 thumb: String(r.thumb), tracks: tracks.length, ytTracks,
-            });
-        }
-        return out;
+            };
+        });
+        return { albums, truncated };
     }
     catch (e) {
         try {
@@ -4475,6 +4519,10 @@ export async function ensureBackgroundIndexes() {
             `CREATE INDEX CONCURRENTLY IF NOT EXISTS release_cache_release_master_idx
         ON release_cache ((data->>'master_id')) WHERE type = 'release'`],
         // Duplicates / unused (every write paid for them).
+        // Year-Label browser: labels/albums for one year.
+        ["create release_cache_year_idx",
+            `CREATE INDEX CONCURRENTLY IF NOT EXISTS release_cache_year_idx
+        ON release_cache ((data->>'year'))`],
         ["drop release_cache_id_type_idx", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_id_type_idx`],
         ["drop release_cache_data_genres_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_genres_gin`],
         ["drop release_cache_data_artists_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_artists_gin`],

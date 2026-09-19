@@ -1173,7 +1173,7 @@ function _sdInitialHomeStripMode() {
     const v = new URLSearchParams(location.search).get("strip");
     if (v === "recent" || v === "suggestions" || v === "feed"
         || v === "rare" || v === "dig" || v === "active" || v === "played"
-        || v === "blues") return v;
+        || v === "yearlabel") return v;
   } catch {}
   // Recent is the default landing tab. Signed-in users see their
   // own history; anons with no local history fall back to the
@@ -1191,7 +1191,7 @@ function _sdSyncHomeStripTabsVisual() {
   // Recent / Feed / Active / Played / Rare / Dig / Suggestions are
   // the visible tabs. Feed is the default landing tab. Any stray
   // mode collapses to Feed.
-  const _KNOWN_MODES = new Set(["recent","suggestions","feed","rare","dig","active","played","blues"]);
+  const _KNOWN_MODES = new Set(["recent","suggestions","feed","rare","dig","active","played","yearlabel"]);
   if (!_KNOWN_MODES.has(window._sdHomeStripMode)) {
     window._sdHomeStripMode = "feed";
   }
@@ -1203,19 +1203,25 @@ function _sdSyncHomeStripTabsVisual() {
     dig:         document.getElementById("rr-tab-dig"),
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
-    blues:       document.getElementById("rr-tab-blues"),
+    yearlabel:   document.getElementById("rr-tab-yearlabel"),
   };
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
     el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
-    // Blues keeps the admin-only (restricted) colours from its class.
-    if (k !== "blues") el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
+    // Year-Label keeps the admin-only (restricted) colours from its class.
+    if (k !== "yearlabel") el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
   }
-  // Blues is an admin-only tab (early-Blues picker, blues-picker.js).
-  const _bluesOn = window._isAdmin === true;
-  if (tabs.blues) tabs.blues.style.display = _bluesOn ? "" : "none";
-  const _bluesSep = document.getElementById("rr-tab-blues-sep");
-  if (_bluesSep) _bluesSep.style.display = _bluesOn ? "" : "none";
+  // Year-Label (year-label.js): admin-only, or every signed-in user when
+  // the server's YEAR_LABEL_OPEN switch is on (then it drops the gold
+  // admin-only tint).
+  const _ylOn = _sdYearLabelAllowed();
+  if (tabs.yearlabel) {
+    tabs.yearlabel.style.display = _ylOn ? "" : "none";
+    tabs.yearlabel.classList.toggle("rr-tab-restricted", !window._sdYearLabelOpen);
+    if (window._sdYearLabelOpen) tabs.yearlabel.style.color = window._sdHomeStripMode === "yearlabel" ? "var(--text)" : "var(--muted)";
+  }
+  const _ylSep = document.getElementById("rr-tab-yearlabel-sep");
+  if (_ylSep) _ylSep.style.display = _ylOn ? "" : "none";
   // Anons see both tabs but they're greyed out — clicking either
   // prompts sign-in. Recent's local-history fallback still renders
   // a community-picks sample so the strip isn't empty.
@@ -1267,7 +1273,7 @@ function _sdSwitchHomeStripTab(mode) {
   else if (mode === "dig") m = "dig";
   else if (mode === "active") m = "active";
   else if (mode === "played") m = "played";
-  else if (mode === "blues" && window._isAdmin === true) m = "blues";
+  else if (mode === "yearlabel" && _sdYearLabelAllowed()) m = "yearlabel";
   // Anon-mode lockdown: signed-out users can land on Recent (its
   // local-history fallback hits community-picks) but not Suggestions.
   if (!window._clerk?.user && m === "suggestions") {
@@ -1326,15 +1332,21 @@ function _sdReflectHomeStripModeInUrl(mode) {
   } catch {}
 }
 
+// Who can use the Year-Label tab: admin, or any signed-in user once the
+// server's YEAR_LABEL_OPEN switch is on (reported by /api/me).
+function _sdYearLabelAllowed() {
+  return window._isAdmin === true || (window._sdYearLabelOpen === true && !!window._clerk?.user);
+}
+
 // Swap the strip between the card grid (+ its filter/sort controls) and
-// the admin Blues picker panel.
-function _sdBluesPickerShow(on) {
+// the Year-Label browser panel.
+function _sdYearLabelShow(on) {
   const grid = document.getElementById("random-records-grid");
   const ctrls = document.getElementById("random-records-controls");
   if (grid) grid.style.display = on ? "none" : "";
   if (ctrls) ctrls.style.display = on ? "none" : "";
-  const bp = document.getElementById("blues-picker");
-  if (bp) bp.style.display = on ? "" : "none";
+  const yl = document.getElementById("year-label");
+  if (yl) yl.style.display = on ? "" : "none";
 }
 
 // Per-tab filter text. The home strip is one physical input reused
@@ -2189,19 +2201,17 @@ async function loadRandomRecords(more) {
   if (!grid || !wrap) return;
   const _mySeq = ++_randomLoadSeq;
   const _stillCurrent = () => _mySeq === _randomLoadSeq;
-  // Admin Blues tab: the year/label/album picker (blues-picker.js) takes
+  // Year-Label tab: the year/label/album browser (year-label.js) takes
   // over the strip area in place of the card grid.
-  if (window._sdHomeStripMode === "blues") {
-    const isAdmin = typeof window._ensureAdminFlag === "function"
-      ? await window._ensureAdminFlag().catch(() => false)
-      : window._isAdmin === true;
+  if (window._sdHomeStripMode === "yearlabel") {
+    if (typeof window._ensureAdminFlag === "function") await window._ensureAdminFlag().catch(() => false);
     if (!_stillCurrent()) return;
-    if (isAdmin) {
-      _sdBluesPickerShow(true);
+    if (_sdYearLabelAllowed()) {
+      _sdYearLabelShow(true);
       if (more) return;
       wrap.style.display = "";
-      window._sdLoadModule("/blues-picker.js")
-        .then(() => { if (window._sdHomeStripMode === "blues") window._sdBluesPickerOpen?.(); })
+      window._sdLoadModule("/year-label.js")
+        .then(() => { if (window._sdHomeStripMode === "yearlabel") window._sdYearLabelMount?.(); })
         .catch(() => {});
       return;
     }
@@ -2209,7 +2219,7 @@ async function loadRandomRecords(more) {
     _sdReflectHomeStripModeInUrl("recent");
     _sdSyncHomeStripTabsVisual();
   }
-  _sdBluesPickerShow(false);
+  _sdYearLabelShow(false);
   // Suggestions requires auth; Recent + Feed are public. Anons land
   // on Recent unless they explicitly arrive via the footer Feed link.
   if (window._sdAuthResolved

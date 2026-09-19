@@ -2316,6 +2316,7 @@ function renderSharedFooter(opts) {
       // Broad YT_OPEN_TO_USERS toggle — off by default. Off means
       // signed-in non-admin/demo users see the standard splash.
       window._sdYtOpen = !!data?.ytOpen;
+      window._sdYearLabelOpen = !!data?.yearLabelOpen;
       // Home-strip Submitted tab gates on _isAdmin / _sdIsDemo, both
       // populated above. applyAuthState already calls the sync once
       // when Clerk resolves, but that fires BEFORE this /api/me

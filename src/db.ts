@@ -5580,72 +5580,127 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
 // "strict blues" = master whose genres array is exactly ['Blues'].
 // Expanding every master's tracklist is heavy, so this runs under a
 // raised statement_timeout and is meant to be called on demand.
-// Blues picker (admin home-strip tab): cached albums from 1920–1960
-// tagged Blues (strict = Blues is the ONLY genre), each with a count of
-// tracks that have a playable YouTube video so the tab can filter to
-// albums where every track does. mastersPlus = masters + releases with no
-// master; otherwise every cached release (the tab lists a master's other
-// pressings in a side panel). "Playable" mirrors the album popup's
+// Year-Label browser (home-strip tab): the catalog cache browsed by year,
+// then label, then album. Filters: genre (+ strict = that genre is the
+// ONLY genre) and mastersPlus (masters + releases with no master; else
+// every cached release). Years and labels are plain SQL counts; the album
+// list for one year+label also carries each album's count of tracks that
+// have a playable YouTube video. "Playable" mirrors the album popup's
 // findVideo(): an override in 'block' mode hides the track; a 'replace'
 // override wins; otherwise a Discogs videos[] title that contains (or is
-// contained in) the track title; then a 'gap' override. A release sees
-// its master's overrides too, with its own winning on the same position.
+// contained in) the track title; then a 'gap' override. A release sees its
+// master's overrides too, with its own winning on the same position.
 // Videos flagged unavailable don't count, and the full-album ("ALBUM")
 // slot is ignored. Masters have no labels of their own, so they borrow
-// label/catno from their cached main release.
-export interface BluesPickerAlbum {
+// label/catno from their cached main release. Label names are grouped with
+// Discogs's " (2)" disambiguator stripped.
+export interface YearLabelFilter { genre: string | null; strict: boolean; mastersPlus: boolean }
+export interface YearLabelAlbum {
   id: number; type: "master" | "release"; masterId: number | null;
   year: number; title: string; artist: string; label: string; catno: string;
-  thumb: string; tracks: number; ytTracks: number;
+  format: string; thumb: string; tracks: number; ytTracks: number;
 }
-export async function getBluesPickerAlbums(strict: boolean, mastersPlus: boolean, yearFrom = 1920, yearTo = 1960): Promise<BluesPickerAlbum[]> {
+const _YL_YEAR_RE = "^(1[0-9]|20)[0-9]{2}$";
+const _YL_MAIN_JOIN = `LEFT JOIN release_cache mr
+           ON rc.type = 'master' AND mr.type = 'release'
+          AND mr.discogs_id = CASE WHEN rc.data->>'main_release' ~ '^[0-9]{1,9}$'
+                                   THEN (rc.data->>'main_release')::int END`;
+const _YL_LABEL = String.raw`regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', ''), '\s+\(\d+\)$', '')`;
+function _ylWhere(f: YearLabelFilter, args: any[]): string {
+  const push = (v: any) => { args.push(v); return `$${args.length}`; };
+  const w = [f.mastersPlus
+    ? `(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
+    : `rc.type = 'release'`];
+  w.push(`rc.data->>'year' ~ '${_YL_YEAR_RE}'`);
+  if (f.genre) {
+    w.push(`jsonb_typeof(rc.data->'genres') = 'array'`);
+    w.push(`rc.data->'genres' ? ${push(f.genre)}`);
+    if (f.strict) w.push(`jsonb_array_length(rc.data->'genres') = 1`);
+  }
+  return w.join(" AND ");
+}
+
+export async function getYearLabelYears(f: YearLabelFilter): Promise<Array<{ year: number; n: number }>> {
+  const args: any[] = [];
+  const r = await getPool().query(
+    `SELECT rc.data->>'year' AS year, COUNT(*)::int AS n
+       FROM release_cache rc
+      WHERE ${_ylWhere(f, args)}
+      GROUP BY 1 ORDER BY 1`, args);
+  return (r.rows as any[]).map(x => ({ year: Number(x.year), n: Number(x.n) }));
+}
+
+export async function getYearLabelLabels(f: YearLabelFilter, year: number): Promise<Array<{ label: string; n: number }>> {
+  const args: any[] = [];
+  const where = _ylWhere(f, args);
+  args.push(String(year));
+  const r = await getPool().query(
+    `SELECT ${_YL_LABEL} AS label, COUNT(*)::int AS n
+       FROM release_cache rc
+       ${_YL_MAIN_JOIN}
+      WHERE ${where} AND rc.data->>'year' = $${args.length}
+      GROUP BY 1 ORDER BY 1`, args);
+  return (r.rows as any[]).map(x => ({ label: String(x.label ?? ""), n: Number(x.n) }));
+}
+
+export async function getYearLabelAlbums(f: YearLabelFilter, year: number, label: string, limit = 1000): Promise<{ albums: YearLabelAlbum[]; truncated: boolean }> {
   const client = await getPool().connect();
   try {
     await client.query("BEGIN READ ONLY");
-    await client.query("SET LOCAL statement_timeout = '120000'");
+    const args: any[] = [];
+    const where = _ylWhere(f, args);
+    args.push(String(year));
+    const yearArg = `$${args.length}`;
+    args.push(label);
+    const labelArg = `$${args.length}`;
+    const cap = Math.max(1, Math.min(5000, limit));
     const rows = (await client.query(
       `SELECT rc.discogs_id AS id, rc.type,
               CASE WHEN rc.type = 'master' THEN rc.discogs_id
-                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]*$' THEN (rc.data->>'master_id')::int
+                   WHEN rc.data->>'master_id' ~ '^[1-9][0-9]{0,8}$' THEN (rc.data->>'master_id')::int
               END                                              AS master_id,
-              (rc.data->>'year')::int                          AS year,
               COALESCE(rc.data->>'title', '')                  AS title,
               COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
-              COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', '')   AS label,
               COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), mr.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(rc.data->'formats'->0->>'name', mr.data->'formats'->0->>'name', '')             AS format,
               COALESCE(rc.data->'images'->0->>'uri150', rc.data->>'thumb', mr.data->'images'->0->>'uri150', '') AS thumb,
               rc.data->'tracklist' AS tracklist,
               rc.data->'videos'    AS videos
          FROM release_cache rc
-         LEFT JOIN release_cache mr
-           ON rc.type = 'master' AND mr.type = 'release'
-          AND rc.data->>'main_release' ~ '^[0-9]+$'
-          AND mr.discogs_id = (rc.data->>'main_release')::int
-        WHERE ${mastersPlus
-          ? `(rc.type = 'master'
-               OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
-          : `rc.type = 'release'`}
-          AND rc.data->'genres' ? 'Blues'
-          ${strict ? `AND jsonb_array_length(rc.data->'genres') = 1` : ""}
-          AND rc.data->>'year' ~ '^[0-9]{4}$'
-          AND (rc.data->>'year')::int BETWEEN $1 AND $2
-          AND jsonb_typeof(rc.data->'tracklist') = 'array'`,
-      [yearFrom, yearTo],
+         ${_YL_MAIN_JOIN}
+        WHERE ${where} AND rc.data->>'year' = ${yearArg} AND ${_YL_LABEL} = ${labelArg}
+        ORDER BY rc.discogs_id
+        LIMIT ${cap + 1}`, args,
     )).rows as any[];
-    if (!rows.length) { await client.query("COMMIT"); return []; }
+    const truncated = rows.length > cap;
+    if (truncated) rows.length = cap;
+    if (!rows.length) { await client.query("COMMIT"); return { albums: [], truncated: false }; }
     const releaseIds = rows.filter(r => r.type === "release").map(r => String(r.id));
     const masterIds = [...new Set(rows.filter(r => r.master_id != null).map(r => String(r.master_id)))];
     const ov = (await client.query(
-      `SELECT release_id, release_type, track_position, video_id, mode
-         FROM track_youtube_overrides
-        WHERE track_position <> 'ALBUM'
-          AND ((release_type = 'release' AND release_id = ANY($1::text[]))
-            OR (release_type = 'master'  AND release_id = ANY($2::text[])))`,
+      `SELECT o.release_id, o.release_type, o.track_position, o.video_id, o.mode
+         FROM track_youtube_overrides o
+        WHERE o.track_position <> 'ALBUM'
+          AND ((o.release_type = 'release' AND o.release_id = ANY($1::text[]))
+            OR (o.release_type = 'master'  AND o.release_id = ANY($2::text[])))`,
       [releaseIds, masterIds],
     )).rows as any[];
-    const unavailable = new Set<string>(((await client.query(
-      `SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`,
-    )).rows as any[]).map(r => String(r.video_id)));
+    const ytId = (uri: string): string => {
+      const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
+      return m ? m[1] : "";
+    };
+    // Only the video ids these albums reference need an availability check.
+    const vids = new Set<string>(ov.map(o => String(o.video_id || "")).filter(Boolean));
+    for (const r of rows) {
+      for (const v of (Array.isArray(r.videos) ? r.videos : [])) {
+        const id = ytId(String(v?.uri ?? ""));
+        if (id) vids.add(id);
+      }
+    }
+    const unavailable = new Set<string>(vids.size ? ((await client.query(
+      `SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable' AND video_id = ANY($1::text[])`,
+      [[...vids]],
+    )).rows as any[]).map(r => String(r.video_id)) : []);
     await client.query("COMMIT");
 
     type Ov = { video_id: string; mode: string };
@@ -5655,15 +5710,9 @@ export async function getBluesPickerAlbums(strict: boolean, mastersPlus: boolean
       if (!ovMap.has(k)) ovMap.set(k, new Map());
       ovMap.get(k)!.set(String(o.track_position), { video_id: String(o.video_id || ""), mode: String(o.mode || "gap") });
     }
-    const ytId = (uri: string): string => {
-      const m = /[?&]v=([\w-]{11})/.exec(uri) || /youtu\.be\/([\w-]{11})/.exec(uri) || /\/embed\/([\w-]{11})/.exec(uri);
-      return m ? m[1] : "";
-    };
-    const out: BluesPickerAlbum[] = [];
-    for (const r of rows) {
-      const tracks = (r.tracklist as any[]).filter(t =>
+    const albums: YearLabelAlbum[] = rows.map(r => {
+      const tracks = (Array.isArray(r.tracklist) ? r.tracklist : []).filter((t: any) =>
         (t?.type_ ?? "track") === "track" && String(t?.title ?? "").trim() !== "");
-      if (!tracks.length) continue;
       const videos = (Array.isArray(r.videos) ? r.videos : [])
         .filter((v: any) => v?.title && v?.uri && !unavailable.has(ytId(String(v.uri))))
         .map((v: any) => String(v.title).toLowerCase());
@@ -5673,7 +5722,7 @@ export async function getBluesPickerAlbums(strict: boolean, mastersPlus: boolean
         ...(r.type === "release" ? ovMap.get(`release:${r.id}`) ?? [] : []),
       ]);
       const playable = (o: Ov | undefined) => !!o && !!o.video_id && !unavailable.has(o.video_id);
-      const ytTracks = tracks.filter(t => {
+      const ytTracks = tracks.filter((t: any) => {
         const o = ovs.get(String(t.position ?? "").trim());
         if (o?.mode === "block") return false;
         if (o?.mode === "replace" && playable(o)) return true;
@@ -5681,15 +5730,15 @@ export async function getBluesPickerAlbums(strict: boolean, mastersPlus: boolean
         if (videos.some((vt: string) => vt.includes(tl) || tl.includes(vt))) return true;
         return playable(o);
       }).length;
-      out.push({
+      return {
         id: Number(r.id), type: r.type, masterId: r.master_id != null ? Number(r.master_id) : null,
-        year: Number(r.year), title: String(r.title),
+        year, title: String(r.title),
         artist: String(r.artist).replace(/\s+\(\d+\)$/, ""),
-        label: String(r.label).replace(/\s+\(\d+\)$/, ""), catno: String(r.catno),
+        label, catno: String(r.catno), format: String(r.format),
         thumb: String(r.thumb), tracks: tracks.length, ytTracks,
-      });
-    }
-    return out;
+      };
+    });
+    return { albums, truncated };
   } catch (e) {
     try { await client.query("ROLLBACK"); } catch {}
     throw e;
@@ -5892,6 +5941,10 @@ export async function ensureBackgroundIndexes(): Promise<void> {
      `CREATE INDEX CONCURRENTLY IF NOT EXISTS release_cache_release_master_idx
         ON release_cache ((data->>'master_id')) WHERE type = 'release'`],
     // Duplicates / unused (every write paid for them).
+    // Year-Label browser: labels/albums for one year.
+    ["create release_cache_year_idx",
+     `CREATE INDEX CONCURRENTLY IF NOT EXISTS release_cache_year_idx
+        ON release_cache ((data->>'year'))`],
     ["drop release_cache_id_type_idx",      `DROP INDEX CONCURRENTLY IF EXISTS release_cache_id_type_idx`],
     ["drop release_cache_data_genres_gin",  `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_genres_gin`],
     ["drop release_cache_data_artists_gin", `DROP INDEX CONCURRENTLY IF EXISTS release_cache_data_artists_gin`],

@@ -11,7 +11,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader, type DiscogsPriority } from "./discogs-client.js";
-import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, getBluesPickerAlbums, reviewQueueDecide, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, isTrackAlreadySearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
+import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, getYearLabelYears, getYearLabelLabels, getYearLabelAlbums, type YearLabelFilter, reviewQueueDecide, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, isTrackAlreadySearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
 } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning, enqueueCacheWarmRuns, getCacheWarmQueue, clearCacheWarmQueue } from "./cache-warm.js";
@@ -655,6 +655,9 @@ function _isTicketedDownloadReq(req: express.Request): boolean {
 // Off by default; flip on with YT_OPEN_TO_USERS=1 on Railway when
 // you want broad signed-in access (e.g. open beta).
 const _ytOpenToUsers = (process.env.YT_OPEN_TO_USERS === "1" || process.env.YT_OPEN_TO_USERS === "true");
+// Year-Label home-strip tab: admin-only unless YEAR_LABEL_OPEN=1, which
+// opens it to every signed-in user.
+const _yearLabelOpen = (process.env.YEAR_LABEL_OPEN === "1" || process.env.YEAR_LABEL_OPEN === "true");
 
 // Per-account allowlist for demo / reviewer access. Comma-separated
 // Clerk user IDs that get the same privileges as admin without being
@@ -1424,7 +1427,7 @@ app.get("/api/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const userId = await getClerkUserId(req);
   if (!userId) {
-    res.json({ signedIn: false, isAdmin: false, isDemo: false, ytOpen: _ytOpenToUsers });
+    res.json({ signedIn: false, isAdmin: false, isDemo: false, ytOpen: _ytOpenToUsers, yearLabelOpen: _yearLabelOpen });
     return;
   }
   const adminId = ADMIN_CLERK_ID;
@@ -1439,6 +1442,7 @@ app.get("/api/me", async (req, res) => {
     // sees YT features. Off by default; demo accounts above are the
     // narrower per-account allowlist.
     ytOpen: _ytOpenToUsers,
+    yearLabelOpen: _yearLabelOpen,
   });
 });
 
@@ -16691,25 +16695,82 @@ app.get("/api/admin/overview", async (req, res) => {
   }
 });
 
-// GET /api/admin/blues-picker?strict=0|1&mp=0|1 — admin home-strip "Blues"
-// tab. Cached Blues albums 1920–1960 (mp=1: Masters+; mp=0: every cached
-// release), each with its count of tracks that have a YouTube video (see
-// getBluesPickerAlbums). Memoized 10 min per mode since it scans every
-// early-Blues cache row; ?refresh=1 recomputes.
-const _bluesPickerMemo = new Map<string, { at: number; albums: any[] }>();
-app.get("/api/admin/blues-picker", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const strict = req.query.strict === "1";
-  const mastersPlus = req.query.mp === "1";
-  const key = `${strict ? "strict" : "loose"}:${mastersPlus ? "mp" : "all"}`;
+// ── Year-Label browser (home-strip tab) ─────────────────────────────────
+// GET /api/year-label/years  ?genre=&strict=0|1&mp=0|1
+// GET /api/year-label/labels ?year=YYYY + filters
+// GET /api/year-label/albums ?year=YYYY&label=NAME + filters
+// Admin-only unless YEAR_LABEL_OPEN=1 (then any signed-in user, rate
+// limited). Results are memoized briefly: the years count scans the whole
+// release cache, so the same filter combo shouldn't pay for it twice.
+const YEAR_LABEL_GENRES = [
+  "Blues", "Brass & Military", "Children's", "Classical", "Electronic",
+  "Folk, World, & Country", "Funk / Soul", "Hip Hop", "Jazz", "Latin",
+  "Non-Music", "Pop", "Reggae", "Rock", "Stage & Screen",
+];
+const _yearLabelUserLimiter = new PerIpRateLimiter(300, 10 * 60_000, "year-label-user");
+const _ylMemo = new Map<string, { at: number; v: any }>();
+async function _ylCached<T>(key: string, ttlMs: number, refresh: boolean, fn: () => Promise<T>): Promise<T> {
+  const hit = _ylMemo.get(key);
+  if (hit && !refresh && Date.now() - hit.at < ttlMs) return hit.v as T;
+  const v = await fn();
+  _ylMemo.delete(key);
+  _ylMemo.set(key, { at: Date.now(), v });
+  while (_ylMemo.size > 400) _ylMemo.delete(_ylMemo.keys().next().value as string);
+  return v;
+}
+async function _ylGate(req: express.Request, res: express.Response): Promise<boolean> {
+  const userId = await getClerkUserId(req);
+  const isAdmin = !!userId && !!ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID;
+  if (isAdmin) return true;
+  if (!_yearLabelOpen || !userId) { res.status(userId ? 403 : 401).json({ error: "Not available" }); return false; }
+  if (!_yearLabelUserLimiter.check(userId)) { res.status(429).json({ error: "Too many requests; try again in a few minutes" }); return false; }
+  return true;
+}
+function _ylFilter(q: any): YearLabelFilter {
+  const g = String(q.genre ?? "");
+  return {
+    genre: YEAR_LABEL_GENRES.includes(g) ? g : null,
+    strict: q.strict === "1",
+    mastersPlus: q.mp === "1",
+  };
+}
+const _ylKey = (f: YearLabelFilter) => `${f.genre ?? "*"}|${f.strict && f.genre ? 1 : 0}|${f.mastersPlus ? 1 : 0}`;
+const _ylYear = (v: any): number | null => (/^(1[0-9]|20)[0-9]{2}$/.test(String(v ?? "")) ? Number(v) : null);
+
+app.get("/api/year-label/years", async (req, res) => {
+  if (!await _ylGate(req, res)) return;
+  const f = _ylFilter(req.query);
   try {
-    const hit = _bluesPickerMemo.get(key);
-    if (!hit || req.query.refresh === "1" || Date.now() - hit.at > 10 * 60_000) {
-      _bluesPickerMemo.set(key, { at: Date.now(), albums: await getBluesPickerAlbums(strict, mastersPlus) });
-    }
-    const m = _bluesPickerMemo.get(key)!;
+    const years = await _ylCached(`y|${_ylKey(f)}`, 30 * 60_000, req.query.refresh === "1", () => getYearLabelYears(f));
     res.set("Cache-Control", "no-store");
-    res.json({ strict, mastersPlus, computedAt: new Date(m.at).toISOString(), albums: m.albums });
+    res.json({ genres: YEAR_LABEL_GENRES, years });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+app.get("/api/year-label/labels", async (req, res) => {
+  if (!await _ylGate(req, res)) return;
+  const f = _ylFilter(req.query);
+  const year = _ylYear(req.query.year);
+  if (year == null) { res.status(400).json({ error: "year required" }); return; }
+  try {
+    const labels = await _ylCached(`l|${_ylKey(f)}|${year}`, 30 * 60_000, req.query.refresh === "1", () => getYearLabelLabels(f, year));
+    res.set("Cache-Control", "no-store");
+    res.json({ year, labels });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+app.get("/api/year-label/albums", async (req, res) => {
+  if (!await _ylGate(req, res)) return;
+  const f = _ylFilter(req.query);
+  const year = _ylYear(req.query.year);
+  const label = String(req.query.label ?? "").slice(0, 300);
+  if (year == null) { res.status(400).json({ error: "year required" }); return; }
+  try {
+    const r = await _ylCached(`a|${_ylKey(f)}|${year}|${label}`, 5 * 60_000, req.query.refresh === "1", () => getYearLabelAlbums(f, year, label));
+    res.set("Cache-Control", "no-store");
+    res.json({ year, label, ...r });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
