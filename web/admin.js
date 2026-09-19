@@ -2025,6 +2025,7 @@ async function loadYtReview() {
           ? `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrStop() })}" title="Signal the worker to wind down at the next safe boundary.">■ Stop</button>`
           : `<button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrStart() })}" title="Walk pre-1960 Blues masters (earliest year first) and propose YouTube videos for tracks with no override yet. Throttled to 1 search per ${Math.round((s.throttleMs||45000)/1000)}s; daily budget ${s.dailyBudget}.">▶ Start</button>
              <button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrRestartFromTop() })}" title="Clear the walk cursor so the next Start begins at the earliest Blues master again. Doesn't touch already-approved / rejected rows or re-search tracks (per-track search log is preserved).">↻ Restart from top</button>
+             ${c.pending ? `<button class="admin-btn" style="color:#8e8" data-sd-click="${_sdOn(function (event) { ytrApproveTop(this) })}" title="For every pending track, approve the candidate listed first (preferred source, then best title match) and pin it. The track's other candidates are superseded, same as clicking Approve on each.">✓ Approve top pick for all</button>` : ""}
              ${c.pending ? `<button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(function (event) { ytrDismissPending() })}" title="Throw out all ${Number(c.pending).toLocaleString()} pending tracks' candidates, forget those tracks were searched, and rewind the walk. Does not start the worker — the next ▶ Start (or scheduled daily run) re-searches them with the current search query. Approved / rejected / skipped rows are kept; rejected videos won't come back.">⟳ Dismiss pending &amp; re-search</button>` : ""}
              <button class="admin-btn" data-sd-click="${_sdOn(function (event) { ytrResetQuota() })}" title="Zero the app's daily search counter. Use ONLY when Google Cloud Console shows the 'Search Queries per day' quota has headroom — the app's count can drift high after a Pacific-midnight reset and block the worker while Google still has budget.">↺ Resync quota</button>`}
         <span style="font-size:0.78rem;color:var(--muted)">cursor: <strong style="color:var(--text)">${st.cursor_year ?? "—"}</strong> · master <strong style="color:var(--text)">${st.cursor_master_id ?? "—"}</strong></span>
@@ -2353,6 +2354,21 @@ async function ytrDismissPending() {
   } catch (e) { _adminNotify(`Dismiss failed: ${e?.message || e}`); }
 }
 window.ytrDismissPending = ytrDismissPending;
+async function ytrApproveTop(btn) {
+  if (!confirm("Approve the top suggestion for EVERY pending track?\n\nFor each track, the candidate listed first (preferred source, then best title match) is approved and pinned; the track's other candidates are superseded. Undo means deleting approvals one by one.")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+  try {
+    const r = await apiFetch("/api/admin/yt-review/approve-top", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { _adminNotify(`Approve failed: ${j.error || r.status}`); return; }
+    _adminNotify(`Approved the top pick for ${Number(j.approved || 0).toLocaleString()} of ${Number(j.tracks || 0).toLocaleString()} tracks${j.failed ? ` (${j.failed} failed)` : ""}.`);
+  } catch (e) {
+    _adminNotify(`Approve failed: ${e?.message || e}`);
+  } finally {
+    loadYtReview();
+  }
+}
+window.ytrApproveTop = ytrApproveTop;
 async function ytrResetQuota() {
   if (!confirm("Zero the app's daily YouTube search counter?\n\nOnly do this when Google Cloud Console shows the 'Search Queries per day' quota still has headroom. If Google is actually near 100/day, resetting here will just make the worker hit Google's real limit and log 403 errors.")) return;
   try {

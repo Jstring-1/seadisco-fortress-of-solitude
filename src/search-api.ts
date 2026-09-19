@@ -13876,6 +13876,49 @@ app.post("/api/admin/yt-review/rescan-empties", express.json({ limit: "2kb" }), 
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
+// Decide one queue row; on approve, pin its video as the track's override.
+// Returns false when the row is gone or no longer pending.
+async function _ytReviewDecideAndPin(id: number, action: "approve" | "reject" | "skip", adminUserId: string): Promise<boolean> {
+  const out = await reviewQueueDecide(id, action, adminUserId);
+  if (!out.ok) return false;
+  if (action === "approve" && out.videoId && out.masterId && out.trackPosition) {
+    try {
+      // An admin approval is authoritative, so clear any existing pin
+      // first. suggestTrackYtOverride is the USER-submission path: its
+      // ON CONFLICT only overwrites a row whose mode is 'block', so on a
+      // track that already carries an override it quietly no-ops and
+      // returns false. Without this delete the queue row flipped to
+      // 'approved' while the track kept pointing at the OLD video. The
+      // custom-approve handler already does exactly this, for exactly
+      // this reason; the plain Approve button was the odd one out.
+      await deleteTrackYtOverride(out.masterId, "master", out.trackPosition);
+      await suggestTrackYtOverride({
+        releaseId: out.masterId,
+        releaseType: "master",
+        trackPosition: out.trackPosition,
+        trackTitle: out.trackTitle ?? null,
+        videoId: out.videoId,
+        videoTitle: null,
+        submittedBy: adminUserId,
+      });
+    } catch (pinErr: any) {
+      // The queue row is already marked approved but the pin did not
+      // land. Put it back to pending so the decision stays retryable
+      // instead of leaving the track silently unpinned. Superseded
+      // siblings stay superseded — that is the desired end state once
+      // the retry succeeds anyway.
+      await getPool().query(
+        `UPDATE track_yt_review_queue
+            SET status = 'pending', reviewed_at = NULL, reviewed_by = NULL
+          WHERE id = $1 AND status = 'approved'`,
+        [id],
+      ).catch(() => {});
+      throw pinErr;
+    }
+  }
+  return true;
+}
+
 app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (req, res) => {
   const adminUserId = await requireAdmin(req, res);
   if (!adminUserId) return;
@@ -13885,45 +13928,47 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
     res.status(400).json({ error: "bad_request" }); return;
   }
   try {
-    const out = await reviewQueueDecide(id, action as any, adminUserId);
-    if (!out.ok) { res.status(404).json({ error: "not_found_or_already_decided" }); return; }
-    if (action === "approve" && out.videoId && out.masterId && out.trackPosition) {
-      try {
-        // An admin approval is authoritative, so clear any existing pin
-        // first. suggestTrackYtOverride is the USER-submission path: its
-        // ON CONFLICT only overwrites a row whose mode is 'block', so on a
-        // track that already carries an override it quietly no-ops and
-        // returns false. Without this delete the queue row flipped to
-        // 'approved' while the track kept pointing at the OLD video. The
-        // custom-approve handler already does exactly this, for exactly
-        // this reason; the plain Approve button was the odd one out.
-        await deleteTrackYtOverride(out.masterId, "master", out.trackPosition);
-        await suggestTrackYtOverride({
-          releaseId: out.masterId,
-          releaseType: "master",
-          trackPosition: out.trackPosition,
-          trackTitle: out.trackTitle ?? null,
-          videoId: out.videoId,
-          videoTitle: null,
-          submittedBy: adminUserId,
-        });
-      } catch (pinErr: any) {
-        // The queue row is already marked approved but the pin did not
-        // land. Put it back to pending so the decision stays retryable
-        // instead of leaving the track silently unpinned. Superseded
-        // siblings stay superseded — that is the desired end state once
-        // the retry succeeds anyway.
-        await getPool().query(
-          `UPDATE track_yt_review_queue
-              SET status = 'pending', reviewed_at = NULL, reviewed_by = NULL
-            WHERE id = $1 AND status = 'approved'`,
-          [id],
-        ).catch(() => {});
-        throw pinErr;
-      }
+    if (!await _ytReviewDecideAndPin(id, action as any, adminUserId)) {
+      res.status(404).json({ error: "not_found_or_already_decided" }); return;
     }
     res.json({ ok: true });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// POST /api/admin/yt-review/approve-top — for every track with pending
+// candidates, approve the one the review list shows first (preferred
+// source, then best title score, then oldest) and pin it. The approval
+// supersedes that track's other candidates, same as clicking Approve.
+app.post("/api/admin/yt-review/approve-top", async (req, res) => {
+  const adminUserId = await requireAdmin(req, res);
+  if (!adminUserId) return;
+  try {
+    const r = await getPool().query(
+      `SELECT id, master_id, track_position, candidate_channel_title, candidate_title, candidate_description
+         FROM track_yt_review_queue
+        WHERE status = 'pending'
+        ORDER BY master_id ASC, track_position ASC, title_score DESC NULLS LAST, id ASC`,
+    );
+    const terms = _ytParsePreferred((await _ytGetQueryConfig()).preferred);
+    const top = new Map<string, any>();
+    for (const row of r.rows as any[]) {
+      const key = `${row.master_id}||${row.track_position ?? ""}`;
+      const pref = !!_ytPreferredMatch(terms, row.candidate_channel_title, row.candidate_title, row.candidate_description);
+      const cur = top.get(key);
+      // Rows arrive best-score-first per track; a preferred-source row
+      // only displaces the current pick if that pick isn't preferred.
+      if (!cur || (pref && !cur.pref)) top.set(key, { id: Number(row.id), pref });
+    }
+    let approved = 0, failed = 0;
+    for (const { id } of top.values()) {
+      try { if (await _ytReviewDecideAndPin(id, "approve", adminUserId)) approved++; else failed++; }
+      catch (e: any) { failed++; console.warn(`[yt-review approve-top] id=${id}: ${e?.message ?? e}`); }
+    }
+    res.json({ ok: true, tracks: top.size, approved, failed });
+  } catch (err: any) {
+    console.error("[yt-review approve-top]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
 });
 
 // POST /api/admin/yt-review/reject-track — reject every pending candidate
