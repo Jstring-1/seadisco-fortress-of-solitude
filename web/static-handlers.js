@@ -562,6 +562,10 @@ window._sdStatic = Object.assign(window._sdStatic || {}, {
   p384_keydown: function (event) { if(event.key==='Enter'){event.preventDefault();ytrBanFromInput();} },
   // admin-panel.html:385 <button>
   p385_click: function (event) { ytrBanFromInput() },
+  ytr_ai_toggle: function (event) { if(this.open)loadYtAiHunt() },
+  ytr_ai_q_keydown: function (event) { if(event.key==='Enter'){event.preventDefault();ytrAiSearch();} },
+  ytr_ai_search_click: function (event) { ytrAiSearch(this) },
+  ytr_ai_save_click: function (event) { ytrAiSaveConfig(this) },
   // admin-panel.html:409 <button id="query-run-btn">
   p409_click: function (event) { queryRun() },
   // admin-panel.html:413 <button id="query-csv-btn">

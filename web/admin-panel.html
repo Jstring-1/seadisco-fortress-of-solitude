@@ -399,6 +399,33 @@
           </div>
           <div id="ytr-bans">Loading…</div>
         </details>
+        <details id="ytr-ai-wrap" style="margin-bottom:0.7rem;border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem" data-sd-toggle="@ytr_ai_toggle">
+          <summary style="cursor:pointer;font-size:0.82rem;font-weight:600">AI channel hunt <span id="ytr-ai-badge" style="font-weight:normal;color:var(--muted)"></span></summary>
+          <div style="font-size:0.74rem;color:var(--muted);margin:0.4rem 0 0.5rem">
+            Finds YouTube channels that look like they post AI-generated music, scored on YouTube's "altered or synthetic" label, AI wording or tool names (Suno, Udio, …) in names, titles and descriptions, and young channels with huge upload counts. Nothing is banned automatically: <strong>Ban</strong> adds a channel to the ban list above; <strong>Not AI</strong> dismisses it for good. Sources: the channels already in your review queue (free) and YouTube searches from the list below (100 units each). The daily run goes just after the review worker's and searches uploads from the last two weeks.
+          </div>
+          <div id="ytr-ai-status" style="font-size:0.78rem;margin-bottom:0.5rem"></div>
+          <div style="display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem">
+            <input type="text" id="ytr-ai-q" class="sd-filter-input" placeholder="search YouTube, e.g. AI delta blues" style="flex:1;min-width:12rem" data-sd-keydown="@ytr_ai_q_keydown">
+            <label style="font-size:0.76rem;color:var(--muted);white-space:nowrap"><input type="checkbox" id="ytr-ai-recent"> last 2 weeks only</label>
+            <button class="admin-btn" data-sd-click="@ytr_ai_search_click" title="One YouTube search (100 units). Flagged channels are added to the list.">Search YouTube</button>
+          </div>
+          <details style="margin-bottom:0.5rem">
+            <summary style="cursor:pointer;font-size:0.76rem;color:var(--muted)">Search list &amp; daily run</summary>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.4rem;font-size:0.76rem">
+              <label>Queries, one per line (the daily run works through them in turn)
+                <textarea id="ytr-ai-queries" rows="6" style="width:100%;box-sizing:border-box;margin-top:0.2rem;font:inherit;font-size:0.76rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:0.3rem"></textarea>
+              </label>
+              <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap">
+                <label><input type="checkbox" id="ytr-ai-daily"> Run once a day</label>
+                <label>Searches per run <input type="number" id="ytr-ai-perrun" min="0" max="20" style="width:3.5rem" class="sd-filter-input"></label>
+                <button class="admin-btn" data-sd-click="@ytr_ai_save_click">Save</button>
+              </div>
+            </div>
+          </details>
+          <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap;margin-bottom:0.5rem" id="ytr-ai-tabs"></div>
+          <div id="ytr-ai-list"></div>
+        </details>
         <div id="ytr-queue" style="display:flex;flex-direction:column;gap:0.5rem"></div>
         <div id="ytr-pager" style="display:flex;gap:0.4rem;align-items:center;margin-top:0.6rem;font-size:0.8rem"></div>
       </div>

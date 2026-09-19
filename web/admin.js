@@ -2212,6 +2212,197 @@ window.loadYtBans = loadYtBans;
 // Swap each channel cell for a profile: avatar, handle, subs / videos /
 // views / country / start year, description, and a strip of the channel's
 // videos that have been through the review queue (border = decision).
+// ── AI channel hunt ─────────────────────────────────────────────────
+let _ytrAiStatus = "pending";
+async function loadYtAiHunt() {
+  const st = document.getElementById("ytr-ai-status");
+  try {
+    const r = await apiFetch("/api/admin/yt-ai/status");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const c = j.counts || {};
+    const badge = document.getElementById("ytr-ai-badge");
+    if (badge) badge.textContent = c.pending ? `· ${Number(c.pending).toLocaleString()} flagged` : "";
+    const lr = j.lastRun;
+    const when = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    if (st) st.innerHTML = [
+      j.running ? `<span style="color:var(--success)">Running…</span>` : "",
+      lr ? `Last run ${escHtml(when(lr.at))} (${escHtml(lr.trigger || "")}): ${lr.searches} search${lr.searches === 1 ? "" : "es"}, ${lr.flagged} flagged, ${lr.added} new${lr.error ? ` · <span style="color:#e88">${escHtml(lr.error)}</span>` : ""}` : "Not run yet.",
+      j.nextRun ? `Next daily run ${escHtml(when(j.nextRun))}` : "Daily run off",
+      `<button class="admin-btn" style="font-size:0.72rem;padding:0.1rem 0.45rem" data-sd-click="${_sdOn(function (event) { ytrAiRunNow(this) })}" ${j.running ? "disabled" : ""} title="Scan the review queue and run the day's searches now.">Run now</button>`,
+    ].filter(Boolean).join(" · ");
+    const cfg = j.config || {};
+    const qEl = document.getElementById("ytr-ai-queries");
+    if (qEl && document.activeElement !== qEl) qEl.value = (cfg.queries || []).join("\n");
+    const dEl = document.getElementById("ytr-ai-daily"); if (dEl) dEl.checked = !!cfg.daily;
+    const pEl = document.getElementById("ytr-ai-perrun"); if (pEl && document.activeElement !== pEl) pEl.value = cfg.perRun ?? 5;
+    const tabs = document.getElementById("ytr-ai-tabs");
+    if (tabs) {
+      const tab = (key, label) => `<button class="admin-btn${_ytrAiStatus === key ? " active" : ""}" style="font-size:0.74rem;padding:0.1rem 0.5rem;${_ytrAiStatus === key ? "border-color:var(--accent);color:var(--text)" : ""}" data-sd-click="${_sdOn(function (event) { _ytrAiStatus = key; loadYtAiHunt(); })}">${label} (${Number(c[key] || 0).toLocaleString()})</button>`;
+      tabs.innerHTML = tab("pending", "Flagged") + tab("banned", "Banned") + tab("ignored", "Not AI")
+        + (_ytrAiStatus === "pending" && c.pending ? `<button class="admin-btn" style="margin-left:auto;font-size:0.72rem;padding:0.1rem 0.5rem;color:#e88" data-sd-click="${_sdOn(function (event) { ytrAiBanAll(this) })}" title="Ban every channel in the Flagged list below.">⛔ Ban all flagged</button>` : "");
+    }
+    if (j.running) setTimeout(() => { if (document.getElementById("ytr-ai-wrap")?.open) loadYtAiHunt(); }, 5000);
+  } catch (e) {
+    if (st) st.textContent = `Error: ${e.message || e}`;
+  }
+  loadYtAiList();
+}
+window.loadYtAiHunt = loadYtAiHunt;
+
+let _ytrAiRows = [];
+async function loadYtAiList() {
+  const el = document.getElementById("ytr-ai-list");
+  if (!el) return;
+  try {
+    const r = await apiFetch(`/api/admin/yt-ai/candidates?status=${encodeURIComponent(_ytrAiStatus)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rows = (await r.json()).rows || [];
+    _ytrAiRows = rows;
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);font-size:0.78rem;font-style:italic">${_ytrAiStatus === "pending" ? "Nothing flagged. Run a search or Run now." : "None."}</div>`;
+      return;
+    }
+    el.innerHTML = rows.map(row => {
+      const id = String(row.channel_id);
+      const signals = (row.signals || []).map(s => `<span class="ytr-ai-sig">${escHtml(s)}</span>`).join("");
+      const actions = _ytrAiStatus === "pending"
+        ? `<button class="admin-btn" style="color:#e88" data-sd-click="${_sdOn(((a0, a1) => function (event) { ytrAiDecide(a0, "ban", this, a1) })(id, String(row.channel_title || "")))}" title="Ban this channel from all YouTube results.">⛔ Ban</button>
+           <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrAiDecide(a0, "ignore", this) })(id))}" title="Not an AI channel. Won't be flagged again.">Not AI</button>`
+        : _ytrAiStatus === "ignored"
+          ? `<button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrAiDecide(a0, "restore", this) })(id))}" title="Put it back in the Flagged list.">↺ Restore</button>`
+          : `<span style="color:var(--muted);font-size:0.74rem">banned · unban from the list above</span>`;
+      return `<div class="ytr-ai-row" data-ch="${escHtml(id)}">
+        <div class="ytr-ai-main">
+          <div class="ytr-ch-cell" data-ch="${escHtml(id)}" data-title="${escHtml(row.channel_title || "")}"><a href="https://www.youtube.com/channel/${encodeURIComponent(id)}" target="_blank" rel="noopener">${escHtml(row.channel_title || id)}</a></div>
+          <div class="ytr-ai-sigs"><span class="ytr-ai-score" title="AI score (flagged at 3+)">${Number(row.score) || 0}</span>${signals}</div>
+        </div>
+        <div class="ytr-ai-actions">${actions}</div>
+      </div>`;
+    }).join("");
+    _ytrAiEnrich(el);
+  } catch (e) {
+    el.textContent = `Error: ${e.message || e}`;
+  }
+}
+// Channel cards: profile from the shared profile cache, samples from the
+// videos that got the channel flagged.
+async function _ytrAiEnrich(root) {
+  const cells = Array.from(root.querySelectorAll(".ytr-ch-cell[data-ch]"));
+  const ids = Array.from(new Set(cells.map(c => c.getAttribute("data-ch")).filter(Boolean))).slice(0, 200);
+  if (!ids.length) return;
+  let profiles = {};
+  try {
+    const r = await apiFetch(`/api/admin/yt-review/channel-profiles?ids=${encodeURIComponent(ids.join(","))}`);
+    if (r.ok) profiles = (await r.json()).profiles || {};
+  } catch {}
+  const byId = new Map(_ytrAiRows.map(row => [String(row.channel_id), row]));
+  for (const cell of cells) {
+    if (!cell.isConnected) continue;
+    const id = cell.getAttribute("data-ch");
+    const samples = (byId.get(id)?.samples || []).map(v => ({ videoId: v.videoId, title: v.title, thumb: v.thumbnail, status: "" }));
+    cell.innerHTML = _ytrChannelProfileHtml(id, cell.getAttribute("data-title") || "", profiles[id], samples);
+  }
+}
+async function ytrAiDecide(channelId, action, btn, channelTitle) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-ai/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channelId, action, channelTitle: channelTitle || "" }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    btn?.closest(".ytr-ai-row")?.remove();
+    if (action === "ban") { loadYtBans(); loadYtReview(); }
+  } catch (e) {
+    _adminNotify(`Failed: ${e?.message || e}`);
+    if (btn) btn.disabled = false;
+    return;
+  }
+  loadYtAiHunt();
+}
+window.ytrAiDecide = ytrAiDecide;
+async function ytrAiBanAll(btn) {
+  const rows = _ytrAiRows.slice();
+  if (!rows.length) return;
+  if (!confirm(`Ban all ${rows.length} flagged channel${rows.length === 1 ? "" : "s"}? They're removed from every YouTube result; unban from the Banned channels list.`)) return;
+  if (btn) btn.disabled = true;
+  let n = 0;
+  for (const row of rows) {
+    try {
+      const r = await apiFetch("/api/admin/yt-ai/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: row.channel_id, action: "ban", channelTitle: row.channel_title || "" }),
+      });
+      if (r.ok) n++;
+    } catch {}
+    if (btn) btn.textContent = `Banning… ${n}/${rows.length}`;
+  }
+  _adminNotify(`Banned ${n} of ${rows.length} channels.`);
+  loadYtBans(); loadYtReview(); loadYtAiHunt();
+}
+window.ytrAiBanAll = ytrAiBanAll;
+async function ytrAiSearch(btn) {
+  const q = (document.getElementById("ytr-ai-q")?.value || "").trim();
+  if (!q) return;
+  const recent = !!document.getElementById("ytr-ai-recent")?.checked;
+  const st = document.getElementById("ytr-ai-status");
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = `Searching "${q}"…`;
+  try {
+    const r = await apiFetch("/api/admin/yt-ai/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ q, recent }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    _adminNotify(`"${q}": ${j.videos} videos from ${j.channels} channels · ${j.flagged} flagged (${j.added} new).`);
+    _ytrAiStatus = "pending";
+  } catch (e) {
+    _adminNotify(`Search failed: ${e?.message || e}`);
+  } finally {
+    if (btn) btn.disabled = false;
+    loadYtAiHunt();
+  }
+}
+window.ytrAiSearch = ytrAiSearch;
+async function ytrAiRunNow(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-ai/run", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  } catch (e) { _adminNotify(`Run failed: ${e?.message || e}`); }
+  setTimeout(loadYtAiHunt, 1500);
+}
+window.ytrAiRunNow = ytrAiRunNow;
+async function ytrAiSaveConfig(btn) {
+  const queries = (document.getElementById("ytr-ai-queries")?.value || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const perRun = Number(document.getElementById("ytr-ai-perrun")?.value);
+  const daily = !!document.getElementById("ytr-ai-daily")?.checked;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-ai/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries, perRun, daily }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    _adminNotify("Saved.");
+  } catch (e) {
+    _adminNotify(`Save failed: ${e?.message || e}`);
+  } finally {
+    if (btn) btn.disabled = false;
+    loadYtAiHunt();
+  }
+}
+window.ytrAiSaveConfig = ytrAiSaveConfig;
+
 async function _ytrEnrichChannels(root) {
   const cells = Array.from(root.querySelectorAll(".ytr-ch-cell[data-ch]"));
   const ids = Array.from(new Set(cells.map(c => c.getAttribute("data-ch")).filter(Boolean)));

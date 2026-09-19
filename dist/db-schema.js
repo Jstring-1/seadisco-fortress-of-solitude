@@ -611,6 +611,24 @@ export async function initDb() {
       fetched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+    // Channels the AI-music hunt (YT review tab) flagged as likely posting
+    // AI-generated music. status: pending (awaiting admin), banned, ignored
+    // (admin said not AI — never re-flagged).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS yt_ai_channel_candidates (
+      channel_id    TEXT PRIMARY KEY,
+      channel_title TEXT,
+      score         INTEGER NOT NULL DEFAULT 0,
+      signals       JSONB NOT NULL DEFAULT '[]'::jsonb,
+      samples       JSONB NOT NULL DEFAULT '[]'::jsonb,
+      sources       JSONB NOT NULL DEFAULT '[]'::jsonb,
+      status        TEXT NOT NULL DEFAULT 'pending',
+      first_seen    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      decided_at    TIMESTAMPTZ
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS yt_ai_channel_candidates_status_idx ON yt_ai_channel_candidates (status, score DESC)`);
     // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
     // The in-memory _ytSearchCache in search-api.ts gets wiped on every
     // deploy. With YT quota at 100 calls/day project-wide, even a few

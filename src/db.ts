@@ -6039,6 +6039,113 @@ export async function upsertChannelProfiles(profiles: Array<{ id: string; data: 
 
 // A few of each channel's videos that have passed through the review
 // queue, newest first — a quick look at what the channel actually posts.
+// ── AI-music channel hunt ───────────────────────────────────────────
+// Channels already decided (banned via the ban list, or a candidate the
+// admin banned / marked not-AI) are never re-flagged.
+export async function getAiHuntDecidedChannelIds(): Promise<Set<string>> {
+  const r = await getPool().query(
+    `SELECT channel_id FROM yt_channel_bans
+     UNION SELECT channel_id FROM yt_ai_channel_candidates WHERE status <> 'pending'`,
+  );
+  return new Set((r.rows as any[]).map(x => String(x.channel_id)));
+}
+
+// Merge findings into the candidate list: score keeps the higher value,
+// signals / sources are unioned, samples keep up to 8 distinct videos.
+// Decided rows are left untouched. Returns how many are new.
+export async function upsertAiChannelCandidates(
+  findings: Array<{ channelId: string; channelTitle: string; score: number; signals: string[]; samples: any[] }>,
+  source: string,
+): Promise<number> {
+  if (!findings.length) return 0;
+  const ids = findings.map(f => f.channelId);
+  const cur = await getPool().query(
+    `SELECT channel_id, status, score, signals, samples, sources FROM yt_ai_channel_candidates WHERE channel_id = ANY($1::text[])`,
+    [ids],
+  );
+  const existing = new Map<string, any>((cur.rows as any[]).map(r => [String(r.channel_id), r]));
+  let added = 0;
+  for (const f of findings) {
+    const ex = existing.get(f.channelId);
+    if (ex && ex.status !== "pending") continue;
+    if (!ex) added++;
+    const signals = [...new Set([...(ex?.signals ?? []), ...f.signals])];
+    const sources = [...new Set([...(ex?.sources ?? []), source])].slice(-12);
+    const seen = new Set<string>();
+    const samples = [...f.samples, ...(ex?.samples ?? [])]
+      .filter((s: any) => s?.videoId && !seen.has(s.videoId) && seen.add(s.videoId))
+      .slice(0, 8);
+    await getPool().query(
+      `INSERT INTO yt_ai_channel_candidates (channel_id, channel_title, score, signals, samples, sources, status, first_seen, last_seen)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, 'pending', NOW(), NOW())
+       ON CONFLICT (channel_id) DO UPDATE SET
+         channel_title = COALESCE(NULLIF(EXCLUDED.channel_title, ''), yt_ai_channel_candidates.channel_title),
+         score = GREATEST(yt_ai_channel_candidates.score, EXCLUDED.score),
+         signals = EXCLUDED.signals, samples = EXCLUDED.samples, sources = EXCLUDED.sources,
+         last_seen = NOW()
+       WHERE yt_ai_channel_candidates.status = 'pending'`,
+      [f.channelId, f.channelTitle, f.score, JSON.stringify(signals), JSON.stringify(samples), JSON.stringify(sources)],
+    );
+  }
+  return added;
+}
+
+export async function listAiChannelCandidates(status: string, limit = 200): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT channel_id, channel_title, score, signals, samples, sources, status, first_seen, last_seen, decided_at
+       FROM yt_ai_channel_candidates
+      WHERE status = $1
+      ORDER BY ${status === "pending" ? "score DESC, last_seen DESC" : "decided_at DESC NULLS LAST"}
+      LIMIT $2`,
+    [status, Math.max(1, Math.min(500, limit))],
+  );
+  return r.rows;
+}
+
+export async function countAiChannelCandidates(): Promise<Record<string, number>> {
+  const r = await getPool().query(`SELECT status, COUNT(*)::int AS n FROM yt_ai_channel_candidates GROUP BY status`);
+  const out: Record<string, number> = { pending: 0, banned: 0, ignored: 0 };
+  for (const x of r.rows as any[]) out[String(x.status)] = Number(x.n);
+  return out;
+}
+
+export async function setAiChannelCandidateStatus(channelId: string, status: "pending" | "banned" | "ignored"): Promise<boolean> {
+  const r = await getPool().query(
+    `UPDATE yt_ai_channel_candidates
+        SET status = $2, decided_at = CASE WHEN $2 = 'pending' THEN NULL ELSE NOW() END
+      WHERE channel_id = $1`,
+    [channelId, status],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Review-queue candidates as videos for the free (no search) part of the
+// hunt: up to `perChannel` of each channel's most recent candidates.
+export async function getReviewQueueVideosForAiScan(perChannel = 5): Promise<Array<{
+  videoId: string; title: string; description: string; channelId: string; channelTitle: string; thumbnail: string; publishedAt: string;
+}>> {
+  const r = await getPool().query(
+    `SELECT candidate_video_id, candidate_title, candidate_description, candidate_channel_id,
+            candidate_channel_title, candidate_thumbnail_url, created_at
+       FROM (
+         SELECT q.*, ROW_NUMBER() OVER (PARTITION BY candidate_channel_id ORDER BY created_at DESC) AS rn
+           FROM track_yt_review_queue q
+          WHERE COALESCE(candidate_channel_id, '') <> ''
+       ) x
+      WHERE rn <= $1`,
+    [perChannel],
+  );
+  return (r.rows as any[]).map(x => ({
+    videoId: String(x.candidate_video_id ?? ""),
+    title: String(x.candidate_title ?? ""),
+    description: String(x.candidate_description ?? ""),
+    channelId: String(x.candidate_channel_id),
+    channelTitle: String(x.candidate_channel_title ?? ""),
+    thumbnail: String(x.candidate_thumbnail_url ?? ""),
+    publishedAt: x.created_at ? new Date(x.created_at).toISOString() : "",
+  }));
+}
+
 export async function getChannelQueueSamples(ids: string[], perChannel = 4): Promise<Map<string, any[]>> {
   const out = new Map<string, any[]>();
   if (!ids.length) return out;

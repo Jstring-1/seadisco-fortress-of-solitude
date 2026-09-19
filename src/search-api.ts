@@ -11,7 +11,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest, discogsGate, discogsKeyFromAuthHeader, type DiscogsPriority } from "./discogs-client.js";
-import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, getYearLabelPairs, getYearLabelAlbums, type YearLabelFilter, reviewQueueDecide, reviewQueueUnreject, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, isTrackAlreadySearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
+import { getPool, initDb, sealPlaintextTokens, ensureBackgroundIndexes, logAdminAction, listAdminActions, tokenEncryptionEnabled, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getLibraryExportPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, resetOrphanedSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, previewRedundantReleases, pruneRedundantReleases, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, setTrackYtOverrideAdmin, cascadeTrackYtVideoSwap, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getFeedRareAlbums, getFeedDigAlbums, getFeedActiveAlbums, getFeedPlayedAlbums, getFeedPoolItems, getFeedPoolFreshness, refreshFeedPool, getOrComputeUserTasteProfile, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getDiscogsSearchCache, setDiscogsSearchCache, pruneDiscogsSearchCache, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, ensurePlaylistShareToken, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, prunePriceHistory, pruneYoutubeSearchCache, pruneArchiveSearchCache, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, getDatabaseSize, purgeNonAdminUserData, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, updateLyricFields, getBluesArchiveStats, getRecentBluesEdits, normalizeEmptyTuningsToStandard, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsFromCache, getLyricsMissingFirstReleaseYear, runReadonlyQuery, getQueryableSchema, listCacheWarmRuns, addBluesLyricsBans, removeBluesLyricsBan, listBluesLyricsBans, getBannedLyricTitleSet, getBannedLyricArtistSet, getBannedLyricBodyHashSet, insertReviewCandidate, supersedeOtherCandidates, listChannelTrust, refreshDerivedChannelTrust, getTrustedChannelIds, setChannelTrust, listYoutubeChannelBans, getBannedYoutubeChannelIds, banYoutubeChannel, unbanYoutubeChannel, reviewQueueHasEntry, listReviewQueue, getReviewQueueCounts, getYtCoverageStats, getYearLabelPairs, getYearLabelAlbums, type YearLabelFilter, reviewQueueDecide, reviewQueueUnreject, reviewQueueRejectTrack, reviewQueueDeleteApproval, reviewQueueDismissPendingForResearch, reviewQueueConfirmAuto, getChannelProfiles, upsertChannelProfiles, getChannelQueueSamples, getAiHuntDecidedChannelIds, upsertAiChannelCandidates, listAiChannelCandidates, countAiChannelCandidates, setAiChannelCandidateStatus, getReviewQueueVideosForAiScan, getReviewState, getReviewQuotaToday, bumpReviewQuota, resetReviewQuota, logReviewError, listReviewErrors, updateReviewState, bumpReviewCounter, getNextBluesMasterAfter, YT_REVIEW_YEAR_CUTOFF, logTrackSearched, isTrackAlreadySearched, getSearchedTrackPositions, clearEmptySearchedRows, listBluesTunings, getBluesTuningsFacets, resetCacheWarmRun, deleteCacheWarmRun, listCacheWarmCatnoRuns, getCacheWarmCatnoRun, resetCacheWarmCatnoRun, bulkInsertExternalDiscography, listExternalDiscographyForLabel, countExternalDiscographyByLabel, purgeExternalDiscographyCovered, cleanDirtyExternalDiscographyLabelNames, mergeExternalLabel, listLabelDirectory, setLabelDirectoryId, addLabelAlias, removeLabelAlias, computeCacheAnalytics, type ExternalDiscographyRow, type CacheAnalyticsFilters, bulkUpdateLyricTuning, bulkDeleteLyrics, listLyricIdsMatching, bulkUpdateTuningPosition, bulkDeleteTunings, listBluesTuningIdsMatching
 } from "./db.js";
 import { resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 import { initCacheWarmModule, startCacheWarmRun, requestCacheWarmStop, isCacheWarmRunning, getActiveCacheWarmParams, forceClearCacheWarmRunning, enqueueCacheWarmRuns, getCacheWarmQueue, clearCacheWarmQueue } from "./cache-warm.js";
@@ -63,6 +63,7 @@ import {
 } from "./faceted-sweep-worker.js";
 import { isSplitCacheReaderEnabled } from "./db.js";
 import { isApiKilled, setApiKilled, assertApiAllowed } from "./api-guard.js";
+import { scoreAiChannels, AI_FLAG_THRESHOLD, type AiVideo } from "./yt-ai-detect.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13053,7 +13054,7 @@ function _ytAutoApproveVerdict(args: {
 // videos.list is 1 quota unit for up to 50 ids — negligible next to
 // the 100-unit search that produced them. Returns a map keyed by video
 // id; ids missing from the response (deleted/private) are simply absent.
-type YtVideoDetail = { durationSeconds: number | null; embeddable: boolean | null; regionBlocked: boolean };
+type YtVideoDetail = { durationSeconds: number | null; embeddable: boolean | null; regionBlocked: boolean; synthetic: boolean | null };
 async function _ytReviewFetchVideoDetails(ids: string[]): Promise<Map<string, YtVideoDetail>> {
   const out = new Map<string, YtVideoDetail>();
   const unique = Array.from(new Set(ids.filter(Boolean)));
@@ -13083,6 +13084,8 @@ async function _ytReviewFetchVideoDetails(ids: string[]): Promise<Map<string, Yt
           // Treat a US block as "blocked" — that's where the bulk of
           // traffic is and a blocked-list that big means trouble anyway.
           regionBlocked: Array.isArray(blocked) && blocked.includes("US"),
+          // Uploader's "altered or synthetic content" disclosure.
+          synthetic: typeof it?.status?.containsSyntheticMedia === "boolean" ? it.status.containsSyntheticMedia : null,
         });
       }
     } catch (e: any) {
@@ -14231,64 +14234,285 @@ app.post("/api/admin/yt-review/delete-approval", express.json({ limit: "4kb" }),
 // channel from channels.list — 1 quota unit per 50 channels, cached in
 // yt_channel_profiles for two weeks — plus a few of its videos that have
 // been through the review queue (free, from our own table).
+// Channel profiles (channels.list snippet+statistics), cached 14 days in
+// yt_channel_profiles. Closed channels are remembered as { gone: true }.
+// 1 quota unit per 50 missing ids; stops at the project soft cap.
+async function _ytFetchChannelProfiles(ids: string[]): Promise<Map<string, any>> {
+  const cached = await getChannelProfiles(ids, 14);
+  const missing = ids.filter(id => !cached.has(id));
+  if (!missing.length || !_youtubeApiKey) return cached;
+  const fresh: Array<{ id: string; data: any }> = [];
+  for (let i = 0; i < missing.length; i += 50) {
+    _ytQuotaMaybeReset();
+    if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) break;
+    const batch = missing.slice(i, i + 50);
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics`
+      + `&id=${encodeURIComponent(batch.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    try {
+      assertApiAllowed("youtube");
+      const resp = await fetch(url);
+      if (!resp.ok) { console.warn(`[yt-review] channels.list failed: HTTP ${resp.status}`); continue; }
+      const body: any = await resp.json();
+      _bumpYtQuotaPersisted(0, 1);
+      const seen = new Set<string>();
+      for (const it of (Array.isArray(body?.items) ? body.items : [])) {
+        const id = String(it?.id || "");
+        if (!id) continue;
+        seen.add(id);
+        const sn = it.snippet ?? {};
+        const st = it.statistics ?? {};
+        const th = sn.thumbnails ?? {};
+        const data = {
+          title: String(sn.title ?? ""),
+          handle: String(sn.customUrl ?? ""),
+          description: String(sn.description ?? "").slice(0, 600),
+          thumbnail: String(th.medium?.url ?? th.default?.url ?? th.high?.url ?? ""),
+          country: String(sn.country ?? ""),
+          publishedAt: String(sn.publishedAt ?? ""),
+          subscriberCount: st.hiddenSubscriberCount ? null : (st.subscriberCount != null ? Number(st.subscriberCount) : null),
+          videoCount: st.videoCount != null ? Number(st.videoCount) : null,
+          viewCount: st.viewCount != null ? Number(st.viewCount) : null,
+        };
+        fresh.push({ id, data });
+        cached.set(id, data);
+      }
+      // Closed / terminated channels come back absent — remember that
+      // so they aren't re-requested on every open.
+      for (const id of batch) {
+        if (seen.has(id)) continue;
+        const data = { gone: true };
+        fresh.push({ id, data });
+        cached.set(id, data);
+      }
+    } catch (e: any) { console.warn("[yt-review] channels.list threw:", e?.message ?? e); }
+  }
+  if (fresh.length) await upsertChannelProfiles(fresh).catch(e => console.warn("[yt-review] profile cache write failed:", e?.message ?? e));
+  return cached;
+}
+
 app.get("/api/admin/yt-review/channel-profiles", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const ids = Array.from(new Set(String(req.query.ids ?? "").split(",")
     .map(s => s.trim()).filter(s => /^UC[\w-]{10,40}$/.test(s)))).slice(0, 200);
   if (!ids.length) { res.json({ profiles: {}, samples: {} }); return; }
   try {
-    const cached = await getChannelProfiles(ids, 14);
-    const missing = ids.filter(id => !cached.has(id));
-    if (missing.length && _youtubeApiKey) {
-      const fresh: Array<{ id: string; data: any }> = [];
-      for (let i = 0; i < missing.length; i += 50) {
-        _ytQuotaMaybeReset();
-        if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) break;
-        const batch = missing.slice(i, i + 50);
-        const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics`
-          + `&id=${encodeURIComponent(batch.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
-        try {
-          assertApiAllowed("youtube");
-          const resp = await fetch(url);
-          if (!resp.ok) { console.warn(`[yt-review] channels.list failed: HTTP ${resp.status}`); continue; }
-          const body: any = await resp.json();
-          _bumpYtQuotaPersisted(0, 1);
-          const seen = new Set<string>();
-          for (const it of (Array.isArray(body?.items) ? body.items : [])) {
-            const id = String(it?.id || "");
-            if (!id) continue;
-            seen.add(id);
-            const sn = it.snippet ?? {};
-            const st = it.statistics ?? {};
-            const th = sn.thumbnails ?? {};
-            const data = {
-              title: String(sn.title ?? ""),
-              handle: String(sn.customUrl ?? ""),
-              description: String(sn.description ?? "").slice(0, 600),
-              thumbnail: String(th.medium?.url ?? th.default?.url ?? th.high?.url ?? ""),
-              country: String(sn.country ?? ""),
-              publishedAt: String(sn.publishedAt ?? ""),
-              subscriberCount: st.hiddenSubscriberCount ? null : (st.subscriberCount != null ? Number(st.subscriberCount) : null),
-              videoCount: st.videoCount != null ? Number(st.videoCount) : null,
-              viewCount: st.viewCount != null ? Number(st.viewCount) : null,
-            };
-            fresh.push({ id, data });
-            cached.set(id, data);
-          }
-          // Closed / terminated channels come back absent — remember that
-          // so they aren't re-requested on every open.
-          for (const id of batch) {
-            if (seen.has(id)) continue;
-            const data = { gone: true };
-            fresh.push({ id, data });
-            cached.set(id, data);
-          }
-        } catch (e: any) { console.warn("[yt-review] channels.list threw:", e?.message ?? e); }
-      }
-      if (fresh.length) await upsertChannelProfiles(fresh).catch(e => console.warn("[yt-review] profile cache write failed:", e?.message ?? e));
-    }
+    const profiles = await _ytFetchChannelProfiles(ids);
     const samples = await getChannelQueueSamples(ids, 4);
-    res.json({ profiles: Object.fromEntries(cached), samples: Object.fromEntries(samples) });
+    res.json({ profiles: Object.fromEntries(profiles), samples: Object.fromEntries(samples) });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+
+// ── AI-music channel hunt ───────────────────────────────────────────
+// Finds YouTube channels that look like they post AI-generated music and
+// lists them for the admin to ban or dismiss (nothing is banned
+// automatically). Sources: the review queue's own candidates (free), and
+// YouTube searches from an admin-editable query list. Scoring lives in
+// yt-ai-detect.ts. A daily run (just after the YT review daily run) scans
+// the queue and spends a few searches on uploads from the last two weeks.
+interface YtAiHuntConfig { queries: string[]; perRun: number; daily: boolean }
+const _YT_AI_HUNT_DEFAULTS: YtAiHuntConfig = {
+  queries: [
+    "AI blues", "AI generated blues", "suno blues", "udio blues", "AI delta blues",
+    "AI country blues", "AI gospel blues", "AI jazz 1920s", "AI 1930s music",
+    "AI vintage jazz", "AI old time music", "AI rhythm and blues 1950s", "suno jazz",
+  ],
+  perRun: 5,
+  daily: true,
+};
+const _YT_AI_HUNT_RUN_OFFSET_MS = 20 * 60 * 1000;   // 20 min after LA midnight
+let _ytAiHuntRunning = false;
+
+async function _ytAiHuntConfig(): Promise<YtAiHuntConfig> {
+  try {
+    const raw = await getAppSetting("yt_ai_hunt_config");
+    const p = raw ? JSON.parse(raw) : {};
+    const queries = Array.isArray(p.queries)
+      ? p.queries.map((q: any) => String(q).trim().slice(0, 120)).filter(Boolean).slice(0, 50)
+      : _YT_AI_HUNT_DEFAULTS.queries;
+    const perRun = Math.max(0, Math.min(20, Number.isFinite(Number(p.perRun)) ? Math.trunc(Number(p.perRun)) : _YT_AI_HUNT_DEFAULTS.perRun));
+    return { queries: queries.length ? queries : _YT_AI_HUNT_DEFAULTS.queries, perRun, daily: p.daily !== false };
+  } catch { return { ..._YT_AI_HUNT_DEFAULTS }; }
+}
+async function _ytAiHuntState(): Promise<any> {
+  try { return JSON.parse((await getAppSetting("yt_ai_hunt_state")) || "{}") || {}; } catch { return {}; }
+}
+
+// One uncached search.list call (100 units). Uncached on purpose: the
+// daily run repeats the same queries, and the 30-day search cache would
+// hand back the same results every day.
+async function _ytAiHuntSearch(q: string, opts: { recentDays?: number } = {}): Promise<{ ok: true; items: any[] } | { ok: false; reason: string }> {
+  if (!_youtubeApiKey) return { ok: false, reason: "no_api_key" };
+  _ytQuotaMaybeReset();
+  if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) return { ok: false, reason: "project_cap" };
+  let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50`
+    + `&q=${encodeURIComponent(q)}&key=${encodeURIComponent(_youtubeApiKey)}`;
+  if (opts.recentDays) {
+    url += `&order=date&publishedAfter=${encodeURIComponent(new Date(Date.now() - opts.recentDays * 86400000).toISOString())}`;
+  }
+  try {
+    assertApiAllowed("youtube");
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      let reason = `http_${resp.status}`;
+      try { const j: any = await resp.json(); const r = j?.error?.errors?.[0]?.reason; if (r) reason += `: ${r}`; } catch {}
+      return { ok: false, reason };
+    }
+    const raw = await resp.json();
+    _bumpYtQuotaPersisted(0, 100);
+    return { ok: true, items: _ytSimplifySearchItems(raw) };
+  } catch (e: any) {
+    return { ok: false, reason: `throw: ${e?.message ?? e}` };
+  }
+}
+
+// Score a batch of videos and record flagged channels. Skips channels
+// already banned or decided. `withDetails` adds the synthetic-media flag
+// (videos.list, 1 unit per 50). Profiles are fetched only for channels
+// that already show a signal.
+async function _ytAiAnalyze(videos: AiVideo[], source: string, withDetails: boolean): Promise<{ videos: number; channels: number; flagged: number; added: number }> {
+  const decided = await getAiHuntDecidedChannelIds();
+  let vids = videos.filter(v => v.channelId && !decided.has(v.channelId));
+  if (withDetails && vids.length) {
+    const det = await _ytReviewFetchVideoDetails(vids.map(v => v.videoId));
+    vids = vids.map(v => ({ ...v, synthetic: det.get(v.videoId)?.synthetic ?? null }));
+  }
+  const first = scoreAiChannels(vids);
+  const profiles = await _ytFetchChannelProfiles(first.map(f => f.channelId)).catch(() => new Map<string, any>());
+  const findings = scoreAiChannels(vids.filter(v => first.some(f => f.channelId === v.channelId)), profiles)
+    .filter(f => f.score >= AI_FLAG_THRESHOLD);
+  const added = await upsertAiChannelCandidates(findings, source);
+  return { videos: vids.length, channels: new Set(vids.map(v => v.channelId)).size, flagged: findings.length, added };
+}
+const _ytAiVideoFromItem = (it: any): AiVideo => ({
+  videoId: String(it.videoId ?? ""), title: String(it.title ?? ""), description: String(it.description ?? ""),
+  channelId: String(it.channelId ?? ""), channelTitle: String(it.channel ?? ""),
+  publishedAt: String(it.publishedAt ?? ""), thumbnail: String(it.thumbnail ?? ""),
+});
+
+// Daily / "Run now": free queue scan, then `perRun` searches over recent
+// uploads, rotating through the query list day to day.
+async function _runYtAiHunt(trigger: string): Promise<void> {
+  if (_ytAiHuntRunning) return;
+  _ytAiHuntRunning = true;
+  const summary: any = { at: new Date().toISOString(), trigger, searches: 0, flagged: 0, added: 0, error: null };
+  try {
+    const cfg = await _ytAiHuntConfig();
+    const state = await _ytAiHuntState();
+    const q = await _ytAiAnalyze(await getReviewQueueVideosForAiScan(5), "review queue", false);
+    summary.flagged += q.flagged; summary.added += q.added;
+    let cursor = Number(state.queryCursor) || 0;
+    for (let i = 0; i < Math.min(cfg.perRun, cfg.queries.length); i++) {
+      const query = cfg.queries[cursor % cfg.queries.length];
+      cursor = (cursor + 1) % cfg.queries.length;
+      const r = await _ytAiHuntSearch(query, { recentDays: 14 });
+      if (!r.ok) { summary.error = `${query}: ${r.reason}`; break; }
+      summary.searches++;
+      const a = await _ytAiAnalyze(r.items.map(_ytAiVideoFromItem), `search: ${query}`, true);
+      summary.flagged += a.flagged; summary.added += a.added;
+      await new Promise(res => setTimeout(res, _YT_REVIEW_THROTTLE_MS));
+    }
+    await setAppSetting("yt_ai_hunt_state", JSON.stringify({ queryCursor: cursor, lastRun: summary }));
+    console.log(`[yt-ai-hunt] ${trigger}: ${summary.searches} searches, ${summary.flagged} flagged, ${summary.added} new${summary.error ? ` (stopped: ${summary.error})` : ""}`);
+  } catch (e: any) {
+    summary.error = String(e?.message ?? e);
+    await setAppSetting("yt_ai_hunt_state", JSON.stringify({ ...(await _ytAiHuntState()), lastRun: summary })).catch(() => {});
+    console.error("[yt-ai-hunt] run failed:", e);
+  } finally {
+    _ytAiHuntRunning = false;
+  }
+}
+function _ytAiHuntMsUntilRun(): number {
+  const now = Date.now();
+  const nextMidnight = _ytQuotaResetAtMs(new Date(now));
+  const todaysRun = nextMidnight - 24 * 60 * 60 * 1000 + _YT_AI_HUNT_RUN_OFFSET_MS;
+  const target = todaysRun > now ? todaysRun : nextMidnight + _YT_AI_HUNT_RUN_OFFSET_MS;
+  return target - now;
+}
+function initYtAiHuntSchedule(): void {
+  const arm = () => {
+    const wait = _ytAiHuntMsUntilRun();
+    setTimeout(() => {
+      (async () => {
+        if (!(await _ytAiHuntConfig()).daily) { console.log("[yt-ai-hunt] daily run disabled — skipping"); return; }
+        await _runYtAiHunt("daily");
+      })().catch(e => console.error("[yt-ai-hunt] daily tick failed:", e)).finally(arm);
+    }, wait);
+  };
+  arm();
+}
+
+app.get("/api/admin/yt-ai/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const cfg = await _ytAiHuntConfig();
+    const state = await _ytAiHuntState();
+    res.json({
+      running: _ytAiHuntRunning,
+      config: cfg,
+      counts: await countAiChannelCandidates(),
+      lastRun: state.lastRun ?? null,
+      nextRun: cfg.daily ? Date.now() + _ytAiHuntMsUntilRun() : null,
+      projectUnitsToday: _ytQuotaUnitsToday,
+    });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.get("/api/admin/yt-ai/candidates", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const status = ["pending", "banned", "ignored"].includes(String(req.query.status)) ? String(req.query.status) : "pending";
+  try { res.json({ rows: await listAiChannelCandidates(status, 300) }); }
+  catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.post("/api/admin/yt-ai/config", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const cur = await _ytAiHuntConfig();
+  const b = req.body || {};
+  const next: YtAiHuntConfig = {
+    queries: Array.isArray(b.queries) ? b.queries.map((q: any) => String(q).trim().slice(0, 120)).filter(Boolean).slice(0, 50) : cur.queries,
+    perRun: Number.isFinite(Number(b.perRun)) ? Math.max(0, Math.min(20, Math.trunc(Number(b.perRun)))) : cur.perRun,
+    daily: typeof b.daily === "boolean" ? b.daily : cur.daily,
+  };
+  if (!next.queries.length) next.queries = _YT_AI_HUNT_DEFAULTS.queries;
+  try {
+    await setAppSetting("yt_ai_hunt_config", JSON.stringify(next));
+    res.json({ ok: true, config: next });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+// One search now (100 units + a few). Flags go straight into the list.
+app.post("/api/admin/yt-ai/search", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const q = String(req.body?.q ?? "").trim().slice(0, 120);
+  if (!q) { res.status(400).json({ error: "q required" }); return; }
+  try {
+    const r = await _ytAiHuntSearch(q, { recentDays: req.body?.recent ? 14 : undefined });
+    if (!r.ok) { res.status(502).json({ error: r.reason }); return; }
+    res.json({ ok: true, ...(await _ytAiAnalyze(r.items.map(_ytAiVideoFromItem), `search: ${q}`, true)) });
+  } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+});
+app.post("/api/admin/yt-ai/run", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_ytAiHuntRunning) { res.status(409).json({ error: "already running" }); return; }
+  _runYtAiHunt("manual").catch(e => console.error("[yt-ai-hunt] manual run threw:", e));
+  res.json({ ok: true });
+});
+// { channelId, action: "ban" | "ignore" | "restore" }
+app.post("/api/admin/yt-ai/decide", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const channelId = String(req.body?.channelId ?? "");
+  const action = String(req.body?.action ?? "");
+  if (!/^UC[\w-]{10,40}$/.test(channelId) || !["ban", "ignore", "restore"].includes(action)) {
+    res.status(400).json({ error: "bad_request" }); return;
+  }
+  try {
+    if (action === "ban") {
+      const title = String(req.body?.channelTitle ?? "").slice(0, 200) || null;
+      const out = await banYoutubeChannel(channelId, title, "AI-generated music");
+      _invalidateBannedChannelCache();
+      await setAiChannelCandidateStatus(channelId, "banned");
+      res.json({ ...out, ok: true });
+      return;
+    }
+    await setAiChannelCandidateStatus(channelId, action === "ignore" ? "ignored" : "pending");
+    res.json({ ok: true });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
 
@@ -17465,6 +17689,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initLabelUpstreamStatsModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] label-upstream-stats init failed:", e);
+    }
+    try { initYtAiHuntSchedule(); } catch (e) {
+      console.error("[startup] yt-ai-hunt schedule init failed:", e);
     }
     try { initYtReviewDailySchedule(); } catch (e) {
       console.error("[startup] yt-review daily schedule init failed:", e);

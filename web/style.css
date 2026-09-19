@@ -12831,6 +12831,14 @@ body.gutenberg-reader-open { overflow: hidden; }
 .ytr-ch-samples { display: flex; gap: 0.25rem; margin-top: 0.3rem; flex-wrap: wrap; }
 .ytr-ch-samples img { width: 64px; height: 36px; object-fit: cover; border-radius: 3px; border: 2px solid var(--border); display: block; }
 .ytr-ch-cell { vertical-align: top; }
+/* AI channel hunt rows (YT review tab) */
+.ytr-ai-row { display: flex; gap: 0.7rem; align-items: flex-start; justify-content: space-between; padding: 0.5rem 0; border-top: 1px solid var(--border); }
+.ytr-ai-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.3rem; }
+.ytr-ai-sigs { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
+.ytr-ai-score { font-weight: 700; font-size: 0.74rem; color: #e88; min-width: 1.4rem; text-align: center; border: 1px solid #5a2b2b; border-radius: 3px; padding: 0 0.25rem; }
+.ytr-ai-sig { font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 0.3rem; }
+.ytr-ai-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+@media (max-width: 700px) { .ytr-ai-row { flex-direction: column; } }
 .ytr-qt-out { margin-top: 0.5rem; font-size: 0.76rem; }
 .ytr-qt-out:empty { display: none; }
 .ytr-qt-head { color: var(--muted); margin-bottom: 0.25rem; }
