@@ -4437,6 +4437,15 @@ export async function getYtCoverageStats() {
         client.release();
     }
 }
+// Put a rejected candidate back in the pending queue (admin changed their
+// mind). Channel trust is derived from queue statuses, so this also drops
+// the rejection from that channel's record on the next trust refresh.
+export async function reviewQueueUnreject(id) {
+    const r = await getPool().query(`UPDATE track_yt_review_queue
+        SET status = 'pending', reviewed_at = NULL, reviewed_by = NULL
+      WHERE id = $1 AND status = 'rejected'`, [id]);
+    return (r.rowCount ?? 0) > 0;
+}
 export async function reviewQueueDecide(id, action, reviewer) {
     const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : "skipped";
     const upd = await getPool().query(`UPDATE track_yt_review_queue

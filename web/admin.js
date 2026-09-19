@@ -2532,6 +2532,7 @@ function ytrRowHtml(r) {
   })() : "";
   const showActions = _ytrStatus === "pending";
   const showDelete = _ytrStatus === "approved";
+  const showUnreject = _ytrStatus === "rejected";
   const showAuto = _ytrStatus === "auto";
   const yr = r.master_year || "?";
   return `<div class="ytr-card" data-ytr-id="${r.id}" data-ytr-ch="${esc(r.candidate_channel_id || "")}" data-ytr-ch-title="${esc(r.candidate_channel_title || "")}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
@@ -2568,6 +2569,10 @@ function ytrRowHtml(r) {
       : showDelete
         ? `<div style="display:flex;gap:0.3rem;align-items:center">
             <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrDeleteApproval(a0) })(_sdLit(r.id)))}" title="Remove the override this approval created and mark the candidate rejected.">🗑 Delete</button>
+          </div>`
+      : showUnreject
+        ? `<div style="display:flex;gap:0.3rem;align-items:center">
+            <button class="admin-btn" data-sd-click="${_sdOn(((a0) => function (event) { ytrUnreject(a0, this) })(_sdLit(r.id)))}" title="Move this candidate back to Pending so you can approve it.">↺ Un-reject</button>
           </div>`
         : `<div style="color:var(--muted);font-size:0.74rem">${esc(r.status || "")}</div>`}
   </div>`;
@@ -2979,6 +2984,28 @@ async function ytrDeleteApproval(id) {
   } catch (e) { _adminNotify(`Delete failed: ${e?.message || e}`); }
 }
 window.ytrDeleteApproval = ytrDeleteApproval;
+async function ytrUnreject(id, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/yt-review/unreject", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      _adminNotify(`Un-reject failed: ${body?.error || `HTTP ${r.status}`}`);
+      if (btn) btn.disabled = false;
+      return;
+    }
+    btn?.closest(".ytr-card")?.remove();
+    loadYtReview();
+  } catch (e) {
+    _adminNotify(`Un-reject failed: ${e?.message || e}`);
+    if (btn) btn.disabled = false;
+  }
+}
+window.ytrUnreject = ytrUnreject;
 // Auto-pinned review. Cards leave immediately (optimistic, like decide);
 // on failure they're un-remembered so the reconcile reload brings them back.
 function _ytrDropAutoCards(ids) {
