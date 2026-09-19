@@ -13939,9 +13939,16 @@ app.post("/api/admin/yt-review/decide", express.json({ limit: "4kb" }), async (r
 // candidates, approve the one the review list shows first (preferred
 // source, then best title score, then oldest) and pin it. The approval
 // supersedes that track's other candidates, same as clicking Approve.
+// Works in batches (?limit, default 200 tracks) so each call finishes well
+// inside the client's request timeout; the admin page repeats it until
+// `remaining` is 0. One batch at a time.
+let _ytApproveTopBusy = false;
 app.post("/api/admin/yt-review/approve-top", async (req, res) => {
   const adminUserId = await requireAdmin(req, res);
   if (!adminUserId) return;
+  if (_ytApproveTopBusy) { res.status(409).json({ error: "a batch is already running" }); return; }
+  const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "200"), 10) || 200));
+  _ytApproveTopBusy = true;
   try {
     const r = await getPool().query(
       `SELECT id, master_id, track_position, candidate_channel_title, candidate_title, candidate_description
@@ -13959,15 +13966,18 @@ app.post("/api/admin/yt-review/approve-top", async (req, res) => {
       // only displaces the current pick if that pick isn't preferred.
       if (!cur || (pref && !cur.pref)) top.set(key, { id: Number(row.id), pref });
     }
+    const picks = [...top.values()].slice(0, limit);
     let approved = 0, failed = 0;
-    for (const { id } of top.values()) {
+    for (const { id } of picks) {
       try { if (await _ytReviewDecideAndPin(id, "approve", adminUserId)) approved++; else failed++; }
       catch (e: any) { failed++; console.warn(`[yt-review approve-top] id=${id}: ${e?.message ?? e}`); }
     }
-    res.json({ ok: true, tracks: top.size, approved, failed });
+    res.json({ ok: true, tracks: picks.length, approved, failed, remaining: top.size - picks.length });
   } catch (err: any) {
     console.error("[yt-review approve-top]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
+  } finally {
+    _ytApproveTopBusy = false;
   }
 });
 

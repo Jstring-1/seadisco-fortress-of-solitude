@@ -2356,14 +2356,24 @@ async function ytrDismissPending() {
 window.ytrDismissPending = ytrDismissPending;
 async function ytrApproveTop(btn) {
   if (!confirm("Approve the top suggestion for EVERY pending track?\n\nFor each track, the candidate listed first (preferred source, then best title match) is approved and pinned; the track's other candidates are superseded. Undo means deleting approvals one by one.")) return;
-  if (btn) { btn.disabled = true; btn.textContent = "Approving…"; }
+  if (btn) btn.disabled = true;
+  // The server approves a batch per call; keep calling until nothing is
+  // left, or a batch makes no progress (so a stuck row can't loop).
+  let approved = 0, failed = 0;
   try {
-    const r = await apiFetch("/api/admin/yt-review/approve-top", { method: "POST" });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { _adminNotify(`Approve failed: ${j.error || r.status}`); return; }
-    _adminNotify(`Approved the top pick for ${Number(j.approved || 0).toLocaleString()} of ${Number(j.tracks || 0).toLocaleString()} tracks${j.failed ? ` (${j.failed} failed)` : ""}.`);
+    for (;;) {
+      const r = await apiFetch("/api/admin/yt-review/approve-top?limit=200", { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { _adminNotify(`Approve stopped after ${approved.toLocaleString()} tracks: ${j.error || r.status}`); return; }
+      approved += Number(j.approved || 0);
+      failed += Number(j.failed || 0);
+      const remaining = Number(j.remaining || 0);
+      if (btn) btn.textContent = `Approving… ${approved.toLocaleString()} done${remaining ? `, ${remaining.toLocaleString()} to go` : ""}`;
+      if (!remaining || !j.approved) break;
+    }
+    _adminNotify(`Approved the top pick for ${approved.toLocaleString()} tracks${failed ? ` (${failed} failed and stay pending)` : ""}.`);
   } catch (e) {
-    _adminNotify(`Approve failed: ${e?.message || e}`);
+    _adminNotify(`Approve stopped after ${approved.toLocaleString()} tracks: ${e?.message || e}`);
   } finally {
     loadYtReview();
   }
