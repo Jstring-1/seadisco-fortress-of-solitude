@@ -8507,6 +8507,57 @@ export async function stampCachedMasterLabels(items) {
                                     THEN rc.data->'labels' ELSE '[]'::jsonb END) = 0`, [rows.map(i => i.id), rows.map(i => i.name), rows.map(i => i.catno ?? "")]);
     return r.rowCount ?? 0;
 }
+// ── Master label backfill (master-label-backfill-worker.ts) ──────────
+// A master "needs a label" when it has none stamped on it and hasn't
+// already been tried (a main release with no label, or a 404, sets
+// data._labelTried so the job doesn't re-fetch it forever).
+const _MLB_NEEDS = `rc.type = 'master'
+      AND COALESCE(rc.data->'labels'->0->>'name', '') = ''
+      AND NOT (rc.data ? '_labelTried')`;
+export async function countMastersNeedingLabel() {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache rc WHERE ${_MLB_NEEDS}`);
+    return Number(r.rows[0]?.n ?? 0);
+}
+export async function listMastersNeedingLabel(afterId, limit) {
+    const r = await getPool().query(`SELECT rc.discogs_id AS id,
+            CASE WHEN rc.data->>'main_release' ~ '^[0-9]{1,9}$' THEN (rc.data->>'main_release')::int END AS main_release
+       FROM release_cache rc
+      WHERE ${_MLB_NEEDS} AND rc.discogs_id > $1
+      ORDER BY rc.discogs_id
+      LIMIT $2`, [afterId, limit]);
+    return r.rows.map(x => ({ id: Number(x.id), mainRelease: x.main_release != null ? Number(x.main_release) : null }));
+}
+export async function markMasterLabelTried(id) {
+    await getPool().query(`UPDATE release_cache SET data = jsonb_set(data, '{_labelTried}', to_jsonb(NOW()::text), true)
+      WHERE type = 'master' AND discogs_id = $1`, [id]);
+}
+// Free first pass: stamp every master that needs a label from whatever
+// the cache already holds (its main release, any pressing of it, or its
+// saved version list) — the same sources the Year-Label tab falls back
+// to. No API calls.
+export async function stampMasterLabelsFromCache() {
+    const client = await getPool().connect();
+    try {
+        await client.query("SET statement_timeout = 0");
+        const r = await client.query(`UPDATE release_cache t
+          SET data = jsonb_set(t.data, '{labels}',
+                               jsonb_build_array(jsonb_build_object('name', s.name, 'catno', s.catno)), true)
+         FROM (
+           SELECT rc.discogs_id AS id,
+                  COALESCE(NULLIF(mr.data->'labels'->0->>'name', ''), NULLIF(anyp.name, ''), NULLIF(mvl.name, '')) AS name,
+                  COALESCE(NULLIF(mr.data->'labels'->0->>'catno', ''), NULLIF(anyp.catno, ''), NULLIF(mvl.catno, ''), '') AS catno
+             FROM release_cache rc
+             ${_YL_MAIN_JOIN}
+            WHERE ${_MLB_NEEDS}
+         ) s
+        WHERE t.type = 'master' AND t.discogs_id = s.id AND s.name IS NOT NULL`);
+        return r.rowCount ?? 0;
+    }
+    finally {
+        await client.query("RESET statement_timeout").catch(() => { });
+        client.release();
+    }
+}
 export async function backfillCachedMasterLabel(ids, labelName) {
     if (!ids.length || !labelName)
         return 0;

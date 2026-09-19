@@ -495,6 +495,9 @@ window._sdStatic = Object.assign(window._sdStatic || {}, {
   p154_click: function (event) { loadRedundantPreview(this) },
   // admin-panel.html:164 <button>
   p164_click: function (event) { pruneRedundant(this) },
+  mlb_start_click: function (event) { masterLabelsAction('start', this) },
+  mlb_stop_click: function (event) { masterLabelsAction('stop', this) },
+  mlb_refresh_click: function (event) { loadMasterLabelsStatus() },
   // admin-panel.html:193 <select id="rcx-genre">
   p193_change: function (event) { _rcxSyncStyleList() },
   // admin-panel.html:225 <button id="rcx-labels-btn">

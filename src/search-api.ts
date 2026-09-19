@@ -53,6 +53,10 @@ import { registerAdminCacheProjectionRoutes } from "./routes/admin-cache-project
 import { registerAdminExternalDiscographyRoutes } from "./routes/admin-external-discography.js";
 import { getLabelUpstreamStatsMap } from "./db.js";
 import {
+  initMasterLabelBackfillModule,
+  getMasterLabelBackfillStatus,       // used by /api/admin/workers/status aggregate
+} from "./master-label-backfill-worker.js";
+import {
   initFacetedSweepModule,
   getFacetedSweepStatus,              // used by /api/admin/workers/status aggregate
   isFacetedSweepRunning,
@@ -10321,6 +10325,7 @@ app.get("/api/admin/workers/status", async (req, res) => {
       projection: getCacheProjectionBackfillStatus(),
       faceted:    getFacetedSweepStatus(),
       upstream:   getLabelUpstreamStatsStatus(),
+      labels:     getMasterLabelBackfillStatus(),
     });
   } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
 });
@@ -17378,6 +17383,9 @@ app.listen(PORT, "0.0.0.0", async () => {
     }
     try { initCacheProjectionBackfillModule(); } catch (e) {
       console.error("[startup] cache-projection-backfill init failed:", e);
+    }
+    try { initMasterLabelBackfillModule(ADMIN_CLERK_ID); } catch (e) {
+      console.error("[startup] master-label-backfill init failed:", e);
     }
     try { initFacetedSweepModule(ADMIN_CLERK_ID); } catch (e) {
       console.error("[startup] faceted-sweep init failed:", e);

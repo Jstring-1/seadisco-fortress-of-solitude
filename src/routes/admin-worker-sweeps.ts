@@ -25,6 +25,11 @@ import {
   getLabelUpstreamStatsStatus,
 } from "../label-upstream-stats-worker.js";
 import {
+  startMasterLabelBackfill,
+  requestMasterLabelBackfillStop,
+  getMasterLabelBackfillOverview,
+} from "../master-label-backfill-worker.js";
+import {
   startBulkLabelSweep,
   requestBulkLabelSweepStop,
   forceClearBulkLabelSweep,
@@ -66,6 +71,28 @@ export function registerAdminWorkerSweepRoutes(app: Express, requireAdmin: Requi
   app.get("/api/admin/faceted-sweep/status", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     try { res.json(getFacetedSweepStatus()); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+
+  // ── Master label backfill ────────────────────────────────────────
+  // Fills in labels for cached masters (Discogs masters carry none) so
+  // the Year-Label tab can group them. See master-label-backfill-worker.
+  app.post("/api/admin/master-labels/start", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+      const r = await startMasterLabelBackfill();
+      if (!r.ok) { res.status(409).json(r); return; }
+      res.json(r);
+    } catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.post("/api/admin/master-labels/stop", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try { requestMasterLabelBackfillStop(); res.json({ ok: true }); }
+    catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
+  });
+  app.get("/api/admin/master-labels/status", async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try { res.json(await getMasterLabelBackfillOverview()); }
     catch (err: any) { res.status(500).json({ error: err?.message ?? String(err) }); }
   });
 

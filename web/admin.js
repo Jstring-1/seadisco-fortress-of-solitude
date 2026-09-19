@@ -124,7 +124,7 @@ const _adminGroups = {
   },
   'cache': {
     panels: ['panel-cache-warm'],
-    load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); },
+    load: () => { loadCacheWarm(); loadCacheRate(); loadCacheAnalytics(); loadMasterLabelsStatus(); },
   },
   'yt-review': {
     panels: ['panel-yt-review'],
@@ -307,6 +307,11 @@ async function loadAdminWorkerStatus() {
       const pos = j.total > 0 ? ` (${j.cursor}/${j.total})` : '';
       const cur = j.currentSlot ? ` · ${j.currentSlot.value}/${j.currentSlot.year}` : '';
       badges.push({ label: `Year×${j.mode || 'facet'}${pos}${cur}`, stop: '/api/admin/faceted-sweep/stop' });
+    }
+    if (w.labels?.running) {
+      const j = w.labels;
+      const pos = j.total > 0 ? ` (${j.processed}/${j.total})` : '';
+      badges.push({ label: `Master labels${pos}`, stop: '/api/admin/master-labels/stop' });
     }
     if (w.upstream?.running) {
       const j = w.upstream;
@@ -931,6 +936,44 @@ async function pruneRedundant(btn) {
   }
 }
 window.pruneRedundant = pruneRedundant;
+
+// ── Fill in master labels (master-label-backfill-worker) ─────────
+async function loadMasterLabelsStatus() {
+  const out = document.getElementById("mlb-status");
+  if (!out) return;
+  try {
+    const r = await apiFetch("/api/admin/master-labels/status");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    const nf = (n) => Number(n || 0).toLocaleString();
+    const parts = [`<strong style="color:var(--text)">${nf(j.remaining)}</strong> masters still need a label`];
+    if (j.running) parts.unshift(`<span style="color:var(--success)">Running</span>`);
+    if (j.startedAt) parts.push(`this run: ${nf(j.fromCache)} from cache, ${nf(j.fetched)} fetched, ${nf(j.noLabel)} with no label${j.errors ? `, ${nf(j.errors)} errors` : ""}`);
+    if (j.done && !j.running) parts.push("finished");
+    if (j.lastError) parts.push(`<span style="color:#e05050">${_adminWorkerEscape(j.lastError)}</span>`);
+    out.innerHTML = parts.join(" · ");
+  } catch (e) {
+    out.textContent = `Error: ${e.message || e}`;
+  }
+}
+window.loadMasterLabelsStatus = loadMasterLabelsStatus;
+async function masterLabelsAction(action, btn) {
+  const out = document.getElementById("mlb-status");
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/admin/master-labels/${action}`, { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    if (typeof _adminNotify === "function") _adminNotify(action === "start" ? "Label fill started" : "Stopping label fill", "info");
+  } catch (e) {
+    if (out) out.textContent = `Error: ${e.message || e}`;
+    return;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+  setTimeout(loadMasterLabelsStatus, 1500);
+}
+window.masterLabelsAction = masterLabelsAction;
 // Populate the V1-vs-V2 totals badge next to the Explore cache header
 // from projection stats (the split-cache projection is retired, so this
 // normally has nothing to show).

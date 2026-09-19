@@ -166,6 +166,19 @@
             </div>
           </div>
         </details>
+        <!-- ── Fill in master labels ───────────────────────────────── -->
+        <details>
+          <summary title="Discogs masters carry no label, so masters cached by the genre / faceted sweeps show as Unknown label in the Year-Label tab. This fills them in." style="cursor:pointer;font-weight:600;font-size:0.95rem">🏷️ Fill in master labels</summary>
+          <div style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted)">
+            <p style="margin:0 0 0.6rem">First copies a label onto each unlabelled master from anything already cached (its main release, a pressing, or its saved release list) at no API cost. Then fetches each remaining master's main release (one Discogs call each, lowest priority, sharing the ~1/sec limit) and saves its label and catalog number on the master; the release itself isn't cached. Stop keeps progress; Start continues. Resumes after a redeploy unless stopped.</p>
+            <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+              <button class="admin-btn" data-sd-click="@mlb_start_click">Start</button>
+              <button class="admin-btn" data-sd-click="@mlb_stop_click">Stop</button>
+              <button class="admin-refresh-btn" data-sd-click="@mlb_refresh_click" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+              <span id="mlb-status" style="font-size:0.8rem"></span>
+            </div>
+          </div>
+        </details>
         <!-- ── Cache analytics (faceted drilldown) ─────────────────── -->
         <details>
           <summary title="Faceted drilldown over release_cache. Enter any combination of label, artist, genre, style, country, year range, and type — get total match count plus top-20 lists across every dimension (genres, styles, labels, artists, countries, decades) and a sample of matching titles. Useful for questions like 'what genres exist under a label' or 'what labels are dominant in 1955-1965 delta blues'." style="cursor:pointer;font-weight:600;font-size:0.95rem">🔍 Explore cache<span id="ca-totals-badge" style="font-weight:400;font-size:0.72rem;color:var(--muted);margin-left:0.6rem"></span></summary>
