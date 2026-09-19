@@ -10,7 +10,7 @@
 // Single in-process worker enforced via module-level `_runningKey`
 // guard.
 import { getAdminDiscogsClient } from "./discogs-client.js";
-import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, bumpCacheWarmRunSkip, cacheRelease, getAppSetting, setAppSetting, } from "./db.js";
+import { getCacheWarmRun, upsertCacheWarmRun, recordCacheWarmRunHit, recordCacheWarmRunSearched, recordCacheWarmRunError, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, bumpCacheWarmRunSkip, cacheRelease, getAppSetting, setAppSetting, searchResultMasterLabels, stampCachedMasterLabels, } from "./db.js";
 // Persisted intent so a Railway restart can auto-resume the run.
 // Set when startCacheWarmRun fires, cleared by Stop or natural
 // completion. Crashes do NOT clear it — boot-resume picks up where
@@ -395,6 +395,14 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
         const skipsThisPage = pageIds.filter(id => cachedIds.has(id) || deadIds.has(id)).length;
         if (skipsThisPage > 0)
             await bumpCacheWarmRunSkip(genreKey, styleKey, skipsThisPage);
+        // /masters/{id} has no labels; the search result does. Stamp it onto
+        // masters already cached without one (free — no API call).
+        const pageLabels = searchResultMasterLabels(results);
+        const stampIds = pageIds.filter(id => cachedIds.has(id) && pageLabels.has(id));
+        if (stampIds.length) {
+            await stampCachedMasterLabels(stampIds.map(id => ({ id, ...pageLabels.get(id) })))
+                .catch((e) => console.error("[cache-warm] label stamp failed:", e?.message ?? e));
+        }
         for (const r of results) {
             if (_stopRequested)
                 break;
@@ -411,6 +419,10 @@ async function _runWorker(client, genreKey, styleKey, startYear, startPage, endY
                 // DiscogsClient — no local sleep, so a solo run rides the gate
                 // at ~1/sec instead of gate + local sleep ≈ 2s/item.
                 const full = await _withRetry(`master ${id}`, () => client.getMasterRelease(id));
+                // /masters/{id} has no labels — carry the search result's over.
+                const lbl = pageLabels.get(id);
+                if (lbl && !(Array.isArray(full?.labels) && full.labels.length))
+                    full.labels = [{ name: lbl.name, catno: lbl.catno }];
                 // warmOnly: swept rows stay seen_at=NULL so the "never-viewed"
                 // prune reflects sweep output until a human opens the album.
                 await cacheRelease(id, "master", full, { warmOnly: true });

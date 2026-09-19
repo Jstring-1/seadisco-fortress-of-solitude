@@ -20,6 +20,8 @@ import {
   getCachedReleaseIds,
   getDeadDiscogsIds,
   recordDeadDiscogsId,
+  searchResultMasterLabels,
+  stampCachedMasterLabels,
 } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 
@@ -231,15 +233,25 @@ async function _sweepSlot(client: DiscogsClient, mode: FacetedMode, slot: QueueI
       getCachedReleaseIds(inScope, "master"),
       getDeadDiscogsIds(inScope, "master"),
     ]);
+    // /masters/{id} has no labels; the search results do. Stamp them onto
+    // masters already cached without one (free — no API call).
+    const pageLabels = searchResultMasterLabels(results);
+    const stampIds = inScope.filter(id => cachedSet.has(id) && pageLabels.has(id));
+    if (stampIds.length) {
+      await stampCachedMasterLabels(stampIds.map(id => ({ id, ...pageLabels.get(id)! })))
+        .catch((e: any) => console.error("[faceted-sweep] label stamp failed:", e?.message ?? e));
+    }
 
     for (const id of inScope) {
       if (_stopRequested) return;
       if (cachedSet.has(id) || deadSet.has(id)) { _state!.skipped++; continue; }
       try {
-        const full = await retryTransient(
+        const full: any = await retryTransient(
           () => client.getMasterRelease(id),
           { label: `faceted-sweep master=${id}` },
         );
+        const lbl = pageLabels.get(id);
+        if (lbl && !(Array.isArray(full?.labels) && full.labels.length)) full.labels = [{ name: lbl.name, catno: lbl.catno }];
         await cacheRelease(id, "master", full as any, { warmOnly: true });
         _state!.hits++;
         await _persist();

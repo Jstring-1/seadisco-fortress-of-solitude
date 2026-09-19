@@ -4208,11 +4208,32 @@ export async function getReviewQueueCounts() {
     return out;
 }
 const _YL_YEAR_RE = "^(1[0-9]|20)[0-9]{2}$";
+// Label sources for a master without its own (see comment above). The
+// laterals only run for masters that have no label stamped on them.
 const _YL_MAIN_JOIN = `LEFT JOIN release_cache mr
            ON rc.type = 'master' AND mr.type = 'release'
           AND mr.discogs_id = CASE WHEN rc.data->>'main_release' ~ '^[0-9]{1,9}$'
-                                   THEN (rc.data->>'main_release')::int END`;
-const _YL_LABEL = String.raw `regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', ''), '\s+\(\d+\)$', '')`;
+                                   THEN (rc.data->>'main_release')::int END
+         LEFT JOIN LATERAL (
+           SELECT p.data->'labels'->0->>'name' AS name, p.data->'labels'->0->>'catno' AS catno
+             FROM release_cache p
+            WHERE rc.type = 'master'
+              AND COALESCE(rc.data->'labels'->0->>'name', '') = ''
+              AND COALESCE(mr.data->'labels'->0->>'name', '') = ''
+              AND p.type = 'release' AND p.data->>'master_id' = rc.discogs_id::text
+              AND COALESCE(p.data->'labels'->0->>'name', '') <> ''
+            LIMIT 1) anyp ON TRUE
+         LEFT JOIN release_cache mv
+           ON rc.type = 'master' AND mv.type = 'master-versions' AND mv.discogs_id = rc.discogs_id
+          AND COALESCE(rc.data->'labels'->0->>'name', '') = ''
+         LEFT JOIN LATERAL (
+           SELECT v->>'label' AS name, v->>'catno' AS catno
+             FROM jsonb_array_elements(CASE WHEN jsonb_typeof(mv.data->'versions') = 'array'
+                                            THEN mv.data->'versions' ELSE '[]'::jsonb END) v
+            WHERE COALESCE(v->>'label', '') <> ''
+            ORDER BY (v->>'id' = rc.data->>'main_release') DESC
+            LIMIT 1) mvl ON TRUE`;
+const _YL_LABEL = String.raw `regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), NULLIF(mr.data->'labels'->0->>'name', ''), NULLIF(anyp.name, ''), NULLIF(mvl.name, ''), ''), '\s+\(\d+\)$', '')`;
 function _ylWhere(f, args) {
     const push = (v) => { args.push(v); return `$${args.length}`; };
     const w = [`(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`];
@@ -4271,7 +4292,7 @@ export async function getYearLabelAlbums(f, year, label, limit = 1000) {
               END                                              AS master_id,
               COALESCE(rc.data->>'title', '')                  AS title,
               COALESCE(rc.data->'artists'->0->>'name', '')     AS artist,
-              COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), mr.data->'labels'->0->>'catno', '') AS catno,
+              COALESCE(NULLIF(rc.data->'labels'->0->>'catno', ''), NULLIF(mr.data->'labels'->0->>'catno', ''), NULLIF(anyp.catno, ''), NULLIF(mvl.catno, ''), '') AS catno,
               COALESCE(rc.data->'formats'->0->>'name', mr.data->'formats'->0->>'name', '')             AS format,
               COALESCE(rc.data->'images'->0->>'uri150', rc.data->>'thumb', mr.data->'images'->0->>'uri150', '') AS thumb,
               rc.data->'tracklist' AS tracklist,
@@ -8451,6 +8472,41 @@ export async function recordDeadDiscogsId(id, type = "master") {
 // stamps a synthetic single-entry `labels` array onto the cached row
 // purely so that join can find it — this doesn't touch any other
 // field and never overwrites a non-empty `labels` already present.
+// Master id -> first label (+ catno) from a page of Discogs search results.
+// Pressing rows carry the real master in master_id; genuine master rows
+// carry it as id.
+export function searchResultMasterLabels(results) {
+    const out = new Map();
+    for (const r of results || []) {
+        const mid = Number(r?.master_id);
+        const id = Number.isFinite(mid) && mid > 0
+            ? mid
+            : (String(r?.type ?? "").toLowerCase() === "master" ? Number(r?.id) : 0);
+        if (!Number.isFinite(id) || id <= 0 || out.has(id))
+            continue;
+        const name = String((Array.isArray(r?.label) ? r.label[0] : r?.label) ?? "").trim();
+        if (!name)
+            continue;
+        out.set(id, { name, catno: String(r?.catno ?? "").trim() });
+    }
+    return out;
+}
+// Batch form for the genre / faceted sweeps: each master gets the label
+// (and catno) from the Discogs search result that surfaced it. Same rule:
+// only fills masters whose `labels` is missing or empty.
+export async function stampCachedMasterLabels(items) {
+    const rows = items.filter(i => Number.isFinite(i.id) && i.id > 0 && i.name);
+    if (!rows.length)
+        return 0;
+    const r = await getPool().query(`UPDATE release_cache rc
+        SET data = jsonb_set(rc.data, '{labels}',
+                             jsonb_build_array(jsonb_build_object('name', x.name, 'catno', x.catno)), true)
+       FROM unnest($1::int[], $2::text[], $3::text[]) AS x(id, name, catno)
+      WHERE rc.type = 'master' AND rc.discogs_id = x.id
+        AND jsonb_array_length(CASE WHEN jsonb_typeof(rc.data->'labels') = 'array'
+                                    THEN rc.data->'labels' ELSE '[]'::jsonb END) = 0`, [rows.map(i => i.id), rows.map(i => i.name), rows.map(i => i.catno ?? "")]);
+    return r.rowCount ?? 0;
+}
 export async function backfillCachedMasterLabel(ids, labelName) {
     if (!ids.length || !labelName)
         return 0;

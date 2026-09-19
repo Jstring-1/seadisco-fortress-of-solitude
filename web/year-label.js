@@ -13,7 +13,7 @@
     "Folk, World, & Country", "Funk / Soul", "Hip Hop", "Jazz", "Latin",
     "Non-Music", "Pop", "Reggae", "Rock", "Stage & Screen",
   ];
-  const NO_LABEL = "(no label)";
+  const NO_LABEL = "Unknown label";       // no label found in the cache for these albums
   const LABEL_RENDER_CAP = 400;           // label rows drawn before "type to narrow"
   const pref = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch { return d; } };
   const setPref = (k, v) => { try { localStorage.setItem(k, v); } catch {} };

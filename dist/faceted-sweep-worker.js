@@ -11,7 +11,7 @@
 // (year, value) queue on start, walk it with a persisted cursor,
 // resume on boot.
 import { getAdminDiscogsClient } from "./discogs-client.js";
-import { cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, } from "./db.js";
+import { cacheRelease, getAppSetting, setAppSetting, getCachedReleaseIds, getDeadDiscogsIds, recordDeadDiscogsId, searchResultMasterLabels, stampCachedMasterLabels, } from "./db.js";
 import { retryTransient } from "./worker-retry.js";
 const STATE_KEY = "faceted_sweep_state";
 let _state = null;
@@ -215,6 +215,14 @@ async function _sweepSlot(client, mode, slot) {
             getCachedReleaseIds(inScope, "master"),
             getDeadDiscogsIds(inScope, "master"),
         ]);
+        // /masters/{id} has no labels; the search results do. Stamp them onto
+        // masters already cached without one (free — no API call).
+        const pageLabels = searchResultMasterLabels(results);
+        const stampIds = inScope.filter(id => cachedSet.has(id) && pageLabels.has(id));
+        if (stampIds.length) {
+            await stampCachedMasterLabels(stampIds.map(id => ({ id, ...pageLabels.get(id) })))
+                .catch((e) => console.error("[faceted-sweep] label stamp failed:", e?.message ?? e));
+        }
         for (const id of inScope) {
             if (_stopRequested)
                 return;
@@ -224,6 +232,9 @@ async function _sweepSlot(client, mode, slot) {
             }
             try {
                 const full = await retryTransient(() => client.getMasterRelease(id), { label: `faceted-sweep master=${id}` });
+                const lbl = pageLabels.get(id);
+                if (lbl && !(Array.isArray(full?.labels) && full.labels.length))
+                    full.labels = [{ name: lbl.name, catno: lbl.catno }];
                 await cacheRelease(id, "master", full, { warmOnly: true });
                 _state.hits++;
                 await _persist();
