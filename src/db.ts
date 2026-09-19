@@ -5544,11 +5544,16 @@ export async function listReviewQueue(opts: {
   const rowParams = params.slice();
   rowParams.push(limit); const limIdx = rowParams.length;
   rowParams.push(offset); const offIdx = rowParams.length;
+  // Pending reads in catalog order (a track's candidates together, best
+  // first). Decided lists read newest decision first, so a mistake made a
+  // moment ago is at the top.
+  const orderSql = status === "approved" || status === "rejected"
+    ? "reviewed_at DESC NULLS LAST, id DESC"
+    : "master_year ASC NULLS LAST, master_id ASC, track_position ASC, title_score DESC NULLS LAST, id ASC";
   const r = await getPool().query(
     `SELECT * FROM track_yt_review_queue
       WHERE ${whereSql}
-      ORDER BY master_year ASC NULLS LAST, master_id ASC, track_position ASC,
-               title_score DESC NULLS LAST, id ASC
+      ORDER BY ${orderSql}
       LIMIT $${limIdx} OFFSET $${offIdx}`,
     rowParams,
   );

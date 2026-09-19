@@ -2513,6 +2513,15 @@ function ytrGroupedHtml(rows) {
   }
   return html;
 }
+// "just now" / "5 min ago" / "3 h ago" / "2 d ago" for decision times.
+function _ytrAgo(ts) {
+  const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+  if (!Number.isFinite(s)) return "";
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+}
 function ytrRowHtml(r) {
   const decode = s => String(s ?? "").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&apos;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
   const esc = s => decode(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;").replace(/"/g,"&quot;");
@@ -2545,7 +2554,7 @@ function ytrRowHtml(r) {
     <div style="min-width:0">
       <div style="font-size:0.86rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--muted);font-weight:normal">${yr} · ${esc(r.track_position || "")}</span> ${esc(r.track_title || "")} <span style="color:var(--muted);font-weight:normal">— ${esc(r.track_artist || "")}</span></div>
       <div style="font-size:0.78rem;color:var(--muted);margin-top:0.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${candTitleHtml}</a> <span style="color:#555">·</span> ${esc(r.candidate_channel_title || "")}${r.is_topic_channel ? ` <span style="color:#7ed196;font-weight:600" title="Official auto-generated artist channel — label-delivered audio.">TOPIC</span>` : ""}${r.preferred_match ? ` <span style="color:#f0c674;font-weight:600" title="Matches preferred source &quot;${esc(r.preferred_match)}&quot; (channel, title or description).">PREFERRED</span>` : ""} <span style="color:#555">·</span> match ${score}${ytrDurationHtml(r)}</div>
-      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${reasonHtml}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">master #${r.master_id} ${r.reviewed_by ? `· decided by ${esc(r.reviewed_by)}` : ""}${r.reviewed_at && _ytrStatus !== "pending" ? ` · <span title="${esc(new Date(r.reviewed_at).toLocaleString())}">${esc(_ytrAgo(r.reviewed_at))}</span>` : ""}${reasonHtml}</div>
       ${r.search_query ? `<div class="ytr-card-q" title="YouTube search that surfaced this candidate: ${esc(r.search_query)}">q: ${esc(r.search_query)}</div>` : ""}
     </div>
     ${showActions

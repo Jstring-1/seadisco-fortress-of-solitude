@@ -13851,7 +13851,13 @@ app.get("/api/admin/yt-review/queue", async (req, res) => {
   const q = String(req.query.q ?? "").trim();
   const out = await listReviewQueue({ status, limit, offset, q });
   const terms = _ytParsePreferred((await _ytGetQueryConfig()).preferred);
-  out.rows = _ytPreferredFirst(out.rows, terms);
+  // Preferred-source candidates float to the top of each track only in
+  // catalog-ordered views; decided lists keep their newest-first order.
+  if (status === "approved" || status === "rejected") {
+    for (const r of out.rows) r.preferred_match = _ytPreferredMatch(terms, r.candidate_channel_title, r.candidate_title, r.candidate_description);
+  } else {
+    out.rows = _ytPreferredFirst(out.rows, terms);
+  }
   res.json(out);
 });
 
