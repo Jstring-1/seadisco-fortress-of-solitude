@@ -2736,9 +2736,17 @@ function ytrRowHtml(r) {
   const showAuto = _ytrStatus === "auto";
   const yr = r.master_year || "?";
   return `<div class="ytr-card" data-ytr-id="${r.id}" data-ytr-ch="${esc(r.candidate_channel_id || "")}" data-ytr-ch-title="${esc(r.candidate_channel_title || "")}" style="border-radius:6px;padding:0.6rem 0.75rem;display:grid;grid-template-columns:64px 64px 1fr auto;gap:0.7rem;align-items:center">
-    ${r.master_cover_url
-      ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy">`
-      : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
+    ${(() => {
+      // Discogs cover → opens the album popup (plain click), or the album
+      // page in a new tab (modifier / middle click) via the real href.
+      const cover = r.master_cover_url
+        ? `<img src="${esc(r.master_cover_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border);display:block" loading="lazy">`
+        : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`;
+      if (!r.master_id) return cover;
+      const mid = String(r.master_id);
+      const href = typeof _sdEntityPath === "function" ? _sdEntityPath("master", mid, r.track_artist || "") : `/master/${encodeURIComponent(mid)}`;
+      return `<a href="${esc(href)}" title="Open the album" data-sd-click="${_sdOn(((a0) => function (event) { if (event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1 || typeof openModal !== "function") return; openModal(event, a0, "master", "https://www.discogs.com/master/" + a0); })(mid))}">${cover}</a>`;
+    })()}
     ${r.candidate_thumbnail_url
       ? `<a href="${esc(ytUrl)}" target="_blank" rel="noopener" title="Open on YouTube"><img src="${esc(r.candidate_thumbnail_url)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:4px;background:var(--border)" loading="lazy"></a>`
       : `<div style="width:64px;height:64px;border-radius:4px;background:rgba(255,255,255,0.04)"></div>`}
