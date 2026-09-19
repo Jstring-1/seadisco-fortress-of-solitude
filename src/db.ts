@@ -5581,9 +5581,9 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
 // Expanding every master's tracklist is heavy, so this runs under a
 // raised statement_timeout and is meant to be called on demand.
 // Year-Label browser (home-strip tab): the catalog cache browsed by year,
-// then label, then album. Filters: genre (+ strict = that genre is the
-// ONLY genre) and mastersPlus (masters + releases with no master; else
-// every cached release). Years and labels are plain SQL counts; the album
+// then label, then album, over Masters+ (masters + releases with no
+// master). Filter: genre (+ strict = that genre is the ONLY genre).
+// Years and labels are plain SQL counts; the album
 // list for one year+label also carries each album's count of tracks that
 // have a playable YouTube video. "Playable" mirrors the album popup's
 // findVideo(): an override in 'block' mode hides the track; a 'replace'
@@ -5594,7 +5594,7 @@ export async function getReviewQueueCounts(): Promise<{ pending: number; approve
 // slot is ignored. Masters have no labels of their own, so they borrow
 // label/catno from their cached main release. Label names are grouped with
 // Discogs's " (2)" disambiguator stripped.
-export interface YearLabelFilter { genre: string | null; strict: boolean; mastersPlus: boolean }
+export interface YearLabelFilter { genre: string | null; strict: boolean }
 export interface YearLabelAlbum {
   id: number; type: "master" | "release"; masterId: number | null;
   year: number; title: string; artist: string; label: string; catno: string;
@@ -5608,9 +5608,7 @@ const _YL_MAIN_JOIN = `LEFT JOIN release_cache mr
 const _YL_LABEL = String.raw`regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', ''), '\s+\(\d+\)$', '')`;
 function _ylWhere(f: YearLabelFilter, args: any[]): string {
   const push = (v: any) => { args.push(v); return `$${args.length}`; };
-  const w = [f.mastersPlus
-    ? `(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
-    : `rc.type = 'release'`];
+  const w = [`(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`];
   w.push(`rc.data->>'year' ~ '${_YL_YEAR_RE}'`);
   if (f.genre) {
     w.push(`jsonb_typeof(rc.data->'genres') = 'array'`);

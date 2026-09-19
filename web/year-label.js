@@ -1,8 +1,8 @@
 // ── Home-strip "Year-Label" tab ──────────────────────────────────────────
 // Browse the catalog cache by year → label → album → every release of
-// that album. Filters: genre (includes / only), one entry per album
-// (Masters+) vs every pressing, and "all tracks on YouTube" (applied to
-// the album list; full-album videos don't count).
+// that album, over Masters+ (masters + releases with no master). Filters:
+// genre (includes / only) and "all tracks on YouTube" (applied to the
+// album list; full-album videos don't count).
 // Data: /api/year-label/{years,labels,albums} and /master-versions/:id.
 // Loaded on demand by loadRandomRecords (search.js) when the tab is
 // active; the panel lives inside #random-records in place of the grid.
@@ -20,7 +20,6 @@
   const st = {
     genre: pref("sd-yl-genre", ""),       // "" = all genres
     strict: pref("sd-yl-strict", "0") === "1",
-    mp: pref("sd-yl-mp", "0") === "1",
     ytOnly: pref("sd-yl-ytonly", "0") === "1",
     genres: GENRES_FALLBACK,
     years: null, yearsErr: "", yearsSeq: 0,
@@ -37,7 +36,6 @@
   const qs = (extra) => {
     const p = new URLSearchParams();
     if (st.genre) { p.set("genre", st.genre); if (st.strict) p.set("strict", "1"); }
-    if (st.mp) p.set("mp", "1");
     for (const [k, v] of Object.entries(extra || {})) if (v != null) p.set(k, String(v));
     return p.toString();
   };
@@ -204,12 +202,6 @@
       ${st.genre ? `<span class="yl-opt">${toggle("strict", st.strict, "Includes", "Only",
         `Albums tagged ${st.genre}, alongside any other genre`, `Albums whose only genre is ${st.genre}`)}</span>` : ""}
       <span class="yl-opt">
-        <span class="yl-opt-label">Show</span>
-        ${toggle("mp", st.mp, "Every pressing", "One per album",
-          "Every cached release, each pressing listed on its own",
-          "One entry per album (its master), plus releases that have no master")}
-      </span>
-      <span class="yl-opt">
         <span class="yl-opt-label">Tracks</span>
         ${toggle("yt", st.ytOnly, "Any", "All on YouTube",
           "Every album, whatever its YouTube coverage",
@@ -284,7 +276,6 @@
         a.catno && a.catno.toLowerCase() !== "none" ? escHtml(a.catno) : "",
         a.format ? escHtml(a.format) : "",
         `<span class="${fullyOnYt(a) ? "yl-yt-full" : ""}">${yt}</span>`,
-        st.mp && a.type === "master" ? "album" : "",
       ].filter(Boolean).join(" · ");
       return `
         <div class="yl-album${keyOf(a) === st.album ? " yl-sel" : ""}" role="button" tabindex="0" data-yl="album" data-key="${escHtml(keyOf(a))}" title="See every release of this album">
@@ -345,10 +336,10 @@
     if (!t) return;
     const kind = t.dataset.yl;
     const on = t.dataset.v === "1";
-    if (kind === "strict" || kind === "mp") {
-      if (on === st[kind]) return;
-      st[kind] = on;
-      setPref(kind === "strict" ? "sd-yl-strict" : "sd-yl-mp", on ? "1" : "0");
+    if (kind === "strict") {
+      if (on === st.strict) return;
+      st.strict = on;
+      setPref("sd-yl-strict", on ? "1" : "0");
       loadYears(false);
     } else if (kind === "yt") {
       if (on === st.ytOnly) return;

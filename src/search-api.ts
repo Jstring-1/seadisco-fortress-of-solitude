@@ -16696,7 +16696,7 @@ app.get("/api/admin/overview", async (req, res) => {
 });
 
 // ── Year-Label browser (home-strip tab) ─────────────────────────────────
-// GET /api/year-label/years  ?genre=&strict=0|1&mp=0|1
+// GET /api/year-label/years  ?genre=&strict=0|1
 // GET /api/year-label/labels ?year=YYYY + filters
 // GET /api/year-label/albums ?year=YYYY&label=NAME + filters
 // Admin-only unless YEAR_LABEL_OPEN=1 (then any signed-in user, rate
@@ -16731,10 +16731,9 @@ function _ylFilter(q: any): YearLabelFilter {
   return {
     genre: YEAR_LABEL_GENRES.includes(g) ? g : null,
     strict: q.strict === "1",
-    mastersPlus: q.mp === "1",
   };
 }
-const _ylKey = (f: YearLabelFilter) => `${f.genre ?? "*"}|${f.strict && f.genre ? 1 : 0}|${f.mastersPlus ? 1 : 0}`;
+const _ylKey = (f: YearLabelFilter) => `${f.genre ?? "*"}|${f.strict && f.genre ? 1 : 0}`;
 const _ylYear = (v: any): number | null => (/^(1[0-9]|20)[0-9]{2}$/.test(String(v ?? "")) ? Number(v) : null);
 
 app.get("/api/year-label/years", async (req, res) => {

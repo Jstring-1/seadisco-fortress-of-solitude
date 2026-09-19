@@ -4215,9 +4215,7 @@ const _YL_MAIN_JOIN = `LEFT JOIN release_cache mr
 const _YL_LABEL = String.raw `regexp_replace(COALESCE(NULLIF(rc.data->'labels'->0->>'name', ''), mr.data->'labels'->0->>'name', ''), '\s+\(\d+\)$', '')`;
 function _ylWhere(f, args) {
     const push = (v) => { args.push(v); return `$${args.length}`; };
-    const w = [f.mastersPlus
-            ? `(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`
-            : `rc.type = 'release'`];
+    const w = [`(rc.type = 'master' OR (rc.type = 'release' AND COALESCE(NULLIF(rc.data->>'master_id', ''), '0') = '0'))`];
     w.push(`rc.data->>'year' ~ '${_YL_YEAR_RE}'`);
     if (f.genre) {
         w.push(`jsonb_typeof(rc.data->'genres') = 'array'`);
